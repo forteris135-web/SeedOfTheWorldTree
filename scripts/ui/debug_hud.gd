@@ -13,6 +13,6 @@ func _process(_delta: float) -> void:
 			return
 	info.text = "상태: %s   속도: (%d, %d)   %s\n장치: %s   FPS %d\n점프 높이 %d / 최고점 %.2f초 / 걷기 %d / 달리기 %d" % [
 		_player.state_name(), _player.velocity.x, _player.velocity.y,
-		("달리기 고정 ●" if _player.run_locked else ("달리는 중" if _player.is_running else "")),
+		("걷기 고정 ●" if _player.walk_locked else ("달리는 중" if _player.is_running else "")),
 		InputDevice.kind_name(InputDevice.current), Engine.get_frames_per_second(),
 		_player.jump_height, _player.jump_time_to_apex, _player.walk_speed, _player.run_speed]

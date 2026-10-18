@@ -195,21 +195,15 @@ position = Vector2(3480, 632)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 2000)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 2200)
 target_scene = "res://scenes/rooms/abyss_01.tscn"
 spawn_name = "FromAbyss02"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(3560, 500)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(3410, 700)
 target_scene = "res://scenes/rooms/moon_garden.tscn"
 spawn_name = "FromAbyss02"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
 
 [node name="Interactables" type="Node2D" parent="."]
 
@@ -217,11 +211,6 @@ shape = SubResource("ExitShape2")
 position = Vector2(1900, 900)
 record_id = "old_promise"
 kind = "stone"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(420, 2200)
-portal_id = "abyss_02"
-display_name = "심연 · 옛 약속의 비석"
 
 [node name="Enemies" type="Node2D" parent="."]
 

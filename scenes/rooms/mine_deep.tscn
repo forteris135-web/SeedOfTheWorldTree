@@ -179,26 +179,20 @@ position = Vector2(2880, 1032)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 900)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1100)
 target_scene = "res://scenes/rooms/mine_02.tscn"
 spawn_name = "FromMineDeep"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(2960, 900)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(2810, 1100)
 target_scene = "res://scenes/rooms/abyss_01.tscn"
 spawn_name = "FromMineDeep"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
 
 [node name="Interactables" type="Node2D" parent="."]
 
 [node name="Grass1" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(2600, 1100)
+position = Vector2(1150, 1100)
 grass_id = "mine_deep"
 display_name = "채굴장 · 가장 깊은 곳"
 
@@ -206,11 +200,6 @@ display_name = "채굴장 · 가장 깊은 곳"
 position = Vector2(1600, 700)
 record_id = "last_order"
 kind = "note"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(450, 1100)
-portal_id = "mine_deep"
-display_name = "채굴장 · 책임자의 방"
 
 [node name="Enemies" type="Node2D" parent="."]
 

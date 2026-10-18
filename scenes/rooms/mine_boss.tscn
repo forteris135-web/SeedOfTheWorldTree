@@ -193,19 +193,12 @@ position = Vector2(1950, 920)
 [node name="HoverRight" type="Marker2D" parent="Markers"]
 position = Vector2(2800, 1000)
 
-
 [node name="Interactables" type="Node2D" parent="."]
 
 [node name="MoonlightGrass" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(330, 1380)
+position = Vector2(420, 1380)
 grass_id = "mine_boss_gate"
 display_name = "채굴장 · 심장 앞"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(1800, 1500)
-portal_id = "mine_boss"
-display_name = "채굴장 · 등불의 심장"
-requires_flag = "boss_knight_defeated"
 
 [node name="GateIn" type="StaticBody2D" parent="."]
 position = Vector2(700, 1500)
@@ -230,14 +223,10 @@ position = Vector2(2600, 1500)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="ToMine02" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 1200)
+[node name="ToMine02" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(140, 1380)
 target_scene = "res://scenes/rooms/mine_02.tscn"
 spawn_name = "FromMineBoss"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/ToMine02"]
-shape = SubResource("RectangleShape2D_exit")
-
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(140, 1323)

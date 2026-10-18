@@ -213,21 +213,15 @@ position = Vector2(2480, 2932)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 100)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 300)
 target_scene = "res://scenes/rooms/village_02.tscn"
 spawn_name = "FromMine"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(2560, 2800)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(2410, 3000)
 target_scene = "res://scenes/rooms/mine_02.tscn"
 spawn_name = "FromMine01"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
 
 [node name="Interactables" type="Node2D" parent="."]
 
@@ -240,11 +234,6 @@ display_name = "채굴장 · 갱도 입구"
 position = Vector2(1500, 2500)
 record_id = "mine_poster"
 kind = "poster"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(950, 300)
-portal_id = "mine_01"
-display_name = "채굴장 · 내려가는 갱도"
 
 [node name="Enemies" type="Node2D" parent="."]
 

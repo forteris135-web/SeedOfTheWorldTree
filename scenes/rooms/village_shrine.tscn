@@ -164,13 +164,10 @@ position = Vector2(120, 932)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 800)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1000)
 target_scene = "res://scenes/rooms/village_02.tscn"
 spawn_name = "FromShrine"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
 
 [node name="Interactables" type="Node2D" parent="."]
 
@@ -184,11 +181,6 @@ art_scale = 0.175
 position = Vector2(1200, 760)
 record_id = "scripture_village"
 kind = "book"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(2000, 1000)
-portal_id = "village_shrine"
-display_name = "마을 · 세계수의 사당"
 
 [node name="Enemies" type="Node2D" parent="."]
 

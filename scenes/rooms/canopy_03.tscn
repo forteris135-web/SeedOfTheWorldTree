@@ -225,28 +225,17 @@ position = Vector2(5080, 1032)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 900)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1100)
 target_scene = "res://scenes/rooms/canopy_02.tscn"
 spawn_name = "FromCanopy03"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(5160, 900)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(5010, 1100)
 target_scene = "res://scenes/rooms/canopy_04.tscn"
 spawn_name = "FromCanopy03"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
-
 [node name="Interactables" type="Node2D" parent="."]
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(450, 1100)
-portal_id = "canopy_03"
-display_name = "수관 · 잎의 회랑"
 
 [node name="Enemies" type="Node2D" parent="."]
 

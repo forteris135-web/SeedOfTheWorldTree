@@ -43,17 +43,15 @@ func _ready() -> void:
 						player.position = g.global_position + Vector2(60, -2)
 						rest_point = g.global_position + Vector2(0, -2)
 						g.arrive(player)
-			elif Progress.next_spawn.begins_with("Portal:"):
-				var pid := Progress.next_spawn.trim_prefix("Portal:")
-				for p in get_tree().get_nodes_in_group("portal"):
-					if p.portal_id == pid:
-						player.position = p.global_position + Vector2(90, -2)
-						p.arrive(player)
 			else:
 				var marker := get_node_or_null("Markers/" + Progress.next_spawn)
 				if marker:
 					player.position = marker.position
 					player.facing = 1 if marker.position.x < bounds.get_center().x else -1
+					# 포탈로 건너왔다면 그 포탈이 번쩍인다
+					for p in get_tree().get_nodes_in_group("portal"):
+						if p.global_position.distance_to(marker.position) < 260.0:
+							p.flash()
 			Progress.next_spawn = ""
 		player.input_enabled = true
 		_spawn = player.position
@@ -130,6 +128,8 @@ func _ready() -> void:
 			_arrivaltest("달빛풀", Progress.next_spawn)
 		else:
 			_grasstest()
+	elif "--nooktest" in args:
+		_nooktest()
 
 
 func _process(_delta: float) -> void:
@@ -234,9 +234,11 @@ func _on_player_died() -> void:
 
 
 func _save_screenshot(file_name: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		return   # 화면 없는 시험에서는 찍지 않는다
 	var tex := get_viewport().get_texture()
 	if tex == null:
-		return   # 화면 없는(headless) 시험에서는 찍지 않는다
+		return
 	var img := tex.get_image()
 	if img == null or img.is_empty():
 		return
@@ -573,7 +575,7 @@ func _fake_action(action: String) -> void:
 	Input.parse_input_event(ev)
 
 
-## Claude Code용: 터치 '지도' 버튼으로 지도가 열리는지, 포탈 메뉴를 열고 다른 방으로 건너가는지 확인한다.
+## Claude Code용: 터치 '지도'·'메뉴' 버튼이 열리는지, 포탈 앞에서 ↑를 눌러 옆 방으로 건너가는지 확인한다.
 func _portaltest() -> void:
 	var tree := get_tree()
 	await tree.create_timer(0.5).timeout
@@ -602,48 +604,38 @@ func _portaltest() -> void:
 		_fake_touch(Vector2(s.x / 2.0, s.y - 40), false)
 		await tree.create_timer(0.2).timeout
 		print("[포탈시험] 바깥 누름 → 메뉴 닫힘: %s (터치 영역 %s)" % [_pause == null or not _pause.is_open(), s])
-	# 2) 포탈
-	var portal: Portal = null
-	for p in tree.get_nodes_in_group("portal"):
-		portal = p
-		break
-	if portal == null:
-		print("[포탈시험] 이 방에 깨어 있는 포탈이 없다")
+	# 2) 포탈: 잠긴 포탈이 있으면 먼저 막히는지, 그 다음 열린 포탈로 건너간다
+	var portals: Array = tree.get_nodes_in_group("portal")
+	if portals.is_empty():
+		print("[포탈시험] 이 방에 포탈이 없다")
 		tree.quit()
 		return
-	# 다른 방에 가 본 것으로 친다
-	Progress.portals["village_01"] = {"scene": "res://scenes/rooms/village_01.tscn", "name": "마을 · 입구의 거리", "region": "village"}
-	Progress.portals["mine_02"] = {"scene": "res://scenes/rooms/mine_02.tscn", "name": "채굴장 · 관의 복도", "region": "mine"}
+	print("[포탈시험] 이 방의 포탈 %d개: %s, 지도에 포탈 자리: %s" % [portals.size(), portals.map(func(p): return "%s→%s" % [p.name, p.target_scene.get_file()]), Progress.visited_rooms[room_id]["portals"]])
 	player._invuln_timer = 9999.0
-	player.global_position = portal.global_position + Vector2(-60, -40)
+	var target: Portal = null
+	for p in portals:
+		if p.requires_ability != "" and not Progress.has_ability(p.requires_ability):
+			player.global_position = p.global_position + Vector2(-40, -70)
+			player.velocity = Vector2.ZERO
+			await tree.create_timer(0.6).timeout
+			Input.action_press("move_up")
+			await tree.physics_frame
+			Input.action_release("move_up")
+			await tree.create_timer(0.5).timeout
+			print("[포탈시험] 잠긴 포탈(%s)에서 ↑: 그대로 이 방 %s, 안내 '%s'" % [p.requires_ability, tree.current_scene == self, get_node("CombatHUD")._message])
+		elif target == null:
+			target = p
+	player.global_position = target.global_position + Vector2(-40, -70)
 	player.velocity = Vector2.ZERO
 	await tree.create_timer(0.6).timeout
-	print("[포탈시험] 포탈 곁 상호작용 가능: %s, 알려진 포탈: %s, 지도에 포탈 자리: %s" % [player.can_interact, Progress.portals.keys(), Progress.visited_rooms[room_id]["portals"]])
-	Input.action_press("interact")
-	await tree.physics_frame
-	Input.action_release("interact")
-	await tree.create_timer(0.4).timeout
-	var menu := _find_travel_menu()
-	print("[포탈시험] 포탈 메뉴 열림: %s, 항목 %d, 멈춤: %s" % [menu != null, menu._items.size() if menu else 0, tree.paused])
-	_save_screenshot("debug_portal_menu.png")
-	if menu == null:
-		tree.quit()
-		return
-	# 터치로 두 번째 줄을 고른다
+	print("[포탈시험] 포탈 앞: 상호작용 가능 %s, 바닥 %s, 터치 상황 버튼 글자 '%s'" % [player.can_interact, player.is_on_floor(), touch._interact_label() if touch else "-"])
 	Progress.set_flag("_test_travelled")
-	var target: String = menu._items[1]["id"]
-	Progress.set_flag("_test_target_" + target)
-	_fake_touch(menu._row_rect(1).get_center(), true)
-	await tree.create_timer(0.1).timeout
-	_fake_touch(menu._row_rect(1).get_center(), false)
-	await tree.create_timer(0.2).timeout
-	print("[포탈시험] 터치로 고른 포탈: %s → 다음 등장 자리 '%s'" % [target, Progress.next_spawn])
-	if Progress.next_spawn == "":
-		# 터치가 안 닿았으면 버튼으로 고른다
-		await _fake_action("move_down")
-		await _fake_action("jump")
-		await tree.create_timer(0.2).timeout
-		print("[포탈시험] 버튼으로 고른 뒤 다음 등장 자리 '%s'" % Progress.next_spawn)
+	Progress.set_flag("_test_target_" + target.spawn_name)
+	Input.action_press("move_up")
+	await tree.physics_frame
+	Input.action_release("move_up")
+	await tree.create_timer(0.3).timeout
+	print("[포탈시험] ↑ 누름 → 다음 등장 자리 '%s', 입력 잠김 %s" % [Progress.next_spawn, not player.input_enabled])
 	await tree.create_timer(6.0).timeout
 	print("[포탈시험] 6초가 지나도 방이 바뀌지 않았다")
 	tree.quit()
@@ -693,20 +685,62 @@ func _grasstest() -> void:
 	tree.quit()
 
 
+## Claude Code용 (첫 방): 꼭대기 가지에서 이단 점프로 천장 틈의 비밀 발판(윗면 y=60)에 올라서는지 확인한다.
+func _nooktest() -> void:
+	var tree := get_tree()
+	await tree.create_timer(0.5).timeout
+	Progress.gain_ability("double_jump")
+	player._apply_abilities()
+	player._invuln_timer = 9999.0
+	for e in tree.get_nodes_in_group("enemy"):
+		e.queue_free()   # 꼭대기 가지의 나무꾼이 끼어들지 않게
+	player.global_position = Vector2(1650, 332)   # 꼭대기 가지(윗면 400) 위, 틈 바로 아래
+	player.velocity = Vector2.ZERO
+	await tree.create_timer(0.5).timeout
+	var top := player.global_position.y
+	print("[틈시험] 누르기 전: 상태 %s, 바닥 %s, 입력 %s, 자리 %s" % [player.state_name(), player.is_on_floor(), player.input_enabled, player.global_position])
+	# 점프는 최고점까지 누르고 있어야 짧은 점프가 되지 않는다
+	Input.action_press("jump")
+	var trace := []
+	var t := 0.0
+	var second_done := false
+	while t < 2.4:
+		await tree.physics_frame
+		t += get_physics_process_delta_time()
+		top = minf(top, player.global_position.y)
+		if t >= 0.4 and not second_done:
+			# 최고점에서 손을 뗐다가 다시 눌러 이단 점프
+			second_done = true
+			Input.action_release("jump")
+			await tree.physics_frame
+			Input.action_press("jump")
+		if t >= 0.9 and Input.is_action_pressed("jump"):
+			Input.action_release("jump")
+		if int(t * 20.0) != int((t - get_physics_process_delta_time()) * 20.0):
+			trace.append("%.2f:%d/v%d%s%s" % [t, player.global_position.y, player.velocity.y, "F" if player.is_on_floor() else "", "P" if Input.is_action_pressed("jump") else ""])
+	print("[틈시험] 시간:높이  " + " ".join(trace))
+	print("[틈시험] 이단 점프 최고점 y=%.0f (비밀 발판에 서면 y=-8), 지금 y=%.0f, 바닥 %s, 최대 점프 수 %d, 남은 점프 %d" % [top, player.global_position.y, player.is_on_floor(), player.max_jumps, player._jumps_left])
+	tree.quit()
+
+
 ## 시험 2단계: 건너온 방에서 제대로 도착했는지 확인하고 끝낸다.
 func _arrivaltest(label: String, _spawn: String) -> void:
 	var tree := get_tree()
 	await tree.create_timer(0.8).timeout
 	var near := "?"
 	var group := "portal" if label == "포탈" else "moonlight_grass"
-	for n in tree.get_nodes_in_group(group):
-		var want := false
-		for f in Progress.flags:
-			if str(f).begins_with("_test_target_") and str(f).trim_prefix("_test_target_") == (n.portal_id if group == "portal" else n.grass_id):
-				want = true
-		if want:
-			near = "%.0f px" % player.global_position.distance_to(n.global_position)
-	print("[%s시험·도착] 방 %s, 소녀 상태 %s, 입력 가능 %s, 목표까지 %s, 등장 자리 비움 %s, 멈춤 %s" % [label, scene_file_path.get_file(), player.state_name(), player.input_enabled, near, Progress.next_spawn == "", tree.paused])
+	if group == "portal":
+		# 등장 자리(Markers/<이름>) 옆에 포탈이 있어야 되돌아갈 수 있다
+		var best := INF
+		for n in tree.get_nodes_in_group("portal"):
+			best = minf(best, player.global_position.distance_to(n.global_position))
+		near = "%.0f px (가장 가까운 포탈)" % best
+	else:
+		for n in tree.get_nodes_in_group(group):
+			for f in Progress.flags:
+				if str(f).begins_with("_test_target_") and str(f).trim_prefix("_test_target_") == n.grass_id:
+					near = "%.0f px" % player.global_position.distance_to(n.global_position)
+	print("[%s시험·도착] 방 %s, 소녀 상태 %s, 입력 가능 %s, 바닥 %s, 목표까지 %s, 등장 자리 비움 %s, 멈춤 %s" % [label, scene_file_path.get_file(), player.state_name(), player.input_enabled, player.is_on_floor(), near, Progress.next_spawn == "", tree.paused])
 	_save_screenshot("debug_%s_arrive.png" % ("portal" if group == "portal" else "grass"))
 	tree.quit()
 

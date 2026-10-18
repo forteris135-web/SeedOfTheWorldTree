@@ -192,6 +192,10 @@ position = Vector2(3000, 650)
 size = Vector2(1200, 60)
 label_text = "훼손된 경전"
 
+[node name="PLedge" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(4620, 720)
+size = Vector2(380, 40)
+
 [node name="Hazards" type="Node2D" parent="."]
 
 [node name="Thorns1" parent="Hazards" instance=ExtResource("17_thorns")]
@@ -207,34 +211,25 @@ position = Vector2(120, 1132)
 position = Vector2(4880, 1132)
 
 [node name="FromMineDeep" type="Marker2D" parent="Markers"]
-position = Vector2(3900, 582)
+position = Vector2(4760, 652)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 1000)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1200)
 target_scene = "res://scenes/rooms/mine_01.tscn"
 spawn_name = "FromMine02"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(4960, 1000)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(4810, 1200)
 target_scene = "res://scenes/rooms/mine_boss.tscn"
 spawn_name = "FromMine02"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
-
-[node name="Exit3" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(4960, 450)
+[node name="Exit3" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(4830, 720)
 target_scene = "res://scenes/rooms/mine_deep.tscn"
 spawn_name = "FromMine02"
 requires_ability = "lantern"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit3"]
-shape = SubResource("ExitShape3")
 
 [node name="Interactables" type="Node2D" parent="."]
 
@@ -247,11 +242,6 @@ display_name = "채굴장 · 오웬의 등불"
 position = Vector2(3600, 650)
 record_id = "scripture_mine"
 kind = "book"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(500, 1200)
-portal_id = "mine_02"
-display_name = "채굴장 · 관의 복도"
 
 [node name="Enemies" type="Node2D" parent="."]
 

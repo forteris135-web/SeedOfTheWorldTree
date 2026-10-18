@@ -1,17 +1,19 @@
 extends CanvasLayer
-## 임시 터치 조작 (기획서 8장 "터치 조작" 배치를 따른 초안).
+## 터치 조작 (기획서 8장 "터치 조작").
 ## - 왼쪽 화면 어디든 누르면 그 자리에 스틱.
-## - 오른쪽: 약공격(가장 크게), 가드(바로 옆, 크게), 점프·회피(아래), 강공격(위, 길게 누르면 차지), 회복(작게 위), 달리기 고정.
-## - 왼쪽 아래: 회피 / 달리기 고정 (양손 어느 쪽으로도).
-## - 상황 버튼(손길): 쉬기·정화가 가능할 때만 나타난다. 달빛풀에서 쉬는 중에는 '이동'.
-## - 위 모서리: 왼쪽 '메뉴', 오른쪽 '지도'. 이 둘은 방이 입력 이벤트로 받으므로 InputEventAction 을 함께 보낸다.
+## - 오른쪽 엄지: 아래 모서리를 축으로 부채꼴로 늘어선다. 가장 가까운 곳에 점프, 그 옆에 약공격(가장 큼),
+##   약공격 왼쪽에 가드(저스트 가드를 같은 엄지로 바로 누르게), 위로 회피·강공격·영혼·회복.
+## - 왼쪽 아래: 회피 / 걷기(달리기가 기본이라, 누르면 걷는다).
+## - 상황 버튼(손길): 상호작용이 가능할 때만 나타난다. 달빛풀에서 쉬는 중엔 '이동', 포탈 앞에선 '들어가기'.
+## - 위 모서리: 왼쪽 '메뉴'(Esc), 오른쪽 '지도'. 이 둘은 방이 입력 이벤트로 받으므로 InputEventAction 을 함께 보낸다.
+## - 밝은 배경에서도 보이게: 어두운 반투명 바탕 + 흰 테두리 + 테두리 있는 글자.
 ## - 컨트롤러나 키보드 입력이 들어오면 숨고, 화면을 만지면 다시 나타난다.
 ## - 멈춤(지도·메뉴) 중에도 손가락 떼기는 받아서 버튼이 눌린 채 남지 않게 한다.
 
+@export var stick_radius := 110.0
+
 ## Input.action_press 는 상태만 바꾸고 이벤트를 보내지 않으므로, 이벤트로 듣는 동작들은 따로 보낸다.
 const EVENT_ACTIONS := ["map", "pause"]
-
-@export var stick_radius := 110.0
 
 var _touches := {}  # 손가락 번호 -> {"role": String, "origin": Vector2, "pos": Vector2}
 var _canvas: Control
@@ -48,27 +50,40 @@ func _on_device_changed(kind: InputDevice.Kind) -> void:
 		_release_all()
 
 
-## 버튼 배치: 이름 -> {pos, r, text, action}
+## 상황 버튼의 글자: 쉬는 중 '이동', 포탈 앞 '들어가기', 그 밖엔 '손길'.
+func _interact_label() -> String:
+	if _player.state == Player.State.REST:
+		return "이동"
+	for n in _player.interactables:
+		if n is Portal:
+			return "들어가기"
+	return "손길"
+
+
+## 버튼 배치: 이름 -> {pos, r, text, action}. 오른쪽은 오른쪽 아래 모서리, 왼쪽은 왼쪽 아래 모서리 기준.
 func _buttons() -> Dictionary:
 	var s := _canvas.size
+	var br := Vector2(s.x, s.y)   # 오른쪽 아래 모서리 (오른손 엄지의 축)
 	var b := {
-		"attack_light": {"pos": Vector2(s.x - 190, s.y - 290), "r": 86.0, "text": "약공격", "action": "attack_light"},
-		"guard": {"pos": Vector2(s.x - 390, s.y - 250), "r": 78.0, "text": "가드", "action": "guard"},
-		"jump": {"pos": Vector2(s.x - 170, s.y - 110), "r": 66.0, "text": "점프", "action": "jump"},
-		"dodge_r": {"pos": Vector2(s.x - 330, s.y - 90), "r": 56.0, "text": "회피", "action": "dodge"},
-		"attack_heavy": {"pos": Vector2(s.x - 190, s.y - 460), "r": 62.0, "text": "강공격", "action": "attack_heavy"},
-		"run_r": {"pos": Vector2(s.x - 360, s.y - 420), "r": 46.0, "text": "달리기", "action": "run_toggle"},
-		"heal": {"pos": Vector2(s.x - 90, s.y - 600), "r": 42.0, "text": "회복", "action": "heal"},
-		"dodge_l": {"pos": Vector2(150, s.y - 110), "r": 60.0, "text": "회피", "action": "dodge"},
-		"run_l": {"pos": Vector2(330, s.y - 150), "r": 46.0, "text": "달리기", "action": "run_toggle"},
+		# 오른쪽 엄지 — 안쪽 호 (가장 자주 누르는 것들)
+		"jump": {"pos": br + Vector2(-150, -130), "r": 76.0, "text": "점프", "action": "jump"},
+		"attack_light": {"pos": br + Vector2(-340, -215), "r": 92.0, "text": "약공격", "action": "attack_light"},
+		"guard": {"pos": br + Vector2(-545, -150), "r": 72.0, "text": "가드", "action": "guard"},
+		# 바깥 호
+		"dodge_r": {"pos": br + Vector2(-170, -335), "r": 64.0, "text": "회피", "action": "dodge"},
+		"attack_heavy": {"pos": br + Vector2(-355, -425), "r": 62.0, "text": "강공격", "action": "attack_heavy"},
+		"soul": {"pos": br + Vector2(-545, -350), "r": 54.0, "text": "영혼", "action": "soul_ability"},
+		"soul_next": {"pos": br + Vector2(-670, -455), "r": 38.0, "text": "전환", "action": "soul_next"},
+		"heal": {"pos": br + Vector2(-175, -525), "r": 50.0, "text": "회복", "action": "heal"},
+		# 왼쪽 엄지
+		"dodge_l": {"pos": Vector2(150, s.y - 130), "r": 62.0, "text": "회피", "action": "dodge"},
+		"walk_l": {"pos": Vector2(320, s.y - 95), "r": 46.0, "text": "걷기", "action": "run_toggle"},
+		# 위 모서리
 		"map": {"pos": Vector2(s.x - 76, 76), "r": 46.0, "text": "지도", "action": "map"},
 		"menu": {"pos": Vector2(76, 76), "r": 46.0, "text": "메뉴", "action": "pause"},
-		"soul": {"pos": Vector2(s.x - 230, s.y - 600), "r": 42.0, "text": "영혼", "action": "soul_ability"},
-		"soul_next": {"pos": Vector2(s.x - 330, s.y - 560), "r": 30.0, "text": "전환", "action": "soul_next"},
 	}
 	if _player and is_instance_valid(_player) and _player.can_interact:
-		var resting := _player.state == Player.State.REST
-		b["interact"] = {"pos": Vector2(s.x - 560, s.y - 110), "r": 70.0, "text": "이동" if resting else "손길", "action": "interact"}
+		b["interact"] = {"pos": br + Vector2(-740, -250), "r": 70.0, "text": _interact_label(), "action": "interact"}
 	var k := Settings.touch_scale_factor()
 	if k != 1.0:
 		for name in b:
@@ -178,19 +193,27 @@ func _release_all() -> void:
 		Input.action_release(a)
 
 
-func _on_draw() -> void:
+## 테두리 있는 글자 (밝은 배경에서도 읽히게).
+func _label(pos: Vector2, text: String, size: int, color: Color, width: float) -> void:
 	var font := ThemeDB.fallback_font
-	var idle := Color(1, 1, 1, 0.12)
-	var active := Color("8fd3ff", 0.35)
-	var locked := Color("ffd46a", 0.35)
+	_canvas.draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_CENTER, width, size, 5, Color(0, 0, 0, 0.75))
+	_canvas.draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_CENTER, width, size, color)
+
+
+func _on_draw() -> void:
+	var idle := Color(0.03, 0.04, 0.07, 0.42)
+	var ring := Color(1, 1, 1, 0.55)
+	var active := Color("8fd3ff", 0.6)
+	var locked := Color("ffd46a", 0.45)
 	for t in _touches.values():
 		if t["role"] == "stick":
 			var origin: Vector2 = t["origin"]
 			var knob: Vector2 = origin + (t["pos"] - origin).limit_length(stick_radius)
-			_canvas.draw_circle(origin, stick_radius, idle)
-			_canvas.draw_arc(origin, stick_radius, 0, TAU, 48, Color(1, 1, 1, 0.3), 2.0, true)
+			_canvas.draw_circle(origin, stick_radius, Color(0, 0, 0, 0.25))
+			_canvas.draw_arc(origin, stick_radius, 0, TAU, 48, ring, 3.0, true)
 			_canvas.draw_circle(knob, 40.0, active)
-	var run_on := _player != null and is_instance_valid(_player) and _player.run_locked
+			_canvas.draw_arc(knob, 40.0, 0, TAU, 32, Color(1, 1, 1, 0.8), 2.0, true)
+	var walking := _player != null and is_instance_valid(_player) and _player.walk_locked
 	var resting := _player != null and is_instance_valid(_player) and _player.state == Player.State.REST
 	var buttons := _buttons()
 	for name in buttons:
@@ -202,18 +225,17 @@ func _on_draw() -> void:
 		var fill := idle
 		if pressed:
 			fill = active
-		elif name.begins_with("run") and run_on:
+		elif name == "walk_l" and walking:
 			fill = locked
 		elif name == "interact":
-			fill = Color("8fd3ff" if resting else "ffd46a", 0.25 + 0.1 * sin(Time.get_ticks_msec() / 150.0))
-		elif name == "map" or name == "menu":
-			fill = Color(1, 1, 1, 0.16)
+			fill = Color("8fd3ff" if resting else "ffd46a", 0.35 + 0.1 * sin(Time.get_ticks_msec() / 150.0))
 		var r: float = b["r"]
 		_canvas.draw_circle(b["pos"], r, fill)
-		_canvas.draw_arc(b["pos"], r, 0, TAU, 48, Color(1, 1, 1, 0.3), 2.0, true)
+		_canvas.draw_arc(b["pos"], r, 0, TAU, 48, ring, 3.0, true)
 		var text: String = b["text"]
-		if name.begins_with("run") and run_on:
-			text = "달리기 ●"
-		_canvas.draw_string(font, b["pos"] + Vector2(-r * 1.5, 9), text, HORIZONTAL_ALIGNMENT_CENTER, r * 3.0, 22 if r < 60 else 28, Color(1, 1, 1, 0.8))
+		if name == "walk_l" and walking:
+			text = "걷기 ●"
+		var size := 22 if r < 60 else 28
+		_label(b["pos"] + Vector2(-r * 1.5, size * 0.36), text, size, Color(1, 1, 1, 0.95), r * 3.0)
 	if _touches.is_empty():
-		_canvas.draw_string(font, Vector2(_canvas.size.x * 0.5 - 700, _canvas.size.y - 36), "왼쪽 화면을 누른 채 움직이면 이동  ·  회피 짧게: 구르기, 길게: 달리기  ·  강공격 길게: 차지", HORIZONTAL_ALIGNMENT_CENTER, 1400, 20, Color(1, 1, 1, 0.45))
+		_label(Vector2(_canvas.size.x * 0.5 - 700, _canvas.size.y - 30), "왼쪽 화면을 누른 채 움직이면 이동 (달리기가 기본)  ·  회피 짧게: 구르기  ·  강공격 길게: 차지  ·  포탈 앞에서 ↑ 또는 들어가기", 20, Color(1, 1, 1, 0.7), 1400)

@@ -55,7 +55,7 @@ fill_to = Vector2(1, 0.5)
 
 [node name="Canopy01" type="Node2D"]
 script = ExtResource("1_room")
-bounds = Rect2(0, 0, 4800, 2330)
+bounds = Rect2(0, -420, 4800, 2750)
 region = "canopy"
 room_id = "canopy_01"
 display_name = "수관 · 시작의 가지"
@@ -129,9 +129,29 @@ position = Vector2(4800, -100)
 size = Vector2(100, 2600)
 decorate = false
 
-[node name="Ceiling" parent="Terrain" instance=ExtResource("3_platform")]
+[node name="CeilingLeft" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, -100)
-size = Vector2(4800, 100)
+size = Vector2(1400, 100)
+decorate = false
+
+[node name="CeilingRight" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1900, -100)
+size = Vector2(2900, 100)
+decorate = false
+
+[node name="NookWallLeft" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1300, -620)
+size = Vector2(100, 620)
+decorate = false
+
+[node name="NookWallRight" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1900, -620)
+size = Vector2(100, 620)
+decorate = false
+
+[node name="NookCeiling" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1300, -620)
+size = Vector2(700, 100)
 decorate = false
 
 [node name="Floor1" parent="Terrain" instance=ExtResource("3_platform")]
@@ -212,9 +232,10 @@ size = Vector2(1000, 80)
 label_text = "틈 400: 달려서  →  바람의 틈으로"
 
 [node name="Secret" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1500, 60)
-size = Vector2(300, 40)
-label_text = "이단 점프 필요 — 위에 무언가 있다"
+position = Vector2(1450, 60)
+size = Vector2(400, 40)
+one_way = true
+label_text = "이단 점프 필요 — 천장 틈 위에 무언가 있다 (아래서 뛰어오르면 올라선다)"
 
 [node name="Hazards" type="Node2D" parent="."]
 
@@ -227,11 +248,6 @@ size = Vector2(320, 60)
 [node name="MoonlightGrass" parent="Interactables" instance=ExtResource("9_grass")]
 position = Vector2(640, 2200)
 grass_id = "canopy_start"
-display_name = "수관 · 시작의 가지"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(1150, 2200)
-portal_id = "canopy_01"
 display_name = "수관 · 시작의 가지"
 
 [node name="Enemies" type="Node2D" parent="."]
@@ -258,21 +274,15 @@ position = Vector2(1650, -8)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="ToCanopy02" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(4770, 240)
+[node name="ToCanopy02" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(4620, 400)
 target_scene = "res://scenes/rooms/canopy_02.tscn"
 spawn_name = "FromCanopy01"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/ToCanopy02"]
-shape = SubResource("RectangleShape2D_exit")
-
-[node name="ToHidden" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(1650, -60)
+[node name="ToHidden" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(1650, 60)
 target_scene = "res://scenes/rooms/canopy_hidden.tscn"
 spawn_name = "FromCanopy01"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/ToHidden"]
-shape = SubResource("RectangleShape2D_hidden_exit")
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(300, 2132)

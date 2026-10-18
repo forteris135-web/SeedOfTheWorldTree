@@ -186,21 +186,15 @@ position = Vector2(4080, 1732)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 1600)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1800)
 target_scene = "res://scenes/rooms/mine_deep.tscn"
 spawn_name = "ToAbyss"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(4160, 1600)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(4010, 1800)
 target_scene = "res://scenes/rooms/abyss_02.tscn"
 spawn_name = "FromAbyss01"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
 
 [node name="Interactables" type="Node2D" parent="."]
 
@@ -213,11 +207,6 @@ display_name = "심연 · 초입"
 position = Vector2(2200, 1800)
 record_id = "burnt_roots"
 kind = "stone"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(900, 1800)
-portal_id = "abyss_01"
-display_name = "심연 · 그을린 뿌리"
 
 [node name="Enemies" type="Node2D" parent="."]
 

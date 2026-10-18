@@ -185,21 +185,15 @@ position = Vector2(4080, 1332)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 1200)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1400)
 target_scene = "res://scenes/rooms/canopy_boss.tscn"
 spawn_name = "FromVillage"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(4160, 1200)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(4010, 1400)
 target_scene = "res://scenes/rooms/village_02.tscn"
 spawn_name = "FromVillage01"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
 
 [node name="Interactables" type="Node2D" parent="."]
 
@@ -212,11 +206,6 @@ display_name = "마을 · 입구의 등불"
 position = Vector2(1900, 1400)
 record_id = "village_poster"
 kind = "poster"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(900, 1400)
-portal_id = "village_01"
-display_name = "마을 · 입구의 거리"
 
 [node name="Enemies" type="Node2D" parent="."]
 

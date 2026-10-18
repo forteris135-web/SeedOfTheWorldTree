@@ -7,7 +7,7 @@ const ACTIONS := ["move_left", "move_right", "move_up", "move_down", "jump", "do
 const NAMES := {
 	"move_left": "이동 ←", "move_right": "이동 →", "move_up": "위", "move_down": "아래", "jump": "점프", "dodge": "회피 / 달리기",
 	"attack_light": "약공격", "attack_heavy": "강공격 / 차지", "guard": "가드 / 저스트 가드", "soul_ability": "영혼 능력", "heal": "회복 (이슬 방울)",
-	"interact": "상호작용 / 정화의 손길", "soul_prev": "영혼 전환 ←", "soul_next": "영혼 전환 →", "map": "지도", "pause": "메뉴", "run_toggle": "달리기 고정",
+	"interact": "상호작용 / 정화의 손길", "soul_prev": "영혼 전환 ←", "soul_next": "영혼 전환 →", "map": "지도", "pause": "메뉴", "run_toggle": "걷기 고정",
 }
 ## 듀얼센스 / 엑스박스 버튼 이름
 const PAD_NAMES := {

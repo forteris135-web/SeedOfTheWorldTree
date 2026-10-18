@@ -1,9 +1,8 @@
 extends CanvasLayer
 class_name TravelMenu
-## 이동 메뉴. 두 가지 목록을 보여 준다 (기획서 8장 "빠른 이동").
-## - 달빛풀: 피워 둔 달빛풀끼리 뿌리로 이어져 있다. (쉬는 중에 손길 버튼)
-## - 포탈: 가 본 방의 포탈끼리 이어져 있다. (포탈 앞에서 손길 버튼)
+## 이동 메뉴 (기획서 8장 "빠른 이동"): 피워 둔 달빛풀끼리 뿌리로 이어져 있다. 쉬는 중에 손길 버튼으로 연다.
 ## 지역 순(수관 → 마을 → 채굴장 → 심연)으로 늘어놓고, 위·아래 / 터치로 고른다.
+## (옆 방으로 가는 포탈은 메뉴가 아니라 Portal 이 바로 건너간다.)
 
 signal closed
 
@@ -44,16 +43,6 @@ func open(current_grass_id: String) -> void:
 		var scene: String = g.get("scene", "")
 		items.append({"id": id, "name": g.get("name", id), "scene": scene, "region": g.get("region", region_of_scene(scene))})
 	_open_list("grass", "뿌리를 따라 이동", "피워 둔 달빛풀로 갈 수 있다", "아직 다른 달빛풀을 피우지 않았다. 달빛풀에 손을 대어 두면 여기서 이어진다.", items, current_grass_id)
-
-
-## 포탈 목록 (포탈 앞).
-func open_portals(current_portal_id: String) -> void:
-	var items: Array = []
-	for id in Progress.portals:
-		var p: Dictionary = Progress.portals[id]
-		var scene: String = p.get("scene", "")
-		items.append({"id": id, "name": p.get("name", id), "scene": scene, "region": p.get("region", region_of_scene(scene))})
-	_open_list("portal", "포탈로 건너가기", "가 본 방의 포탈로 갈 수 있다", "아직 다른 포탈을 보지 못했다. 다른 방에 가 보면 여기서 이어진다.", items, current_portal_id)
 
 
 func _open_list(kind: String, title: String, subtitle: String, empty_hint: String, items: Array, current_id: String) -> void:

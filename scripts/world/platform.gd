@@ -24,6 +24,8 @@ class_name Platform
 @export var label_text := ""
 ## 장식을 그릴지 (벽·천장은 끈다)
 @export var decorate := true
+## 한쪽 방향 발판: 아래에서 뛰어오르면 통과해 위에 올라선다 (천장 틈의 비밀 발판처럼).
+@export var one_way := false
 
 
 func _ready() -> void:
@@ -32,6 +34,9 @@ func _ready() -> void:
 	rect.size = size
 	shape.shape = rect
 	shape.position = size / 2.0
+	if one_way:
+		shape.one_way_collision = true
+		shape.one_way_collision_margin = 24.0
 	add_child(shape)
 	if label_text != "":
 		var label := Label.new()

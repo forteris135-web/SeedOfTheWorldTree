@@ -18,7 +18,6 @@ func save(grass_id: String, scene_path: String) -> void:
 		"abilities": Progress.abilities,
 		"upgrades": Progress.upgrades,
 		"grasses": Progress.grasses,
-		"portals": Progress.portals,
 		"rescued": Progress.rescued,
 		"visited_rooms": _rooms_to_json(Progress.visited_rooms),
 		"ending": Progress.ending,
@@ -42,7 +41,6 @@ func load_game() -> String:
 	Progress.abilities = data.get("abilities", {})
 	Progress.upgrades = data.get("upgrades", {})
 	Progress.grasses = data.get("grasses", {})
-	Progress.portals = data.get("portals", {})
 	Progress.rescued = data.get("rescued", {})
 	Progress.visited_rooms = _rooms_from_json(data.get("visited_rooms", {}))
 	Progress.ending = data.get("ending", "")

@@ -212,15 +212,9 @@ script = ExtResource("18_pile")
 [node name="Interactables" type="Node2D" parent="."]
 
 [node name="MoonlightGrass" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(330, 1380)
+position = Vector2(420, 1380)
 grass_id = "canopy_boss_gate"
 display_name = "수관 · 싸움터 앞"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(1800, 1500)
-portal_id = "canopy_boss"
-display_name = "수관 · 꼭대기의 하늘"
-requires_flag = "boss_bird_defeated"
 
 [node name="GateIn" type="StaticBody2D" parent="."]
 position = Vector2(700, 1500)
@@ -245,21 +239,15 @@ position = Vector2(1950, -400)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="ToCanopy04" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 1200)
+[node name="ToCanopy04" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(140, 1380)
 target_scene = "res://scenes/rooms/canopy_04.tscn"
 spawn_name = "FromBoss"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/ToCanopy04"]
-shape = SubResource("RectangleShape2D_exit")
-
-[node name="ToVillage" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(3640, 1300)
+[node name="ToVillage" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(3610, 1500)
 target_scene = "res://scenes/rooms/village_01.tscn"
 spawn_name = "FromCanopy"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/ToVillage"]
-shape = SubResource("RectangleShape2D_exit")
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(140, 1323)

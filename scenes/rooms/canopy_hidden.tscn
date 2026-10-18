@@ -172,20 +172,12 @@ position = Vector2(220, 1232)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 1100)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1300)
 target_scene = "res://scenes/rooms/canopy_01.tscn"
 spawn_name = "FromHidden"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
 [node name="Interactables" type="Node2D" parent="."]
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(600, 1300)
-portal_id = "canopy_hidden"
-display_name = "수관 · 잿가지의 둥지"
 
 [node name="GateIn" type="StaticBody2D" parent="."]
 position = Vector2(560, 1300)

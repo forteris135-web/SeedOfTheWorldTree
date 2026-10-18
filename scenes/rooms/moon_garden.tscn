@@ -165,26 +165,20 @@ position = Vector2(2880, 1032)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 900)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1100)
 target_scene = "res://scenes/rooms/abyss_02.tscn"
 spawn_name = "FromGarden"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(2960, 900)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(2810, 1100)
 target_scene = "res://scenes/rooms/abyss_boss.tscn"
 spawn_name = "FromGarden"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
 
 [node name="Interactables" type="Node2D" parent="."]
 
 [node name="Decor1" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(300, 1100)
+position = Vector2(410, 1100)
 art_scale = 0.2
 is_open = true
 decor = true
@@ -196,13 +190,13 @@ is_open = true
 decor = true
 
 [node name="Decor3" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(900, 1100)
+position = Vector2(1000, 1100)
 art_scale = 0.18
 is_open = true
 decor = true
 
 [node name="Decor4" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(2000, 1100)
+position = Vector2(1950, 1100)
 art_scale = 0.24
 is_open = true
 decor = true
@@ -214,19 +208,14 @@ is_open = true
 decor = true
 
 [node name="Decor6" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(2650, 1100)
+position = Vector2(2560, 1100)
 art_scale = 0.22
 is_open = true
 decor = true
 
 [node name="Grass1" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(1600, 1100)
+position = Vector2(1500, 1100)
 grass_id = "moon_garden"
-display_name = "달빛 정원"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(1250, 1100)
-portal_id = "moon_garden"
 display_name = "달빛 정원"
 
 [node name="Enemies" type="Node2D" parent="."]

@@ -140,8 +140,9 @@ var state: State = State.IDLE
 ## 바라보는 방향. 1 = 오른쪽, -1 = 왼쪽.
 var facing := 1
 var is_running := false
-## 달리기 고정 (터치의 달리기 버튼, 컨트롤러 L3). 켜져 있으면 이동이 항상 달리기.
-var run_locked := false
+## 걷기 고정 (터치의 걷기 버튼, 컨트롤러 L3). 달리기가 기본이고, 켜면 이동이 걷기가 된다 (2026-10-18 기획자 결정).
+## 걷는 중에도 회피 버튼을 길게 누르면 그동안은 달린다.
+var walk_locked := false
 var hp := 100.0
 var guard := 100.0
 var dews := 3
@@ -370,10 +371,10 @@ func _handle_dodge_and_run(delta: float, on_floor: bool) -> void:
 				_try_roll(on_floor)
 			_dodge_running = false
 		if Input.is_action_just_pressed("run_toggle"):
-			run_locked = not run_locked
+			walk_locked = not walk_locked
 		if Input.is_action_just_pressed("jump"):
 			_buffer_timer = jump_buffer_time
-	is_running = _dodge_running or run_locked
+	is_running = _dodge_running or not walk_locked
 
 	if state == State.ROLL:
 		_roll_timer -= delta
@@ -415,7 +416,8 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 					_attack_timer = light_active
 					var hit := HitData.make(light_damage[attack_step - 1] * attack_multiplier, light_poise[attack_step - 1], self, Vector2(260, -80) if attack_step < 3 else Vector2(520, -180))
 					hit.from_player = true
-					hitbox.set_box(Rect2(30, -85, 150, 105), facing)
+					# 범위: 앞으로 195 (기획자 요청으로 150 → 195, 2026-10-18)
+					hitbox.set_box(Rect2(30, -90, 195, 112), facing)
 					hitbox.activate(hit, light_active)
 					if on_floor:
 						velocity.x = facing * light_lunge
@@ -444,7 +446,7 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 					var hit := HitData.make(lerpf(heavy_damage, heavy_damage_charged, t) * attack_multiplier, lerpf(heavy_poise, heavy_poise_charged, t), self, Vector2(700, -260))
 					hit.from_player = true
 					hit.hitstop = 0.09
-					hitbox.set_box(Rect2(20, -105, 215, 140), facing)
+					hitbox.set_box(Rect2(20, -110, 265, 148), facing)
 					hitbox.activate(hit, heavy_active)
 					if on_floor:
 						velocity.x = facing * light_lunge * 0.6

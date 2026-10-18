@@ -196,34 +196,25 @@ position = Vector2(3600, 1332)
 
 [node name="Exits" type="Node2D" parent="."]
 
-[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(-50, 1200)
+[node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 1400)
 target_scene = "res://scenes/rooms/village_01.tscn"
 spawn_name = "FromVillage02"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
-shape = SubResource("ExitShape1")
-
-[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(3760, 380)
+[node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(3610, 560)
 target_scene = "res://scenes/rooms/village_shrine.tscn"
 spawn_name = "FromVillage02"
 
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
-shape = SubResource("ExitShape2")
-
-[node name="Exit3" parent="Exits" instance=ExtResource("16_exit")]
-position = Vector2(3760, 1200)
+[node name="Exit3" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(3610, 1400)
 target_scene = "res://scenes/rooms/mine_01.tscn"
 spawn_name = "FromVillage"
-
-[node name="Shape" type="CollisionShape2D" parent="Exits/Exit3"]
-shape = SubResource("ExitShape3")
 
 [node name="Interactables" type="Node2D" parent="."]
 
 [node name="Grass1" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(3350, 1400)
+position = Vector2(3300, 1400)
 grass_id = "village_tia"
 display_name = "마을 · 마을 끝 달빛풀"
 
@@ -239,11 +230,6 @@ npc_id = "owen"
 texture = ExtResource("33_owen")
 art_scale = 0.165
 require_flag = "owen_rescued"
-
-[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
-position = Vector2(600, 1400)
-portal_id = "village_02"
-display_name = "마을 · 등불 골목"
 
 [node name="Enemies" type="Node2D" parent="."]
 
