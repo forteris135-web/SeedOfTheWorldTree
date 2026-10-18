@@ -107,7 +107,8 @@ signal blocked
 ## 가드를 하지 않을 때 초당 회복되는 가드 게이지.
 @export var guard_regen := 28.0
 ## 가드 버튼을 누른 뒤 이 시간(초) 안에 맞으면 저스트 가드.
-@export var just_guard_window := 0.15
+## 저스트 가드 판정 (가드를 누른 뒤 이 시간 안에 맞으면). 0.15 → 0.24 로 후하게 (2026-10-18 기획자 요청).
+@export var just_guard_window := 0.24
 ## 가드를 뗀 뒤 다시 가드할 수 있기까지 (연타 방지).
 @export var guard_relock_time := 0.2
 ## 가드가 깨졌을 때 무방비 시간.
@@ -229,7 +230,7 @@ var _base_just_guard_window := -1.0
 func _apply_settings() -> void:
 	if _base_just_guard_window < 0.0:
 		_base_just_guard_window = just_guard_window
-	just_guard_window = _base_just_guard_window * (1.7 if Settings.get_value("lenient_guard") else 1.0)
+	just_guard_window = _base_just_guard_window * (1.5 if Settings.get_value("lenient_guard") else 1.0)
 
 
 func _apply_abilities() -> void:
