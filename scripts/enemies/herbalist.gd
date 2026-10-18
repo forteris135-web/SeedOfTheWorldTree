@@ -19,6 +19,7 @@ func _begin_windup() -> void:
 
 func _strike() -> void:
 	_set_state(State.STRIKE)
+	anim_hint = "scatter"   # 뿌리는 자세: 숙였다 펴며 포자를 흩뿌린다 (휘두르기가 아니다)
 	_timer = strike_time + 0.2
 	# 자기 주위와 소녀 쪽에 포자 구름
 	_spawn_cloud(global_position + Vector2(facing * 140.0, -40.0))
@@ -37,15 +38,17 @@ func _spawn_cloud(at: Vector2) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if anim_hint == "scatter" and state != State.STRIKE:
+		anim_hint = ""
 	if state == State.CHASE and player and _sees_player(notice_range * 1.4):
 		var dx := player.global_position.x - global_position.x
 		facing = 1 if dx > 0.0 else -1
 		if absf(dx) < keep_distance and _can_walk(-facing):
+			# 뒤로 걷는다 (그림은 이동 방향을 보고 뒷걸음 자세를 잡는다)
+			_tick_common(delta)
 			velocity.x = move_toward(velocity.x, -facing * walk_speed, 1800.0 * delta)
 			if not is_on_floor():
 				velocity.y += gravity * delta
-			_timer -= delta
-			_flash = maxf(_flash - delta * 8.0, 0.0)
 			move_and_slide()
 			if _timer <= 0.0:
 				_begin_windup()

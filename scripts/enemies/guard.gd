@@ -18,7 +18,7 @@ func _begin_windup() -> void:
 	if randf() < charge_chance:
 		_mode = "charge"
 		anim_hint = "red"           # 붉은 예고 = 가드 불가
-		_timer = windup_time * 1.3
+		_timer = windup_time * 1.3  # 예고 길이는 _tick_common 이 첫 틱에 잡아 windup_progress 가 0→1 이 된다
 	else:
 		_mode = "bash"
 		anim_hint = ""
@@ -41,7 +41,7 @@ func _strike() -> void:
 
 func _physics_process(delta: float) -> void:
 	if state == State.STRIKE and _mode == "charge":
-		_flash = maxf(_flash - delta * 8.0, 0.0)
+		_tick_common(delta)
 		_charge_timer -= delta
 		velocity.x = facing * charge_speed
 		if not is_on_floor():
@@ -49,7 +49,7 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		var blocked := is_on_wall() or not _can_walk(facing)
 		if blocked or _charge_timer <= 0.0:
-			# 방패가 박혔다: 무방비
+			# 방패가 박혔다: 무방비. 그림은 '꽝' 하고 박히는 충격 반동.
 			hitbox.deactivate()
 			_mode = "stuck"
 			anim_hint = "stuck"
@@ -57,15 +57,14 @@ func _physics_process(delta: float) -> void:
 			_set_state(State.RECOVER)
 			_timer = stuck_time
 			Juice.shake(5.0)
+			_visual_call("impact", [facing, 1.3 if blocked else 0.8])
 		return
 	if state == State.RECOVER and _mode == "stuck":
+		_tick_common(delta)
 		velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
 		if not is_on_floor():
 			velocity.y += gravity * delta
 		move_and_slide()
-		_timer -= delta
-		_flash = maxf(_flash - delta * 8.0, 0.0)
-		_poise_hold_timer = maxf(_poise_hold_timer - delta, 0.0)
 		if _timer <= 0.0:
 			_mode = ""
 			anim_hint = ""
@@ -86,6 +85,8 @@ func receive_hit(hit: HitData, hb: Hurtbox) -> String:
 		if from_front:
 			_flash = 0.6
 			Juice.hitstop(0.03, 0.1)
+			# 방패로 막는 자세: 몸이 뒤로 살짝 밀리며 번쩍
+			_visual_call("block", [-facing, clampf(hit.poise / 40.0, 0.6, 1.5)])
 			return "blocked"
 	if stuck:
 		hit.poise *= 2.0
