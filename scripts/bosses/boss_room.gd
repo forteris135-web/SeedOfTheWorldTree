@@ -211,7 +211,7 @@ func _bosstest() -> void:
 		if sname != last:
 			print("[보스시험] %5.1f초  %s  (체력 %.0f, 흐트러짐 %.0f, 페이즈 %d, 투사체 %d)" % [t, sname, boss.hp, boss.poise, boss.phase, tree.get_nodes_in_group("projectile").size()])
 			last = sname
-			if sname in ["LEAF_RAIN", "FEATHERS", "WIND", "EAT", "SWEEP", "THRUST", "FLAME", "SLAM", "THROW"] and not shots.has(sname):
+			if sname in ["LEAF_RAIN", "FEATHERS", "WIND", "EAT", "SWEEP", "PECK", "THRUST", "FLAME", "SLAM", "THROW", "SPIKES", "ORBS", "WALL"] and not shots.has(sname):
 				shots[sname] = true
 				await tree.create_timer(0.8).timeout
 				_save_screenshot("debug_boss_%s_%s.png" % [boss_name, sname.to_lower()])

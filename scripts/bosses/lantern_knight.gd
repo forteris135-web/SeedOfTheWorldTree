@@ -6,7 +6,9 @@ class_name LanternKnight
 ## 2페이즈(체력 절반): 갑옷 폭주 — 빨라지고, 불꽃 파도 두 줄, 등불 던지기(포물선, 떨어진 자리에 불기둥).
 ## BossRoom 과 맞추는 약속: start_fight / reset_fight / arena / ground_y / fallen / purified / hp_changed / poise_changed / phase_changed / telegraph
 
-enum State { WAIT, INTRO, MARCH, THRUST, FLAME, SLAM, THROW, BROKEN, FALLEN, PURIFIED }
+## STAGGER: 2페이즈로 넘어가는 순간의 짧은 휘청(0.5초). 그 뒤 MARCH 로 이어진다.
+enum State { WAIT, INTRO, MARCH, THRUST, FLAME, SLAM, THROW, BROKEN, FALLEN, PURIFIED, STAGGER }
+const ATTACK_STATES := [State.THRUST, State.FLAME, State.SLAM, State.THROW]
 
 signal hp_changed(hp: float, max_hp: float)
 signal poise_changed(poise: float, max_poise: float)
@@ -36,8 +38,21 @@ var facing := -1
 var player: Player
 var arena: Rect2
 var ground_y := 0.0
-var attack_phase := ""   # startup / active / recovery
+var attack_phase := ""   # startup / active / recovery (공격이 아니면 "")
 var windup_progress := 0.0
+## 지금 공격의 단계 길이(초). 그림이 진행도(남은 시간 / 길이)를 계산하는 데 쓴다. 2페이즈 배속이 있어도 모양이 같다.
+var startup_len := 0.5
+var active_len := 0.2
+var recovery_len := 0.7
+## 그림에 주는 힌트: "" / "stagger"(저스트 가드로 창이 튕김, 2페이즈 휘청)
+var anim_hint := ""
+## 2페이즈 전환 휘청 길이. 그 뒤 MARCH 0.7초 → 합쳐서 예전(1.2초)과 같다.
+var stagger_len := 0.5
+## 몸 돌리기 규칙: 소녀가 이만큼(px) 넘게 반대쪽에 있어야 돌고, 한 번 돌면 이 시간 동안은 다시 돌지 않는다.
+## (행진 중 소녀 몸을 지나칠 때 매 프레임 뒤집혀 그림이 납작해졌다 펴지는 걸 막는다. 창 판정은 x 60부터라 영향 없음)
+@export var face_deadzone := 40.0
+@export var face_hold := 0.25
+var _face_hold := 0.0
 var _timer := 0.0
 var _phase_timer := 0.0
 var _poise_hold := 0.0
@@ -96,6 +111,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 	_timer -= delta
+	_face_hold = maxf(_face_hold - delta, 0.0)
 	var fast := 0.75 if phase == 2 else 1.0
 	match state:
 		State.INTRO:
@@ -106,7 +122,7 @@ func _physics_process(delta: float) -> void:
 		State.MARCH:
 			if player:
 				var dx := player.global_position.x - global_position.x
-				facing = 1 if dx > 0.0 else -1
+				_update_facing(dx)
 				velocity.x = move_toward(velocity.x, facing * march_speed * (1.3 if phase == 2 else 1.0), 900.0 * delta)
 				if _timer <= 0.0:
 					_choose_attack(absf(dx))
@@ -128,7 +144,7 @@ func _physics_process(delta: float) -> void:
 				_spawn_flame_wave(facing)
 				if phase == 2:
 					get_tree().create_timer(0.35).timeout.connect(func() -> void:
-						if state == State.FLAME or state == State.MARCH:
+						if state == State.FLAME or state == State.MARCH or state == State.STAGGER:
 							_spawn_flame_wave(facing)))
 		State.SLAM:
 			velocity.x = move_toward(velocity.x, 0.0, 2500.0 * delta)
@@ -144,6 +160,12 @@ func _physics_process(delta: float) -> void:
 		State.THROW:
 			velocity.x = move_toward(velocity.x, 0.0, 2500.0 * delta)
 			_phase_step(delta, 0.6, 0.1, 1.0, func() -> void: _throw_lantern())
+		State.STAGGER:
+			# 갑옷이 폭주하며 잠깐 휘청인다 (뒤로 살짝 밀리며 멈춤)
+			velocity.x = move_toward(velocity.x, 0.0, 900.0 * delta)
+			if _timer <= 0.0:
+				_set_state(State.MARCH)
+				_timer = 1.2 - stagger_len
 		State.BROKEN:
 			velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
 			if _timer <= 0.0:
@@ -165,15 +187,39 @@ func _phase_step(delta: float, startup: float, active: float, recovery: float, o
 			if _timer <= 0.0:
 				attack_phase = "active"
 				_timer = active
+				active_len = active
 				on_active.call()
 		"active":
 			if _timer <= 0.0:
 				attack_phase = "recovery"
 				_timer = recovery
+				recovery_len = recovery
 		"recovery":
 			if _timer <= 0.0:
 				_set_state(State.MARCH)
 				_timer = (0.5 if phase == 1 else 0.3) + randf() * 0.3
+
+
+## 소녀 쪽으로 몸을 돌린다 — 데드존 + 최소 유지 시간 (바로 옆을 지나쳐도 매 프레임 뒤집히지 않게).
+func _update_facing(dx: float) -> void:
+	var want := 1 if dx > 0.0 else -1
+	if want != facing and absf(dx) > face_deadzone and _face_hold <= 0.0:
+		facing = want
+		_face_hold = face_hold
+
+
+## 지금 공격 단계의 진행도 (0→1). 그림이 세 박자 곡선(예비→타격→되돌림)을 그리는 기준.
+func phase_progress() -> float:
+	match attack_phase:
+		"startup": return clampf(windup_progress, 0.0, 1.0)
+		"active": return 1.0 - clampf(_timer / maxf(active_len, 0.001), 0.0, 1.0)
+		"recovery": return 1.0 - clampf(_timer / maxf(recovery_len, 0.001), 0.0, 1.0)
+	return 0.0
+
+
+## 지금 상태의 진행도 (0→1; STAGGER 같은 단순 상태용).
+func state_progress(length: float) -> float:
+	return 1.0 - clampf(_timer / maxf(length, 0.001), 0.0, 1.0)
 
 
 func _begin(st: State, startup: float) -> void:
@@ -181,6 +227,7 @@ func _begin(st: State, startup: float) -> void:
 	attack_phase = "startup"
 	windup_progress = 0.0
 	_timer = startup
+	startup_len = startup
 
 
 func _choose_attack(dist: float) -> void:
@@ -271,8 +318,11 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		phase_changed.emit(2)
 		Juice.shake(10.0)
 		hitbox.deactivate()
-		_set_state(State.MARCH)
-		_timer = 1.2
+		# 공격 자세에서 곧바로 행진으로 '툭' 바뀌지 않게, 짧은 휘청을 거친다
+		_set_state(State.STAGGER)
+		anim_hint = "stagger"
+		_timer = stagger_len
+		velocity.x = -facing * 160.0
 	if poise >= max_poise and state != State.BROKEN:
 		hitbox.deactivate()
 		_set_state(State.BROKEN)
@@ -290,9 +340,12 @@ func on_just_guarded(_by: Player, amount: float) -> void:
 		_set_state(State.BROKEN)
 		_timer = broken_time
 	elif state == State.THRUST:
+		# 창이 튕겨 나간다: 긴 회복 + 뒤로 밀림. 그림은 "stagger" 힌트로 뒤로 젖히며 출렁인다.
 		hitbox.deactivate()
 		attack_phase = "recovery"
 		_timer = 1.1
+		recovery_len = 1.1
+		anim_hint = "stagger"
 		velocity.x = -facing * 240.0
 
 
@@ -347,6 +400,9 @@ func _set_state(new_state: State) -> void:
 	if debug_log:
 		print("[기사] %s → %s" % [State.keys()[state], State.keys()[new_state]])
 	state = new_state
+	anim_hint = ""
+	if new_state not in ATTACK_STATES:
+		attack_phase = ""
 	state_changed.emit(new_state)
 
 
