@@ -73,7 +73,7 @@ bounds = Rect2(0, 0, 4200, 2000)
 region = "abyss"
 room_id = "abyss_01"
 display_name = "심연 · 그을린 뿌리"
-map_offset = Vector2(38000, 500)
+map_offset = Vector2(39300, 500)
 terrain_color = Color(0.08, 0.06, 0.12, 1)
 dark = true
 

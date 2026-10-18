@@ -13,7 +13,7 @@ var next_spawn := ""
 ## 지금 보여 줄 회상 (memories.json 의 키)과 끝난 뒤 돌아갈 방.
 var pending_memory := ""
 var memory_return_scene := ""
-## 성장 보상 누적: max_hp(+체력), attack(+배수, 0.1 = 10%), dews(+개수)
+## 성장 보상 누적: max_hp(+체력), attack(+배수, 0.1 = 10%), dews(+개수), heal(+회복량)
 var upgrades := {}
 ## 피워 둔 달빛풀: id -> {"scene": 경로, "name": 표시 이름}
 var grasses := {}
@@ -25,8 +25,24 @@ var rescued := {}
 var visited_rooms := {}
 ## 고른 엔딩: sacrifice / return
 var ending := ""
+## 모은 것·부순 것 (id -> true): 아이템(pick_<방>_<번호>), 비밀 벽·천장(secret_<방>_<번호>).
+## 한 번 모으거나 부순 것은 다시 와도 그대로다.
+var collected := {}
 
 signal upgraded(kind: String, amount: float)
+## 무언가를 모으거나 부쉈다 (숨은 아이템이 나타나고, 지도의 탐사 수가 바뀐다).
+signal collected_changed(id: String)
+
+
+func is_collected(id: String) -> bool:
+	return collected.get(id, false)
+
+
+func collect(id: String) -> void:
+	if id == "" or is_collected(id):
+		return
+	collected[id] = true
+	collected_changed.emit(id)
 
 
 func add_upgrade(kind: String, amount: float) -> void:
@@ -64,4 +80,5 @@ func reset() -> void:
 	last_grass = {}
 	rescued.clear()
 	visited_rooms.clear()
+	collected.clear()
 	next_spawn = ""

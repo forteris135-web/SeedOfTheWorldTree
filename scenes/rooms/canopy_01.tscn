@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3 uid="uid://c1seedcanopy01"]
+[gd_scene load_steps=26 format=3 uid="uid://c1seedcanopy01"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -19,6 +19,8 @@
 [ext_resource type="PackedScene" uid="uid://c1seedgardener" path="res://scenes/enemies/gardener.tscn" id="18_gardener"]
 [ext_resource type="PackedScene" uid="uid://c1seedwoodcuttersav" path="res://scenes/enemies/woodcutter_savable.tscn" id="19_woodcutter_sav"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="PackedScene" uid="uid://c1seedsecretwall" path="res://scenes/world/secret_wall.tscn" id="50_secret_wall"]
+[ext_resource type="PackedScene" uid="uid://c1seedpickup" path="res://scenes/world/pickup.tscn" id="52_pickup"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
 size = Vector2(80, 320)
@@ -176,10 +178,6 @@ position = Vector2(3200, 2330)
 size = Vector2(320, 200)
 decorate = false
 
-[node name="BlockRight" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(4020, 1500)
-size = Vector2(780, 1000)
-
 [node name="Climb1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3650, 1800)
 size = Vector2(260, 40)
@@ -237,6 +235,24 @@ size = Vector2(400, 40)
 one_way = true
 label_text = "이단 점프 필요 — 천장 틈 위에 무언가 있다 (아래서 뛰어오르면 올라선다)"
 
+[node name="BlockTop" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(4020, 1500)
+size = Vector2(780, 350)
+
+[node name="BlockBottom" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(4020, 2050)
+size = Vector2(780, 450)
+
+[node name="BlockRightPart" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(4320, 1850)
+size = Vector2(480, 200)
+decorate = false
+
+[node name="SecretWall1" parent="Terrain" instance=ExtResource("50_secret_wall")]
+position = Vector2(4020, 1850)
+size = Vector2(60, 200)
+secret_id = "secret_canopy_01_1"
+
 [node name="Hazards" type="Node2D" parent="."]
 
 [node name="PitThorns" parent="Hazards" instance=ExtResource("17_thorns")]
@@ -249,6 +265,13 @@ size = Vector2(320, 60)
 position = Vector2(640, 2200)
 grass_id = "canopy_start"
 display_name = "수관 · 시작의 가지"
+
+[node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
+position = Vector2(4200, 2010)
+pickup_id = "pick_canopy_01_1"
+kind = "dews"
+amount = 1.0
+hidden_in = "secret_canopy_01_1"
 
 [node name="Enemies" type="Node2D" parent="."]
 

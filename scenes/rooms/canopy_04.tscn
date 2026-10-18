@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3 uid="uid://c1seedcanopy04"]
+[gd_scene load_steps=33 format=3 uid="uid://c1seedcanopy04"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -33,6 +33,8 @@
 [ext_resource type="PackedScene" uid="uid://c1seedherbalist" path="res://scenes/enemies/herbalist.tscn" id="36_herbalist"]
 [ext_resource type="PackedScene" uid="uid://c1seedherbalistsav" path="res://scenes/enemies/herbalist_savable.tscn" id="37_herbalist_sav"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="PackedScene" uid="uid://c1seedsecretwall" path="res://scenes/world/secret_wall.tscn" id="50_secret_wall"]
+[ext_resource type="PackedScene" uid="uid://c1seedpickup" path="res://scenes/world/pickup.tscn" id="52_pickup"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -69,7 +71,7 @@ size = Vector2(80, 300)
 
 [node name="Canopy04" type="Node2D"]
 script = ExtResource("1_room")
-bounds = Rect2(0, 0, 3200, 2200)
+bounds = Rect2(0, 0, 3500, 2200)
 region = "canopy"
 room_id = "canopy_04"
 display_name = "수관 · 가지 갈림길"
@@ -141,7 +143,7 @@ size = Vector2(100, 2400)
 decorate = false
 
 [node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(3200, -100)
+position = Vector2(3500, -100)
 size = Vector2(100, 2400)
 decorate = false
 
@@ -152,7 +154,7 @@ decorate = false
 
 [node name="P1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, 2000)
-size = Vector2(3200, 200)
+size = Vector2(3500, 200)
 label_text = "갈림길"
 
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
@@ -184,6 +186,20 @@ label_text = "높은 가지 (기록물 자리)"
 position = Vector2(2900, 700)
 size = Vector2(300, 60)
 
+[node name="RightUpper" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3200, -100)
+size = Vector2(300, 600)
+decorate = false
+
+[node name="RightLower" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3200, 700)
+size = Vector2(300, 1400)
+
+[node name="SecretWall1" parent="Terrain" instance=ExtResource("50_secret_wall")]
+position = Vector2(3200, 500)
+size = Vector2(60, 200)
+secret_id = "secret_canopy_04_1"
+
 [node name="Markers" type="Node2D" parent="."]
 
 [node name="FromCanopy03" type="Marker2D" parent="Markers"]
@@ -210,6 +226,13 @@ spawn_name = "FromCanopy04"
 position = Vector2(400, 2000)
 grass_id = "canopy_fork"
 display_name = "수관 · 갈림길"
+
+[node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
+position = Vector2(3400, 660)
+pickup_id = "pick_canopy_04_1"
+kind = "attack"
+amount = 0.05
+hidden_in = "secret_canopy_04_1"
 
 [node name="Enemies" type="Node2D" parent="."]
 

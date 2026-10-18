@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3 uid="uid://c1seedvillage01"]
+[gd_scene load_steps=33 format=3 uid="uid://c1seedvillage01"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -33,6 +33,8 @@
 [ext_resource type="PackedScene" uid="uid://c1seedherbalist" path="res://scenes/enemies/herbalist.tscn" id="36_herbalist"]
 [ext_resource type="PackedScene" uid="uid://c1seedherbalistsav" path="res://scenes/enemies/herbalist_savable.tscn" id="37_herbalist_sav"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="PackedScene" uid="uid://c1seedsecretceil" path="res://scenes/world/secret_ceiling.tscn" id="51_secret_ceiling"]
+[ext_resource type="PackedScene" uid="uid://c1seedpickup" path="res://scenes/world/pickup.tscn" id="52_pickup"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -73,7 +75,7 @@ bounds = Rect2(0, 0, 4200, 1600)
 region = "village"
 room_id = "village_01"
 display_name = "마을 · 입구의 거리"
-map_offset = Vector2(19200, -2523)
+map_offset = Vector2(19600, -2523)
 terrain_color = Color(0.11, 0.085, 0.06, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -175,6 +177,15 @@ position = Vector2(3200, 1020)
 size = Vector2(460, 50)
 label_text = "지붕"
 
+[node name="SecretStalk" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1000, -100)
+size = Vector2(180, 900)
+
+[node name="SecretCeiling1" parent="Terrain" instance=ExtResource("51_secret_ceiling")]
+position = Vector2(1000, 800)
+size = Vector2(180, 150)
+secret_id = "secret_village_01_1"
+
 [node name="Markers" type="Node2D" parent="."]
 
 [node name="FromCanopy" type="Marker2D" parent="Markers"]
@@ -206,6 +217,14 @@ display_name = "마을 · 입구의 등불"
 position = Vector2(1900, 1400)
 record_id = "village_poster"
 kind = "poster"
+
+[node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
+position = Vector2(1090, 880)
+pickup_id = "pick_village_01_1"
+kind = "heal"
+amount = 10.0
+hidden_in = "secret_village_01_1"
+fall_to = Vector2(1090, 1110)
 
 [node name="Enemies" type="Node2D" parent="."]
 
