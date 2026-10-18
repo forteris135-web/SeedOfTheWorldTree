@@ -237,5 +237,4 @@ func _on_draw() -> void:
 			text = "걷기 ●"
 		var size := 22 if r < 60 else 28
 		_label(b["pos"] + Vector2(-r * 1.5, size * 0.36), text, size, Color(1, 1, 1, 0.95), r * 3.0)
-	if _touches.is_empty():
-		_label(Vector2(_canvas.size.x * 0.5 - 700, _canvas.size.y - 30), "왼쪽 화면을 누른 채 움직이면 이동 (달리기가 기본)  ·  회피 짧게: 구르기  ·  강공격 길게: 차지  ·  포탈 앞에서 ↑ 또는 들어가기", 20, Color(1, 1, 1, 0.7), 1400)
+	# (화면 아래 조작 설명 줄은 없앴다. 버튼 이름만으로 충분하고, 설명 글자는 기획자 요청으로 모두 제거.)

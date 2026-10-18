@@ -111,12 +111,15 @@ func _on_draw() -> void:
 		var tex: Texture2D = DEWS[k]
 		var tint := Color(1.2, 1.2, 1.25, 1.0) if i < _player.dews else Color(0.45, 0.45, 0.5, 0.4)
 		_canvas.draw_texture_rect(tex, Rect2(_s(DEW_POS[k]), tex.get_size() * SHEET_SCALE), false, tint)
-	# 고른 영혼
+	# 고른 영혼: 이름만 보인다. 키 안내는 설명 글자라서 '개발 표시'를 켰을 때만 덧붙인다.
 	if _player.soul != "":
-		var owned := _player.owned_souls()
-		var label := "영혼: %s   (%s)" % [_player.soul_name(), InputDevice.prompt("soul_ability")]
-		if owned.size() > 1:
-			label += "   전환 Q / ◁▷"
+		var label := "영혼: %s" % _player.soul_name()
+		if bool(Settings.get_value("debug_hud")):
+			label += "   (%s)" % InputDevice.prompt("soul_ability")
+			if _player.owned_souls().size() > 1:
+				# 터치 사전에는 soul_next 가 없어서 터치는 버튼 이름을 직접 쓴다
+				var nxt := "전환 버튼" if InputDevice.current == InputDevice.Kind.TOUCH else InputDevice.prompt("soul_next")
+				label += "   전환 %s" % nxt
 		_canvas.draw_string(font, _s(Vector2(60, 790)), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.85, 1.0, 0.9, 0.85) if _player.soul == "wind" else Color(1.0, 0.9, 0.7, 0.9))
 	# 메시지
 	var size := _canvas.size
