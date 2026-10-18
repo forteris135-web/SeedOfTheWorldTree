@@ -76,7 +76,7 @@ bounds = Rect2(0, 0, 5000, 1500)
 region = "mine"
 room_id = "mine_02"
 display_name = "채굴장 · 관의 복도"
-map_offset = Vector2(29900, 700)
+map_offset = Vector2(30600, 700)
 terrain_color = Color(0.1, 0.07, 0.06, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]

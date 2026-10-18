@@ -9,6 +9,8 @@ const LOCOMOTION := [State.IDLE, State.WALK, State.RUN, State.JUMP, State.FALL]
 signal state_changed(new_state: State)
 signal jumped(air_jump: bool)
 signal landed(fall_speed: float)
+## 점프 중 천장에 머리를 박았다 (부딪힌 지형, 부딪힐 때 올라가던 속도)
+signal ceiling_bumped(collider: Node, speed: float)
 signal roll_started
 signal hp_changed(hp: float, max_hp: float)
 signal guard_changed(guard: float, max_guard: float)
@@ -249,6 +251,7 @@ func _apply_abilities() -> void:
 	attack_multiplier = 1.0 + Progress.upgrades.get("attack", 0.0)
 	max_dews = 3 + int(Progress.upgrades.get("dews", 0))
 	dews = mini(dews, max_dews)
+	heal_amount = 45.0 + Progress.upgrades.get("heal", 0.0)   # 회복량 아이템(맑은 샘물)
 	hp_changed.emit(hp, max_hp)
 	dews_changed.emit(dews)
 
@@ -313,6 +316,14 @@ func _physics_process(delta: float) -> void:
 	_last_fall_speed = velocity.y
 	move_and_slide()
 	slow_factor = 1.0
+	# 점프하다 천장에 머리를 박았다 (올라가던 중 위쪽에 부딪힘): 비밀 천장이 듣는다
+	if is_on_ceiling() and _last_fall_speed < -150.0:
+		for i in get_slide_collision_count():
+			var c := get_slide_collision(i)
+			if c.get_normal().y > 0.7:
+				ceiling_bumped.emit(c.get_collider(), -_last_fall_speed)
+				if c.get_collider() and c.get_collider().has_method("on_head_bump"):
+					c.get_collider().on_head_bump(self, -_last_fall_speed)
 
 	if is_on_floor() and not _was_on_floor and state != State.ROLL:
 		landed.emit(_last_fall_speed)

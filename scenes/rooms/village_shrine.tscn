@@ -70,7 +70,7 @@ bounds = Rect2(0, 0, 2400, 1200)
 region = "village"
 room_id = "village_shrine"
 display_name = "마을 · 세계수의 사당"
-map_offset = Vector2(27200, -3200)
+map_offset = Vector2(27600, -3200)
 terrain_color = Color(0.11, 0.085, 0.06, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]

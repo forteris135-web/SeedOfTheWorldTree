@@ -22,6 +22,7 @@ func save(grass_id: String, scene_path: String) -> void:
 		"visited_rooms": _rooms_to_json(Progress.visited_rooms),
 		"ending": Progress.ending,
 		"purity": Purity.regions,
+		"collected": Progress.collected,
 	}
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
 	if f:
@@ -68,6 +69,7 @@ func load_game() -> String:
 	Progress.rescued = data.get("rescued", {})
 	Progress.visited_rooms = _rooms_from_json(data.get("visited_rooms", {}))
 	Progress.ending = data.get("ending", "")
+	Progress.collected = data.get("collected", {})   # 옛 저장 파일에는 없다 → 빈 사전
 	var pur: Dictionary = data.get("purity", {})
 	for k in pur:
 		Purity.regions[k] = pur[k]
@@ -97,7 +99,9 @@ func _rooms_to_json(rooms: Dictionary) -> Dictionary:
 		var ps := []
 		for p in r.get("portals", []):
 			ps.append([p.x, p.y])
-		out[id] = {"offset": [r["offset"].x, r["offset"].y], "size": [r["size"].x, r["size"].y], "name": r.get("name", id), "region": r.get("region", ""), "grasses": gs, "portals": ps, "boss": r.get("boss", false)}
+		out[id] = {"offset": [r["offset"].x, r["offset"].y], "size": [r["size"].x, r["size"].y], "name": r.get("name", id), "region": r.get("region", ""), "grasses": gs, "portals": ps, "boss": r.get("boss", false),
+			"explore_total": int(r.get("explore_total", 0)), "explore_found": int(r.get("explore_found", 0)),
+			"explore_ids": r.get("explore_ids", {})}   # 탐사 요소 id 목록 (글자 배열들) — 구원된 자는 노드가 사라져도 세기 위해
 	return out
 
 
@@ -111,5 +115,7 @@ func _rooms_from_json(rooms: Dictionary) -> Dictionary:
 		var ps := []
 		for p in r.get("portals", []):
 			ps.append(Vector2(p[0], p[1]))
-		out[id] = {"offset": Vector2(r["offset"][0], r["offset"][1]), "size": Vector2(r["size"][0], r["size"][1]), "name": r.get("name", id), "region": r.get("region", ""), "grasses": gs, "portals": ps, "boss": r.get("boss", false)}
+		out[id] = {"offset": Vector2(r["offset"][0], r["offset"][1]), "size": Vector2(r["size"][0], r["size"][1]), "name": r.get("name", id), "region": r.get("region", ""), "grasses": gs, "portals": ps, "boss": r.get("boss", false),
+			"explore_total": int(r.get("explore_total", 0)), "explore_found": int(r.get("explore_found", 0)),
+			"explore_ids": r.get("explore_ids", {})}
 	return out

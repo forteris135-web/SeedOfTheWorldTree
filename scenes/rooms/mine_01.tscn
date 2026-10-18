@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3 uid="uid://c1seedmine01"]
+[gd_scene load_steps=33 format=3 uid="uid://c1seedmine01"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -33,6 +33,8 @@
 [ext_resource type="PackedScene" uid="uid://c1seedherbalist" path="res://scenes/enemies/herbalist.tscn" id="36_herbalist"]
 [ext_resource type="PackedScene" uid="uid://c1seedherbalistsav" path="res://scenes/enemies/herbalist_savable.tscn" id="37_herbalist_sav"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="PackedScene" uid="uid://c1seedsecretwall" path="res://scenes/world/secret_wall.tscn" id="50_secret_wall"]
+[ext_resource type="PackedScene" uid="uid://c1seedpickup" path="res://scenes/world/pickup.tscn" id="52_pickup"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -69,11 +71,11 @@ size = Vector2(80, 300)
 
 [node name="Mine01" type="Node2D"]
 script = ExtResource("1_room")
-bounds = Rect2(0, 0, 2600, 3200)
+bounds = Rect2(0, 0, 2900, 3200)
 region = "mine"
 room_id = "mine_01"
 display_name = "채굴장 · 내려가는 갱도"
-map_offset = Vector2(27300, -1000)
+map_offset = Vector2(27700, -1000)
 terrain_color = Color(0.1, 0.07, 0.06, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -141,7 +143,7 @@ size = Vector2(100, 3400)
 decorate = false
 
 [node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(2600, -100)
+position = Vector2(2900, -100)
 size = Vector2(100, 3400)
 decorate = false
 
@@ -193,6 +195,20 @@ position = Vector2(0, 3000)
 size = Vector2(2600, 200)
 label_text = "갱도 바닥"
 
+[node name="RightUpper" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(2600, -100)
+size = Vector2(300, 500)
+decorate = false
+
+[node name="RightLower" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(2600, 600)
+size = Vector2(300, 2700)
+
+[node name="SecretWall1" parent="Terrain" instance=ExtResource("50_secret_wall")]
+position = Vector2(2600, 400)
+size = Vector2(60, 200)
+secret_id = "secret_mine_01_1"
+
 [node name="Hazards" type="Node2D" parent="."]
 
 [node name="Thorns1" parent="Hazards" instance=ExtResource("17_thorns")]
@@ -234,6 +250,13 @@ display_name = "채굴장 · 갱도 입구"
 position = Vector2(1500, 2500)
 record_id = "mine_poster"
 kind = "poster"
+
+[node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
+position = Vector2(2800, 560)
+pickup_id = "pick_mine_01_1"
+kind = "dews"
+amount = 1.0
+hidden_in = "secret_mine_01_1"
 
 [node name="Enemies" type="Node2D" parent="."]
 
