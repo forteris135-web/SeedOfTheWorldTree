@@ -11,6 +11,8 @@ signal poise_changed(poise: float, max_poise: float)
 signal broke
 signal recovered
 signal died(purified: bool)
+## 상태가 바뀔 때마다 (그림 쪽이 진입 1회 연출에 쓴다)
+signal state_changed(old_state: State, new_state: State)
 
 @export_group("능력치")
 @export var max_hp := 70.0
@@ -70,9 +72,32 @@ var _origin := Vector2.ZERO
 var _patrol_dir := 1
 var _registered := false
 var _flash := 0.0
+## 예고 진행도: WINDUP 중 0→1 (예고를 늘린 적도 실제 길이 기준으로 0에서 시작한다)
 var windup_progress := 0.0
 ## 그림 쪽에 주는 힌트: "red"(가드 불가 예고) / "charge"(돌진) / "stuck"(박힘)
+## 그 밖에 종류별: "shoot"(정원사 쏘기) / "scatter"(약초꾼 뿌리기) / "leap"·"fall"·"land"(거인 내려찍기) / "block"(경비병 막음)
 var anim_hint := ""
+## 지금 상태에 들어온 뒤 흐른 시간(초). 상태가 바뀌면 0.
+var state_time := 0.0
+## 지금 상태의 전체 길이(초). 상태에 들어선 첫 틱의 남은 시간으로 잡는다. 길이가 없는 상태(추격 등)는 0.
+var phase_len := 0.0
+## 지금 상태의 진행도 0→1 (길이가 있는 상태만; 없으면 0).
+var phase_progress := 0.0
+## 공격 단계 이름: "windup" / "strike" / "recover" / "" — 그림이 세 박자 곡선을 고를 때 쓴다.
+var attack_phase := ""
+## 쓰러지는 중인가 (DEAD 자세로 잠시 머문 뒤 사라진다)
+var _dying := false
+## 쓰러짐 연출이 끝나 묘목/사람을 만들고 사라졌는가 (한 번만)
+var _fall_done := false
+## 쓰러짐이 끝나면 구원(사람으로 돌아옴)인가, 묘목인가
+var _fall_rescue := false
+## 쓰러지기 전 발 위치 (묘목·구원 NPC 는 여기에 선다)
+var _fall_at := Vector2.ZERO
+var _fall_facing := 1
+## 구원해 준 소녀 (감사 인사 대상)
+var _fall_by: Player
+## 마지막으로 맞은 방향(밀린 쪽, ±1). 쓰러질 때 이쪽으로 기울어진다.
+var last_hit_dir := 1
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -100,18 +125,41 @@ func _ready() -> void:
 	_timer = randf_range(0.3, 1.2)
 
 
-func _physics_process(delta: float) -> void:
+## 모든 상태가 공통으로 매 틱 하는 일: 번쩍임 감쇠, 흐트러짐 회복, 남은 시간 줄이기, 진행도 계산.
+## 종류별 스크립트가 _physics_process 를 가로채는 분기에서도 반드시 이걸 부른다 (그림이 진행도를 읽는다).
+func _tick_common(delta: float) -> void:
 	if player == null or not is_instance_valid(player):
 		player = get_tree().get_first_node_in_group("player") as Player
 	_flash = maxf(_flash - delta * 8.0, 0.0)
 	_poise_hold_timer = maxf(_poise_hold_timer - delta, 0.0)
-	if state != State.BROKEN and _poise_hold_timer <= 0.0 and poise > 0.0:
+	if state != State.BROKEN and state != State.DEAD and _poise_hold_timer <= 0.0 and poise > 0.0:
 		poise = maxf(poise - poise_decay * delta, 0.0)
 		poise_changed.emit(poise, max_poise)
+	# 상태 길이는 들어선 뒤 첫 틱의 남은 시간으로 잡는다 (하위 스크립트가 _timer 를 늘려도 그 값이 잡힌다)
+	if _timer > phase_len and _timer != INF:
+		phase_len = _timer
+	_timer -= delta
+	state_time += delta
+	if phase_len > 0.0 and phase_len != INF:
+		phase_progress = clampf(1.0 - _timer / phase_len, 0.0, 1.0)
+	else:
+		phase_progress = 0.0
+	match state:
+		State.WINDUP:
+			attack_phase = "windup"
+			windup_progress = phase_progress
+		State.STRIKE:
+			attack_phase = "strike"
+		State.RECOVER:
+			attack_phase = "recover"
+		_:
+			attack_phase = ""
 
+
+func _physics_process(delta: float) -> void:
+	_tick_common(delta)
 	if not is_on_floor():
 		velocity.y += gravity * delta
-	_timer -= delta
 
 	match state:
 		State.IDLE:
@@ -170,7 +218,6 @@ func _physics_process(delta: float) -> void:
 					_timer = 0.15
 		State.WINDUP:
 			velocity.x = move_toward(velocity.x, 0.0, 2400.0 * delta)
-			windup_progress = 1.0 - _timer / windup_time
 			if _timer <= 0.0:
 				_strike()
 		State.STRIKE:
@@ -208,7 +255,11 @@ func _physics_process(delta: float) -> void:
 				_timer = 0.4
 				recovered.emit()
 		State.DEAD:
-			velocity.x = 0.0
+			velocity.x = move_toward(velocity.x, 0.0, 900.0 * delta)
+			# 쓰러짐 연출이 끝나면 (타이머가 아니라 상태 기계라 일시정지 중엔 멈추고, 방을 떠나면 그냥 함께 사라진다)
+			if _dying and not _fall_done and _timer <= 0.0:
+				_fall_done = true
+				_finish_fall()
 	move_and_slide()
 
 
@@ -266,7 +317,10 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	var dir := 1
 	if hit.source:
 		dir = 1 if global_position.x >= hit.source.global_position.x else -1
+	last_hit_dir = dir
 	velocity.x = dir * absf(hit.knockback.x) * 0.5
+	# 그림에 충격을 전한다 (맞은 프레임에 튕기고 스프링으로 되돌아온다)
+	_visual_call("kick", [dir, clampf(hit.poise / 40.0, 0.5, 1.6)])
 	if hp <= 0.0:
 		if savable:
 			_break(true)
@@ -294,9 +348,10 @@ func on_just_guarded(_by: Player, amount: float) -> void:
 	if poise >= max_poise:
 		_break(false)
 		return
-	# 받아친 뒤 크게 휘청인다
+	# 받아친 뒤 크게 휘청인다 (칼은 되튕겨 올라오고 몸은 뒤로)
 	hitbox.deactivate()
 	velocity.x = -facing * 220.0
+	_visual_call("parried", [-facing, 1.4])
 	_set_state(State.RECOVER)
 	_timer = recover_time + 0.4
 
@@ -347,49 +402,90 @@ func purified_by(by: Player) -> void:
 
 
 ## 구원: 사람으로 돌아온다. 감사의 말과 보상은 RescuedPerson 이 맡는다.
+## 깃발·신호는 지금 바로 세우고, 그림은 빛으로 흩어지는 짧은 연출(0.5초) 뒤 사람으로 바뀐다.
 func _rescue(by: Player) -> void:
-	_unregister()
-	hitbox.deactivate()
-	_set_state(State.DEAD)
+	if _dying:
+		return
+	_fall_rescue = true
+	_fall_by = by
+	_begin_fall(true, 0.5)
 	if rescue_id != "":
 		Progress.rescued[rescue_id] = true
 		Progress.set_flag(rescue_id + "_rescued")
 	rescued.emit(rescue_id)
-	var scene: PackedScene = load("res://scenes/npcs/rescued_person.tscn")
-	if scene:
-		var npc := scene.instantiate()
-		npc.rescue_id = rescue_id
-		npc.texture = ($Visual.texture if $Visual.get("texture") != null else null)
-		npc.art_faces_right = $Visual.get("art_faces_right")
-		npc.art_scale = $Visual.get("art_scale")
-		npc.facing = -facing
-		npc.global_position = global_position + Vector2(0, hurt_height * 0.5)
-		get_parent().add_child(npc)
-		npc.greet(by)
-	queue_free()
 
 
+## 쓰러짐: 신호는 지금 바로, 그림은 0.75초 동안 쓰러지는 자세로 가라앉은 뒤 묘목이 된다.
 func _die(purified: bool) -> void:
+	if _dying:
+		return
+	_fall_rescue = false
+	_begin_fall(purified, 0.75)
+	died.emit(purified)
+
+
+## 쓰러지기 시작: 판정을 끄고 DEAD 자세로 들어간다. 더는 맞지도, 소녀를 막지도 않는다 (땅에는 그대로 선다).
+## 끝나는 시점은 _physics_process 의 DEAD 분기가 _timer 로 잰다 (일시정지 중엔 함께 멈춘다).
+func _begin_fall(gentle: bool, duration: float) -> void:
+	_dying = true
+	_fall_done = false
+	_fall_at = global_position + Vector2(0, hurt_height * 0.5)
+	_fall_facing = facing
 	_unregister()
 	hitbox.deactivate()
+	hurtbox.set_deferred("monitorable", false)
+	collision_layer = 0
+	remove_from_group("enemy")
 	_set_state(State.DEAD)
-	died.emit(purified)
-	_spawn_sprout()
+	_timer = duration
+	_visual_call("fall", [last_hit_dir, gentle])
+
+
+## 쓰러짐 연출이 끝났다: 구원이면 사람(RescuedPerson)으로, 아니면 묘목으로 바뀌고 사라진다.
+func _finish_fall() -> void:
+	if _fall_rescue:
+		var vis := get_node_or_null("Visual")
+		var scene: PackedScene = load("res://scenes/npcs/rescued_person.tscn")
+		if scene:
+			var npc := scene.instantiate()
+			npc.rescue_id = rescue_id
+			npc.texture = vis.get("texture") if vis else null
+			npc.art_faces_right = vis.get("art_faces_right") if vis else true
+			npc.art_scale = vis.get("art_scale") if vis else 0.17
+			npc.facing = -_fall_facing
+			npc.global_position = _fall_at
+			get_parent().add_child(npc)
+			if is_instance_valid(_fall_by):
+				npc.greet(_fall_by)
+	else:
+		_spawn_sprout(_fall_at)
 	queue_free()
 
 
-func _spawn_sprout() -> void:
+func _spawn_sprout(at: Vector2) -> void:
 	var sprout_scene: PackedScene = load("res://scenes/world/sprout.tscn")
 	if sprout_scene:
 		var s := sprout_scene.instantiate()
-		s.global_position = global_position + Vector2(0, hurt_height * 0.5)
+		s.global_position = at
 		get_parent().add_child(s)
+
+
+## 그림(Visual)에 메서드가 있으면 부른다 (충격·반동 같은 1회 연출).
+func _visual_call(method: String, args: Array = []) -> void:
+	var vis := get_node_or_null("Visual")
+	if vis and vis.has_method(method):
+		vis.callv(method, args)
 
 
 func _set_state(new_state: State) -> void:
 	if new_state == state:
 		return
+	var old := state
 	state = new_state
+	state_time = 0.0
+	phase_len = 0.0
+	phase_progress = 0.0
+	state_changed.emit(old, new_state)
 
 
 func flash_amount() -> float:

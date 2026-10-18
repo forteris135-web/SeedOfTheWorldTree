@@ -14,10 +14,9 @@ var _ram_timer := 0.0
 func _begin_windup() -> void:
 	super._begin_windup()
 	_ramming = player != null and absf(player.global_position.x - global_position.x) > attack_range * 0.8
-	anim_hint = "" if not _ramming else "red"
+	anim_hint = ""   # 가드 가능하므로 붉은 예고는 아님. 떨림만.
 	if _ramming:
-		anim_hint = ""   # 가드 가능하므로 붉은 예고는 아님. 떨림만.
-		_timer = windup_time * 1.2
+		_timer = windup_time * 1.2   # 긴 예고. 길이는 _tick_common 이 첫 틱에 잡아 진행도가 0→1.
 
 
 func _strike() -> void:
@@ -35,13 +34,14 @@ func _strike() -> void:
 
 func _physics_process(delta: float) -> void:
 	if state == State.STRIKE and _ramming:
-		_flash = maxf(_flash - delta * 8.0, 0.0)
+		_tick_common(delta)
 		_ram_timer -= delta
 		velocity.x = facing * ram_speed
 		if not is_on_floor():
 			velocity.y += gravity * delta
 		move_and_slide()
-		if is_on_wall() or not _can_walk(facing) or _ram_timer <= 0.0:
+		var hit_wall := is_on_wall() or not _can_walk(facing)
+		if hit_wall or _ram_timer <= 0.0:
 			hitbox.deactivate()
 			_ramming = false
 			anim_hint = ""
@@ -49,6 +49,8 @@ func _physics_process(delta: float) -> void:
 			_set_state(State.RECOVER)
 			_timer = recover_time * 1.5
 			Juice.shake(4.0)
+			# 들이받기 끝: '꽝' 충격 반동 (벽에 부딛혔으면 더 크게)
+			_visual_call("impact", [facing, 1.4 if hit_wall else 0.9])
 		return
 	if _ramming and state not in [State.WINDUP, State.STRIKE]:
 		_ramming = false
