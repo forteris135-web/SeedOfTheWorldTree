@@ -20,7 +20,9 @@ case "$ROOM" in
   res://*) SCENE="$ROOM" ;;
   *) SCENE="res://scenes/rooms/$ROOM.tscn" ;;
 esac
-timeout "$LIMIT" "$G" --headless --path "$PROJECT" "$SCENE" -- "$FLAG" 2>&1 \
+# FLAG 는 따옴표 없이 넘겨서 "--screenshot --map" 처럼 여러 플래그를 한 번에 줄 수 있게 한다
+# shellcheck disable=SC2086
+timeout "$LIMIT" "$G" --headless --path "$PROJECT" "$SCENE" -- $FLAG 2>&1 \
   | grep -E "^\[|SCRIPT ERROR|Parse Error|ERROR: Failed to load|^ERROR: .*\.gd" \
   | grep -v "resources still in use\|ObjectDB instances"
 echo "exit ${PIPESTATUS[0]}"

@@ -49,7 +49,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _save_screenshot(file_name: String) -> void:
-	var img := get_viewport().get_texture().get_image()
+	if DisplayServer.get_name() == "headless":
+		return   # 화면 없는 시험에서는 찍지 않는다
+	var tex := get_viewport().get_texture()
+	var img := tex.get_image() if tex else null
+	if img == null or img.is_empty():
+		return
 	img.save_png(ProjectSettings.globalize_path("res://screenshots/" + file_name))
 
 

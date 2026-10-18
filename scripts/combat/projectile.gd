@@ -80,6 +80,12 @@ func _physics_process(delta: float) -> void:
 	var hit_terrain := get_world_2d().direct_space_state.intersect_ray(ray)
 	if not hit_terrain.is_empty():
 		global_position = hit_terrain["position"]
+		# 소녀의 바람·빛이 '때리면 부서지는 벽' 같은 지형에 닿으면 한 대로 친다
+		var col = hit_terrain.get("collider")
+		if from_player and col and col.has_method("receive_hit"):
+			var h := HitData.make(damage, poise, source if source else self, Vector2(200, -60))
+			h.from_player = true
+			col.receive_hit(h, null)
 		_vanish()
 		return
 	global_position = to
