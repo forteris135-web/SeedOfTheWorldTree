@@ -54,6 +54,14 @@ signal telegraph(kind: String)   # "wind" 등 붉은 예고
 @export var peck_damage := 16.0
 @export var gravity := 2600.0
 
+@export_group("움직임 연출")
+## 소녀가 이만큼(px) 넘게 반대쪽으로 가야 몸을 돌린다 (바로 밑을 지날 때 매 프레임 뒤집히지 않게)
+@export var face_deadzone := 80.0
+## 한 번 돌면 이 시간 동안은 다시 돌지 않는다
+@export var face_hold := 0.35
+## 이륙 전 웅크리는 시간 (TAKEOFF 1.1초 안에 포함, 상태 길이는 그대로)
+@export var takeoff_crouch := 0.2
+
 var state: State = State.WAIT
 var hp := 900.0
 var poise := 0.0
@@ -82,6 +90,20 @@ var _hit_this_phase := false
 var _home := Vector2.ZERO
 var _bob_t := 0.0
 var _wind_dir := 1
+var _face_hold := 0.0
+
+## 그림이 읽는 공개 값들 (기사·뿌리지기와 같은 약속)
+var attack_phase := ""          # SWEEP/PECK 의 startup / active / recovery (아니면 "")
+var windup_progress := 0.0      # startup 동안 0→1
+var startup_len := 0.5
+var active_len := 0.22
+var recovery_len := 0.9
+## 깃털 화살 예고 (0→1 로 차오르고, 쏘기 시작하면 사라진다). 피격 번쩍임과 다른 색으로 보인다.
+var telegraph_amount := 0.0
+## 움찔 (잎 삼키기를 끊겼을 때 1 에서 0.6초에 걸쳐 0 으로)
+var stagger := 0.0
+## 이륙 전 웅크리는 중
+var crouching := false
 
 @onready var sprite: Sprite2D = $Sprite
 @onready var hitbox: Hitbox = $Hitbox
@@ -139,8 +161,18 @@ func _physics_process(delta: float) -> void:
 		poise_changed.emit(poise, max_poise)
 	_timer -= delta
 	_bob_t += delta
+	_face_hold = maxf(_face_hold - delta, 0.0)
+	stagger = maxf(stagger - delta / 0.6, 0.0)
+	if state != State.FEATHERS:
+		telegraph_amount = maxf(telegraph_amount - delta * 4.0, 0.0)
+	crouching = state == State.TAKEOFF and _timer > 1.1 - takeoff_crouch
 	if player and state in AIR_STATES + [State.INTRO, State.GROUND_IDLE, State.EAT]:
-		facing = 1 if player.global_position.x > global_position.x else -1
+		# 데드존 + 최소 유지 시간: 소녀가 바로 밑을 지나도 매 프레임 뒤집히지 않는다. 공격 중엔 고정.
+		var dx := player.global_position.x - global_position.x
+		var want := 1 if dx > 0.0 else -1
+		if want != facing and absf(dx) > face_deadzone and _face_hold <= 0.0:
+			facing = want
+			_face_hold = face_hold
 
 	match state:
 		State.INTRO:
@@ -172,6 +204,8 @@ func _physics_process(delta: float) -> void:
 			var count := feather_count if phase == 1 else feather_count + 2
 			# 예고 0.6초 뒤 0.15초 간격으로 쏜다
 			var t_since := (0.6 + count * 0.15) - _timer
+			# 예고: 0.6초 동안 차오르고 쏘기 시작하면 0.3초에 걸쳐 사라진다
+			telegraph_amount = clampf(t_since / 0.6, 0.0, 1.0) if t_since < 0.6 else maxf(1.0 - (t_since - 0.6) / 0.3, 0.0)
 			var should_have := clampi(int(floor((t_since - 0.6) / 0.15)) + 1, 0, count)
 			while _spawned < should_have:
 				_spawn_feather(_spawned, count)
@@ -238,7 +272,11 @@ func _physics_process(delta: float) -> void:
 			_melee_phase("peck")
 		State.TAKEOFF:
 			set_collision_mask_value(1, false)
-			_fly_toward(_hover_target, delta, 2.5)
+			if crouching:
+				# 이륙 전 잠깐 웅크린다 (그 뒤 날아오름; 상태 길이는 1.1초 그대로)
+				velocity = velocity.move_toward(Vector2.ZERO, 3000.0 * delta)
+			else:
+				_fly_toward(_hover_target, delta, 2.5)
 			if _timer <= 0.0:
 				_set_state(State.HOVER)
 				_timer = _rest()
@@ -307,7 +345,7 @@ func _next_pattern() -> void:
 			var count := feather_count if phase == 1 else feather_count + 2
 			_timer = 0.6 + count * 0.15
 			_spawned = 0
-			_flash = 0.6
+			telegraph_amount = 0.0   # 예고는 telegraph_amount 로 (피격 번쩍임과 구분)
 		State.WIND:
 			_set_state(State.WIND)
 			_timer = wind_telegraph + wind_time
@@ -399,14 +437,19 @@ func _pick_ground_action() -> void:
 		_set_state(State.SWEEP)
 		_timer = sweep_windup if phase == 1 else sweep_windup * 0.75
 	_melee_stage = 0
+	attack_phase = "startup"
+	windup_progress = 0.0
+	startup_len = _timer
 
 
 var _melee_stage := 0
 func _melee_phase(kind: String) -> void:
 	if _melee_stage == 0:
 		# 예고 중
+		windup_progress = 1.0 - clampf(_timer / maxf(startup_len, 0.001), 0.0, 1.0)
 		if _timer <= 0.0:
 			_melee_stage = 1
+			attack_phase = "active"
 			if kind == "sweep":
 				var hit := HitData.make(sweep_damage, 0.0, self, Vector2(520, -220))
 				hitbox.set_box(Rect2(-40, -120, 330, 180), facing)
@@ -418,13 +461,16 @@ func _melee_phase(kind: String) -> void:
 				hitbox.activate(hit2, 0.3)
 				velocity.x = facing * 520.0
 				_timer = 0.3
+			active_len = _timer
 			Juice.shake(3.0)
 	elif _melee_stage == 1:
 		if kind == "peck":
 			velocity.x = move_toward(velocity.x, 0.0, 900.0 * get_physics_process_delta_time())
 		if _timer <= 0.0:
 			_melee_stage = 2
+			attack_phase = "recovery"
 			_timer = 0.9 if phase == 1 else 0.65
+			recovery_len = _timer
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, 1600.0 * get_physics_process_delta_time())
 		if _timer <= 0.0:
@@ -456,6 +502,7 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 		hitbox.deactivate()
 		_set_state(State.GROUND_IDLE)
 		_timer = 1.2
+		stagger = 1.0   # 뒤로 움찔 (그림)
 		Juice.shake(5.0)
 	elif state in AIR_STATES:
 		_fatigue += 1 if not hit.from_player or hit.poise < 25.0 else 2
@@ -548,11 +595,27 @@ func _set_state(new_state: State) -> void:
 		print("[새] %s %.2f초 → %s" % [State.keys()[state], (Time.get_ticks_msec() - _state_started_ms) / 1000.0, State.keys()[new_state]])
 	_state_started_ms = Time.get_ticks_msec()
 	state = new_state
+	if new_state != State.SWEEP and new_state != State.PECK:
+		attack_phase = ""
 	state_changed.emit(new_state)
 
 
 func flash_amount() -> float:
 	return _flash
+
+
+## 지금 공격 단계의 진행도 (0→1). 그림이 세 박자 곡선(예비→타격→되돌림)을 그리는 기준.
+func phase_progress() -> float:
+	match attack_phase:
+		"startup": return clampf(windup_progress, 0.0, 1.0)
+		"active": return 1.0 - clampf(_timer / maxf(active_len, 0.001), 0.0, 1.0)
+		"recovery": return 1.0 - clampf(_timer / maxf(recovery_len, 0.001), 0.0, 1.0)
+	return 0.0
+
+
+## 붉은 예고 (가드 불가 날갯바람의 예고 동안)
+func is_red() -> bool:
+	return state == State.WIND and _timer > wind_time
 
 
 func is_ground() -> bool:

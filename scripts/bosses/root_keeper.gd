@@ -6,6 +6,7 @@ class_name RootKeeper
 ## 체력 0 → 쓰러짐 → 정화 → 마지막 회상 → 선택.
 
 enum State { WAIT, INTRO, STANCE, SPIKES, SWEEP, ORBS, WALL, RISE, BROKEN, FALLEN, PURIFIED }
+const ATTACK_STATES := [State.SPIKES, State.SWEEP, State.ORBS, State.WALL]
 
 signal hp_changed(hp: float, max_hp: float)
 signal poise_changed(poise: float, max_poise: float)
@@ -35,8 +36,26 @@ var facing := -1
 var player: Player
 var arena: Rect2
 var ground_y := 0.0
-var attack_phase := ""
+var attack_phase := ""   # startup / active / recovery (공격이 아니면 "")
 var windup_progress := 0.0
+## 지금 공격의 단계 길이(초). 그림이 진행도(남은 시간 / 길이)를 계산하는 데 쓴다.
+var startup_len := 0.5
+var active_len := 0.2
+var recovery_len := 0.8
+## 다시 일어서는 연출 길이 (RISE)
+var rise_len := 3.0
+## 그림에 주는 힌트: "" / "stagger"(저스트 가드로 지팡이가 튕김 — 그림만 휘청, 공격 흐름은 그대로)
+var anim_hint := ""
+var _hint_timer := 0.0
+## 저스트 가드 휘청의 세기 (1 → 0 으로 stagger_len 동안 서서히 줄어든다). 그림은 이 값만큼 뒤로 젖힌다.
+## 힌트 시간이 끝날 때 보정이 한 번에 사라지지 않게 따로 감쇠시킨다.
+var stagger := 0.0
+var stagger_len := 0.45
+## 몸 돌리기 규칙: 소녀가 이만큼(px) 넘게 반대쪽에 있어야 돌고, 한 번 돌면 이 시간 동안은 다시 돌지 않는다.
+## (소녀가 구르기로 몸을 통과할 때 정면 그림이 찌그러졌다 펴지길 반복하지 않게)
+@export var face_deadzone := 40.0
+@export var face_hold := 0.25
+var _face_hold := 0.0
 var spike_marks: Array = []   # 예고 중인 가시 x 좌표들
 var _timer := 0.0
 var _poise_hold := 0.0
@@ -96,6 +115,12 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 	_timer -= delta
+	_face_hold = maxf(_face_hold - delta, 0.0)
+	stagger = maxf(stagger - delta / stagger_len, 0.0)
+	if _hint_timer > 0.0:
+		_hint_timer -= delta
+		if _hint_timer <= 0.0:
+			anim_hint = ""
 	var fast := 0.7 if phase == 2 else 1.0
 	match state:
 		State.INTRO:
@@ -106,13 +131,17 @@ func _physics_process(delta: float) -> void:
 		State.STANCE:
 			if player:
 				var dx := player.global_position.x - global_position.x
-				facing = 1 if dx > 0.0 else -1
+				var want_face := 1 if dx > 0.0 else -1
+				if want_face != facing and absf(dx) > face_deadzone and _face_hold <= 0.0:
+					facing = want_face
+					_face_hold = face_hold
 				# 천천히 거리를 유지한다 (너무 가까우면 물러나고, 멀면 다가온다)
+				# 거리 유지는 몸 방향이 아니라 소녀가 있는 쪽(dx) 기준 — 예전과 같은 움직임
 				var want := 0.0
 				if absf(dx) < 260.0:
-					want = -facing * walk_speed
+					want = -want_face * walk_speed
 				elif absf(dx) > 700.0:
-					want = facing * walk_speed
+					want = want_face * walk_speed
 				velocity.x = move_toward(velocity.x, want, 800.0 * delta)
 				if _timer <= 0.0:
 					_choose(absf(dx))
@@ -175,15 +204,31 @@ func _phase_step(delta: float, startup: float, active: float, recovery: float, o
 			if _timer <= 0.0:
 				attack_phase = "active"
 				_timer = active
+				active_len = active
 				on_active.call()
 		"active":
 			if _timer <= 0.0:
 				attack_phase = "recovery"
 				_timer = recovery
+				recovery_len = recovery
 		"recovery":
 			if _timer <= 0.0:
 				_set_state(State.STANCE)
 				_timer = (0.7 if phase == 1 else 0.4) + randf() * 0.3
+
+
+## 지금 공격 단계의 진행도 (0→1). 그림이 세 박자 곡선(예비→타격→되돌림)을 그리는 기준.
+func phase_progress() -> float:
+	match attack_phase:
+		"startup": return clampf(windup_progress, 0.0, 1.0)
+		"active": return 1.0 - clampf(_timer / maxf(active_len, 0.001), 0.0, 1.0)
+		"recovery": return 1.0 - clampf(_timer / maxf(recovery_len, 0.001), 0.0, 1.0)
+	return 0.0
+
+
+## 지금 상태의 진행도 (0→1; RISE 같은 단순 상태용).
+func state_progress(length: float) -> float:
+	return 1.0 - clampf(_timer / maxf(length, 0.001), 0.0, 1.0)
 
 
 func _begin(st: State, startup: float) -> void:
@@ -191,6 +236,7 @@ func _begin(st: State, startup: float) -> void:
 	attack_phase = "startup"
 	windup_progress = 0.0
 	_timer = startup
+	startup_len = startup
 
 
 func _choose(dist: float) -> void:
@@ -262,7 +308,7 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		hitbox.deactivate()
 		spike_marks.clear()
 		_set_state(State.RISE)
-		_timer = 3.0
+		_timer = rise_len
 		phase_changed.emit(2)
 		telegraph.emit("rise")
 		Juice.hitstop(0.2, 0.02)
@@ -284,6 +330,11 @@ func on_just_guarded(_by: Player, amount: float) -> void:
 		hitbox.deactivate()
 		_set_state(State.BROKEN)
 		_timer = broken_time
+	elif state == State.SWEEP:
+		# 지팡이가 튕겼다: 그림만 짧게 휘청인다 (공격 길이·판정은 그대로)
+		anim_hint = "stagger"
+		_hint_timer = stagger_len
+		stagger = 1.0
 
 
 func _add_poise(amount: float) -> void:
@@ -338,6 +389,10 @@ func _set_state(new_state: State) -> void:
 	if debug_log:
 		print("[뿌리지기] %s → %s" % [State.keys()[state], State.keys()[new_state]])
 	state = new_state
+	anim_hint = ""
+	_hint_timer = 0.0
+	if new_state not in ATTACK_STATES:
+		attack_phase = ""
 	state_changed.emit(new_state)
 
 
