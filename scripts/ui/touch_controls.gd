@@ -1,9 +1,9 @@
 extends CanvasLayer
 ## 터치 조작 (기획서 8장 "터치 조작").
 ## - 왼쪽 화면 어디든 누르면 그 자리에 스틱.
-## - 오른쪽 엄지: 아래 모서리를 축으로 부채꼴로 늘어선다. 가장 가까운 곳에 점프, 그 옆에 약공격(가장 큼),
-##   약공격 왼쪽에 가드(저스트 가드를 같은 엄지로 바로 누르게), 위로 회피·강공격·영혼·회복.
-## - 왼쪽 아래: 회피 / 걷기(달리기가 기본이라, 누르면 걷는다).
+## - 오른쪽 엄지: 싸움 버튼 다섯 개만. 아래 모서리를 축으로 안쪽 호에 점프(가장 가까움)·약공격(가장 큼),
+##   바깥 호에 회피(점프 위)·가드(약공격 왼쪽, 저스트 가드를 같은 엄지로)·강공격(약공격 위).
+## - 왼쪽 가장자리 세로 줄: 회복 / 영혼 / 전환 (급하지 않은 버튼). 걷기 고정은 L3·키보드만 (터치 버튼은 없앴다).
 ## - 상황 버튼(손길): 상호작용이 가능할 때만 나타난다. 달빛풀에서 쉬는 중엔 '이동', 포탈 앞에선 '들어가기'.
 ## - 위 모서리: 왼쪽 '메뉴'(Esc), 오른쪽 '지도'. 이 둘은 방이 입력 이벤트로 받으므로 InputEventAction 을 함께 보낸다.
 ## - 밝은 배경에서도 보이게: 어두운 반투명 바탕 + 흰 테두리 + 테두리 있는 글자.
@@ -65,25 +65,25 @@ func _buttons() -> Dictionary:
 	var s := _canvas.size
 	var br := Vector2(s.x, s.y)   # 오른쪽 아래 모서리 (오른손 엄지의 축)
 	var b := {
-		# 오른쪽 엄지 — 안쪽 호 (가장 자주 누르는 것들)
-		"jump": {"pos": br + Vector2(-150, -130), "r": 76.0, "text": "점프", "action": "jump"},
-		"attack_light": {"pos": br + Vector2(-340, -215), "r": 92.0, "text": "약공격", "action": "attack_light"},
-		"guard": {"pos": br + Vector2(-545, -150), "r": 72.0, "text": "가드", "action": "guard"},
-		# 바깥 호
-		"dodge_r": {"pos": br + Vector2(-170, -335), "r": 64.0, "text": "회피", "action": "dodge"},
-		"attack_heavy": {"pos": br + Vector2(-355, -425), "r": 62.0, "text": "강공격", "action": "attack_heavy"},
-		"soul": {"pos": br + Vector2(-545, -350), "r": 54.0, "text": "영혼", "action": "soul_ability"},
-		"soul_next": {"pos": br + Vector2(-670, -455), "r": 38.0, "text": "전환", "action": "soul_next"},
-		"heal": {"pos": br + Vector2(-175, -525), "r": 50.0, "text": "회복", "action": "heal"},
-		# 왼쪽 엄지
-		"dodge_l": {"pos": Vector2(150, s.y - 130), "r": 62.0, "text": "회피", "action": "dodge"},
-		"walk_l": {"pos": Vector2(320, s.y - 95), "r": 46.0, "text": "걷기", "action": "run_toggle"},
+		# 오른쪽 엄지 (2026-10-18 기획자 결정: 오른쪽은 싸움 버튼 다섯 개만) — 모서리에 가까운 안쪽 호:
+		# 점프(가장 가까움) → 약공격(가장 큼). 바깥 호: 회피(점프 위), 가드(약공격 왼쪽, 저스트 가드를 같은 엄지로), 강공격(약공격 위).
+		"jump": {"pos": br + Vector2(-160, -140), "r": 80.0, "text": "점프", "action": "jump"},
+		"attack_light": {"pos": br + Vector2(-360, -210), "r": 96.0, "text": "약공격", "action": "attack_light"},
+		"dodge_r": {"pos": br + Vector2(-170, -350), "r": 66.0, "text": "회피", "action": "dodge"},
+		"guard": {"pos": br + Vector2(-560, -140), "r": 76.0, "text": "가드", "action": "guard"},
+		"attack_heavy": {"pos": br + Vector2(-390, -430), "r": 66.0, "text": "강공격", "action": "attack_heavy"},
+		# 왼쪽 엄지: 왼쪽 가장자리 세로 줄 (스틱은 그 오른쪽 빈 자리에서 시작한다). 회복·영혼·전환은 급하지 않은 버튼.
+		# x=170: 가로로 쥔 아이폰의 노치(가장자리 가운데, 깊이 약 130px)를 피한다. 셋 다 아래쪽 절반에 두어
+		# 버튼 크기 설정으로 키워도 같은(왼쪽 아래) 모서리 기준으로 함께 벌어진다.
+		"heal": {"pos": Vector2(170, s.y - 560), "r": 50.0, "text": "회복", "action": "heal"},
+		"soul": {"pos": Vector2(170, s.y - 430), "r": 54.0, "text": "영혼", "action": "soul_ability"},
+		"soul_next": {"pos": Vector2(170, s.y - 310), "r": 42.0, "text": "전환", "action": "soul_next"},
 		# 위 모서리
 		"map": {"pos": Vector2(s.x - 76, 76), "r": 46.0, "text": "지도", "action": "map"},
 		"menu": {"pos": Vector2(76, 76), "r": 46.0, "text": "메뉴", "action": "pause"},
 	}
 	if _player and is_instance_valid(_player) and _player.can_interact:
-		b["interact"] = {"pos": br + Vector2(-740, -250), "r": 70.0, "text": _interact_label(), "action": "interact"}
+		b["interact"] = {"pos": br + Vector2(-740, -270), "r": 70.0, "text": _interact_label(), "action": "interact"}
 	var k := Settings.touch_scale_factor()
 	if k != 1.0:
 		for name in b:
@@ -204,7 +204,6 @@ func _on_draw() -> void:
 	var idle := Color(0.03, 0.04, 0.07, 0.42)
 	var ring := Color(1, 1, 1, 0.55)
 	var active := Color("8fd3ff", 0.6)
-	var locked := Color("ffd46a", 0.45)
 	for t in _touches.values():
 		if t["role"] == "stick":
 			var origin: Vector2 = t["origin"]
@@ -213,7 +212,6 @@ func _on_draw() -> void:
 			_canvas.draw_arc(origin, stick_radius, 0, TAU, 48, ring, 3.0, true)
 			_canvas.draw_circle(knob, 40.0, active)
 			_canvas.draw_arc(knob, 40.0, 0, TAU, 32, Color(1, 1, 1, 0.8), 2.0, true)
-	var walking := _player != null and is_instance_valid(_player) and _player.walk_locked
 	var resting := _player != null and is_instance_valid(_player) and _player.state == Player.State.REST
 	var buttons := _buttons()
 	for name in buttons:
@@ -225,16 +223,12 @@ func _on_draw() -> void:
 		var fill := idle
 		if pressed:
 			fill = active
-		elif name == "walk_l" and walking:
-			fill = locked
 		elif name == "interact":
 			fill = Color("8fd3ff" if resting else "ffd46a", 0.35 + 0.1 * sin(Time.get_ticks_msec() / 150.0))
 		var r: float = b["r"]
 		_canvas.draw_circle(b["pos"], r, fill)
 		_canvas.draw_arc(b["pos"], r, 0, TAU, 48, ring, 3.0, true)
 		var text: String = b["text"]
-		if name == "walk_l" and walking:
-			text = "걷기 ●"
 		var size := 22 if r < 60 else 28
 		_label(b["pos"] + Vector2(-r * 1.5, size * 0.36), text, size, Color(1, 1, 1, 0.95), r * 3.0)
 	# (화면 아래 조작 설명 줄은 없앴다. 버튼 이름만으로 충분하고, 설명 글자는 기획자 요청으로 모두 제거.)

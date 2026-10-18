@@ -120,12 +120,18 @@ func _set_battle_camera(on: bool) -> void:
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(cam, "zoom", Vector2(0.88, 0.88) if on else Vector2(cam.base_zoom, cam.base_zoom), 1.2).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(cam, "vertical_offset", -260.0 if on else -110.0, 1.2).set_trans(Tween.TRANS_SINE)
+	# 레터박스 띠가 화면 아래를 가리므로 바닥이 띠 위에 오게 아래 경계를 맞춘다
+	if on and cam.has_method("keep_floor_above"):
+		var ground_y: float = $Markers/GroundLine.position.y
+		cam.keep_floor_above(ground_y, boss_hud.band_full_px(), 0.88)
+	elif cam.has_method("restore_bounds"):
+		cam.restore_bounds()
 
 
 func _on_boss_fallen() -> void:
 	Sfx.play("boss_fall", 0.0, 0.0)
 	Music.stop(0.4)   # 보스곡이 끊기고 정적
-	boss_hud.hide_boss()
+	boss_hud.hide_bar()   # 막대만 사라지고 띠는 정화의 손길까지 남는다
 	_set_battle_camera(false)
 	var hud := get_node_or_null("CombatHUD")
 	if hud:
@@ -138,7 +144,8 @@ func _on_boss_purified() -> void:
 	Progress.next_spawn = "AfterBoss"
 	Progress.pending_memory = memory_id
 	Progress.memory_return_scene = scene_file_path
-	# 새가 빛이 되어 흩어진다
+	# 새가 빛이 되어 흩어지고, 레터박스 띠가 천천히 내려가며 회상으로 이어진다
+	boss_hud.lower_band(1.8)
 	var tw := create_tween()
 	tw.tween_property(boss, "modulate", Color(3, 3, 3, 0), 1.6)
 	await get_tree().create_timer(1.8).timeout

@@ -829,15 +829,22 @@ func _camtest() -> void:
 	player._invuln_timer = 9999.0
 	for e in tree.get_nodes_in_group("enemy"):
 		e.queue_free()
+	var band := 0.0
 	if has_method("_set_battle_camera"):
 		call("_set_battle_camera", true)   # 보스 방: 싸움 카메라(0.88배, 위쪽 더 보기)
+	var bhud := get_node_or_null("BossHUD")
+	if bhud:
+		bhud.show_boss()   # 레터박스 띠가 올라온다
 	await tree.create_timer(2.5).timeout
+	if bhud:
+		band = bhud.band_px()
 	var cam := get_viewport().get_camera_2d()
 	var vp := get_viewport().get_visible_rect().size
 	var center := cam.get_screen_center_position()
 	var bottom_world := center.y + vp.y / 2.0 / cam.zoom.y
 	var feet := player.global_position.y + 67.0
-	print("[카메라시험] %s: 확대 %.2f, 화면 아래 끝 세계 y=%.0f (방 경계 아래 %.0f), 소녀 발 y=%.0f → 화면 아래에서 %.0f px 위 (보스 바 띠 150px보다 커야 함), 바닥 %s" % [scene_file_path.get_file(), cam.zoom.y, bottom_world, bounds.end.y, feet, (bottom_world - feet) * cam.zoom.y, player.is_on_floor()])
+	var feet_px := (bottom_world - feet) * cam.zoom.y
+	print("[카메라시험] %s: 확대 %.2f, 화면 아래 끝 세계 y=%.0f (방 경계 아래 %.0f, 카메라 아래 한계 %d), 소녀 발 y=%.0f → 화면 아래에서 %.0f px 위, 레터박스 띠 %.0f px (발이 띠 위: %s), 바닥 %s" % [scene_file_path.get_file(), cam.zoom.y, bottom_world, bounds.end.y, cam.limit_bottom, feet, feet_px, band, feet_px > band, player.is_on_floor()])
 	tree.quit()
 
 

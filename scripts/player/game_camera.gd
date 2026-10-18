@@ -36,13 +36,32 @@ func _process(delta: float) -> void:
 	offset = jitter
 
 
+## 방의 경계 (set_room_bounds 로 받은 원래 값)
+var _room_rect := Rect2()
+
+
 ## 방이 카메라 경계를 정해 준다.
 func set_room_bounds(rect: Rect2) -> void:
+	_room_rect = rect
 	limit_left = int(rect.position.x)
 	limit_top = int(rect.position.y)
 	limit_right = int(rect.end.x)
 	limit_bottom = int(rect.end.y)
 	reset_smoothing()
+
+
+## 보스전 레터박스: 화면 아래 inset_px 만큼이 띠로 가려지므로, 소녀가 서는 바닥(ground_y)이 띠 위에 오도록
+## 아래 경계를 필요한 만큼 내린다 (바닥 아래로 띠 높이 + 여유 60px 의 세계 거리를 확보). 끝나면 restore_bounds().
+func keep_floor_above(ground_y: float, inset_px: float, zoom_y: float) -> void:
+	var need := inset_px / maxf(zoom_y, 0.01) + 60.0
+	var want := int(ground_y + need)
+	if want > limit_bottom:
+		limit_bottom = want
+
+
+func restore_bounds() -> void:
+	if _room_rect.size != Vector2.ZERO:
+		limit_bottom = int(_room_rect.end.y)
 
 
 ## 화면을 잠깐 흔든다 (픽셀 단위 세기).
