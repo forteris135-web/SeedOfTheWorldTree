@@ -43,6 +43,12 @@ func _ready() -> void:
 						player.position = g.global_position + Vector2(60, -2)
 						rest_point = g.global_position + Vector2(0, -2)
 						g.arrive(player)
+			elif Progress.next_spawn.begins_with("Portal:"):
+				var pid := Progress.next_spawn.trim_prefix("Portal:")
+				for p in get_tree().get_nodes_in_group("portal"):
+					if p.portal_id == pid:
+						player.position = p.global_position + Vector2(90, -2)
+						p.arrive(player)
 			else:
 				var marker := get_node_or_null("Markers/" + Progress.next_spawn)
 				if marker:
@@ -114,6 +120,16 @@ func _ready() -> void:
 		_savetest()
 	elif "--remaptest" in args:
 		_remaptest()
+	elif "--portaltest" in args:
+		if Progress.has("_test_travelled"):
+			_arrivaltest("포탈", Progress.next_spawn)
+		else:
+			_portaltest()
+	elif "--grasstest" in args:
+		if Progress.has("_test_travelled"):
+			_arrivaltest("달빛풀", Progress.next_spawn)
+		else:
+			_grasstest()
 
 
 func _process(_delta: float) -> void:
@@ -161,7 +177,10 @@ func _register_on_map() -> void:
 	var grasses: Array = []
 	for g in get_tree().get_nodes_in_group("moonlight_grass"):
 		grasses.append(g.position)
-	Progress.visited_rooms[room_id] = {"offset": map_offset, "size": bounds.size, "name": display_name if display_name != "" else room_id, "region": region, "grasses": grasses, "boss": is_boss_room}
+	var portals: Array = []
+	for p in get_tree().get_nodes_in_group("portal"):
+		portals.append(p.position)
+	Progress.visited_rooms[room_id] = {"offset": map_offset, "size": bounds.size, "name": display_name if display_name != "" else room_id, "region": region, "grasses": grasses, "portals": portals, "boss": is_boss_room}
 
 
 ## 월드의 한 점에서 색이 번져 돌아온다.
@@ -215,7 +234,12 @@ func _on_player_died() -> void:
 
 
 func _save_screenshot(file_name: String) -> void:
-	var img := get_viewport().get_texture().get_image()
+	var tex := get_viewport().get_texture()
+	if tex == null:
+		return   # 화면 없는(headless) 시험에서는 찍지 않는다
+	var img := tex.get_image()
+	if img == null or img.is_empty():
+		return
 	img.save_png(ProjectSettings.globalize_path("res://screenshots/" + file_name))
 
 
@@ -515,6 +539,175 @@ func _savetest() -> void:
 	_pause.close()
 	SaveGame.new_game()
 	print("[저장시험] 새로 시작 뒤 저장 파일 있음: %s" % SaveGame.has_save())
+	tree.quit()
+
+
+## 시험용: 열려 있는 이동 메뉴를 찾는다.
+func _find_travel_menu() -> TravelMenu:
+	for c in get_children():
+		if c is TravelMenu and c.is_open():
+			return c
+	return null
+
+
+## 시험용: 화면(캔버스 좌표)의 한 점을 손가락으로 누르거나 뗀다 (터치 조작 시험). 창 좌표로 바꿔서 보낸다.
+func _fake_touch(pos: Vector2, pressed: bool) -> void:
+	var ev := InputEventScreenTouch.new()
+	ev.index = 0
+	ev.position = get_viewport().get_final_transform() * pos
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
+
+
+## 시험용: 동작을 진짜 입력 이벤트로 눌렀다 뗀다 (메뉴처럼 이벤트로 듣는 화면용).
+func _fake_action(action: String) -> void:
+	var ev := InputEventAction.new()
+	ev.action = action
+	ev.pressed = true
+	Input.parse_input_event(ev)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	ev = InputEventAction.new()
+	ev.action = action
+	ev.pressed = false
+	Input.parse_input_event(ev)
+
+
+## Claude Code용: 터치 '지도' 버튼으로 지도가 열리는지, 포탈 메뉴를 열고 다른 방으로 건너가는지 확인한다.
+func _portaltest() -> void:
+	var tree := get_tree()
+	await tree.create_timer(0.5).timeout
+	# 1) 터치 지도 버튼
+	var touch := get_node_or_null("TouchControls")
+	if touch:
+		var s: Vector2 = touch._canvas.size
+		_fake_touch(Vector2(s.x - 76, 76), true)
+		await tree.create_timer(0.3).timeout
+		print("[포탈시험] 터치 '지도' 누름 → 지도 열림: %s (손가락 %s, 장치 %s)" % [_map != null and _map._open, touch._touches, InputDevice.current])
+		_fake_touch(Vector2(s.x - 76, 76), false)
+		await tree.create_timer(0.2).timeout
+		_fake_touch(Vector2(s.x / 2.0, s.y / 2.0), true)
+		await tree.create_timer(0.2).timeout
+		_fake_touch(Vector2(s.x / 2.0, s.y / 2.0), false)
+		await tree.create_timer(0.2).timeout
+		print("[포탈시험] 화면 누름 → 지도 닫힘: %s, 멈춤 해제: %s" % [_map == null or not _map._open, not tree.paused])
+		# 터치 '메뉴' 버튼
+		_fake_touch(Vector2(76, 76), true)
+		await tree.create_timer(0.3).timeout
+		print("[포탈시험] 터치 '메뉴' 누름 → 메뉴 열림: %s" % (_pause != null and _pause.is_open()))
+		_fake_touch(Vector2(76, 76), false)
+		await tree.create_timer(0.2).timeout
+		_fake_touch(Vector2(s.x / 2.0, s.y - 40), true)
+		await tree.create_timer(0.2).timeout
+		_fake_touch(Vector2(s.x / 2.0, s.y - 40), false)
+		await tree.create_timer(0.2).timeout
+		print("[포탈시험] 바깥 누름 → 메뉴 닫힘: %s (터치 영역 %s)" % [_pause == null or not _pause.is_open(), s])
+	# 2) 포탈
+	var portal: Portal = null
+	for p in tree.get_nodes_in_group("portal"):
+		portal = p
+		break
+	if portal == null:
+		print("[포탈시험] 이 방에 깨어 있는 포탈이 없다")
+		tree.quit()
+		return
+	# 다른 방에 가 본 것으로 친다
+	Progress.portals["village_01"] = {"scene": "res://scenes/rooms/village_01.tscn", "name": "마을 · 입구의 거리", "region": "village"}
+	Progress.portals["mine_02"] = {"scene": "res://scenes/rooms/mine_02.tscn", "name": "채굴장 · 관의 복도", "region": "mine"}
+	player._invuln_timer = 9999.0
+	player.global_position = portal.global_position + Vector2(-60, -40)
+	player.velocity = Vector2.ZERO
+	await tree.create_timer(0.6).timeout
+	print("[포탈시험] 포탈 곁 상호작용 가능: %s, 알려진 포탈: %s, 지도에 포탈 자리: %s" % [player.can_interact, Progress.portals.keys(), Progress.visited_rooms[room_id]["portals"]])
+	Input.action_press("interact")
+	await tree.physics_frame
+	Input.action_release("interact")
+	await tree.create_timer(0.4).timeout
+	var menu := _find_travel_menu()
+	print("[포탈시험] 포탈 메뉴 열림: %s, 항목 %d, 멈춤: %s" % [menu != null, menu._items.size() if menu else 0, tree.paused])
+	_save_screenshot("debug_portal_menu.png")
+	if menu == null:
+		tree.quit()
+		return
+	# 터치로 두 번째 줄을 고른다
+	Progress.set_flag("_test_travelled")
+	var target: String = menu._items[1]["id"]
+	Progress.set_flag("_test_target_" + target)
+	_fake_touch(menu._row_rect(1).get_center(), true)
+	await tree.create_timer(0.1).timeout
+	_fake_touch(menu._row_rect(1).get_center(), false)
+	await tree.create_timer(0.2).timeout
+	print("[포탈시험] 터치로 고른 포탈: %s → 다음 등장 자리 '%s'" % [target, Progress.next_spawn])
+	if Progress.next_spawn == "":
+		# 터치가 안 닿았으면 버튼으로 고른다
+		await _fake_action("move_down")
+		await _fake_action("jump")
+		await tree.create_timer(0.2).timeout
+		print("[포탈시험] 버튼으로 고른 뒤 다음 등장 자리 '%s'" % Progress.next_spawn)
+	await tree.create_timer(6.0).timeout
+	print("[포탈시험] 6초가 지나도 방이 바뀌지 않았다")
+	tree.quit()
+
+
+## Claude Code용: 달빛풀에서 쉬고 → 쉬자마자 메뉴가 열리지 않는지 → 손길을 한 번 더 눌러 메뉴 → 다른 달빛풀로 이동.
+func _grasstest() -> void:
+	var tree := get_tree()
+	await tree.create_timer(0.5).timeout
+	var grass := tree.get_first_node_in_group("moonlight_grass") as MoonlightGrass
+	if grass == null:
+		print("[달빛풀시험] 달빛풀이 없다")
+		tree.quit()
+		return
+	Progress.grasses["canopy_wind"] = {"scene": "res://scenes/rooms/canopy_02.tscn", "name": "수관 · 바람의 틈 위"}
+	player._invuln_timer = 9999.0
+	player.global_position = grass.global_position + Vector2(50, -40)
+	player.velocity = Vector2.ZERO
+	await tree.create_timer(0.6).timeout
+	Input.action_press("interact")
+	await tree.physics_frame
+	await tree.process_frame
+	print("[달빛풀시험] 손길 직후: 소녀 상태 %s, 메뉴 열림 %s (처음 피우는 중이면 쉬기 전)" % [player.state_name(), _find_travel_menu() != null])
+	Input.action_release("interact")
+	await tree.create_timer(2.4).timeout
+	print("[달빛풀시험] 2.4초 뒤: 소녀 상태 %s, 메뉴 저절로 열림 %s (false 여야 함), 등록된 달빛풀 %s" % [player.state_name(), _find_travel_menu() != null, Progress.grasses.keys()])
+	Input.action_press("interact")
+	await tree.physics_frame
+	await tree.process_frame
+	Input.action_release("interact")
+	await tree.create_timer(0.4).timeout
+	var menu := _find_travel_menu()
+	print("[달빛풀시험] 손길 한 번 더: 메뉴 열림 %s, 항목 %d" % [menu != null, menu._items.size() if menu else 0])
+	_save_screenshot("debug_grass_menu.png")
+	if menu == null:
+		tree.quit()
+		return
+	Progress.set_flag("_test_travelled")
+	var next_i := (menu._index + 1) % menu._items.size()
+	Progress.set_flag("_test_target_" + menu._items[next_i]["id"])
+	await _fake_action("move_down")
+	await _fake_action("jump")
+	await tree.create_timer(0.2).timeout
+	print("[달빛풀시험] 고른 뒤 다음 등장 자리: '%s'" % Progress.next_spawn)
+	await tree.create_timer(6.0).timeout
+	print("[달빛풀시험] 6초가 지나도 방이 바뀌지 않았다")
+	tree.quit()
+
+
+## 시험 2단계: 건너온 방에서 제대로 도착했는지 확인하고 끝낸다.
+func _arrivaltest(label: String, _spawn: String) -> void:
+	var tree := get_tree()
+	await tree.create_timer(0.8).timeout
+	var near := "?"
+	var group := "portal" if label == "포탈" else "moonlight_grass"
+	for n in tree.get_nodes_in_group(group):
+		var want := false
+		for f in Progress.flags:
+			if str(f).begins_with("_test_target_") and str(f).trim_prefix("_test_target_") == (n.portal_id if group == "portal" else n.grass_id):
+				want = true
+		if want:
+			near = "%.0f px" % player.global_position.distance_to(n.global_position)
+	print("[%s시험·도착] 방 %s, 소녀 상태 %s, 입력 가능 %s, 목표까지 %s, 등장 자리 비움 %s, 멈춤 %s" % [label, scene_file_path.get_file(), player.state_name(), player.input_enabled, near, Progress.next_spawn == "", tree.paused])
+	_save_screenshot("debug_%s_arrive.png" % ("portal" if group == "portal" else "grass"))
 	tree.quit()
 
 

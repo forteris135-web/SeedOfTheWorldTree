@@ -3,8 +3,13 @@ extends CanvasLayer
 ## - 왼쪽 화면 어디든 누르면 그 자리에 스틱.
 ## - 오른쪽: 약공격(가장 크게), 가드(바로 옆, 크게), 점프·회피(아래), 강공격(위, 길게 누르면 차지), 회복(작게 위), 달리기 고정.
 ## - 왼쪽 아래: 회피 / 달리기 고정 (양손 어느 쪽으로도).
-## - 상황 버튼(손길): 쉬기·정화가 가능할 때만 나타난다.
+## - 상황 버튼(손길): 쉬기·정화가 가능할 때만 나타난다. 달빛풀에서 쉬는 중에는 '이동'.
+## - 위 모서리: 왼쪽 '메뉴', 오른쪽 '지도'. 이 둘은 방이 입력 이벤트로 받으므로 InputEventAction 을 함께 보낸다.
 ## - 컨트롤러나 키보드 입력이 들어오면 숨고, 화면을 만지면 다시 나타난다.
+## - 멈춤(지도·메뉴) 중에도 손가락 떼기는 받아서 버튼이 눌린 채 남지 않게 한다.
+
+## Input.action_press 는 상태만 바꾸고 이벤트를 보내지 않으므로, 이벤트로 듣는 동작들은 따로 보낸다.
+const EVENT_ACTIONS := ["map", "pause"]
 
 @export var stick_radius := 110.0
 
@@ -16,6 +21,7 @@ var _player: Player
 
 func _ready() -> void:
 	layer = 20
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_canvas = Control.new()
 	_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -55,12 +61,14 @@ func _buttons() -> Dictionary:
 		"heal": {"pos": Vector2(s.x - 90, s.y - 600), "r": 42.0, "text": "회복", "action": "heal"},
 		"dodge_l": {"pos": Vector2(150, s.y - 110), "r": 60.0, "text": "회피", "action": "dodge"},
 		"run_l": {"pos": Vector2(330, s.y - 150), "r": 46.0, "text": "달리기", "action": "run_toggle"},
-		"map": {"pos": Vector2(s.x - 70, 70), "r": 38.0, "text": "지도", "action": "map"},
+		"map": {"pos": Vector2(s.x - 76, 76), "r": 46.0, "text": "지도", "action": "map"},
+		"menu": {"pos": Vector2(76, 76), "r": 46.0, "text": "메뉴", "action": "pause"},
 		"soul": {"pos": Vector2(s.x - 230, s.y - 600), "r": 42.0, "text": "영혼", "action": "soul_ability"},
 		"soul_next": {"pos": Vector2(s.x - 330, s.y - 560), "r": 30.0, "text": "전환", "action": "soul_next"},
 	}
 	if _player and is_instance_valid(_player) and _player.can_interact:
-		b["interact"] = {"pos": Vector2(s.x - 560, s.y - 110), "r": 70.0, "text": "손길", "action": "interact"}
+		var resting := _player.state == Player.State.REST
+		b["interact"] = {"pos": Vector2(s.x - 560, s.y - 110), "r": 70.0, "text": "이동" if resting else "손길", "action": "interact"}
 	var k := Settings.touch_scale_factor()
 	if k != 1.0:
 		for name in b:
@@ -75,7 +83,8 @@ func _buttons() -> Dictionary:
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed:
-			if not _shown:
+			# 멈춤 중(지도·메뉴·이동 목록)에는 그 화면이 터치를 받는다
+			if not _shown or get_tree().paused:
 				return
 			_begin_touch(event.index, event.position)
 		else:
@@ -103,7 +112,18 @@ func _begin_touch(index: int, pos: Vector2) -> void:
 			return
 	else:
 		Input.action_press(buttons[role]["action"])
+		_send_action_event(buttons[role]["action"], true)
 	_touches[index] = {"role": role, "origin": pos, "pos": pos}
+
+
+## 지도·메뉴처럼 _unhandled_input 으로 듣는 동작은 진짜 입력 이벤트로도 보낸다.
+func _send_action_event(action: String, pressed: bool) -> void:
+	if action not in EVENT_ACTIONS:
+		return
+	var ev := InputEventAction.new()
+	ev.action = action
+	ev.pressed = pressed
+	Input.parse_input_event(ev)
 
 
 func _end_touch(index: int) -> void:
@@ -123,6 +143,7 @@ func _end_touch(index: int) -> void:
 		if buttons.has(t["role"]) and buttons[t["role"]]["action"] == action:
 			return
 	Input.action_release(action)
+	_send_action_event(action, false)
 
 
 func _update_stick() -> void:
@@ -153,7 +174,7 @@ func _set_axis(neg: String, pos: String, value: float) -> void:
 
 func _release_all() -> void:
 	_touches.clear()
-	for a in ["jump", "dodge", "run_toggle", "attack_light", "attack_heavy", "guard", "heal", "interact", "soul_ability", "soul_next", "map", "move_left", "move_right", "move_up", "move_down"]:
+	for a in ["jump", "dodge", "run_toggle", "attack_light", "attack_heavy", "guard", "heal", "interact", "soul_ability", "soul_next", "map", "pause", "move_left", "move_right", "move_up", "move_down"]:
 		Input.action_release(a)
 
 
@@ -170,6 +191,7 @@ func _on_draw() -> void:
 			_canvas.draw_arc(origin, stick_radius, 0, TAU, 48, Color(1, 1, 1, 0.3), 2.0, true)
 			_canvas.draw_circle(knob, 40.0, active)
 	var run_on := _player != null and is_instance_valid(_player) and _player.run_locked
+	var resting := _player != null and is_instance_valid(_player) and _player.state == Player.State.REST
 	var buttons := _buttons()
 	for name in buttons:
 		var b: Dictionary = buttons[name]
@@ -183,7 +205,9 @@ func _on_draw() -> void:
 		elif name.begins_with("run") and run_on:
 			fill = locked
 		elif name == "interact":
-			fill = Color("ffd46a", 0.25 + 0.1 * sin(Time.get_ticks_msec() / 150.0))
+			fill = Color("8fd3ff" if resting else "ffd46a", 0.25 + 0.1 * sin(Time.get_ticks_msec() / 150.0))
+		elif name == "map" or name == "menu":
+			fill = Color(1, 1, 1, 0.16)
 		var r: float = b["r"]
 		_canvas.draw_circle(b["pos"], r, fill)
 		_canvas.draw_arc(b["pos"], r, 0, TAU, 48, Color(1, 1, 1, 0.3), 2.0, true)

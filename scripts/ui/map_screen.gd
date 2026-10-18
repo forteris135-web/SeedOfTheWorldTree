@@ -61,7 +61,7 @@ func _on_draw() -> void:
 	var size := _panel.size
 	_panel.draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.03, 0.05, 0.88))
 	_panel.draw_string(font, Vector2(60, 70), "지도", HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(0.95, 0.9, 0.8))
-	_panel.draw_string(font, Vector2(60, 104), "가 본 곳만 그려진다  ·  지도 / 회피 / 메뉴: 닫기", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1, 0.45))
+	_panel.draw_string(font, Vector2(60, 104), "가 본 곳만 그려진다  ·  ● 달빛풀  ◆ 포탈  ☠ 수호자  ·  지도 / 회피 / 메뉴 / 화면 누르기: 닫기", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1, 0.45))
 	var rooms: Dictionary = Progress.visited_rooms
 	if rooms.is_empty():
 		return
@@ -93,6 +93,12 @@ func _on_draw() -> void:
 			var gp: Vector2 = origin + (off + g - mn) * scale
 			_panel.draw_circle(gp, 7.0, Color(0.56, 0.83, 1.0))
 			_panel.draw_circle(gp, 11.0, Color(0.56, 0.83, 1.0, 0.25 + 0.15 * sin(_t * 3.0)))
+		for pp in r.get("portals", []):
+			var c: Vector2 = origin + (off + pp - mn) * scale
+			var d := 9.0
+			var gold := Color(1.0, 0.86, 0.5)
+			_panel.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -d), c + Vector2(d, 0), c + Vector2(0, d), c + Vector2(-d, 0)]), gold)
+			_panel.draw_polyline(PackedVector2Array([c + Vector2(0, -d - 4), c + Vector2(d + 4, 0), c + Vector2(0, d + 4), c + Vector2(-d - 4, 0), c + Vector2(0, -d - 4)]), Color(gold, 0.3 + 0.2 * sin(_t * 3.0 + 1.0)), 2.0)
 		if r.get("boss", false):
 			var c := rect.get_center()
 			_panel.draw_string(font, c + Vector2(-20, 12), "☠", HORIZONTAL_ALIGNMENT_CENTER, 40, 30, Color(1.0, 0.75, 0.6, 0.9))

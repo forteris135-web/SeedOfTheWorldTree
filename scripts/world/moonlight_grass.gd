@@ -31,6 +31,8 @@ var _glow: Sprite2D
 
 var _travel: TravelMenu
 var _resting_player: Player
+## 쉬기 시작한 그 손길 버튼이 떨어진 뒤에야 이동 메뉴를 연다 (쉬자마자 열리지 않게).
+var _travel_armed := false
 
 
 func _ready() -> void:
@@ -133,9 +135,7 @@ func _process(delta: float) -> void:
 		var resting := _player_near.state == Player.State.REST
 		_prompt.visible = true
 		if resting:
-			_prompt.text = "%s  뿌리를 따라 이동" % InputDevice.prompt("interact") if Progress.grasses.size() >= 2 else ""
-			if _player_near.input_enabled and Input.is_action_just_pressed("interact") and Progress.grasses.size() >= 2:
-				_open_travel()
+			_prompt.text = "%s  뿌리를 따라 이동" % InputDevice.prompt("interact")
 		else:
 			_prompt.text = "%s  %s" % [InputDevice.prompt("interact"), "쉬기" if is_open else "손을 대기"]
 	else:
@@ -146,6 +146,21 @@ func _process(delta: float) -> void:
 	_glow.scale = Vector2.ONE * (1.3 + 1.6 * _bloom) * pulse
 	# 펼쳐진 잎은 살랑인다
 	_open.rotation = sin(_time * 0.8) * 0.012 * _bloom
+
+
+## 쉬는 중에 손길 버튼을 한 번 더 누르면 이동 메뉴. (소녀와 같은 물리 틱에서 입력을 읽는다)
+func _physics_process(_delta: float) -> void:
+	if _player_near == null or _player_near.state != Player.State.REST:
+		_travel_armed = false
+		return
+	if not _player_near.input_enabled or (_travel and is_instance_valid(_travel) and _travel.is_open()):
+		return
+	if not _travel_armed:
+		# 쉬기 시작한 그 버튼이 떨어진 뒤부터
+		if not Input.is_action_pressed("interact"):
+			_travel_armed = true
+	elif Input.is_action_just_pressed("interact"):
+		_open_travel()
 
 
 func _apply_bloom() -> void:

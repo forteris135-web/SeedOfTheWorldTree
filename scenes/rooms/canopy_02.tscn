@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3 uid="uid://c1seedcanopy02"]
+[gd_scene load_steps=31 format=3 uid="uid://c1seedcanopy02"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -32,6 +32,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedowen" path="res://scenes/enemies/owen.tscn" id="35_owen_enemy"]
 [ext_resource type="PackedScene" uid="uid://c1seedherbalist" path="res://scenes/enemies/herbalist.tscn" id="36_herbalist"]
 [ext_resource type="PackedScene" uid="uid://c1seedherbalistsav" path="res://scenes/enemies/herbalist_savable.tscn" id="37_herbalist_sav"]
+[ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -242,6 +243,11 @@ shape = SubResource("ExitShape2")
 position = Vector2(2050, 300)
 grass_id = "canopy_wind"
 display_name = "수관 · 바람의 틈 위"
+
+[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
+position = Vector2(560, 2400)
+portal_id = "canopy_02"
+display_name = "수관 · 바람의 틈"
 
 [node name="Enemies" type="Node2D" parent="."]
 

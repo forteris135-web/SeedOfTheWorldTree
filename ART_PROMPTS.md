@@ -243,6 +243,7 @@
 | 달빛풀 | `objects/moonlight_grass_sheet.png` → `_closed.png`, `_open.png` | 한 장을 둘로 잘라 둠 |
 | 티아의 작은 등불 | `objects/tia_lantern_sheet.png` → `tia_lantern.png`(켜짐), `tia_lantern_off.png` | 한 장을 둘로 잘라 둠 |
 | 이슬방울 | `objects/icon_dew.png` | |
+| 포탈 | `objects/portal.png` | 기획자가 만들어 준 그림. 가장자리의 주황 찌꺼기를 `tools/clean_portal.py`로 정리함 |
 | 새(현재/과거) | `bosses/boss_bird_now.png`, `boss_bird_past.png` | |
 | 기사(현재/과거) | `bosses/boss_knight_now.png`, `boss_knight_past.png` | |
 | 뿌리지기(현재/과거) | `bosses/boss_rootkeeper_now.png`, `boss_rootkeeper_past.png` | |

@@ -17,6 +17,8 @@ var memory_return_scene := ""
 var upgrades := {}
 ## 피워 둔 달빛풀: id -> {"scene": 경로, "name": 표시 이름}
 var grasses := {}
+## 가 본 방의 포탈: id -> {"scene": 경로, "name": 표시 이름, "region": 지역}
+var portals := {}
 ## 구원한 사람들 (id)
 var rescued := {}
 ## 지도: 가 본 방 (room_id -> offset, size, name, region, grasses, boss)
@@ -59,6 +61,7 @@ func reset() -> void:
 	abilities.clear()
 	upgrades.clear()
 	grasses.clear()
+	portals.clear()
 	rescued.clear()
 	visited_rooms.clear()
 	next_spawn = ""

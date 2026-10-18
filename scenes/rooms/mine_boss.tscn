@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3 uid="uid://c1seedmineboss"]
+[gd_scene load_steps=28 format=3 uid="uid://c1seedmineboss"]
 
 [ext_resource type="Script" path="res://scripts/bosses/boss_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedbossknight" path="res://scenes/bosses/lantern_knight.tscn" id="17_boss"]
 [ext_resource type="Script" path="res://scripts/world/fog_gate.gd" id="19_gate"]
 [ext_resource type="PackedScene" uid="uid://c1seedbosshud" path="res://scenes/ui/boss_hud.tscn" id="20_boss_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
 size = Vector2(80, 400)
@@ -199,6 +200,12 @@ position = Vector2(2800, 1000)
 position = Vector2(330, 1380)
 grass_id = "mine_boss_gate"
 display_name = "채굴장 · 심장 앞"
+
+[node name="Portal" parent="Interactables" instance=ExtResource("40_portal")]
+position = Vector2(1800, 1500)
+portal_id = "mine_boss"
+display_name = "채굴장 · 등불의 심장"
+requires_flag = "boss_knight_defeated"
 
 [node name="GateIn" type="StaticBody2D" parent="."]
 position = Vector2(700, 1500)

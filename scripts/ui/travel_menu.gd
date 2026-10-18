@@ -1,13 +1,22 @@
 extends CanvasLayer
 class_name TravelMenu
-## 달빛풀 이동 메뉴. 피워 둔 달빛풀끼리 뿌리로 이어져 있다 (기획서 8장 "빠른 이동").
+## 이동 메뉴. 두 가지 목록을 보여 준다 (기획서 8장 "빠른 이동").
+## - 달빛풀: 피워 둔 달빛풀끼리 뿌리로 이어져 있다. (쉬는 중에 손길 버튼)
+## - 포탈: 가 본 방의 포탈끼리 이어져 있다. (포탈 앞에서 손길 버튼)
+## 지역 순(수관 → 마을 → 채굴장 → 심연)으로 늘어놓고, 위·아래 / 터치로 고른다.
 
 signal closed
 
-var _items: Array = []     # [{id, name, scene}]
+const REGION_ORDER := {"canopy": 0, "village": 1, "mine": 2, "abyss": 3}
+const REGION_NAMES := {"canopy": "수관", "village": "마을", "mine": "채굴장", "abyss": "심연"}
+
+var _kind := "grass"          # grass / portal
+var _title := ""
+var _subtitle := ""
+var _empty_hint := ""
+var _items: Array = []        # [{id, name, scene, region}]
 var _index := 0
 var _panel: Control
-var _labels: Array[Label] = []
 var _current_id := ""
 var _open := false
 
@@ -23,13 +32,43 @@ func _ready() -> void:
 	add_child(_panel)
 
 
+func is_open() -> bool:
+	return _open
+
+
+## 달빛풀 목록 (쉬는 중).
 func open(current_grass_id: String) -> void:
-	_current_id = current_grass_id
-	_items.clear()
+	var items: Array = []
 	for id in Progress.grasses:
 		var g: Dictionary = Progress.grasses[id]
-		_items.append({"id": id, "name": g.get("name", id), "scene": g.get("scene", "")})
-	_items.sort_custom(func(a, b): return a["name"] < b["name"])
+		var scene: String = g.get("scene", "")
+		items.append({"id": id, "name": g.get("name", id), "scene": scene, "region": g.get("region", region_of_scene(scene))})
+	_open_list("grass", "뿌리를 따라 이동", "피워 둔 달빛풀로 갈 수 있다", "아직 다른 달빛풀을 피우지 않았다. 달빛풀에 손을 대어 두면 여기서 이어진다.", items, current_grass_id)
+
+
+## 포탈 목록 (포탈 앞).
+func open_portals(current_portal_id: String) -> void:
+	var items: Array = []
+	for id in Progress.portals:
+		var p: Dictionary = Progress.portals[id]
+		var scene: String = p.get("scene", "")
+		items.append({"id": id, "name": p.get("name", id), "scene": scene, "region": p.get("region", region_of_scene(scene))})
+	_open_list("portal", "포탈로 건너가기", "가 본 방의 포탈로 갈 수 있다", "아직 다른 포탈을 보지 못했다. 다른 방에 가 보면 여기서 이어진다.", items, current_portal_id)
+
+
+func _open_list(kind: String, title: String, subtitle: String, empty_hint: String, items: Array, current_id: String) -> void:
+	_kind = kind
+	_title = title
+	_subtitle = subtitle
+	_empty_hint = empty_hint
+	_current_id = current_id
+	_items = items
+	_items.sort_custom(func(a, b):
+		var ra: int = REGION_ORDER.get(a["region"], 9)
+		var rb: int = REGION_ORDER.get(b["region"], 9)
+		if ra != rb:
+			return ra < rb
+		return a["name"] < b["name"])
 	_index = 0
 	for i in _items.size():
 		if _items[i]["id"] == _current_id:
@@ -47,34 +86,53 @@ func close() -> void:
 	closed.emit()
 
 
+## 방 경로에서 지역을 알아낸다 (옛 세이브에는 지역이 없다).
+static func region_of_scene(scene: String) -> String:
+	var file := scene.get_file().get_basename()
+	if file.begins_with("moon_"):
+		return "abyss"
+	for r in REGION_ORDER:
+		if file.begins_with(r):
+			return r
+	return "canopy"
+
+
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
 	if event.is_action_pressed("move_down") or event.is_action_pressed("ui_down"):
 		_index = (_index + 1) % max(_items.size(), 1)
+		Sfx.play("blip")
 		_panel.queue_redraw()
 	elif event.is_action_pressed("move_up") or event.is_action_pressed("ui_up"):
 		_index = (_index - 1 + _items.size()) % max(_items.size(), 1)
+		Sfx.play("blip")
 		_panel.queue_redraw()
 	elif event.is_action_pressed("jump") or event.is_action_pressed("interact") or event.is_action_pressed("ui_accept"):
 		_choose(_index)
-	elif event.is_action_pressed("dodge") or event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel"):
+	elif event.is_action_pressed("dodge") or event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel") or event.is_action_pressed("map"):
 		close()
 	elif event is InputEventScreenTouch and event.pressed:
 		var hit := _item_at(event.position)
 		if hit >= 0:
 			_choose(hit)
-		elif event.position.y > _panel.size.y * 0.8:
+		else:
 			close()
 	get_viewport().set_input_as_handled()
 
 
+func _row_height() -> float:
+	var n := maxi(_items.size(), 1)
+	return clampf(floorf(_panel.size.y * 0.58 / n), 36.0, 56.0)
+
+
 func _row_rect(i: int) -> Rect2:
 	var size := _panel.size
-	var w := 620.0
+	var w := 720.0
 	var x := (size.x - w) / 2.0
-	var y0 := size.y * 0.3
-	return Rect2(x, y0 + i * 56.0, w, 50.0)
+	var y0 := size.y * 0.27
+	var rh := _row_height()
+	return Rect2(x, y0 + i * rh, w, rh - 5.0)
 
 
 func _item_at(pos: Vector2) -> int:
@@ -92,21 +150,32 @@ func _choose(i: int) -> void:
 		close()
 		return
 	close()
-	Progress.next_spawn = "Grass:" + it["id"]
+	Sfx.play("select")
+	Progress.next_spawn = ("Grass:" if _kind == "grass" else "Portal:") + it["id"]
 	Game.go_to(it["scene"], 0.8, 1.0)
 
 
 func _on_draw() -> void:
 	var font := ThemeDB.fallback_font
 	var size := _panel.size
-	_panel.draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.6))
-	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.22), "뿌리를 따라 이동", HORIZONTAL_ALIGNMENT_CENTER, 800, 36, Color(0.56, 0.83, 1.0))
-	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.22 + 34), "피워 둔 달빛풀로 갈 수 있다", HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.5))
+	var accent := Color(0.56, 0.83, 1.0) if _kind == "grass" else Color(1.0, 0.86, 0.5)
+	_panel.draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.62))
+	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.19), _title, HORIZONTAL_ALIGNMENT_CENTER, 800, 36, accent)
+	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.19 + 34), _subtitle, HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.5))
+	var rh := _row_height()
+	var font_size := 26 if rh >= 50.0 else 22
 	for i in _items.size():
 		var r := _row_rect(i)
 		var sel := i == _index
-		_panel.draw_rect(r, Color(0.56, 0.83, 1.0, 0.18) if sel else Color(1, 1, 1, 0.06))
 		var it: Dictionary = _items[i]
+		_panel.draw_rect(r, Color(accent, 0.18) if sel else Color(1, 1, 1, 0.06))
+		var region: String = it.get("region", "canopy")
+		var rc: Color = MapScreen.REGION_COLORS.get(region, Color(0.4, 0.4, 0.4))
+		_panel.draw_rect(Rect2(r.position + Vector2(12, 10), Vector2(8, r.size.y - 20)), rc.lightened(0.25))
+		var baseline := r.position.y + r.size.y / 2.0 + font_size * 0.36
+		_panel.draw_string(font, Vector2(r.position.x + 32, baseline), REGION_NAMES.get(region, ""), HORIZONTAL_ALIGNMENT_LEFT, 90, font_size - 6, Color(1, 1, 1, 0.5))
 		var text: String = it["name"] + ("   (여기)" if it["id"] == _current_id else "")
-		_panel.draw_string(font, r.position + Vector2(20, 34), ("▸  " if sel else "    ") + text, HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1.0, 0.86, 0.5) if sel else Color(0.9, 0.9, 0.9))
-	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.86), "위·아래로 고르고 결정  ·  회피 / 메뉴: 닫기", HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.45))
+		_panel.draw_string(font, Vector2(r.position.x + 120, baseline), ("▸  " if sel else "    ") + text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, accent if sel else Color(0.9, 0.9, 0.9))
+	if _items.size() <= 1:
+		_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.27 + _items.size() * rh + 40), _empty_hint, HORIZONTAL_ALIGNMENT_CENTER, 800, 22, Color(1, 1, 1, 0.55))
+	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y - 70), "위·아래로 고르고 결정 (터치: 줄을 누르기)  ·  회피 / 메뉴 / 바깥 누르기: 닫기", HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.45))

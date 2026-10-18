@@ -18,6 +18,7 @@ func save(grass_id: String, scene_path: String) -> void:
 		"abilities": Progress.abilities,
 		"upgrades": Progress.upgrades,
 		"grasses": Progress.grasses,
+		"portals": Progress.portals,
 		"rescued": Progress.rescued,
 		"visited_rooms": _rooms_to_json(Progress.visited_rooms),
 		"ending": Progress.ending,
@@ -41,6 +42,7 @@ func load_game() -> String:
 	Progress.abilities = data.get("abilities", {})
 	Progress.upgrades = data.get("upgrades", {})
 	Progress.grasses = data.get("grasses", {})
+	Progress.portals = data.get("portals", {})
 	Progress.rescued = data.get("rescued", {})
 	Progress.visited_rooms = _rooms_from_json(data.get("visited_rooms", {}))
 	Progress.ending = data.get("ending", "")
@@ -66,7 +68,10 @@ func _rooms_to_json(rooms: Dictionary) -> Dictionary:
 		var gs := []
 		for g in r.get("grasses", []):
 			gs.append([g.x, g.y])
-		out[id] = {"offset": [r["offset"].x, r["offset"].y], "size": [r["size"].x, r["size"].y], "name": r.get("name", id), "region": r.get("region", ""), "grasses": gs, "boss": r.get("boss", false)}
+		var ps := []
+		for p in r.get("portals", []):
+			ps.append([p.x, p.y])
+		out[id] = {"offset": [r["offset"].x, r["offset"].y], "size": [r["size"].x, r["size"].y], "name": r.get("name", id), "region": r.get("region", ""), "grasses": gs, "portals": ps, "boss": r.get("boss", false)}
 	return out
 
 
@@ -77,5 +82,8 @@ func _rooms_from_json(rooms: Dictionary) -> Dictionary:
 		var gs := []
 		for g in r.get("grasses", []):
 			gs.append(Vector2(g[0], g[1]))
-		out[id] = {"offset": Vector2(r["offset"][0], r["offset"][1]), "size": Vector2(r["size"][0], r["size"][1]), "name": r.get("name", id), "region": r.get("region", ""), "grasses": gs, "boss": r.get("boss", false)}
+		var ps := []
+		for p in r.get("portals", []):
+			ps.append(Vector2(p[0], p[1]))
+		out[id] = {"offset": Vector2(r["offset"][0], r["offset"][1]), "size": Vector2(r["size"][0], r["size"][1]), "name": r.get("name", id), "region": r.get("region", ""), "grasses": gs, "portals": ps, "boss": r.get("boss", false)}
 	return out
