@@ -16,7 +16,8 @@ APK 파일은 `build/android/SeedOfTheWorldTree.apk` 에 있다 (디버그 서�
 4. Claude Code에게 "안드로이드에 설치해 줘" 라고 하면 `adb install` 로 넣어 준다.
 
 ## 클라우드(Claude Code 웹)에서 만든 APK
-- 맥이 아니라 클라우드 세션에서 만들면 결과물은 GitHub 저장소의 **Releases** 페이지에 올라간다 (https://github.com/forteris135-web/SeedOfTheWorldTree/releases). 거기서 `.apk` 를 받아 방법 1처럼 설치한다.
+- 맥이 아니라 클라우드 세션에서 만들면 결과물 `.apk` 는 대화창에 파일로 보내 준다 (저장소에는 100MB 넘는 파일을 올릴 수 없고, 이 세션에서는 GitHub Releases 를 만들 수 없다). 받아서 방법 1처럼 설치한다.
+- 맥에서 다시 만들려면 `git pull` 한 뒤 `tools/export_android.sh` 를 실행한다. 이쪽은 이전과 같은 서명 키라 깔려 있는 앱 위에 바로 덮어 설치된다.
 - 클라우드와 맥은 서로 다른 디버그 서명 키를 쓴다. **한쪽에서 만든 APK가 깔려 있는 기기에 다른 쪽 APK를 덮어 깔면 "서명이 다르다"며 설치가 안 된다.** 그럴 때는 기기에서 앱을 먼저 지우고 다시 설치한다 (세이브는 앱 안에 있으므로 함께 지워진다).
 
 ## 알아 둘 것
