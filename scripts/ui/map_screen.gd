@@ -26,16 +26,38 @@ const REGION_BAND := 6.0
 ## 2) 없으면 "explore_total"/"explore_found" 정수를 쓴다(없으면 0).
 static func explore_counts(r: Dictionary) -> Array[int]:
 	if r.has("explore_ids"):
-		var ids: Array = r["explore_ids"]
+		var raw = r["explore_ids"]
 		var found := 0
-		for key in ids:
-			var k := str(key)
-			if k.begins_with("grass:"):
-				if Progress.grasses.has(k.substr(6)):
+		var total := 0
+		if raw is Dictionary:
+			# Room._collect_explore_ids 형식: {"pickups": [...], "rescues": [...], "records": [...], "grasses": [...]}
+			for id in raw.get("pickups", []):
+				total += 1
+				if Progress.is_collected(str(id)):
 					found += 1
-			elif Progress.has(k):
-				found += 1
-		return [found, ids.size()]
+			for id in raw.get("rescues", []):
+				total += 1
+				if Progress.rescued.has(str(id)):
+					found += 1
+			for id in raw.get("records", []):
+				total += 1
+				if Progress.has("read_" + str(id)):
+					found += 1
+			for id in raw.get("grasses", []):
+				total += 1
+				if Progress.grasses.has(str(id)):
+					found += 1
+			return [found, total]
+		elif raw is Array:
+			for key in raw:
+				var k := str(key)
+				total += 1
+				if k.begins_with("grass:"):
+					if Progress.grasses.has(k.substr(6)):
+						found += 1
+				elif Progress.has(k):
+					found += 1
+			return [found, total]
 	return [int(r.get("explore_found", 0)), int(r.get("explore_total", 0))]
 
 

@@ -233,6 +233,7 @@ label_text = "틈 400: 달려서  →  바람의 틈으로"
 position = Vector2(1450, 60)
 size = Vector2(400, 40)
 one_way = true
+suspicious = true
 label_text = "이단 점프 필요 — 천장 틈 위에 무언가 있다 (아래서 뛰어오르면 올라선다)"
 
 [node name="BlockTop" parent="Terrain" instance=ExtResource("3_platform")]

@@ -8,7 +8,7 @@ class_name BossRoom
 @export var defeat_flag := "boss_bird_defeated"
 @export var memory_id := "memory_bird"
 @export var abilities := ["double_jump", "wind"]
-@export var reward_message := "영혼이 깃들었다 — 이단 점프, 바람 공격 (I / L2)"
+@export var reward_message := "영혼이 깃들었다 — 이단 점프, 바람 공격"
 @export var fallen_message := "새가 쓰러졌다. 손을 얹어라."
 ## 최종 보스: 회상 뒤 능력 대신 선택지가 열린다 (EndingChoice 노드들이 깨어난다).
 @export var final_boss := false
@@ -81,9 +81,10 @@ func _on_boss_telegraph(kind: String) -> void:
 	if hud == null:
 		return
 	match kind:
-		"wind": hud.flash("날갯바람!  (가드 불가)")
-		"slam": hud.flash("내려찍기!  (가드 불가)")
-		"wall": hud.flash("뿌리 벽!  (가드 불가)")
+		# 가드 불가는 붉은 예고 빛으로 알린다 (설명 글자는 넣지 않는다 — 2026-10-18 기획자 결정)
+		"wind": hud.flash("날갯바람!")
+		"slam": hud.flash("내려찍기!")
+		"wall": hud.flash("뿌리 벽!")
 		"rise":
 			hud.show_message("뿌리지기가 다시 일어선다…", 3.0)
 			# 주제곡이 격렬하게 터진다 (기획서 10장)

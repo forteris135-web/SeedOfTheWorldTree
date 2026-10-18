@@ -109,7 +109,7 @@ func prompt(action: String) -> String:
 		Kind.XBOX, Kind.OTHER_PAD:
 			return _first(Keymap.label_for(action, "xb"))
 		Kind.TOUCH:
-			return {"interact": "손길 버튼", "guard": "가드", "heal": "회복", "soul_ability": "영혼"}.get(action, action)
+			return {"interact": "손길 버튼", "guard": "가드", "heal": "회복", "soul_ability": "영혼", "soul_next": "전환 버튼", "jump": "점프", "map": "지도", "pause": "메뉴"}.get(action, action)
 		_:
 			return _first(Keymap.label_for(action, "kb"))
 
