@@ -208,7 +208,10 @@ func interact(by: Player) -> void:
 
 func _register() -> void:
 	if grass_id != "":
-		Progress.grasses[grass_id] = {"scene": get_tree().current_scene.scene_file_path, "name": display_name if display_name != "" else grass_id}
+		var scene_path := get_tree().current_scene.scene_file_path
+		var shown := display_name if display_name != "" else grass_id
+		Progress.grasses[grass_id] = {"scene": scene_path, "name": shown}
+		Progress.last_grass = {"id": grass_id, "scene": scene_path, "name": shown}
 
 
 ## 이동해서 도착했다: 바로 쉬는 자세로.
@@ -219,6 +222,7 @@ func arrive(by: Player) -> void:
 	_spores.emitting = true
 	_player_near = by
 	by.register_interactable(self)
+	_register()
 	by.call_deferred("start_rest", self)
 
 

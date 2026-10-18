@@ -11,7 +11,7 @@ const HP_DARK := Rect2(1260, 159, 40, 86)
 const GUARD_FILL := Rect2(20, 13, 1100, 70)
 const GUARD_BLUE := Rect2(360, 13, 40, 70)
 const GUARD_DARK := Rect2(910, 13, 40, 70)
-const SCALE := 0.7
+const SCALE := 0.6
 
 var _boss: Node
 var _canvas: Control
@@ -91,7 +91,8 @@ func _on_draw() -> void:
 	var size := _canvas.size
 	var a := _shown
 	var hp_w := HP_FILL.size.x * SCALE
-	var x := (size.x - hp_w) / 2.0
+	# 터치 조작 중에는 오른쪽 아래 버튼 무리(가드)와 겹치지 않게 조금 왼쪽으로
+	var x := (size.x - hp_w) / 2.0 - (100.0 if InputDevice.current == InputDevice.Kind.TOUCH else 0.0)
 	var y := size.y - 150.0
 	_canvas.draw_string(font, Vector2(x, y - 12), _name, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(1.0, 0.9, 0.72, a))
 	_bar(BAR_HP, Vector2(x, y), HP_FILL, HP_RED, HP_DARK, _hp, a, _hp_trail)

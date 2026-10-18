@@ -34,7 +34,9 @@ func open() -> void:
 		{"key": "debug_hud", "label": "개발 표시"},
 		{"key": "music_volume", "label": "음악 음량"},
 		{"key": "remap", "label": "키 · 버튼 바꾸기"},
-		{"key": "title", "label": "타이틀로 (달빛풀에서 쉰 데까지 저장됨)"},
+		{"key": "save", "label": "지금 저장하기"},
+		{"key": "load", "label": "불러오기"},
+		{"key": "title", "label": "타이틀로"},
 	]
 	_index = 0
 	_open = true
@@ -101,6 +103,19 @@ func _activate() -> void:
 		"title":
 			close()
 			Game.go_to(Game.TITLE_SCENE, 0.6, 0.8)
+		"save":
+			var where := SaveGame.save_now()
+			Sfx.play("select")
+			var hud := get_tree().current_scene.get_node_or_null("CombatHUD")
+			if hud:
+				hud.show_message("저장되었다 — 다음에는 '%s'에서 이어진다" % where, 3.0)
+		"load":
+			if not SaveGame.has_save():
+				Sfx.play("blip")
+				return
+			close()
+			var scene := SaveGame.load_game()
+			Game.go_to(scene if scene != "" else Game.FIRST_ROOM, 0.8, 1.0)
 		"remap":
 			_panel.visible = false
 			_open = false
@@ -144,6 +159,11 @@ func _value_text(key: String) -> String:
 			return "◀ " + "■".repeat(v) + "□".repeat(10 - v) + " ▶"
 		"touch_scale":
 			return "◀ " + ["작게", "보통", "크게"][int(Settings.get_value(key))] + " ▶"
+		"save":
+			return "이어질 곳: " + str(Progress.last_grass.get("name", "지금 방의 처음"))
+		"load":
+			var at := SaveGame.saved_at_text()
+			return ("저장: " + at) if at != "" else "저장 없음"
 	return ""
 
 

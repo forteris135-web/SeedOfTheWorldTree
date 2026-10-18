@@ -130,6 +130,8 @@ func _ready() -> void:
 			_grasstest()
 	elif "--nooktest" in args:
 		_nooktest()
+	elif "--camtest" in args:
+		_camtest()
 
 
 func _process(_delta: float) -> void:
@@ -531,7 +533,10 @@ func _savetest() -> void:
 	Progress.reset()
 	print("[저장시험] 초기화 뒤 능력: %s" % Progress.abilities)
 	var scene := SaveGame.load_game()
-	print("[저장시험] 읽은 뒤: 방 %s, 깃발 %s, 능력 %s, 성장 %s, 달빛풀 %s, 등장 %s" % [scene.get_file(), Progress.has("test_flag"), Progress.abilities, Progress.upgrades, Progress.grasses.keys(), Progress.next_spawn])
+	print("[저장시험] 읽은 뒤: 방 %s, 깃발 %s, 능력 %s, 성장 %s, 달빛풀 %s, 등장 %s, 마지막 달빛풀 %s" % [scene.get_file(), Progress.has("test_flag"), Progress.abilities, Progress.upgrades, Progress.grasses.keys(), Progress.next_spawn, Progress.last_grass])
+	# 메뉴의 '지금 저장하기' / 표시 글자
+	var where := SaveGame.save_now()
+	print("[저장시험] 지금 저장하기 → 이어질 곳 '%s', 저장한 때 '%s'" % [where, SaveGame.saved_at_text()])
 	# 일시정지 메뉴 열어 찍기
 	_pause = PauseMenu.new()
 	add_child(_pause)
@@ -720,6 +725,25 @@ func _nooktest() -> void:
 			trace.append("%.2f:%d/v%d%s%s" % [t, player.global_position.y, player.velocity.y, "F" if player.is_on_floor() else "", "P" if Input.is_action_pressed("jump") else ""])
 	print("[틈시험] 시간:높이  " + " ".join(trace))
 	print("[틈시험] 이단 점프 최고점 y=%.0f (비밀 발판에 서면 y=-8), 지금 y=%.0f, 바닥 %s, 최대 점프 수 %d, 남은 점프 %d" % [top, player.global_position.y, player.is_on_floor(), player.max_jumps, player._jumps_left])
+	tree.quit()
+
+
+## Claude Code용: 바닥에 서 있을 때 소녀의 발이 화면 아래에서 몇 px 위에 있는지 (보스 체력 바는 아래 150px 띠).
+func _camtest() -> void:
+	var tree := get_tree()
+	await tree.create_timer(0.5).timeout
+	player._invuln_timer = 9999.0
+	for e in tree.get_nodes_in_group("enemy"):
+		e.queue_free()
+	if has_method("_set_battle_camera"):
+		call("_set_battle_camera", true)   # 보스 방: 싸움 카메라(0.88배, 위쪽 더 보기)
+	await tree.create_timer(2.5).timeout
+	var cam := get_viewport().get_camera_2d()
+	var vp := get_viewport().get_visible_rect().size
+	var center := cam.get_screen_center_position()
+	var bottom_world := center.y + vp.y / 2.0 / cam.zoom.y
+	var feet := player.global_position.y + 67.0
+	print("[카메라시험] %s: 확대 %.2f, 화면 아래 끝 세계 y=%.0f (방 경계 아래 %.0f), 소녀 발 y=%.0f → 화면 아래에서 %.0f px 위 (보스 바 띠 150px보다 커야 함), 바닥 %s" % [scene_file_path.get_file(), cam.zoom.y, bottom_world, bounds.end.y, feet, (bottom_world - feet) * cam.zoom.y, player.is_on_floor()])
 	tree.quit()
 
 

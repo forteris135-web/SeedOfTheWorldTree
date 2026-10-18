@@ -30,7 +30,10 @@ func _process(delta: float) -> void:
 	_look = lerpf(_look, target, 1.0 - exp(-look_ahead_speed * delta))
 	_shake = maxf(_shake - delta * 28.0, 0.0)
 	var jitter := Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake
-	offset = Vector2(_look, vertical_offset) + jitter
+	# 앞보기와 위쪽 보기는 카메라 자리(소녀 기준)로 옮긴다. Camera2D.offset 은 방 경계를 맞춘 '뒤에' 더해져
+	# 경계를 넘어 버리기 때문에, 바닥에 서 있을 때 소녀가 화면 맨 아래(보스 체력 바 뒤)로 밀려났다.
+	position = Vector2(_look, vertical_offset)
+	offset = jitter
 
 
 ## 방이 카메라 경계를 정해 준다.

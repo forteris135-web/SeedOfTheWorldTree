@@ -29,6 +29,30 @@ func save(grass_id: String, scene_path: String) -> void:
 		f.close()
 
 
+## 메뉴의 '지금 저장하기': 마지막으로 쉰 달빛풀에서 이어지도록 저장한다.
+## 아직 달빛풀에서 쉰 적이 없으면 지금 방의 처음 자리에서 이어진다.
+func save_now() -> String:
+	var g: Dictionary = Progress.last_grass
+	var scene: String = g.get("scene", "")
+	if scene == "":
+		scene = get_tree().current_scene.scene_file_path
+	save(str(g.get("id", "")), scene)
+	return str(g.get("name", "지금 방의 처음"))
+
+
+## 저장한 때 (메뉴 표시용). 없으면 "".
+func saved_at_text() -> String:
+	if not has_save():
+		return ""
+	var data = JSON.parse_string(FileAccess.get_file_as_string(PATH))
+	if typeof(data) != TYPE_DICTIONARY:
+		return ""
+	var s := str(data.get("saved_at", ""))   # 2026-10-18T09:12:33
+	if s.length() >= 16:
+		return s.substr(5, 5).replace("-", "/") + " " + s.substr(11, 5)
+	return s
+
+
 ## 읽어서 진행을 되돌린 뒤, 마지막 달빛풀이 있는 방 경로를 돌려준다. 없으면 "".
 func load_game() -> String:
 	if not has_save():
@@ -47,8 +71,12 @@ func load_game() -> String:
 	var pur: Dictionary = data.get("purity", {})
 	for k in pur:
 		Purity.regions[k] = pur[k]
-	Progress.next_spawn = "Grass:" + str(data.get("grass", ""))
-	return str(data.get("scene", ""))
+	var gid := str(data.get("grass", ""))
+	var scene := str(data.get("scene", ""))
+	if gid != "":
+		Progress.last_grass = {"id": gid, "scene": scene, "name": Progress.grasses.get(gid, {}).get("name", gid)}
+	Progress.next_spawn = "Grass:" + gid
+	return scene
 
 
 func new_game() -> void:
