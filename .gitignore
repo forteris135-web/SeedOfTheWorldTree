@@ -1,0 +1,13 @@
+# Godot
+.godot/
+*.import.tmp
+export_presets.cfg.bak
+
+# macOS
+.DS_Store
+
+# Xcode / iOS 내보내기 결과물
+build/
+export/
+*.xcarchive
+*.ipa

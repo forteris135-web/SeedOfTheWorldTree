@@ -1,0 +1,81 @@
+{
+  "_설명": "보스 회상 씬의 독백 자막. SCRIPT.md 4장이 기준. 한 줄 = 한 장면. [작성 예정]은 기획자가 채운다.",
+  "memory_bird": {
+    "title": "첫 회상 — 잿빛 잎새의 새",
+    "lines": [
+      {
+        "id": "memory_bird_01",
+        "text": "아주 기나긴 꿈을 꾸었어…",
+        "image": "res://art/memories/memory_bird_1.png"
+      },
+      {
+        "id": "memory_bird_02",
+        "text": "잎이 하나씩 잿빛으로 물들었지. 나는 그걸 삼켰어. 내가 삼키면, 나무는 아프지 않을 줄 알았거든.",
+        "image": "res://art/memories/memory_bird_2.png"
+      },
+      {
+        "id": "memory_bird_03",
+        "text": "그런데 아무리 삼켜도 끝이 없었어. 병은… 저 아래에서 올라오고 있었으니까.",
+        "image": "res://art/memories/memory_bird_3.png"
+      },
+      {
+        "id": "memory_bird_04",
+        "text": "깨워 줘서 고마워, 작은 씨앗아. 내려가 봐. 답은 뿌리에 있어.",
+        "image": "res://art/memories/memory_bird_3.png"
+      }
+    ],
+    "reward_text": "영혼이 깃들었다 — 이단 점프, 바람 공격"
+  },
+  "memory_knight": {
+    "title": "둘째 회상 — 등불 기사",
+    "lines": [
+      {
+        "id": "memory_knight_01",
+        "text": "저녁마다 아이들과 등불을 켰지. 하나, 둘… 마을 끝까지. 그게 내 일이었어.",
+        "image": "res://art/memories/memory_knight_1.png"
+      },
+      {
+        "id": "memory_knight_02",
+        "text": "어느 날 명령이 내려왔어. 마을 아래를 지키라고. 빛나는 갑옷을 주더군. 관이 날마다 더 깊이 박히는 걸, 나는 지켰어.",
+        "image": "res://art/memories/memory_knight_2.png"
+      },
+      {
+        "id": "memory_knight_03",
+        "text": "뿌리가 마르는 소리를 들으면서도 멈추지 못했어. 멈추면 아이들의 등불이 꺼지니까. 모두 알고 있었어. 모두 피해자였고, 모두 공범이었지.",
+        "image": "res://art/memories/memory_knight_3.png"
+      },
+      {
+        "id": "memory_knight_04",
+        "text": "갑옷이 나를 삼킬 때, 가장 깊은 곳에서 누군가 보고 있었어. 빛나는 뿌리로 된… 그 눈을. 작은 씨앗아, 그 아이의 등불을 들고 있구나. 내가 밝혀 주마.",
+        "image": "res://art/memories/memory_knight_3.png"
+      }
+    ],
+    "reward_text": "영혼이 티아의 작은 등불에 깃들었다 — 빛 공격, 등불"
+  },
+  "memory_root": {
+    "title": "마지막 회상 — 뿌리지기",
+    "lines": [
+      {
+        "id": "memory_root_01",
+        "text": "아주 먼 옛날, 사람들은 서로 손을 잡고 세계수에게 빌었어. 현명한 자와 어리석은 자, 귀족과 평민, 남자와 여자를 막론하고.",
+        "image": "res://art/memories/memory_root_1.png"
+      },
+      {
+        "id": "memory_root_02",
+        "text": "나무는 약속했지. 조금씩, 숨 쉴 만큼만 나누어 주겠다고. 나는 그 약속을 지키는 자였어. 모두의 바람에는 문명의 희망을 넘어 욕심이 담겨 있었지.",
+        "image": "res://art/memories/memory_root_2.png"
+      },
+      {
+        "id": "memory_root_03",
+        "text": "사람들은 약속을 잊었고, 나는 사람들을 미워하게 되었어. 그런데 나무는… 죽어 가면서도 마지막 씨앗을 맺었단다. 아직 생명을 믿었던 거야.",
+        "image": "res://art/memories/memory_root_3.png"
+      },
+      {
+        "id": "memory_root_04",
+        "text": "그게 너다, 셀레니아. 어머니의 마지막 믿음. 이제 네가 정해야 해. 나는… 너무 오래 미워했구나.",
+        "image": "res://art/memories/memory_root_3.png"
+      }
+    ],
+    "reward_text": "영혼이 깃들었다 — 이제 선택의 때"
+  }
+}

@@ -1,0 +1,106 @@
+[gd_scene load_steps=4 format=3 uid="uid://c1seedplayground"]
+
+[ext_resource type="Script" path="res://scripts/playground/playground.gd" id="1_playground"]
+[ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://c1seedplatform" path="res://scenes/world/platform.tscn" id="3_platform"]
+[ext_resource type="PackedScene" uid="uid://c1seedtouchctl" path="res://scenes/ui/touch_controls.tscn" id="4_touch"]
+[ext_resource type="PackedScene" uid="uid://c1seeddebughud" path="res://scenes/ui/debug_hud.tscn" id="5_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedcombathud" path="res://scenes/ui/combat_hud.tscn" id="6_combat_hud"]
+
+[node name="Playground" type="Node2D"]
+script = ExtResource("1_playground")
+
+[node name="Background" type="CanvasLayer" parent="."]
+layer = -10
+
+[node name="Color" type="ColorRect" parent="Background"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0784314, 0.101961, 0.164706, 1)
+
+[node name="Title" type="Label" parent="."]
+offset_left = -200.0
+offset_top = 560.0
+offset_right = 600.0
+offset_bottom = 600.0
+theme_override_colors/font_color = Color(0.913725, 0.768627, 0.415686, 1)
+theme_override_font_sizes/font_size = 30
+text = "3단계 연습장 · 왼쪽부터: 높이 시험 → 틈 시험"
+
+[node name="Hint" type="Label" parent="."]
+offset_left = -200.0
+offset_top = 605.0
+offset_right = 900.0
+offset_bottom = 640.0
+theme_override_colors/font_color = Color(0.603922, 0.639216, 0.721569, 1)
+theme_override_font_sizes/font_size = 22
+text = "이동 ← →  ·  점프 Space / ×  ·  회피 Shift / ○ (짧게: 구르기, 길게: 달리기)  ·  Esc·P: 입력 확인 화면"
+
+[node name="Floor" parent="." instance=ExtResource("3_platform")]
+position = Vector2(-700, 900)
+size = Vector2(5500, 400)
+
+[node name="WallLeft" parent="." instance=ExtResource("3_platform")]
+position = Vector2(-800, -600)
+size = Vector2(100, 1500)
+decorate = false
+
+[node name="WallRight" parent="." instance=ExtResource("3_platform")]
+position = Vector2(4700, -600)
+size = Vector2(100, 1500)
+decorate = false
+
+[node name="Step1" parent="." instance=ExtResource("3_platform")]
+position = Vector2(500, 700)
+size = Vector2(220, 40)
+label_text = "높이 200"
+
+[node name="Step2" parent="." instance=ExtResource("3_platform")]
+position = Vector2(900, 650)
+size = Vector2(220, 40)
+label_text = "높이 250 (아슬아슬)"
+
+[node name="Step3" parent="." instance=ExtResource("3_platform")]
+position = Vector2(1300, 560)
+size = Vector2(220, 40)
+label_text = "높이 340 (이단 점프 필요)"
+
+[node name="Ledge1" parent="." instance=ExtResource("3_platform")]
+position = Vector2(1800, 760)
+size = Vector2(400, 140)
+label_text = "여기서 틈 시험 시작"
+
+[node name="Ledge2" parent="." instance=ExtResource("3_platform")]
+position = Vector2(2420, 760)
+size = Vector2(400, 140)
+label_text = "틈 220: 걸어서 점프"
+
+[node name="Ledge3" parent="." instance=ExtResource("3_platform")]
+position = Vector2(3200, 760)
+size = Vector2(400, 140)
+label_text = "틈 380: 달려서 점프"
+
+[node name="Ledge4" parent="." instance=ExtResource("3_platform")]
+position = Vector2(4050, 760)
+size = Vector2(650, 140)
+label_text = "틈 450: 달려서 아슬아슬"
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(0, 843)
+
+[node name="DebugHUD" parent="." instance=ExtResource("5_hud")]
+
+[node name="Measure" type="Label" parent="DebugHUD"]
+offset_left = 32.0
+offset_top = 130.0
+offset_right = 1400.0
+offset_bottom = 170.0
+theme_override_colors/font_color = Color(0.913725, 0.768627, 0.415686, 1)
+theme_override_font_sizes/font_size = 24
+
+[node name="CombatHUD" parent="." instance=ExtResource("6_combat_hud")]
+
+[node name="TouchControls" parent="." instance=ExtResource("4_touch")]

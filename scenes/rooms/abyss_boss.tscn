@@ -1,0 +1,269 @@
+[gd_scene load_steps=28 format=3 uid="uid://c1seedabyssboss"]
+
+[ext_resource type="Script" path="res://scripts/bosses/boss_room.gd" id="1_room"]
+[ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://c1seedplatform" path="res://scenes/world/platform.tscn" id="3_platform"]
+[ext_resource type="PackedScene" uid="uid://c1seedtouchctl" path="res://scenes/ui/touch_controls.tscn" id="6_touch"]
+[ext_resource type="PackedScene" uid="uid://c1seeddebughud" path="res://scenes/ui/debug_hud.tscn" id="7_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedcombathud" path="res://scenes/ui/combat_hud.tscn" id="8_combat_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedmoongrass" path="res://scenes/world/moonlight_grass.tscn" id="9_grass"]
+[ext_resource type="Texture2D" path="res://art/backgrounds/bg_moon_garden.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/art_backdrop.gd" id="12_art_backdrop"]
+[ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
+[ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
+[ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
+[ext_resource type="PackedScene" uid="uid://c1seedroomexit" path="res://scenes/world/room_exit.tscn" id="16_exit"]
+[ext_resource type="PackedScene" uid="uid://c1seedbossroot" path="res://scenes/bosses/root_keeper.tscn" id="17_boss"]
+[ext_resource type="PackedScene" uid="uid://c1seedendingchoice" path="res://scenes/world/ending_choice.tscn" id="21_choice"]
+[ext_resource type="Script" path="res://scripts/world/fog_gate.gd" id="19_gate"]
+[ext_resource type="PackedScene" uid="uid://c1seedbosshud" path="res://scenes/ui/boss_hud.tscn" id="20_boss_hud"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
+size = Vector2(80, 400)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_trigger"]
+size = Vector2(120, 900)
+
+[sub_resource type="Environment" id="Environment_glow"]
+background_mode = 3
+glow_enabled = true
+glow_levels/1 = 0.0
+glow_levels/2 = 0.5
+glow_levels/3 = 1.0
+glow_levels/4 = 0.7
+glow_levels/5 = 0.3
+glow_intensity = 0.6
+glow_strength = 1.0
+glow_bloom = 0.03
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 2.0
+
+[sub_resource type="Gradient" id="Gradient_mote"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 0.85, 0.45, 1, 1, 0.85, 0.45, 0.5, 1, 0.85, 0.45, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mote"]
+gradient = SubResource("Gradient_mote")
+width = 32
+height = 32
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="AbyssBoss" type="Node2D"]
+script = ExtResource("1_room")
+bounds = Rect2(0, 0, 3700, 1800)
+region = "abyss"
+room_id = "abyss_boss"
+display_name = "뿌리의 심연 · 정원의 끝"
+map_offset = Vector2(48800, -200)
+is_boss_room = true
+boss_track = "boss_root"
+terrain_color = Color(0.09, 0.1, 0.12, 1)
+boss_name = "뿌리지기"
+boss_subtitle = "세계수의 첫 수호자"
+defeat_flag = "boss_root_defeated"
+memory_id = "memory_root"
+abilities = Array[String]([])
+reward_message = "정원에 색이 돌아온다. 셀레니아는 허리의 등불을 내려다본다."
+fallen_message = "뿌리지기가 쓰러졌다. 손을 얹어라."
+final_boss = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_glow")
+
+[node name="Backdrop" type="Node2D" parent="."]
+
+[node name="Far" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.1, 0.1)
+
+[node name="Sky" type="Sprite2D" parent="Backdrop/Far"]
+texture = ExtResource("11_bg")
+script = ExtResource("12_art_backdrop")
+
+[node name="Shafts" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.3, 0.3)
+
+[node name="LightShafts" type="Node2D" parent="Backdrop/Shafts"]
+script = ExtResource("13_shafts")
+count = 5
+
+[node name="FogFar" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.45, 0.45)
+
+[node name="Fog" type="Sprite2D" parent="Backdrop/FogFar"]
+script = ExtResource("14_fog")
+drift = Vector2(22, -2)
+fog_color = Color(0.7, 0.8, 1, 0.12)
+noise_scale = 1.4
+seed = 5
+
+[node name="Leaves" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.8, 0.8)
+
+[node name="FallingLeaves" type="CPUParticles2D" parent="Backdrop/Leaves"]
+script = ExtResource("15_leaves")
+count = 10
+
+[node name="Motes" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.9, 0.9)
+
+[node name="Particles" type="CPUParticles2D" parent="Backdrop/Motes"]
+modulate = Color(1.7, 1.5, 1.1, 1)
+position = Vector2(1800, 900)
+amount = 60
+lifetime = 9.0
+preprocess = 9.0
+texture = SubResource("GradientTexture2D_mote")
+emission_shape = 3
+emission_rect_extents = Vector2(1900, 1100)
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, -6)
+initial_velocity_min = 8.0
+initial_velocity_max = 26.0
+scale_amount_min = 0.25
+scale_amount_max = 0.7
+color = Color(0.6, 0.85, 1, 0.55)
+
+[node name="Arena" type="ReferenceRect" parent="."]
+offset_left = 760.0
+offset_top = 500.0
+offset_right = 3440.0
+offset_bottom = 1500.0
+
+[node name="Terrain" type="Node2D" parent="."]
+
+[node name="WallLeft" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(-100, -100)
+size = Vector2(100, 2000)
+decorate = false
+
+[node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3700, -100)
+size = Vector2(100, 2000)
+decorate = false
+
+[node name="Ceiling" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, -100)
+size = Vector2(3700, 100)
+decorate = false
+
+[node name="Floor" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 1500)
+size = Vector2(3700, 400)
+
+[node name="EntryLedge" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 1380)
+size = Vector2(520, 160)
+label_text = "정원을 지나"
+
+[node name="Branch1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1000, 1230)
+size = Vector2(280, 44)
+
+[node name="Branch3" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(2100, 1120)
+size = Vector2(320, 44)
+
+[node name="Branch5" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3100, 1240)
+size = Vector2(280, 44)
+
+[node name="Markers" type="Node2D" parent="."]
+
+[node name="FromGarden" type="Marker2D" parent="Markers"]
+position = Vector2(140, 1323)
+
+[node name="AfterBoss" type="Marker2D" parent="Markers"]
+position = Vector2(1800, 1432)
+
+[node name="FromVillage" type="Marker2D" parent="Markers"]
+position = Vector2(3460, 1432)
+
+[node name="GroundLine" type="Marker2D" parent="Markers"]
+position = Vector2(1800, 1500)
+
+[node name="HoverLeft" type="Marker2D" parent="Markers"]
+position = Vector2(1200, 1000)
+
+[node name="HoverCenter" type="Marker2D" parent="Markers"]
+position = Vector2(1950, 920)
+
+[node name="HoverRight" type="Marker2D" parent="Markers"]
+position = Vector2(2800, 1000)
+
+
+[node name="Interactables" type="Node2D" parent="."]
+
+[node name="MoonlightGrass" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(330, 1380)
+grass_id = "abyss_boss_gate"
+display_name = "심연 · 정원의 끝"
+
+[node name="GateIn" type="StaticBody2D" parent="."]
+position = Vector2(700, 1500)
+script = ExtResource("19_gate")
+size = Vector2(60, 900)
+
+[node name="GateOut" type="StaticBody2D" parent="."]
+position = Vector2(3540, 1500)
+script = ExtResource("19_gate")
+size = Vector2(60, 900)
+
+[node name="BossTrigger" type="Area2D" parent="."]
+position = Vector2(960, 1050)
+collision_layer = 0
+collision_mask = 2
+
+[node name="Shape" type="CollisionShape2D" parent="BossTrigger"]
+shape = SubResource("RectangleShape2D_trigger")
+
+[node name="Boss" parent="." instance=ExtResource("17_boss")]
+position = Vector2(2600, 1500)
+
+[node name="Exits" type="Node2D" parent="."]
+
+[node name="ToGarden" parent="Exits" instance=ExtResource("16_exit")]
+position = Vector2(-50, 1200)
+target_scene = "res://scenes/rooms/moon_garden.tscn"
+spawn_name = "FromBoss"
+
+[node name="Shape" type="CollisionShape2D" parent="Exits/ToGarden"]
+shape = SubResource("RectangleShape2D_exit")
+
+
+[node name="Choices" type="Node2D" parent="."]
+visible = false
+
+[node name="Roots" parent="Choices" instance=ExtResource("21_choice")]
+position = Vector2(1300, 1500)
+choice = "sacrifice"
+label = "심연의 뿌리에 손을 얹는다"
+
+[node name="Pipe" parent="Choices" instance=ExtResource("21_choice")]
+position = Vector2(2500, 1500)
+choice = "return"
+label = "마력의 관을 끊는다"
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(140, 1323)
+
+[node name="FogNear" type="Parallax2D" parent="."]
+scroll_scale = Vector2(1.15, 1.15)
+
+[node name="Fog" type="Sprite2D" parent="FogNear"]
+script = ExtResource("14_fog")
+drift = Vector2(30, -5)
+fog_color = Color(1, 0.97, 0.9, 0.06)
+noise_scale = 1.9
+seed = 12
+
+[node name="CombatHUD" parent="." instance=ExtResource("8_combat_hud")]
+
+[node name="BossHUD" parent="." instance=ExtResource("20_boss_hud")]
+
+[node name="TouchControls" parent="." instance=ExtResource("6_touch")]
+
+[node name="DebugHUD" parent="." instance=ExtResource("7_hud")]

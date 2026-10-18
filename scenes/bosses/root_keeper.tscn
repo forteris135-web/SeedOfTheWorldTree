@@ -1,0 +1,52 @@
+[gd_scene load_steps=8 format=3 uid="uid://c1seedbossroot"]
+
+[ext_resource type="Script" path="res://scripts/bosses/root_keeper.gd" id="1_boss"]
+[ext_resource type="Script" path="res://scripts/bosses/root_keeper_visual.gd" id="2_visual"]
+[ext_resource type="Texture2D" path="res://art/bosses/boss_rootkeeper_now.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_body"]
+radius = 55.0
+height = 380.0
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_hurt"]
+radius = 65.0
+height = 380.0
+
+[node name="RootKeeper" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+floor_snap_length = 10.0
+script = ExtResource("1_boss")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -190)
+shape = SubResource("CapsuleShape2D_body")
+
+[node name="Sprite" type="Sprite2D" parent="."]
+position = Vector2(0, -215)
+scale = Vector2(0.3, 0.3)
+texture = ExtResource("3_tex")
+script = ExtResource("2_visual")
+
+[node name="Light" type="PointLight2D" parent="."]
+position = Vector2(0, -220)
+color = Color(0.6, 0.85, 1, 1)
+energy = 1.0
+texture_scale = 2.4
+
+[node name="Hurtbox" type="Area2D" parent="."]
+position = Vector2(0, -190)
+collision_layer = 16
+collision_mask = 0
+script = ExtResource("5_hurtbox")
+
+[node name="HurtShape" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("CapsuleShape2D_hurt")
+
+[node name="Hitbox" type="Area2D" parent="."]
+position = Vector2(0, -60)
+collision_layer = 0
+collision_mask = 8
+script = ExtResource("4_hitbox")

@@ -1,0 +1,288 @@
+[gd_scene load_steps=23 format=3 uid="uid://c1seedcanopy01"]
+
+[ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
+[ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://c1seedplatform" path="res://scenes/world/platform.tscn" id="3_platform"]
+[ext_resource type="PackedScene" uid="uid://c1seedterrainpoly" path="res://scenes/world/terrain_polygon.tscn" id="4_terrain"]
+[ext_resource type="PackedScene" uid="uid://c1seedtouchctl" path="res://scenes/ui/touch_controls.tscn" id="6_touch"]
+[ext_resource type="PackedScene" uid="uid://c1seeddebughud" path="res://scenes/ui/debug_hud.tscn" id="7_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedcombathud" path="res://scenes/ui/combat_hud.tscn" id="8_combat_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedmoongrass" path="res://scenes/world/moonlight_grass.tscn" id="9_grass"]
+[ext_resource type="PackedScene" uid="uid://c1seedwoodcutter" path="res://scenes/enemies/woodcutter.tscn" id="10_woodcutter"]
+[ext_resource type="Texture2D" path="res://art/backgrounds/bg_canopy_2.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/art_backdrop.gd" id="12_art_backdrop"]
+[ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
+[ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
+[ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
+[ext_resource type="PackedScene" uid="uid://c1seedroomexit" path="res://scenes/world/room_exit.tscn" id="16_exit"]
+[ext_resource type="PackedScene" uid="uid://c1seedthorns" path="res://scenes/world/thorns.tscn" id="17_thorns"]
+[ext_resource type="PackedScene" uid="uid://c1seedgardener" path="res://scenes/enemies/gardener.tscn" id="18_gardener"]
+[ext_resource type="PackedScene" uid="uid://c1seedwoodcuttersav" path="res://scenes/enemies/woodcutter_savable.tscn" id="19_woodcutter_sav"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
+size = Vector2(80, 320)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hidden_exit"]
+size = Vector2(300, 70)
+
+[sub_resource type="Environment" id="Environment_glow"]
+background_mode = 3
+glow_enabled = true
+glow_levels/1 = 0.0
+glow_levels/2 = 0.5
+glow_levels/3 = 1.0
+glow_levels/4 = 0.7
+glow_levels/5 = 0.3
+glow_intensity = 0.6
+glow_strength = 1.0
+glow_bloom = 0.03
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 2.0
+
+[sub_resource type="Gradient" id="Gradient_mote"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 0.85, 0.45, 1, 1, 0.85, 0.45, 0.5, 1, 0.85, 0.45, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mote"]
+gradient = SubResource("Gradient_mote")
+width = 32
+height = 32
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="Canopy01" type="Node2D"]
+script = ExtResource("1_room")
+bounds = Rect2(0, 0, 4800, 2330)
+region = "canopy"
+room_id = "canopy_01"
+display_name = "수관 · 시작의 가지"
+map_offset = Vector2(0, 0)
+terrain_color = Color(0.09, 0.085, 0.06, 1)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_glow")
+
+[node name="Backdrop" type="Node2D" parent="."]
+
+[node name="Far" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.1, 0.1)
+
+[node name="Sky" type="Sprite2D" parent="Backdrop/Far"]
+texture = ExtResource("11_bg")
+script = ExtResource("12_art_backdrop")
+
+[node name="Shafts" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.3, 0.3)
+
+[node name="LightShafts" type="Node2D" parent="Backdrop/Shafts"]
+script = ExtResource("13_shafts")
+
+[node name="FogFar" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.45, 0.45)
+
+[node name="Fog" type="Sprite2D" parent="Backdrop/FogFar"]
+script = ExtResource("14_fog")
+drift = Vector2(14, -3)
+fog_color = Color(1, 0.95, 0.82, 0.14)
+noise_scale = 1.3
+seed = 3
+
+[node name="Leaves" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.8, 0.8)
+
+[node name="FallingLeaves" type="CPUParticles2D" parent="Backdrop/Leaves"]
+script = ExtResource("15_leaves")
+
+[node name="Motes" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.9, 0.9)
+
+[node name="Particles" type="CPUParticles2D" parent="Backdrop/Motes"]
+modulate = Color(1.7, 1.5, 1.1, 1)
+position = Vector2(2160, 1080)
+amount = 70
+lifetime = 9.0
+preprocess = 9.0
+texture = SubResource("GradientTexture2D_mote")
+emission_shape = 3
+emission_rect_extents = Vector2(1900, 1400)
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, -6)
+initial_velocity_min = 8.0
+initial_velocity_max = 26.0
+scale_amount_min = 0.25
+scale_amount_max = 0.7
+color = Color(1, 0.85, 0.45, 0.55)
+
+[node name="Terrain" type="Node2D" parent="."]
+
+[node name="WallLeft" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(-100, -100)
+size = Vector2(100, 2600)
+decorate = false
+
+[node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(4800, -100)
+size = Vector2(100, 2600)
+decorate = false
+
+[node name="Ceiling" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, -100)
+size = Vector2(4800, 100)
+decorate = false
+
+[node name="Floor1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 2200)
+size = Vector2(1600, 300)
+label_text = "시작"
+
+[node name="Slope1" parent="Terrain" instance=ExtResource("4_terrain")]
+polygon = PackedVector2Array(1600, 2200, 2100, 2050, 2600, 2050, 2600, 2500, 1600, 2500)
+
+[node name="Floor2" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(2600, 2050)
+size = Vector2(600, 450)
+
+[node name="Floor3" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3520, 2050)
+size = Vector2(500, 450)
+label_text = "틈 320: 달려서"
+
+[node name="PitFloor" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3200, 2330)
+size = Vector2(320, 200)
+decorate = false
+
+[node name="BlockRight" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(4020, 1500)
+size = Vector2(780, 1000)
+
+[node name="Climb1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3650, 1800)
+size = Vector2(260, 40)
+
+[node name="Climb2" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3200, 1580)
+size = Vector2(260, 40)
+
+[node name="Climb3" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(2750, 1360)
+size = Vector2(300, 40)
+
+[node name="Climb4" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(2250, 1150)
+size = Vector2(300, 40)
+
+[node name="MidBranch" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(900, 950)
+size = Vector2(1150, 60)
+label_text = "가운데 가지"
+
+[node name="Slope2" parent="Terrain" instance=ExtResource("4_terrain")]
+polygon = PackedVector2Array(500, 1100, 900, 950, 900, 1010, 500, 1160)
+
+[node name="LeftLedge" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(100, 1100)
+size = Vector2(400, 60)
+
+[node name="Up1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(250, 850)
+size = Vector2(220, 40)
+
+[node name="Up2" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(600, 620)
+size = Vector2(220, 40)
+
+[node name="Top1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(900, 400)
+size = Vector2(1200, 80)
+label_text = "꼭대기 가지"
+
+[node name="Top2" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(2400, 400)
+size = Vector2(1000, 80)
+label_text = "틈 300"
+
+[node name="Top3" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3800, 400)
+size = Vector2(1000, 80)
+label_text = "틈 400: 달려서  →  바람의 틈으로"
+
+[node name="Secret" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1500, 60)
+size = Vector2(300, 40)
+label_text = "이단 점프 필요 — 위에 무언가 있다"
+
+[node name="Hazards" type="Node2D" parent="."]
+
+[node name="PitThorns" parent="Hazards" instance=ExtResource("17_thorns")]
+position = Vector2(3200, 2270)
+size = Vector2(320, 60)
+
+[node name="Interactables" type="Node2D" parent="."]
+
+[node name="MoonlightGrass" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(640, 2200)
+grass_id = "canopy_start"
+display_name = "수관 · 시작의 가지"
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Woodcutter1" parent="Enemies" instance=ExtResource("10_woodcutter")]
+position = Vector2(2950, 1985)
+
+[node name="Woodcutter2" parent="Enemies" instance=ExtResource("10_woodcutter")]
+position = Vector2(1300, 885)
+
+[node name="Gardener1" parent="Enemies" instance=ExtResource("18_gardener")]
+position = Vector2(1900, 885)
+
+[node name="WoodcutterSavable1" parent="Enemies" instance=ExtResource("19_woodcutter_sav")]
+position = Vector2(1700, 335)
+
+[node name="Markers" type="Node2D" parent="."]
+
+[node name="FromCanopy02" type="Marker2D" parent="Markers"]
+position = Vector2(4600, 332)
+
+[node name="FromHidden" type="Marker2D" parent="Markers"]
+position = Vector2(1650, -8)
+
+[node name="Exits" type="Node2D" parent="."]
+
+[node name="ToCanopy02" parent="Exits" instance=ExtResource("16_exit")]
+position = Vector2(4770, 240)
+target_scene = "res://scenes/rooms/canopy_02.tscn"
+spawn_name = "FromCanopy01"
+
+[node name="Shape" type="CollisionShape2D" parent="Exits/ToCanopy02"]
+shape = SubResource("RectangleShape2D_exit")
+
+[node name="ToHidden" parent="Exits" instance=ExtResource("16_exit")]
+position = Vector2(1650, -60)
+target_scene = "res://scenes/rooms/canopy_hidden.tscn"
+spawn_name = "FromCanopy01"
+
+[node name="Shape" type="CollisionShape2D" parent="Exits/ToHidden"]
+shape = SubResource("RectangleShape2D_hidden_exit")
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(300, 2132)
+
+[node name="FogNear" type="Parallax2D" parent="."]
+scroll_scale = Vector2(1.15, 1.15)
+
+[node name="Fog" type="Sprite2D" parent="FogNear"]
+script = ExtResource("14_fog")
+drift = Vector2(28, -6)
+fog_color = Color(1, 0.96, 0.86, 0.07)
+noise_scale = 1.9
+seed = 9
+
+[node name="CombatHUD" parent="." instance=ExtResource("8_combat_hud")]
+
+[node name="TouchControls" parent="." instance=ExtResource("6_touch")]
+
+[node name="DebugHUD" parent="." instance=ExtResource("7_hud")]

@@ -1,0 +1,46 @@
+[gd_scene load_steps=8 format=3 uid="uid://c1seedplayer"]
+
+[ext_resource type="Script" path="res://scripts/player/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/player/selenia_rig.gd" id="2_visual"]
+[ext_resource type="Script" path="res://scripts/player/game_camera.gd" id="3_camera"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_body"]
+radius = 23.0
+height = 134.0
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_hurt"]
+radius = 25.0
+height = 132.0
+
+[node name="Player" type="CharacterBody2D" groups=["player"]]
+collision_layer = 2
+collision_mask = 1
+floor_snap_length = 8.0
+script = ExtResource("1_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CapsuleShape2D_body")
+
+[node name="Visual" type="Node2D" parent="."]
+script = ExtResource("2_visual")
+
+[node name="Hurtbox" type="Area2D" parent="."]
+collision_layer = 8
+collision_mask = 0
+script = ExtResource("5_hurtbox")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hurtbox"]
+shape = SubResource("CapsuleShape2D_hurt")
+
+[node name="Hitbox" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 16
+script = ExtResource("4_hitbox")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+offset = Vector2(0, -120)
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0
+script = ExtResource("3_camera")

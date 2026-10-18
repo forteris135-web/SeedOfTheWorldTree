@@ -1,0 +1,213 @@
+[gd_scene load_steps=8 format=3 uid="uid://c1seedtitle"]
+
+[ext_resource type="Script" path="res://scripts/ui/title_screen.gd" id="1_title"]
+[ext_resource type="Texture2D" path="res://art/characters/title_selenia.png" id="2_art"]
+
+[sub_resource type="Environment" id="Environment_glow"]
+background_mode = 3
+glow_enabled = true
+glow_levels/1 = 0.0
+glow_levels/2 = 0.6
+glow_levels/3 = 1.0
+glow_levels/4 = 0.6
+glow_intensity = 0.55
+glow_strength = 1.0
+glow_bloom = 0.02
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 2.0
+
+[sub_resource type="Gradient" id="Gradient_vignette"]
+offsets = PackedFloat32Array(0.45, 1)
+colors = PackedColorArray(0, 0, 0, 0, 0, 0, 0, 0.75)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_vignette"]
+gradient = SubResource("Gradient_vignette")
+width = 512
+height = 288
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="Gradient_mote"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 0.85, 0.45, 1, 1, 0.85, 0.45, 0.5, 1, 0.85, 0.45, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mote"]
+gradient = SubResource("Gradient_mote")
+width = 32
+height = 32
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="TitleScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_title")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_glow")
+
+[node name="Art" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_art")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Vignette" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("GradientTexture2D_vignette")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="MotesHolder" type="Node2D" parent="."]
+position = Vector2(960, 540)
+
+[node name="Motes" type="CPUParticles2D" parent="MotesHolder"]
+modulate = Color(1.6, 1.4, 1, 1)
+amount = 50
+lifetime = 10.0
+preprocess = 10.0
+texture = SubResource("GradientTexture2D_mote")
+emission_shape = 3
+emission_rect_extents = Vector2(1300, 800)
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, -5)
+initial_velocity_min = 6.0
+initial_velocity_max = 22.0
+scale_amount_min = 0.2
+scale_amount_max = 0.6
+color = Color(1, 0.85, 0.45, 0.6)
+
+[node name="Layout" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Title" type="Label" parent="Layout"]
+modulate = Color(1.12, 1.08, 1, 1)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -860.0
+offset_top = 220.0
+offset_right = -120.0
+offset_bottom = 360.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(0.98, 0.93, 0.8, 1)
+theme_override_colors/font_shadow_color = Color(0.2, 0.12, 0, 0.6)
+theme_override_constants/shadow_offset_x = 0
+theme_override_constants/shadow_offset_y = 4
+theme_override_constants/shadow_outline_size = 12
+theme_override_font_sizes/font_size = 112
+text = "세계수의 씨앗"
+horizontal_alignment = 2
+
+[node name="Subtitle" type="Label" parent="Layout"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -960.0
+offset_top = 372.0
+offset_right = -120.0
+offset_bottom = 412.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(0.85, 0.82, 0.74, 0.85)
+theme_override_font_sizes/font_size = 26
+text = "멸망해 가는 몽환의 세계에서, 한 소녀가 끝을 막기 위해 걸어간다."
+horizontal_alignment = 2
+
+[node name="Menu" type="VBoxContainer" parent="Layout"]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -520.0
+offset_top = -420.0
+offset_right = -120.0
+offset_bottom = -160.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_constants/separation = 14
+alignment = 2
+
+[node name="Continue" type="Button" parent="Layout/Menu"]
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 40
+text = "이어하기"
+flat = true
+alignment = 2
+
+[node name="Start" type="Button" parent="Layout/Menu"]
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 36
+text = "새로 시작"
+flat = true
+alignment = 2
+
+[node name="InputTest" type="Button" parent="Layout/Menu"]
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 32
+text = "입력 확인"
+flat = true
+alignment = 2
+
+[node name="Hint" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -720.0
+offset_top = -90.0
+offset_right = -120.0
+offset_bottom = -56.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 0.45)
+theme_override_font_sizes/font_size = 20
+text = "W / S 로 고르고  Space 로 결정"
+horizontal_alignment = 2
+
+[node name="Version" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 40.0
+offset_top = -60.0
+offset_right = 400.0
+offset_bottom = -30.0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 0.3)
+theme_override_font_sizes/font_size = 18
+text = "가제 · 개발 중"

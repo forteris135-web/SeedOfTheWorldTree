@@ -1,0 +1,50 @@
+[gd_scene load_steps=7 format=3 uid="uid://c1seedowen"]
+
+[ext_resource type="Script" path="res://scripts/enemies/enemy_base.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_sprite_visual.gd" id="2_visual"]
+[ext_resource type="Texture2D" path="res://art/enemies/enemy_owen.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_body"]
+radius = 30.0
+height = 140.0
+
+[node name="Owen" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+floor_snap_length = 8.0
+script = ExtResource("1_enemy")
+max_hp = 140.0
+max_poise = 110.0
+walk_speed = 200.0
+windup_time = 0.5
+damage = 17.0
+savable = true
+rescue_id = "owen"
+strike_box = Rect2(20, -110, 180, 130)
+hurt_radius = 34.0
+hurt_height = 140.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -5)
+shape = SubResource("CapsuleShape2D_body")
+
+[node name="Visual" type="Node2D" parent="."]
+script = ExtResource("2_visual")
+texture = ExtResource("3_tex")
+art_faces_right = false
+art_scale = 0.17
+foot_offset = 30.0
+warm_eye = true
+
+[node name="Hurtbox" type="Area2D" parent="."]
+position = Vector2(0, -5)
+collision_layer = 16
+collision_mask = 0
+script = ExtResource("5_hurtbox")
+
+[node name="Hitbox" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 8
+script = ExtResource("4_hitbox")

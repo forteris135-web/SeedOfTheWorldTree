@@ -1,0 +1,245 @@
+[gd_scene load_steps=30 format=3 uid="uid://c1seedmoongarden"]
+
+[ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
+[ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://c1seedplatform" path="res://scenes/world/platform.tscn" id="3_platform"]
+[ext_resource type="PackedScene" uid="uid://c1seedtouchctl" path="res://scenes/ui/touch_controls.tscn" id="6_touch"]
+[ext_resource type="PackedScene" uid="uid://c1seeddebughud" path="res://scenes/ui/debug_hud.tscn" id="7_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedcombathud" path="res://scenes/ui/combat_hud.tscn" id="8_combat_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedmoongrass" path="res://scenes/world/moonlight_grass.tscn" id="9_grass"]
+[ext_resource type="Texture2D" path="res://art/backgrounds/bg_moon_garden.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/art_backdrop.gd" id="12_art_backdrop"]
+[ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
+[ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
+[ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
+[ext_resource type="PackedScene" uid="uid://c1seedroomexit" path="res://scenes/world/room_exit.tscn" id="16_exit"]
+[ext_resource type="PackedScene" uid="uid://c1seedthorns" path="res://scenes/world/thorns.tscn" id="17_thorns"]
+[ext_resource type="PackedScene" uid="uid://c1seedwoodcutter" path="res://scenes/enemies/woodcutter.tscn" id="20_woodcutter"]
+[ext_resource type="PackedScene" uid="uid://c1seedgardener" path="res://scenes/enemies/gardener.tscn" id="21_gardener"]
+[ext_resource type="PackedScene" uid="uid://c1seedwoodcuttersav" path="res://scenes/enemies/woodcutter_savable.tscn" id="22_woodcutter_sav"]
+[ext_resource type="PackedScene" uid="uid://c1seedgardenersav" path="res://scenes/enemies/gardener_savable.tscn" id="23_gardener_sav"]
+[ext_resource type="PackedScene" uid="uid://c1seedashgiant" path="res://scenes/enemies/ash_giant.tscn" id="24_giant"]
+[ext_resource type="PackedScene" uid="uid://c1seedbosshud" path="res://scenes/ui/boss_hud.tscn" id="25_boss_hud"]
+[ext_resource type="Script" path="res://scripts/world/fog_gate.gd" id="26_gate"]
+[ext_resource type="PackedScene" uid="uid://c1seedguard" path="res://scenes/enemies/guard.tscn" id="27_guard"]
+[ext_resource type="PackedScene" uid="uid://c1seedguardsav" path="res://scenes/enemies/guard_savable.tscn" id="28_guard_sav"]
+[ext_resource type="PackedScene" uid="uid://c1seednpc" path="res://scenes/npcs/npc.tscn" id="29_npc"]
+[ext_resource type="PackedScene" uid="uid://c1seedrecord" path="res://scenes/world/record.tscn" id="30_record"]
+[ext_resource type="Texture2D" path="res://art/npcs/npc_tia.png" id="31_tia"]
+[ext_resource type="Texture2D" path="res://art/npcs/npc_lampkeeper.png" id="32_lampkeeper"]
+[ext_resource type="Texture2D" path="res://art/npcs/npc_owen.png" id="33_owen"]
+[ext_resource type="PackedScene" uid="uid://c1seedmachine" path="res://scenes/enemies/machine.tscn" id="34_machine"]
+[ext_resource type="PackedScene" uid="uid://c1seedowen" path="res://scenes/enemies/owen.tscn" id="35_owen_enemy"]
+[ext_resource type="PackedScene" uid="uid://c1seedherbalist" path="res://scenes/enemies/herbalist.tscn" id="36_herbalist"]
+[ext_resource type="PackedScene" uid="uid://c1seedherbalistsav" path="res://scenes/enemies/herbalist_savable.tscn" id="37_herbalist_sav"]
+
+[sub_resource type="Environment" id="Environment_glow"]
+background_mode = 3
+glow_enabled = true
+glow_levels/1 = 0.0
+glow_levels/2 = 0.5
+glow_levels/3 = 1.0
+glow_levels/4 = 0.7
+glow_levels/5 = 0.3
+glow_intensity = 0.6
+glow_strength = 1.0
+glow_bloom = 0.03
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 2.0
+
+[sub_resource type="Gradient" id="Gradient_mote"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(1, 0.85, 0.45, 1, 1, 0.85, 0.45, 0.5, 1, 0.85, 0.45, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mote"]
+gradient = SubResource("Gradient_mote")
+width = 32
+height = 32
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="RectangleShape2D" id="ExitShape1"]
+size = Vector2(80, 300)
+
+[sub_resource type="RectangleShape2D" id="ExitShape2"]
+size = Vector2(80, 300)
+
+[node name="MoonGarden" type="Node2D"]
+script = ExtResource("1_room")
+bounds = Rect2(0, 0, 3000, 1300)
+region = "abyss"
+room_id = "moon_garden"
+display_name = "달빛 정원"
+map_offset = Vector2(45800, 300)
+terrain_color = Color(0.09, 0.1, 0.12, 1)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_glow")
+
+[node name="Backdrop" type="Node2D" parent="."]
+
+[node name="Far" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.1, 0.1)
+
+[node name="Sky" type="Sprite2D" parent="Backdrop/Far"]
+texture = ExtResource("11_bg")
+script = ExtResource("12_art_backdrop")
+
+[node name="Shafts" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.3, 0.3)
+
+[node name="LightShafts" type="Node2D" parent="Backdrop/Shafts"]
+script = ExtResource("13_shafts")
+seed = 43
+
+[node name="FogFar" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.45, 0.45)
+
+[node name="Fog" type="Sprite2D" parent="Backdrop/FogFar"]
+script = ExtResource("14_fog")
+drift = Vector2(16, -3)
+fog_color = Color(1, 0.95, 0.82, 0.13)
+noise_scale = 1.3
+seed = 43
+
+[node name="Leaves" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.8, 0.8)
+
+[node name="FallingLeaves" type="CPUParticles2D" parent="Backdrop/Leaves"]
+script = ExtResource("15_leaves")
+count = 30
+
+[node name="Motes" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.9, 0.9)
+
+[node name="Particles" type="CPUParticles2D" parent="Backdrop/Motes"]
+modulate = Color(1.7, 1.5, 1.1, 1)
+position = Vector2(1500, 650)
+amount = 60
+lifetime = 9.0
+preprocess = 9.0
+texture = SubResource("GradientTexture2D_mote")
+emission_shape = 3
+emission_rect_extents = Vector2(1800, 950)
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, -6)
+initial_velocity_min = 8.0
+initial_velocity_max = 26.0
+scale_amount_min = 0.25
+scale_amount_max = 0.7
+color = Color(1, 0.85, 0.45, 0.55)
+
+[node name="Terrain" type="Node2D" parent="."]
+
+[node name="WallLeft" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(-100, -100)
+size = Vector2(100, 1500)
+decorate = false
+
+[node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3000, -100)
+size = Vector2(100, 1500)
+decorate = false
+
+[node name="Ceiling" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, -100)
+size = Vector2(3000, 100)
+decorate = false
+
+[node name="P1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 1100)
+size = Vector2(3000, 200)
+label_text = "달빛 정원"
+
+[node name="Markers" type="Node2D" parent="."]
+
+[node name="FromAbyss02" type="Marker2D" parent="Markers"]
+position = Vector2(120, 1032)
+
+[node name="FromBoss" type="Marker2D" parent="Markers"]
+position = Vector2(2880, 1032)
+
+[node name="Exits" type="Node2D" parent="."]
+
+[node name="Exit1" parent="Exits" instance=ExtResource("16_exit")]
+position = Vector2(-50, 900)
+target_scene = "res://scenes/rooms/abyss_02.tscn"
+spawn_name = "FromGarden"
+
+[node name="Shape" type="CollisionShape2D" parent="Exits/Exit1"]
+shape = SubResource("ExitShape1")
+
+[node name="Exit2" parent="Exits" instance=ExtResource("16_exit")]
+position = Vector2(2960, 900)
+target_scene = "res://scenes/rooms/abyss_boss.tscn"
+spawn_name = "FromGarden"
+
+[node name="Shape" type="CollisionShape2D" parent="Exits/Exit2"]
+shape = SubResource("ExitShape2")
+
+[node name="Interactables" type="Node2D" parent="."]
+
+[node name="Decor1" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(300, 1100)
+art_scale = 0.2
+is_open = true
+decor = true
+
+[node name="Decor2" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(650, 1100)
+art_scale = 0.26
+is_open = true
+decor = true
+
+[node name="Decor3" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(1000, 1100)
+art_scale = 0.18
+is_open = true
+decor = true
+
+[node name="Decor4" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(1950, 1100)
+art_scale = 0.24
+is_open = true
+decor = true
+
+[node name="Decor5" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(2300, 1100)
+art_scale = 0.17
+is_open = true
+decor = true
+
+[node name="Decor6" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(2650, 1100)
+art_scale = 0.22
+is_open = true
+decor = true
+
+[node name="Grass1" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(1500, 1100)
+grass_id = "moon_garden"
+display_name = "달빛 정원"
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(120, 1032)
+
+[node name="FogNear" type="Parallax2D" parent="."]
+scroll_scale = Vector2(1.15, 1.15)
+
+[node name="Fog" type="Sprite2D" parent="FogNear"]
+script = ExtResource("14_fog")
+drift = Vector2(28, -6)
+fog_color = Color(1, 0.96, 0.86, 0.06)
+noise_scale = 1.9
+seed = 50
+
+[node name="CombatHUD" parent="." instance=ExtResource("8_combat_hud")]
+
+[node name="TouchControls" parent="." instance=ExtResource("6_touch")]
+
+[node name="DebugHUD" parent="." instance=ExtResource("7_hud")]
