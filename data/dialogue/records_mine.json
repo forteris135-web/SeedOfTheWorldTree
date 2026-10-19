@@ -1,0 +1,59 @@
+{
+  "_설명": "확장판 · 경전 조각 4장(숨겨진 방), 설계도 조각(배관 위). 네 조각을 다 읽으면 사당 경전(scripture_village)에 완성 구절이 더해진다 (extra.when, EXPANSION.md 6장).",
+  "scripture_1": {
+    "title": "경전 조각 (하나)",
+    "lines": [
+      "…나는 나의 빛을 너희에게 조금씩 나누어 주리라…",
+      "(찢긴 자리 아래로는 그을려 읽을 수 없다.)"
+    ],
+    "count_ids": ["scripture_1", "scripture_2", "scripture_3", "scripture_4"],
+    "count_message": "경전의 잃어버린 조각을 찾았다 (%d/4)"
+  },
+  "scripture_2": {
+    "title": "경전 조각 (둘)",
+    "lines": [
+      "…너희는 필요한 만큼만 받고…",
+      "(종이 끝에 작은 잎 무늬가 찍혀 있다.)"
+    ],
+    "count_ids": ["scripture_1", "scripture_2", "scripture_3", "scripture_4"],
+    "count_message": "경전의 잃어버린 조각을 찾았다 (%d/4)"
+  },
+  "scripture_3": {
+    "title": "경전 조각 (셋)",
+    "lines": [
+      "…남은 것은 땅으로 돌려보내라…",
+      "(누군가 이 줄에 거칠게 선을 그었다.)"
+    ],
+    "count_ids": ["scripture_1", "scripture_2", "scripture_3", "scripture_4"],
+    "count_message": "경전의 잃어버린 조각을 찾았다 (%d/4)"
+  },
+  "scripture_4": {
+    "title": "경전 조각 (넷)",
+    "lines": [
+      "…받은 것을 돌려보내는 손이 곧 나를 지키는 손이니라.",
+      "(이것이 경전의 끝이다. 사당의 경전에는 없는 구절.)"
+    ],
+    "count_ids": ["scripture_1", "scripture_2", "scripture_3", "scripture_4"],
+    "count_message": "경전의 잃어버린 조각을 찾았다 (%d/4)"
+  },
+  "scripture_village": {
+    "extra": [
+      {
+        "when": "read_scripture_1,read_scripture_2,read_scripture_3,read_scripture_4",
+        "lines": [
+          "(찢긴 조각들을 맞추자, 지워졌던 끝부분이 이어진다.)",
+          "나는 나의 빛을 너희에게 조금씩 나누어 주리라.",
+          "너희는 필요한 만큼만 받고, 남은 것은 땅으로 돌려보내라.",
+          "받은 것을 돌려보내는 손이 곧 나를 지키는 손이니라."
+        ]
+      }
+    ]
+  },
+  "blueprint_piece": {
+    "title": "설계도 조각",
+    "lines": [
+      "…주 톱니를 반대로 물리면 관은 거꾸로 흐른다. 뽑는 손이 곧 돌려주는 손이 되게 하라…",
+      "(기름때 묻은 종이. 아래에 작은 글씨로: '언젠가 쓰일 날을 위해 — 하론, 오웬')"
+    ]
+  }
+}

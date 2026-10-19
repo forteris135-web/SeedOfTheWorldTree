@@ -24,11 +24,16 @@ func _ready() -> void:
 			c.pressed.connect(_on_item_pressed.bind(c))
 			c.mouse_entered.connect(func() -> void: _select(_items.find(c)))
 	_select(0)
-	if Progress.has("cleared"):
-		# 클리어 후: 밝은 일러스트, 바뀐 부제, 엔딩 버전 곡
+	var seen := cleared_state()
+	if seen["cleared"]:
+		# 클리어 후: 밝은 일러스트, 바뀐 부제, 엔딩 버전 곡. 제3의 길(확장판)을 보았으면 부제와 곡이 또 바뀐다.
 		art.texture = load("res://art/characters/title_selenia_alt_b.png")
-		subtitle.text = "— 그리고 세계는 다시 숨을 쉰다."
-		Music.play("theme_ending", 2.0)
+		if seen["third"]:
+			subtitle.text = "— 등불 하나면 충분해."
+			Music.play(_ending_track_name("third"), 2.0)
+		else:
+			subtitle.text = "— 그리고 세계는 다시 숨을 쉰다."
+			Music.play("theme_ending", 2.0)
 	else:
 		Music.play("theme_full", 2.0)
 	InputDevice.device_changed.connect(func(_k): _refresh_hint())
@@ -56,6 +61,27 @@ func _ready() -> void:
 		await get_tree().create_timer(4.5).timeout
 		get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://screenshots/debug_title.png"))
 		get_tree().quit()
+
+
+## 엔딩을 보았는가: 지금 진행(Progress) 또는 저장 파일의 깃발. 앱을 새로 켠 뒤에도 클리어한 타이틀이 보이게
+## 저장 파일을 **읽기만** 한다 (진행은 '이어하기'를 고를 때 SaveGame.load_game 이 되돌린다).
+## {"cleared": 엔딩을 하나라도 봄, "third": 제3의 길을 봄}
+static func cleared_state() -> Dictionary:
+	var out := {"cleared": Progress.has("cleared"), "third": Progress.has("cleared_third")}
+	if SaveGame.has_save():
+		var data = JSON.parse_string(FileAccess.get_file_as_string(SaveGame.PATH))
+		if typeof(data) == TYPE_DICTIONARY and typeof(data.get("flags", null)) == TYPE_DICTIONARY:
+			var f: Dictionary = data["flags"]
+			out["cleared"] = out["cleared"] or bool(f.get("cleared", false))
+			out["third"] = out["third"] or bool(f.get("cleared_third", false))
+	return out
+
+
+## 제3의 길 곡(theme_ending_third.wav)이 있으면 그것, 없으면 theme_ending (엔딩 씬과 같은 규칙).
+static func _ending_track_name(which: String) -> String:
+	if which == "third" and ResourceLoader.exists(Music.DIR + "theme_ending_third.wav"):
+		return "theme_ending_third"
+	return "theme_ending"
 
 
 func _process(delta: float) -> void:

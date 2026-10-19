@@ -6,9 +6,13 @@ class_name Machine
 @export var light_damage_ratio := 0.35
 @export var ram_speed := 820.0
 @export var ram_time := 0.5
+## 확장판 · 벽 부수기(wall_break) 능력이 있으면 무거운 공격(씨앗 베기·낙하 공격)이 장갑을 깨서 이 시간 동안 약공격도 온전히 들어간다.
+@export var armor_break_time := 4.0
+const WALL_BREAK_POISE := 45.0
 
 var _ramming := false
 var _ram_timer := 0.0
+var _armor_timer := 0.0
 
 
 func _begin_windup() -> void:
@@ -33,6 +37,7 @@ func _strike() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	_armor_timer = maxf(_armor_timer - delta, 0.0)
 	if state == State.STRIKE and _ramming:
 		_tick_common(delta)
 		_ram_timer -= delta
@@ -58,9 +63,19 @@ func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
 
 
+func is_armor_broken() -> bool:
+	return _armor_timer > 0.0
+
+
 func receive_hit(hit: HitData, hb: Hurtbox) -> String:
-	# 단단함: 약한 공격(흐트러짐 30 미만)은 피해가 크게 준다. 무너졌을 땐 온전히.
-	if hit.poise < 30.0 and state != State.BROKEN:
-		hit.damage *= light_damage_ratio
+	# 벽 부수기: 무거운 공격이 장갑을 깬다 (한동안 약공격도 온전히)
+	if hit.from_player and hit.poise >= WALL_BREAK_POISE and Progress.has_ability("wall_break"):
+		_armor_timer = armor_break_time
+		_flash = 1.0
+	# 단단함: 약한 공격(흐트러짐 30 미만)은 피해가 크게 준다. 무너졌을 땐·장갑이 깨졌을 땐 온전히.
+	if hit.poise < 30.0 and state != State.BROKEN and _armor_timer <= 0.0:
+		var weak := hit.copy()   # Hitbox 는 같은 HitData 를 여러 상대에게 넘기므로 원본을 고치지 않는다
+		weak.damage *= light_damage_ratio
 		_flash = 0.5
+		return super.receive_hit(weak, hb)
 	return super.receive_hit(hit, hb)

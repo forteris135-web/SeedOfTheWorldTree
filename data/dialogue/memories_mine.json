@@ -1,0 +1,29 @@
+{
+  "_설명": "확장판 · 무쇠 펌프 회상 (EXPANSION.md 5장 초안). 기획자가 다듬으면 바꾼다. 그림 memory_pump_1~3 은 임시.",
+  "memory_pump": {
+    "title": "회상 — 무쇠 펌프",
+    "lines": [
+      {
+        "id": "memory_pump_01",
+        "text": "더 뽑아라. 더. 그것이 내가 들은 유일한 말이었다.",
+        "image": "res://art/memories/memory_pump_1.png"
+      },
+      {
+        "id": "memory_pump_02",
+        "text": "그런데 뽑아낸 것 속에서, 나무의 비명과 광부들의 노래가 함께 들렸다.",
+        "image": "res://art/memories/memory_pump_2.png"
+      },
+      {
+        "id": "memory_pump_03",
+        "text": "나를 만든 손은 따뜻했다. 그 손들은 알았지. 나는 거꾸로도 돌 수 있다는 것을.",
+        "image": "res://art/memories/memory_pump_3.png"
+      },
+      {
+        "id": "memory_pump_04",
+        "text": "멈춰 줘서 고맙다. …이제, 돌려줄 차례다.",
+        "image": "res://art/memories/memory_pump_3.png"
+      }
+    ],
+    "reward_text": "영혼이 깃들었다 — 벽 부수기"
+  }
+}

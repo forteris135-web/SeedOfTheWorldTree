@@ -14,6 +14,9 @@
   python3 tools/audit_rooms.py --verbose mine_01   # 면·간선(창 폭까지) 자세히
   python3 tools/audit_rooms.py --oneway            # one_way 후보 발판 목록(규칙 + 내려가기 안전 확인, 파일의 켜짐 상태 그대로 표시)
   python3 tools/audit_rooms.py --robust            # 여유 모델(달리기 580, 점프 속도 98.5%)도 함께 (느리다)
+  python3 tools/audit_rooms.py --locked            # 벽 부수기 전(1편 상태): 금 간 벽(cracked_wall)을 단단한 벽으로 치고,
+                                                   #  숨겨진 방(_hidden_) 포탈은 [나중에], 그 방에서 돌아오는 FromHidden1/2 등장은 뺀다
+                                                   #  → 금 간 벽이 본편 길을 막지 않는지 본다 (기본은 '부서진 뒤' = 벽 없음)
 
 모델 (player.gd 수치): 걷기 380, 달리기 640, 점프 높이 260·최고점 0.4초 → 중력 3250, 초기 속도 1300,
 낙하 중력 1.7배, 짧은 점프(일찍 떼면 상승 속도 ×0.4), 코요테 0.1초, 1/60초 적분(소녀와 같은 순서: 중력 → 점프 → 이동).
@@ -63,14 +66,20 @@ APPROACH = 460.0                         # 가시 양옆에서 뛰는 자리·�
 LATER_TARGETS = {"canopy_01": {"ToHidden"}}
 # 이단 점프 없이 도는 방 (수관: 첫 보스 전)
 NO_DOUBLE_ROOMS = {"canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canopy_06", "canopy_07",
-                   "canopy_mini_1", "canopy_mini_2", "canopy_boss", "canopy_hidden"}
-BOSS_ROOMS = {"canopy_boss", "mine_boss", "abyss_boss"}
+                   "canopy_mini_1", "canopy_mini_2", "canopy_boss", "canopy_hidden", "canopy_hidden_1", "canopy_hidden_2"}
+BOSS_ROOMS = {"canopy_boss", "mine_boss", "abyss_boss", "flooded_mine_boss"}
+# --locked: 벽 부수기 전 (금 간 벽이 단단하다)
+LOCKED = False
 
 ORDER = ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canopy_06", "canopy_07",
          "canopy_mini_1", "canopy_mini_2", "canopy_hidden", "canopy_boss",
          "village_01", "village_02", "village_shrine", "village_mini_1",
          "mine_01", "mine_02", "mine_mini_1", "mine_deep", "mine_boss",
-         "abyss_01", "abyss_02", "abyss_mini_1", "moon_garden", "abyss_boss"]
+         "abyss_01", "abyss_02", "abyss_mini_1", "moon_garden", "abyss_boss",
+         # 확장판 · 잠긴 채굴장 묶음 (금 간 벽 뒤 숨겨진 방들은 작아서 함께 돈다)
+         "flooded_mine_01", "flooded_mine_02", "flooded_mine_boss",
+         "canopy_hidden_1", "canopy_hidden_2", "village_hidden_1", "village_hidden_2",
+         "mine_hidden_1", "mine_hidden_2", "abyss_hidden_1", "abyss_hidden_2", "flooded_mine_hidden_1"]
 
 
 # ---------------- .tscn 파싱 ----------------
@@ -174,8 +183,8 @@ class Room:
             p = n["props"]
             gx, gy = n["gpos"]
             base = os.path.basename(inst)
-            if base in ("platform.tscn", "secret_wall.tscn", "secret_ceiling.tscn"):
-                w, h = p.get("size", (400.0, 40.0) if base == "platform.tscn" else ((60.0, 200.0) if base == "secret_wall.tscn" else (200.0, 150.0)))
+            if base in ("platform.tscn", "secret_wall.tscn", "secret_ceiling.tscn") or (LOCKED and base == "cracked_wall.tscn"):
+                w, h = p.get("size", (400.0, 40.0) if base == "platform.tscn" else ((60.0, 200.0) if base == "secret_wall.tscn" else ((60.0, 320.0) if base == "cracked_wall.tscn" else (200.0, 150.0))))
                 self.plats.append({"name": n["path"], "short": n["name"], "x0": gx, "y0": gy, "x1": gx + w, "y1": gy + h,
                                    "w": w, "h": h, "one_way": bool(p.get("one_way", False)),
                                    "kind": base[:-5], "decorate": p.get("decorate", True) is not False,
@@ -190,7 +199,8 @@ class Room:
                 self.thorns.append({"name": n["name"], "x0": gx + 4.0, "y0": gy + 0.3 * h, "x1": gx + w - 4.0, "y1": gy + h,
                                     "rx0": gx, "ry0": gy, "w": w, "h": h})
             elif base == "portal.tscn":
-                self.targets.append({"kind": "portal", "name": n["name"], "x": gx, "y": gy, "requires": p.get("requires_ability", ""), "secret": ""})
+                self.targets.append({"kind": "portal", "name": n["name"], "x": gx, "y": gy, "requires": p.get("requires_ability", ""), "secret": "",
+                                     "later": LOCKED and "_hidden_" in str(p.get("target_scene", ""))})
             elif base == "moonlight_grass.tscn":
                 if not p.get("decor", False):
                     self.targets.append({"kind": "grass", "name": n["name"], "x": gx, "y": gy, "requires": "", "secret": ""})
@@ -205,6 +215,8 @@ class Room:
             elif n["type"] == "Marker2D" and n["parent"] == "Markers":
                 if n["name"] == "GroundLine" or n["name"].startswith("Hover"):
                     continue
+                if LOCKED and re.match(r"FromHidden\d", n["name"]):
+                    continue   # 금 간 벽 뒤 숨겨진 방에서 돌아오는 자리(FromHidden1/2): 벽을 부순 뒤에만 온다 (수관의 FromHidden 은 본편)
                 self.spawns.append((n["name"], gx, gy))
         self.solids = [pl for pl in self.plats if not pl["one_way"]]
         self._build_surfaces()
@@ -877,7 +889,7 @@ def audit_room(room_id, model_exact, model_robust, verbose=False, force_double=N
                     label += "[비밀]"
                 if t["requires"]:
                     label += "(%s 필요)" % t["requires"]
-                if t["name"] in LATER_TARGETS.get(room_id, set()):
+                if t["name"] in LATER_TARGETS.get(room_id, set()) or t.get("later"):
                     label += "[나중에]"
                 if not ok_any:
                     unreachable.append(label)
@@ -978,7 +990,10 @@ def main():
     ap.add_argument("--oneway", action="store_true", help="one_way 후보 발판 목록과 내려가기 안전 여부")
     ap.add_argument("--double", choices=["on", "off"], help="기본 모드를 강제 (보고 판정용)")
     ap.add_argument("--model", choices=["exact", "robust"], default="exact", help="robust: 여유 모델을 기본 모델로 써서 어디가 빠듯한지 본다")
+    ap.add_argument("--locked", action="store_true", help="벽 부수기 전: 금 간 벽을 단단하게, 숨겨진 방 포탈은 [나중에]")
     args = ap.parse_args()
+    global LOCKED
+    LOCKED = args.locked
     # ORDER 에 없는 방(확장판 등 새로 더한 .tscn)도 이름순으로 뒤에 붙여 모두 본다
     extra = sorted(fn[:-5] for fn in os.listdir(ROOM_DIR) if fn.endswith(".tscn") and fn[:-5] not in ORDER)
     rooms = args.rooms or (ORDER + extra)

@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://c1seedcrackedwall"]
+
+[ext_resource type="Script" path="res://scripts/world/cracked_wall.gd" id="1_cracked_wall"]
+
+[node name="CrackedWall" type="StaticBody2D"]
+collision_layer = 1
+collision_mask = 0
+script = ExtResource("1_cracked_wall")
+size = Vector2(60, 320)
+decorate = false

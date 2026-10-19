@@ -170,7 +170,17 @@ func writeWav(_ samples: [Double], _ name: String) {
 }
 
 /// 트랙을 렌더링. loopBeats 가 있으면 그 길이에서 자르고 꼬리를 앞머리에 섞어 끊김 없이 반복되게 한다.
+/// 인자로 곡 이름을 주면(예: swift tools/gen_music.swift ambient_flooded_mine boss_iron_pump) 그 곡만 만든다. 없으면 전부.
+/// **이미 있는 파일은 건너뛴다** (기획자의 진짜 곡을 같은 이름으로 넣어 두었을 수 있다). 덮어쓰려면 --force.
+let FORCE = CommandLine.arguments.contains("--force")
+let ONLY = Set(CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("--") })
+
 func bounce(_ tr: Track, _ name: String, loopBeats: Double? = nil, tailSec: Double = 4.0, mix: Double = 0.28, size: Double = 1.0) {
+    if !ONLY.isEmpty && !ONLY.contains(name) { return }
+    if !FORCE && FileManager.default.fileExists(atPath: OUT + name + ".wav") {
+        print("\(name).wav 이미 있음 — 건너뜀 (덮어쓰려면 --force)")
+        return
+    }
     let spb = 60.0 / tr.bpm
     let total = (loopBeats ?? tr.lengthBeats) * spb + tailSec
     var buf = [Double](repeating: 0, count: Int(total * RATE) + 1)
@@ -437,8 +447,7 @@ do {
 // =====================================================================
 // 확장판 · 수액의 호수 (3/4 왈츠). EXPANSION.md 10장의 Suno 프롬프트를 흉내 낸 임시곡.
 // 기획자의 진짜 곡(field_sap_lake.mp3 / boss_sap_queen.mp3)이 오면 같은 이름의 wav 로 바꿔 끼운다.
-// =====================================================================
-// 수액의 호수 필드: 쓸쓸한 왈츠, 부드러운 피아노·하프(pluck), 흐르는 패드. Eb장조에 단조 그림자. 72bpm, 24마디 반복 (60초).
+// ==============================================================// 수액의 호수 필드: 쓸쓸한 왈츠, 부드러운 피아노·하프(pluck), 흐르는 패드. Eb장조에 단조 그림자. 72bpm, 24마디 반복 (60초).
 do {
     let t = Track(bpm: 72, beatsPerBar: 3)
     // (베이스, 화음, 하프 분산화음 6개(8분음표))
@@ -533,4 +542,88 @@ do {
     }
     bounce(t, "boss_sap_queen", loopBeats: 96, tailSec: 2.5, mix: 0.28, size: 1.1)
 }
+=======
+// 확장판 · 잠긴 채굴장. EXPANSION.md 10장의 Suno 프롬프트를 흉내 낸 임시곡.
+// 기획자의 진짜 곡(field_flooded_mine.mp3 / boss_iron_pump.mp3)이 오면 같은 이름의 wav 로 바꿔 끼운다.
+// =====================================================================
+// 잠긴 채굴장 필드: 어두운 앰비언트, 느린 기계 오스티나토(8분음표 베이스 맥동), 물방울(종), 낮은 피아노, 멀리서 금속이 끙끙대는 소리(현악 불협). C단조 70bpm, 16마디 반복 (54.9초).
+do {
+    let t = Track(bpm: 70)
+    t.add("C1", 1, 1, 64, 0.45, .drone)
+    let roots = ["C2","C2","Ab1","Ab1","C2","C2","G1","G1","C2","C2","F1","F1","Ab1","Ab1","G1","G1"]
+    for bar in 1...16 {
+        let r = n(roots[bar - 1])
+        let base = Double(bar - 1) * 4
+        // 기계 오스티나토: 8분음표로 뿌리음·5도를 번갈아 (물에 잠긴 듯 낮고 둔하게)
+        for e in 0..<8 {
+            let m = (e % 4 == 2) ? r + 7 : ((e % 4 == 3) ? r + 3 : r)
+            t.midiNote(m, base + Double(e) * 0.5, 0.42, e % 2 == 0 ? 0.5 : 0.32, .bass)
+        }
+        // 느린 피스톤 (북): 매 마디 첫 박과 셋째 박 뒤
+        t.midiNote(36, base, 0.5, 0.55, .kick)
+        t.midiNote(36, base + 2.5, 0.5, 0.35, .kick)
+        if bar % 4 == 0 { t.midiNote(38, base + 3.5, 0.3, 0.25, .snare) }
+    }
+    // 물방울: 높은 종이 불규칙하게
+    let drips: [(String, Double, Double)] = [("G5",1,2.5),("C6",2,4),("Eb5",4,1.5),("G5",5,3),("Bb5",7,2),("C6",8,3.5),("F5",10,1),("Ab5",11,4),("G5",13,2.5),("Eb6",14,3),("D5",15,1.5),("G5",16,4)]
+    for (nm, bar, beat) in drips { t.add(nm, bar, beat, 1.5, 0.22, .bell) }
+    // 낮은 피아노 (절정 없이 맴도는 두 음)
+    let low: [(String, Double, Double, Double)] = [("Eb3",1,1,4),("D3",3,1,4),("C3",5,1,6),("Ab2",9,1,4),("G2",11,1,4),("Bb2",13,1,4),("G2",15,1,4)]
+    for (nm, bar, beat, len) in low { t.add(nm, bar, beat, len, 0.3, .piano) }
+    // 금속이 끙끙대는 소리: 단2도로 겹친 현악이 길게
+    t.chord(["C3","Db3"], 3, 1, 6, 0.1, .strings); t.chord(["G2","Ab2"], 9, 1, 6, 0.1, .strings); t.chord(["C3","B2"], 14, 1, 6, 0.12, .strings)
+    bounce(t, "ambient_flooded_mine", loopBeats: 64, mix: 0.4, size: 1.6)
+}
+// 무쇠 펌프 보스: 산업적이고 비극적인 보스곡. 쉼 없는 기계 오스티나토(16분음표), 매 박 두드리는 낮은 북, 모루(높은 종+스네어), 무거운 금관(낮은 현악 화음),
+// 비명 같은 높은 현악 선율, 피아노. C단조 128bpm, 32마디 반복(60초). 뒤 8마디는 리듬이 조금씩 무너진다(엇박 건너뛰기).
+// 보스 코드는 이 곡의 박(0.46875초)에 맞춰 2박 예고로 공격한다 (scripts/bosses/iron_pump.gd BEAT).
+// boss_iron_pump_2: 2페이즈(규칙이 무너짐)용 — 같은 곡을 처음부터 끝까지 '무너지는 리듬'으로: 16분음표가 빠지고 밀리며, 북은 엇박으로 끌려가고,
+//  모루는 박을 놓친다 (scripts/bosses/iron_pump_room.gd 가 페이즈 2 에서 바꿔 튼다).
+func ironPump(_ name: String, broken: Bool) {
+    let t = Track(bpm: 128)
+    let roots = ["C2","C2","C2","C2","Ab1","Ab1","G1","G1","C2","C2","Eb2","Eb2","F2","F2","G1","G1",
+                 "C2","C2","C2","C2","Ab1","Ab1","Bb1","Bb1","C2","C2","Db2","Db2","G1","G1","G1","G1"]
+    for bar in 1...32 {
+        let r = n(roots[bar - 1])
+        let base = Double(bar - 1) * 4
+        let breaking = broken || bar > 24
+        for e in 0..<16 {
+            // 뒤 8마디: 16분음표 몇 개를 건너뛰고 몇 개는 밀린다 (무너지는 리듬)
+            if breaking && (e * 7 + bar) % 11 == 0 { continue }
+            let shift = breaking && (e * 5 + bar) % 9 == 0 ? 0.12 : 0.0
+            let m = (e % 4 == 0) ? r : ((e % 4 == 2) ? r + 12 : ((e % 8 == 5) ? r + 7 : r + (e % 2 == 0 ? 0 : 3)))
+            t.midiNote(m, base + Double(e) * 0.25 + shift, 0.22, e % 4 == 0 ? 0.62 : 0.4, .bass)
+        }
+        for b in 0..<4 {
+            if breaking && (b + bar) % 7 == 0 { continue }
+            // 무너진 판: 셋째 박 북이 반 박 늦게 끌려온다
+            let late = broken && b == 2 && bar % 2 == 0 ? 0.5 : 0.0
+            t.midiNote(36, base + Double(b) + late, 0.4, b == 0 ? 1.0 : 0.75, .kick)
+        }
+        // 모루: 둘째·넷째 박 (스네어 + 금속 종). 무너진 판은 넷째 박을 가끔 놓치고 엇박(3.5)에 친다
+        t.midiNote(38, base + 1, 0.3, 0.6, .snare)
+        let anvil = broken && bar % 3 == 0 ? 3.5 : 3.0
+        t.midiNote(38, base + anvil, 0.3, 0.65, .snare)
+        t.midiNote(n("G6"), base + 1, 0.2, 0.22, .bell); t.midiNote(n(broken ? "F#6" : "G6"), base + anvil, 0.2, 0.25, .bell)
+        // 무거운 금관 (낮은 현악 화음, 두 마디마다)
+        if bar % 2 == 1 { t.midiNote(r, base, 8.0, 0.45, .strings); t.midiNote(r + 12, base, 8.0, 0.4, .strings) }
+        t.midiNote(r + 12 + 3, base, 8.0, 0.3, .strings); t.midiNote(r + 12 + 7, base, 8.0, 0.28, .strings)
+    }
+    // 비명 같은 높은 현악 선율 (8마디 두 번 + 변주 두 번)
+    let mel: [(String, Double, Double, Double)] = [
+        ("G6",1,1,3),("Ab6",1,4,1),("G6",2,1,2),("Eb6",2,3,2),("C6",3,1,3),("D6",3,4,1),("Eb6",4,1,4),
+        ("F6",5,1,2),("Eb6",5,3,1),("D6",5,4,1),("C6",6,1,3),("B5",6,4,1),("D6",7,1,2),("G6",7,3,2),("G6",8,1,4),
+        ("C7",9,1,3),("Bb6",9,4,1),("Ab6",10,1,2),("G6",10,3,2),("Eb6",11,1,3),("F6",11,4,1),("G6",12,1,4),
+        ("Ab6",13,1,2),("G6",13,3,1),("F6",13,4,1),("Eb6",14,1,3),("D6",14,4,1),("B5",15,1,2),("D6",15,3,2),("G6",16,1,4),
+    ]
+    for (nm, bar, beat, len) in mel {
+        t.add(nm, bar, beat, len, 0.9, .strings)
+        t.add(nm, bar + 16, beat, len, 0.95, .strings)
+        t.midiNote(n(nm) - 12, (bar - 1) * 4 + beat - 1, len, 0.45, .piano)
+        t.midiNote(n(nm) - 12, (bar + 15) * 4 + beat - 1, len, 0.5, .piano)
+    }
+    bounce(t, name, loopBeats: 128, tailSec: 2.5, mix: 0.22, size: 0.9)
+}
+ironPump("boss_iron_pump", broken: false)
+ironPump("boss_iron_pump_2", broken: true)
 print("음악 생성 완료")

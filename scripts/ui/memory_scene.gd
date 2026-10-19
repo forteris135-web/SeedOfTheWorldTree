@@ -1,4 +1,5 @@
 extends Control
+class_name MemoryScene
 ## 보스 회상 씬 (임시 연출). 회상 그림 위로 천천히 움직이는 카메라, 떠다니는 빛, 독백 자막.
 ## 대사는 data/dialogue/memories.json 에서 읽는다. 주제곡은 13단계에서.
 
@@ -33,8 +34,15 @@ func _ready() -> void:
 	art2.modulate.a = 0.0
 	hint.modulate.a = 0.0
 	Game.fade_in(1.0)
-	# 회상마다 주제곡이 조금씩 더 길게 들린다 (기획서 2장 "귀")
-	Music.play({"memory_bird": "theme_a", "memory_knight": "theme_ab", "memory_root": "theme_full"}.get(_memory_id, "theme_a"), 2.5, true)
+	# 회상마다 주제곡이 조금씩 더 길게 들린다 (기획서 2장 "귀"). 확장판에서는 순서가 사람마다 다르므로
+	# '지금까지 정화한 보스 수'로 정한다 (EXPANSION.md 5장): 1 A파트 / 2 A+B 앞 / 3 A+B 대부분 / 4 마지막 마디 전까지 / 뿌리지기 전체.
+	var pick := theme_for(_memory_id, purified_boss_count())
+	Music.play(pick[0], 2.5, true)
+	if pick[1] > 0.0:
+		# 길이 제한: 그 시간이 지나면 곡을 멈춘다 (실제 회상은 훨씬 짧아 보통 닿지 않는다)
+		get_tree().create_timer(pick[1]).timeout.connect(func() -> void:
+			if is_inside_tree() and not _done:
+				Music.stop(1.5))
 	var tw := create_tween()
 	tw.tween_property(title, "modulate:a", 1.0, 1.2)
 	tw.tween_interval(1.2)
@@ -44,6 +52,33 @@ func _ready() -> void:
 		await get_tree().create_timer(6.0).timeout
 		get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://screenshots/debug_memory.png"))
 		get_tree().quit()
+
+
+## 주제곡 전체(theme_full, 62bpm 80박)에서 마지막 마디(4박)를 뺀 길이(초).
+const FULL_BEFORE_LAST_BAR := (80.0 - 4.0) * 60.0 / 62.0
+
+
+## 정화한 보스 수: 깃발 boss_<이름>_defeated 가 선 것을 센다 (중간 보스 miniboss_* 는 아님). 지금 정화한 보스도 포함된다
+## (BossRoom 이 회상으로 오기 전에 깃발을 세운다).
+static func purified_boss_count() -> int:
+	var n := 0
+	for f in Progress.flags:
+		var k := str(f)
+		if k.begins_with("boss_") and k.ends_with("_defeated") and Progress.flags[f]:
+			n += 1
+	return n
+
+
+## [곡 이름, 길이 제한(초; 0 = 끝까지)]. 뿌리지기(마지막 회상)는 보스 수와 상관없이 처음으로 전체.
+## 1편(새 → 기사 → 뿌리지기)은 전과 같다: theme_a → theme_ab → theme_full.
+static func theme_for(memory_id: String, bosses: int) -> Array:
+	if memory_id == "memory_root":
+		return ["theme_full", 0.0]
+	match bosses:
+		0, 1: return ["theme_a", 0.0]
+		2: return ["theme_ab", 0.0]
+		3: return ["theme_ab", 0.0]   # "A + B 대부분" — 그 길이의 파일이 없어 theme_ab 로 (기획자 곡이 오면 theme_abx 를 둔다)
+		_: return ["theme_full", FULL_BEFORE_LAST_BAR]
 
 
 func _process(delta: float) -> void:

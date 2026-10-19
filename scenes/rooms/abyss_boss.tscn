@@ -246,6 +246,11 @@ position = Vector2(2500, 1500)
 choice = "return"
 label = "마력의 관을 끊는다"
 
+[node name="Pump" parent="Choices" instance=ExtResource("21_choice")]
+position = Vector2(1900, 1500)
+choice = "third"
+label = "심연의 거대한 펌프를 거꾸로 돌린다"
+
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(140, 1323)
 

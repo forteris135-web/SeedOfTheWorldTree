@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3 uid="uid://c1seedsapspurt"]
+
+[ext_resource type="Script" path="res://scripts/combat/sap_spurt.gd" id="1_spurt"]
+
+[node name="SapSpurt" type="Area2D"]
+collision_layer = 0
+collision_mask = 8
+script = ExtResource("1_spurt")

@@ -1,0 +1,59 @@
+[gd_scene load_steps=7 format=3 uid="uid://c1seedsmallpump"]
+
+[ext_resource type="Script" path="res://scripts/enemies/small_pump.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_sprite_visual.gd" id="2_visual"]
+[ext_resource type="Texture2D" path="res://art/enemies/enemy_small_pump.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_body"]
+radius = 42.0
+height = 130.0
+
+[node name="SmallPump" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+floor_snap_length = 8.0
+script = ExtResource("1_enemy")
+max_hp = 90.0
+max_poise = 70.0
+poise_decay = 12.0
+walk_speed = 50.0
+chase_multiplier = 1.0
+lunge_extra = 0.0
+backstep_chance = 0.0
+notice_range = 820.0
+attack_range = 120.0
+patrol_range = 60.0
+windup_time = 0.5
+strike_time = 0.2
+recover_time = 0.5
+cooldown = 0.2
+damage = 10.0
+knockback = Vector2(360, -160)
+hit_stun = 0.1
+strike_box = Rect2(0, -110, 150, 130)
+hurt_radius = 46.0
+hurt_height = 130.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -5)
+shape = SubResource("CapsuleShape2D_body")
+
+[node name="Visual" type="Node2D" parent="."]
+script = ExtResource("2_visual")
+texture = ExtResource("3_tex")
+art_faces_right = false
+art_scale = 0.19
+foot_offset = 40.0
+
+[node name="Hurtbox" type="Area2D" parent="."]
+position = Vector2(0, -5)
+collision_layer = 16
+collision_mask = 0
+script = ExtResource("5_hurtbox")
+
+[node name="Hitbox" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 8
+script = ExtResource("4_hitbox")

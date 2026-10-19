@@ -125,11 +125,20 @@ func _hit_from_front(hit: HitData) -> bool:
 	return (hit.source.global_position.x - global_position.x) * look > 0.0
 
 
+## 확장판 · 벽 부수기(wall_break) 능력이 있으면 무거운 공격(씨앗 베기·낙하 공격, 흐트러짐 45 이상)은 방패를 깬다
+## (막지 못하고 흐트러짐 +block_break_poise, 잠깐 방패가 열린다). EXPANSION.md 2장 "능력의 전투 활용".
+const WALL_BREAK_POISE := 45.0
+
+
+func _shield_breaker(hit: HitData) -> bool:
+	return hit.from_player and hit.poise >= WALL_BREAK_POISE and Progress.has_ability("wall_break")
+
+
 ## 정면 방패: 무방비·무너짐·피격이 아닐 때 앞에서 온 공격은 튕긴다. 연속 block_limit 번까지만.
 func receive_hit(hit: HitData, hb: Hurtbox) -> String:
 	var stuck := _mode == "stuck"
 	if _can_block() and _hit_from_front(hit):
-		if _block_count >= block_limit:
+		if _block_count >= block_limit or _shield_breaker(hit):
 			# 방패가 들렸다: 이번 한 대는 맞고 크게 흔들린다. 잠깐 방패가 열린다.
 			_block_count = 0
 			_block_reset = 0.0

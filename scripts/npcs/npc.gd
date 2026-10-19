@@ -27,6 +27,7 @@ var _talk_count := 0
 func _ready() -> void:
 	add_to_group("npc")
 	if require_flag != "" and not Progress.has(require_flag):
+		set_process(false)   # 지워지기 전 한 프레임 동안 _process 가 빈 _prompt 를 건드리지 않게
 		queue_free()
 		return
 	var all: Dictionary = DialogueData.load_dialogue(DATA_PATH)
@@ -88,15 +89,23 @@ static func condition_ok(when: String) -> bool:
 	return true
 
 
-func interact(_by: Player) -> void:
+## 지금 상황에 맞는 대사 묶음을 고른다 (없으면 빈 사전).
+## priority 가 큰 묶음부터 본다 (확장판 파일 npcs_*.json 의 talks 는 뒤에 이어 붙으므로, 먼저 골라지려면 priority 를 준다). 같은 값은 파일 순서.
+func pick_talk() -> Dictionary:
 	var talks: Array = _data.get("talks", [])
-	var chosen := {}
-	for t in talks:
+	var ordered: Array = talks.duplicate()
+	ordered.sort_custom(func(a, b) -> bool: return float(a.get("priority", 0)) > float(b.get("priority", 0)))
+	for t in ordered:
 		if t.get("once", false) and Progress.has("talked_" + npc_id + "_" + str(talks.find(t))):
 			continue
 		if _condition_ok(t.get("when", "")):
-			chosen = t
-			break
+			return t
+	return {}
+
+
+func interact(_by: Player) -> void:
+	var talks: Array = _data.get("talks", [])
+	var chosen := pick_talk()
 	if chosen.is_empty():
 		return
 	var name: String = _data.get("name", "")

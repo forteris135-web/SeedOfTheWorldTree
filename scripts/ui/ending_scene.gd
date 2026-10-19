@@ -31,8 +31,14 @@ func _ready() -> void:
 	credits.modulate.a = 0.0
 	Progress.set_flag("cleared")
 	Progress.set_flag("ending_" + which)
+	if which == "third":
+		Progress.set_flag("cleared_third")   # 확장판 · 제3의 길 (타이틀 부제가 바뀐다)
+	# 엔딩 뒤에도 이어서 탐험할 수 있게 진행을 저장한다 (타이틀 → 이어하기 → 마지막 달빛풀; EXPANSION.md 7장 "엔딩 후").
+	# 아직 달빛풀에서 쉰 적이 없으면(이어질 곳이 없음) 저장하지 않는다.
+	if str(Progress.last_grass.get("scene", "")) != "":
+		SaveGame.save_now()
 	Game.fade_in(1.5)
-	Music.play("theme_ending", 3.0, true)
+	Music.play(ending_track(which), 3.0, true)
 	var tw := create_tween()
 	tw.tween_property(art, "modulate", Color(0.75, 0.72, 0.68, 1), 4.0)
 	tw.parallel().tween_property(title, "modulate:a", 1.0, 2.0).set_delay(1.0)
@@ -46,6 +52,13 @@ func _ready() -> void:
 		await get_tree().create_timer(12.0).timeout
 		get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://screenshots/debug_ending.png"))
 		get_tree().quit()
+
+
+## 엔딩 곡: 제3의 길은 기획자의 E♭장조 버전(theme_ending_third.wav)이 있으면 그것, 없으면 theme_ending.
+static func ending_track(which: String) -> String:
+	if which == "third" and ResourceLoader.exists(Music.DIR + "theme_ending_third.wav"):
+		return "theme_ending_third"
+	return "theme_ending"
 
 
 func _process(delta: float) -> void:

@@ -4,7 +4,7 @@ extends Node
 ## 이름: theme_a / theme_ab / theme_full / theme_ending / theme_battle / ambient_<지역> / boss_bird / boss_knight / boss_root
 
 const DIR := "res://audio/music/"
-const LOOPING := ["theme_a", "theme_ab", "theme_full", "theme_battle", "ambient_canopy", "ambient_village", "ambient_mine", "ambient_abyss", "boss_bird", "boss_knight", "boss_root"]
+const LOOPING := ["theme_a", "theme_ab", "theme_full", "theme_battle", "ambient_canopy", "ambient_village", "ambient_mine", "ambient_abyss", "boss_bird", "boss_knight", "boss_root", "ambient_flooded_mine", "boss_iron_pump", "boss_iron_pump_2"]
 
 var _players: Array[AudioStreamPlayer] = []
 var _active := 0
