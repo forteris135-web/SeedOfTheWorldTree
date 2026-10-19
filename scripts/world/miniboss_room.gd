@@ -108,6 +108,7 @@ func _on_player_died() -> void:
 	respawn_enemies()   # 새 보스를 다시 묶는다 (위 respawn_enemies) — 싸움 전처럼 잠든 채로
 	$GateIn.open()
 	$BossHUD.hide_boss()
+	Music.play_region(region, room_id)   # 보스곡을 멈추고 들판 곡으로 (전엔 쓰러진 뒤에도 보스곡이 계속 흘렀다)
 	player.revive(rest_point)
 	var cam := player.get_node_or_null("Camera2D")
 	if cam:

@@ -56,7 +56,7 @@ git pull origin main
 - `scripts/world/` 방(`room.gd` — 방 바탕 + 모든 `--…test`), 발판·경사·가시·포탈·달빛풀·비밀 벽/천장·아이템
 - `scripts/ui/` HUD·보스 HUD·터치·지도·메뉴·키 바꾸기·이동 메뉴·타이틀·회상·엔딩
 - `scripts/autoload/` Progress(진행·능력·성장·고른 영혼), SaveGame, Settings, Keymap, InputDevice, Sfx, Music, Juice, Purity, Dialogue, Game
-- `scenes/rooms/` 방 17개, `data/dialogue/` 대사·기록물·회상·엔딩 JSON, `audio/sfx/`(합성 효과음, `tools/gen_sfx.gd`), `audio/music/`(합성 음악, `tools/gen_music.swift`), `music/theme/` 원본(절대 덮어쓰지 않음)
+- `scenes/rooms/` 방 17개, `data/dialogue/` 대사·기록물·회상·엔딩 JSON, `audio/sfx/`(합성 효과음, `tools/gen_sfx.gd`), `audio/music/`(기획자의 정식 곡 18곡, 곡 표는 GAME_DESIGN.md 10장; 옛 합성 도구 `tools/gen_music.swift` 는 `audio/_temp_music/` 에 씀), `music/theme/` 원본(절대 덮어쓰지 않음)
 - `tools/` 시험·생성·내보내기 스크립트. `tools/add_secrets.py`·`tools/make_portals.py`·`tools/add_portals.py` 도 자리 표 기록용이지 다시 돌릴 용도가 아니다.
 
 ## 8. 아직 안 한 것 (남은 단계)

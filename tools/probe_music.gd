@@ -254,6 +254,28 @@ func _probe_room_flow() -> void:
 	_check(Music.current() == "", "보스가 쓰러지면 정적 ('%s')" % Music.current())
 	await _close_room(r8)
 	Progress.reset()
+	# 중간 보스 방: 싸움 → 보스곡, 소녀가 쓰러져 일어나면 들판 곡 / 보스를 쓰러뜨리면 들판 곡
+	var r9 := await _open_room("canopy_hidden")
+	# 일어나는 자리는 문 밖 (게임에서는 포탈로 들어온 입구 자리) — 문 안이면 일어나자마자 싸움이 다시 시작된다
+	r9.rest_point = Vector2(r9.get_node("GateIn").position.x - 300.0, r9.player.global_position.y)
+	r9._start_fight()
+	await _frames(2)
+	var mini_track := Music.current()
+	r9._on_player_died()
+	var t0 := Time.get_ticks_msec()
+	while Music.current() == mini_track and Time.get_ticks_msec() - t0 < 6000:
+		await _frames(1)
+	print("[probe]   (쓰러지고 %.1f초 뒤 곡이 바뀜 → %s)" % [(Time.get_ticks_msec() - t0) / 1000.0, Music.current()])
+	await _wait(1.0)
+	var after_death := Music.current()   # 1초 뒤에도 그대로 (싸움이 다시 붙지 않음)
+	r9._start_fight()
+	await _frames(2)
+	r9._on_boss_died(true)
+	await _frames(2)
+	_check(mini_track == "boss_bird" and after_death == "field_canopy" and Music.current() == "field_canopy",
+		"중간 보스 방: 싸움 %s → 쓰러졌다 문 밖에서 일어나면 %s → 이기면 %s (일어난 자리 x %.0f, 시작 선 x %.0f)" % [mini_track, after_death, Music.current(), r9.player.global_position.x, r9.get_node("BossTrigger").position.x])
+	await _close_room(r9)
+	Progress.reset()
 
 
 # ---------- 5) 쉼 · 회상 곡 붙잡기 ----------
