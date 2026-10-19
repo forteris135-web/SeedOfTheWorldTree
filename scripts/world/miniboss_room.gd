@@ -8,9 +8,13 @@ class_name MiniBossRoom
 @export var reward_type := "attack"
 @export var reward_amount := 0.1
 @export var reward_text := "거인의 힘이 검에 깃들었다 — 공격력 +10%"
+## 쓰러뜨리면 떨어지는 재화 '빛 가루' (2026-10-19 기획자 요청 9번). 보스 자신의 dust_value 는 0 으로 두고 방이 이만큼 준다 (깃발로 한 번만).
+@export var dust_reward := 60
 
 var _boss: EnemyBase
 var _started := false
+## 보스 씬 경로 (되살아난 보스를 찾을 때)
+var _boss_scene := ""
 
 
 func _ready() -> void:
@@ -18,10 +22,36 @@ func _ready() -> void:
 	_boss = get_node_or_null("Enemies/MiniBoss")
 	if _boss == null or Progress.has(defeat_flag):
 		return
-	$BossHUD.bind(_boss, boss_name)
-	_boss.died.connect(_on_boss_died)
+	_boss_scene = _boss.scene_file_path
+	_bind_boss()
 	if "--minitest" in OS.get_cmdline_user_args():
 		_minitest()
+
+
+## 보스 체력 바를 묶고, 쓰러짐을 듣고, 빛 가루는 방이 주도록 보스 몫을 끈다.
+func _bind_boss() -> void:
+	_boss.dust_value = 0
+	$BossHUD.bind(_boss, boss_name)
+	if not _boss.died.is_connected(_on_boss_died):
+		_boss.died.connect(_on_boss_died)
+
+
+## 적이 다시 나타날 때(소녀가 쓰러졌다 일어날 때 등) 새로 만든 보스를 다시 묶는다.
+## 새 보스의 노드 이름은 'MiniBoss' 가 아니다 (옛 노드가 지워지기를 기다리며 아직 그 이름을 쥐고 있다) → 씬 경로로 찾는다.
+func respawn_enemies() -> void:
+	super.respawn_enemies()
+	_boss = _find_respawned_boss()
+	if _boss:
+		_bind_boss()
+
+
+func _find_respawned_boss() -> EnemyBase:
+	if _boss_scene == "" or Progress.has(defeat_flag):
+		return null
+	for c in $Enemies.get_children():
+		if c is EnemyBase and not c.is_queued_for_deletion() and c.scene_file_path == _boss_scene:
+			return c
+	return null
 
 
 func _process(delta: float) -> void:
@@ -35,6 +65,8 @@ func _process(delta: float) -> void:
 
 
 func _on_boss_died(_purified: bool) -> void:
+	if dust_reward > 0 and is_instance_valid(_boss):
+		Dust.burst(self, _boss.global_position + Vector2(0, -_boss.hurt_height * 0.3), dust_reward, player)
 	Progress.set_flag(defeat_flag)
 	Progress.add_upgrade(reward_type, reward_amount)
 	$BossHUD.hide_boss()
@@ -49,11 +81,7 @@ func _on_player_died() -> void:
 	await get_tree().create_timer(2.6).timeout
 	if player == null or not is_instance_valid(player):
 		return
-	respawn_enemies()
-	_boss = get_node_or_null("Enemies/MiniBoss")
-	if _boss and is_instance_valid(_boss):
-		$BossHUD.bind(_boss, boss_name)
-		_boss.died.connect(_on_boss_died)
+	respawn_enemies()   # 새 보스를 다시 묶는다 (위 respawn_enemies)
 	_started = false
 	$GateIn.open()
 	$BossHUD.hide_boss()

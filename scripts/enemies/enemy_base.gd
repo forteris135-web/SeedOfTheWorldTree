@@ -33,6 +33,12 @@ signal state_changed(old_state: State, new_state: State)
 ## 추격 중 소녀가 등 뒤로 갔을 때 돌아서기까지 걸리는 시간(초). 0 이면 바로 돈다.
 ## 방패를 든 경비병처럼 몸이 무거운 자는 늦게 돌아서서(0.45) 등 뒤가 빈틈이 된다. 도는 동안은 걷지 않고 멈칫한다.
 @export var turn_delay := 0.0
+## 쓰러질 때 떨어뜨리는 재화 '빛 가루' (±DUST_JITTER 흔들림, 2026-10-19 기획자 요청 9번). 정화의 손길로 쓰러지거나 구원되면
+## DUST_PURIFY_BONUS 를 더 준다. 0 이면 안 떨어뜨린다 (중간 보스는 MiniBossRoom 이 0 으로 두고 따로 준다).
+@export var dust_value := 10
+
+const DUST_JITTER := 2
+const DUST_PURIFY_BONUS := 20
 
 @export_group("행동")
 ## 이 거리 안에 소녀가 오면 알아챈다.
@@ -452,6 +458,7 @@ func _rescue(by: Player) -> void:
 	_fall_rescue = true
 	_fall_by = by
 	_begin_fall(true, 0.5)
+	_drop_dust(true)
 	if rescue_id != "":
 		Progress.rescued[rescue_id] = true
 		Progress.set_flag(rescue_id + "_rescued")
@@ -464,7 +471,28 @@ func _die(purified: bool) -> void:
 		return
 	_fall_rescue = false
 	_begin_fall(purified, 0.75)
+	_drop_dust(purified)
 	died.emit(purified)
+
+
+## 떨어뜨릴 빛 가루 양 (정화·구원이면 보너스 포함). dust_value 가 0 이면 0.
+func dust_amount(purified: bool) -> int:
+	if dust_value <= 0:
+		return 0
+	var n := dust_value + randi_range(-DUST_JITTER, DUST_JITTER)
+	if purified:
+		n += DUST_PURIFY_BONUS
+	return maxi(n, 1)
+
+
+## 빛 가루를 몸에서 흩뿌린다 (Dust.burst). 소녀가 없는 시험 공간에서는 떨어뜨리지 않는다 (주울 이가 없다).
+func _drop_dust(purified: bool) -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	var n := dust_amount(purified)
+	if n <= 0:
+		return
+	Dust.burst(get_parent(), global_position + Vector2(0, -hurt_height * 0.25), n, player)
 
 
 ## 쓰러지기 시작: 판정을 끄고 DEAD 자세로 들어간다. 더는 맞지도, 소녀를 막지도 않는다 (땅에는 그대로 선다).

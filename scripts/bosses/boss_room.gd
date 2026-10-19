@@ -14,6 +14,8 @@ class_name BossRoom
 @export var final_boss := false
 ## 보스곡 이름 (audio/music/)
 @export var boss_track := "boss_bird"
+## 보스를 정화하면 떨어지는 재화 '빛 가루' (2026-10-19 기획자 요청 9번). 처음 한 번만 — 깃발 "dust_<defeat_flag>" 로 막는다.
+@export var dust_reward := 200
 
 @onready var boss: Node = $Boss
 @onready var gate_in: FogGate = $GateIn
@@ -145,7 +147,18 @@ func _on_boss_fallen() -> void:
 		hud.show_message(fallen_message, 3.0)
 
 
+## 보스의 빛 가루: 처음 정화할 때 한 번만 보스 자리에서 흩뿌린다. 돌려주는 값은 뿌린 양 (이미 받았으면 0).
+func _drop_boss_dust() -> int:
+	var flag := "dust_" + defeat_flag
+	if dust_reward <= 0 or Progress.has(flag) or boss == null or not is_instance_valid(boss):
+		return 0
+	Progress.set_flag(flag)
+	Dust.burst(self, boss.global_position, dust_reward, player)
+	return dust_reward
+
+
 func _on_boss_purified() -> void:
+	_drop_boss_dust()
 	Progress.set_flag(defeat_flag)
 	Purity.regions[region] = true
 	Progress.next_spawn = "AfterBoss"

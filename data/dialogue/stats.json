@@ -1,0 +1,15 @@
+{
+  "title": "성장",
+  "subtitle": "빛 가루를 달빛풀 뿌리에 뿌려 몸을 키운다",
+  "currency": "빛 가루",
+  "not_enough": "빛 가루가 모자라다",
+  "maxed": "더는 자랄 수 없다",
+  "touch_again": "한 번 더 누르면 성장",
+  "bought": "{name} {amount}  (이제 {now})  — 빛 가루 {cost}",
+  "items": [
+    {"kind": "max_hp", "name": "최대 체력", "amount": 10, "amount_text": "+10", "base_cost": 40, "cost_step": 15, "max_level": 8, "desc": "세계수의 수액이 몸에 스민다"},
+    {"kind": "attack", "name": "공격력", "amount": 0.05, "amount_text": "+5%", "base_cost": 60, "cost_step": 20, "max_level": 6, "desc": "나뭇가지 검이 단단해진다"},
+    {"kind": "heal", "name": "회복량", "amount": 10, "amount_text": "+10", "base_cost": 50, "cost_step": 15, "max_level": 5, "desc": "이슬 한 방울이 더 깊이 적신다"},
+    {"kind": "dews", "name": "이슬 방울", "amount": 1, "amount_text": "+1", "base_cost": 120, "cost_step": 80, "max_level": 3, "desc": "잎 끝에 이슬이 하나 더 맺힌다"}
+  ]
+}

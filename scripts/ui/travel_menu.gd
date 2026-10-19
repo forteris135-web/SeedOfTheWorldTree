@@ -18,6 +18,8 @@ var _index := 0
 var _panel: Control
 var _current_id := ""
 var _open := false
+## 스틱 위·아래: 한 번 밀기 = 한 칸 (StickLatch)
+var _stick_v := StickLatch.new()
 
 
 func _ready() -> void:
@@ -63,6 +65,7 @@ func _open_list(kind: String, title: String, subtitle: String, empty_hint: Strin
 		if _items[i]["id"] == _current_id:
 			_index = i
 	_open = true
+	_stick_v.reset()
 	_panel.visible = true
 	get_tree().paused = true
 	_panel.queue_redraw()
@@ -90,14 +93,24 @@ static func region_of_scene(scene: String) -> String:
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
+	_handle_event(event)
+	# 손가락 떼기는 터치 버튼(TouchControls)에도 흘려보낸다: 메뉴를 연 '이동' 버튼의 손가락을 메뉴가 삼키면
+	# 손길(interact)이 눌린 채 남아, 패드·키로 닫은 뒤 다음 터치 한 번이 먹힌다. (떼기로 메뉴가 하는 일은 없다)
+	if event is InputEventScreenTouch and not event.pressed:
+		return
+	get_viewport().set_input_as_handled()
+
+
+## 입력 하나를 처리한다 (하위 메뉴 GrassMenu 가 가로채어 탭 바꾸기 등을 덧붙인다).
+func _handle_event(event: InputEvent) -> void:
+	if _stick_v.feed(event, ["move_up", "ui_up"], ["move_down", "ui_down"]):
+		if _stick_v.step != 0:
+			_move(_stick_v.step)
+		return
 	if event.is_action_pressed("move_down") or event.is_action_pressed("ui_down"):
-		_index = (_index + 1) % max(_items.size(), 1)
-		Sfx.play("blip")
-		_panel.queue_redraw()
+		_move(1)
 	elif event.is_action_pressed("move_up") or event.is_action_pressed("ui_up"):
-		_index = (_index - 1 + _items.size()) % max(_items.size(), 1)
-		Sfx.play("blip")
-		_panel.queue_redraw()
+		_move(-1)
 	elif event.is_action_pressed("jump") or event.is_action_pressed("interact") or event.is_action_pressed("ui_accept"):
 		_choose(_index)
 	elif event.is_action_pressed("dodge") or event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel") or event.is_action_pressed("map"):
@@ -108,7 +121,14 @@ func _input(event: InputEvent) -> void:
 			_choose(hit)
 		else:
 			close()
-	get_viewport().set_input_as_handled()
+
+
+## 고른 줄을 dir(+1 아래 / -1 위)만큼 옮긴다 (끝에서 반대쪽으로 돈다).
+func _move(dir: int) -> void:
+	var n := maxi(_items.size(), 1)
+	_index = (_index + dir + n) % n
+	Sfx.play("blip")
+	_panel.queue_redraw()
 
 
 func _row_height() -> float:
@@ -116,11 +136,16 @@ func _row_height() -> float:
 	return clampf(floorf(_panel.size.y * 0.58 / n), 36.0, 56.0)
 
 
+## 목록이 시작하는 높이 (하위 메뉴가 탭 머리 아래로 내릴 수 있다)
+func _list_top() -> float:
+	return _panel.size.y * 0.27
+
+
 func _row_rect(i: int) -> Rect2:
 	var size := _panel.size
 	var w := 720.0
 	var x := (size.x - w) / 2.0
-	var y0 := size.y * 0.27
+	var y0 := _list_top()
 	var rh := _row_height()
 	return Rect2(x, y0 + i * rh, w, rh - 5.0)
 
@@ -145,13 +170,28 @@ func _choose(i: int) -> void:
 	Game.go_to(it["scene"], 0.8, 1.0)
 
 
+func _accent() -> Color:
+	return Color(0.56, 0.83, 1.0) if _kind == "grass" else Color(1.0, 0.86, 0.5)
+
+
+## 그리기는 네 조각으로 나눠 하위 메뉴가 조각마다 바꿔 끼울 수 있게 했다.
 func _on_draw() -> void:
 	var font := ThemeDB.fallback_font
+	_panel.draw_rect(Rect2(Vector2.ZERO, _panel.size), Color(0, 0, 0, 0.62))
+	_draw_title(font)
+	_draw_list(font)
+	_draw_hint(font)
+
+
+func _draw_title(font: Font) -> void:
 	var size := _panel.size
-	var accent := Color(0.56, 0.83, 1.0) if _kind == "grass" else Color(1.0, 0.86, 0.5)
-	_panel.draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.62))
-	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.19), _title, HORIZONTAL_ALIGNMENT_CENTER, 800, 36, accent)
+	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.19), _title, HORIZONTAL_ALIGNMENT_CENTER, 800, 36, _accent())
 	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.19 + 34), _subtitle, HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.5))
+
+
+func _draw_list(font: Font) -> void:
+	var size := _panel.size
+	var accent := _accent()
 	var rh := _row_height()
 	var font_size := 26 if rh >= 50.0 else 22
 	for i in _items.size():
@@ -167,5 +207,14 @@ func _on_draw() -> void:
 		var text: String = it["name"] + ("   (여기)" if it["id"] == _current_id else "")
 		_panel.draw_string(font, Vector2(r.position.x + 120, baseline), ("▸  " if sel else "    ") + text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, accent if sel else Color(0.9, 0.9, 0.9))
 	if _items.size() <= 1:
-		_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.27 + _items.size() * rh + 40), _empty_hint, HORIZONTAL_ALIGNMENT_CENTER, 800, 22, Color(1, 1, 1, 0.55))
-	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y - 70), "위·아래로 고르고 결정 (터치: 줄을 누르기)  ·  회피 / 메뉴 / 바깥 누르기: 닫기", HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.45))
+		_panel.draw_string(font, Vector2(size.x / 2.0 - 400, _list_top() + _items.size() * rh + 40), _empty_hint, HORIZONTAL_ALIGNMENT_CENTER, 800, 22, Color(1, 1, 1, 0.55))
+
+
+## 아래 안내 줄의 글자 (안내는 메뉴 안에만 둔다)
+func _hint_text() -> String:
+	return "위·아래로 고르고 결정 (터치: 줄을 누르기)  ·  회피 / 메뉴 / 바깥 누르기: 닫기"
+
+
+func _draw_hint(font: Font) -> void:
+	var size := _panel.size
+	_panel.draw_string(font, Vector2(size.x / 2.0 - 500, size.y - 70), _hint_text(), HORIZONTAL_ALIGNMENT_CENTER, 1000, 20, Color(1, 1, 1, 0.45))

@@ -2,6 +2,7 @@ extends Area2D
 class_name MoonlightGrass
 ## 달빛풀: 세이브 포인트. 처음엔 오므라든 채 희미하게 빛나고, 손을 대면(△) 천천히 펼쳐진다.
 ## 쉬면 체력·이슬이 채워지고, 일반 적이 다시 나타난다. 그림: art/objects/moonlight_grass_*.png
+## 쉬는 중에 손길 버튼을 한 번 더 누르면 달빛풀 메뉴(GrassMenu: 이동 탭 / 성장 탭)가 열린다 (2026-10-19 기획자 요청 9번).
 
 signal bloomed
 signal rested(player: Player)
@@ -29,9 +30,11 @@ var _open: Sprite2D
 var _glow: Sprite2D
 
 
-var _travel: TravelMenu
+const GRASS_MENU := preload("res://scenes/ui/grass_menu.tscn")
+
+var _menu: GrassMenu
 var _resting_player: Player
-## 쉬기 시작한 그 손길 버튼이 떨어진 뒤에야 이동 메뉴를 연다 (쉬자마자 열리지 않게).
+## 쉬기 시작한 그 손길 버튼이 떨어진 뒤에야 메뉴를 연다 (쉬자마자 열리지 않게).
 var _travel_armed := false
 
 
@@ -135,7 +138,7 @@ func _process(delta: float) -> void:
 		var resting := _player_near.state == Player.State.REST
 		_prompt.visible = true
 		if resting:
-			_prompt.text = "%s  뿌리를 따라 이동" % InputDevice.prompt("interact")
+			_prompt.text = "%s  이동 · 성장" % InputDevice.prompt("interact")
 		else:
 			_prompt.text = "%s  %s" % [InputDevice.prompt("interact"), "쉬기" if is_open else "손을 대기"]
 	else:
@@ -148,19 +151,19 @@ func _process(delta: float) -> void:
 	_open.rotation = sin(_time * 0.8) * 0.012 * _bloom
 
 
-## 쉬는 중에 손길 버튼을 한 번 더 누르면 이동 메뉴. (소녀와 같은 물리 틱에서 입력을 읽는다)
+## 쉬는 중에 손길 버튼을 한 번 더 누르면 달빛풀 메뉴(이동 / 성장). (소녀와 같은 물리 틱에서 입력을 읽는다)
 func _physics_process(_delta: float) -> void:
 	if _player_near == null or _player_near.state != Player.State.REST:
 		_travel_armed = false
 		return
-	if not _player_near.input_enabled or (_travel and is_instance_valid(_travel) and _travel.is_open()):
+	if not _player_near.input_enabled or (_menu and is_instance_valid(_menu) and _menu.is_open()):
 		return
 	if not _travel_armed:
 		# 쉬기 시작한 그 버튼이 떨어진 뒤부터
 		if not Input.is_action_pressed("interact"):
 			_travel_armed = true
 	elif Input.is_action_just_pressed("interact"):
-		_open_travel()
+		_open_menu()
 
 
 func _apply_bloom() -> void:
@@ -226,8 +229,22 @@ func arrive(by: Player) -> void:
 	by.call_deferred("start_rest", self)
 
 
-func _open_travel() -> void:
-	if _travel == null:
-		_travel = TravelMenu.new()
-		get_tree().current_scene.add_child(_travel)
-	_travel.open(grass_id)
+## 달빛풀 메뉴를 연다 (이동 탭으로 시작). 시험·다른 코드가 바로 부를 수 있다.
+func _open_menu() -> void:
+	if _menu == null or not is_instance_valid(_menu):
+		_menu = GRASS_MENU.instantiate()
+		get_tree().current_scene.add_child(_menu)
+		_menu.closed.connect(_on_menu_closed)
+	# 머리 위 안내 글자는 멈춤 동안 어두운 판 밑으로 비치므로 숨긴다 (닫히면 _process 가 다시 띄운다)
+	_prompt.visible = false
+	_menu.open_grass(grass_id)
+
+
+## 메뉴가 닫혔다: 손길 버튼이 한 번 떨어진 뒤에야 다시 연다 ('(여기)'를 손길로 골라 닫은 그 누름으로 다시 열리지 않게).
+func _on_menu_closed() -> void:
+	_travel_armed = false
+
+
+## 열려 있는 달빛풀 메뉴 (없으면 null)
+func menu() -> GrassMenu:
+	return _menu if _menu and is_instance_valid(_menu) else null
