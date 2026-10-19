@@ -143,6 +143,7 @@ const SAP_WAVE := preload("res://scenes/combat/sap_wave.tscn")
 
 func _ready() -> void:
 	add_to_group("boss")
+	add_child(preload("res://scripts/fx/sap_queen_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	hp = max_hp
 	_home = global_position
 	set_collision_mask_value(1, false)

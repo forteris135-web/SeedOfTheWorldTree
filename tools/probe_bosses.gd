@@ -1105,6 +1105,16 @@ func _check_shot(p: Projectile, label: String, base_size: Vector2, base_radius: 
 	print("[probe]    %s: size %s, 그림 배율 %.2f → 몸 %.1f × %.1f (예전 그림 %.1f × %.1f 대비 %.2f×, %.2f×; 테두리까지 %.1f × %.1f), 판정 반지름 %.1f (모양 %.1f), 테두리 %s, 발광 %.1f, 꼬리 %d" % [
 		label, p.size, p.draw_scale, body.size.x, body.size.y, old_draw.x, old_draw.y, ratio_x, ratio_y, full.size.x, full.size.y, p.hit_radius(), shape_r, p.outline_color, p.glow, p.trail_count])
 	_ok(p.size == base_size and absf(p.hit_radius() - base_radius) < 0.01 and absf(shape_r - base_radius) < 0.01, "%s 판정은 그대로 (반지름 %.0f)" % [label, base_radius])
+	if p.has_art():
+		# 2026-10-19 이펙트 리뉴얼 F2: 코드 그림 대신 기획자 그림(그림 묶음 look). 그림(꼬리 포함)의 긴 쪽이 판정 지름의 3배 이상,
+		# 짧은 쪽이 판정 지름 이상이면 '판정보다 크게 잘 보인다'. 예전 다각형 크기·테두리 규칙은 코드 그림에만 해당한다.
+		var hit_d := p.hit_radius() * 2.0
+		var long_side := maxf(body.size.x, body.size.y)
+		var short_side := minf(body.size.x, body.size.y)
+		print("[probe]    %s: 그림 묶음 %s → 그림 %.0f × %.0f (판정 지름 %.0f)" % [label, p.look, body.size.x, body.size.y, hit_d])
+		_ok(long_side >= hit_d * 3.0 and short_side >= hit_d, "%s 그림이 판정보다 크게 보인다" % label)
+		_ok(p.glow > 0.0 and p.trail_count >= 2 and p._glow != null, "%s 발광·꼬리 있음" % label)
+		return
 	_ok(ratio_x >= 1.6 and ratio_x <= 2.1 and ratio_y >= 1.6 and ratio_y <= 2.1, "%s 몸 그림은 예전 그림의 1.6~2.1배" % label)
 	_ok(p.outline_color.a > 0.0 and p.glow > 0.0 and p.trail_count >= 3 and p.trail_count <= 5, "%s 테두리·발광·꼬리(3~5) 있음" % label)
 	_ok(p._glow != null and p._glow.get_parent() == p, "%s 발광 자식 있음" % label)

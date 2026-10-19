@@ -183,6 +183,19 @@ static func set_palette(m: ShaderMaterial, pal_name: String, keep := 0.0) -> voi
 		m.set_shader_parameter(&"pal_keep", keep)
 
 
+## 같은 (팔레트, 섞기, 남김) 조합끼리 함께 쓰는 재질 (F2: 투사체·보스 기술 그림용). 여러 노드가 한 재질을 쓰면
+## 묶어 그려지고(그리기 호출이 줄어든다), 노드마다 재질을 새로 만들지 않는다. 받은 재질은 고치지 말 것 (모두에게 바뀐다).
+## pal_name 이 "" 이고 add 가 false 면 팔레트 없는 보통 섞기 셰이더 재질.
+var _shared_mats := {}
+func shared_material(pal_name: String, add := false, keep := 0.0) -> ShaderMaterial:
+	var key := "%s|%s|%.2f" % [pal_name, add, keep]
+	var m: ShaderMaterial = _shared_mats.get(key)
+	if m == null:
+		m = make_material(pal_name, add, keep)
+		_shared_mats[key] = m
+	return m
+
+
 ## fx_mix / fx_add 셰이더로 새 재질을 만든다 (레이저·초승달 검기·보호막처럼 Fx 밖에서 그리는 그림용).
 static func make_material(pal_name: String, add := true, keep := 0.0) -> ShaderMaterial:
 	var m := ShaderMaterial.new()

@@ -53,6 +53,8 @@ func _strike() -> void:
 	super()
 	anim_hint = "whip"
 	Sfx.play("swing", -3.0, 0.08)
+	# 이펙트 리뉴얼 F2: 낚싯줄을 따라 흩뿌려지는 수액 (판정 상자 앞 30 ~ 330, 높이 -WHIP_H-20 ~ -20)
+	Fx.spawn("whip_splash", global_position + Vector2(facing * 30.0, -WHIP_H * 0.5 - 20.0), {"facing": facing})
 
 
 ## 예고의 박(0: 하나, 1: 둘). 그림이 줄을 흔드는 기준.

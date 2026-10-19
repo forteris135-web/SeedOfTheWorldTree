@@ -3,6 +3,8 @@ class_name RootSeed
 ## 씨앗 비 (뿌리지기 패턴): 하늘에서 떨어지는 가시 씨앗. 가드 가능.
 ## 떨어질 자리에 주황빛 점(가드 가능한 예고 색) + 하늘에서 내려오는 가는 선이 먼저 뜨고, 땅에 닿으면 가시가 터진다(짧은 판정).
 ## 생기면 바로 떨어지기 시작한다(delay 가 있으면 그동안 떠서 기다린다). 떨어지는 시간 ≈ FALL_HEIGHT / speed = 0.9초.
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 빛 꼬리를 단 가시 씨앗(art/fx/seed_fall)이 떨어지고,
+## 땅에 닿으면 씨앗이 터지는 빛(Fx "seed_land")이 솟는다. 주황 바닥 예고는 코드 그림 그대로. 판정은 그대로.
 
 var damage := 16.0
 var speed := 1100.0
@@ -16,7 +18,12 @@ var _hit_done := false
 var _spin := 0.0
 var _shape: CollisionShape2D
 var _trail: Array[Vector2] = []
+var _art: Sprite2D
 const FALL_HEIGHT := 1000.0
+## 그림: 씨앗 몸(UV y)이 판정 가운데에 오게, 배율
+const ART := "seed_fall"
+const ART_SEED_V := 0.8
+const ART_SCALE := 0.78
 const BURST := 0.35
 const BURST_RADIUS := 70.0
 const SEED_R := 28.0
@@ -35,6 +42,14 @@ func _ready() -> void:
 	c.radius = SEED_R
 	_shape.shape = c
 	add_child(_shape)
+	_art = Sprite2D.new()
+	_art.texture = Fx.texture(ART)
+	_art.material = Fx.shared_material("", false, 0.0)
+	_art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	if _art.texture:
+		_art.offset = Vector2(0.0, -(ART_SEED_V - 0.5) * _art.texture.get_height())
+	_art.scale = Vector2(ART_SCALE, ART_SCALE)
+	add_child(_art)
 
 
 ## 땅 위 높이 (시험용)
@@ -75,6 +90,9 @@ func _physics_process(delta: float) -> void:
 		_shape.position = Vector2(0, -20)
 		Juice.shake(3.0)
 		Sfx.play("seed_land", -6.0, 0.15)
+		if _art:
+			_art.visible = false
+			Fx.spawn("seed_land", Vector2(global_position.x, ground_y + 4.0))
 		queue_redraw()
 		return
 	_try_hit(Vector2(200, -320))
@@ -105,6 +123,8 @@ func _draw() -> void:
 		draw_colored_polygon(RootSpike._ellipse(Vector2(0, gy), MARK_RX * prog, MARK_RY * prog), Color(tg, 0.55))
 		draw_polyline(RootSpike._ellipse(Vector2(0, gy), MARK_RX, MARK_RY, 28) + PackedVector2Array([Vector2(MARK_RX, gy)]), Color(tg, 0.6 + 0.3 * pulse), 2.0, true)
 		draw_line(Vector2(0, 0), Vector2(0, gy), Color(tg, 0.18 + 0.2 * prog), 2.0)
+		if _art and _art.texture:
+			return   # 씨앗 몸·꼬리는 그림이 그린다
 		# 꼬리
 		for i in _trail.size():
 			var k := 1.0 - float(i) / _trail.size()
@@ -119,6 +139,8 @@ func _draw() -> void:
 		draw_circle(Vector2(-6, -6), 8.0, Color(0.62, 0.48, 0.7))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	else:
+		if _art and _art.texture:
+			return   # 터짐은 Fx "seed_land" 가 그린다
 		# 터짐: 땅에서 솟는 가시 다발 (짧게)
 		var k := clampf(_land_t / 0.12, 0.0, 1.0)
 		var fade := 1.0 - clampf((_land_t - 0.2) / 0.15, 0.0, 1.0)

@@ -68,6 +68,8 @@ func _test_every_effect() -> void:
 	_check(missing.is_empty(), "표의 그림·딸린 이펙트가 모두 있다 %s" % [missing])
 	var failed := []
 	for n in names:
+		# 이펙트가 많아(F2) 상한(72)을 넘지 않게 하나씩 비우고 띄운다
+		Fx.clear()
 		var before := Fx.active_count()
 		var fx := Fx.spawn(n, Vector2(100, 100))
 		if fx == null or Fx.active_count() <= before or fx.fx_name != n or not fx.visible:

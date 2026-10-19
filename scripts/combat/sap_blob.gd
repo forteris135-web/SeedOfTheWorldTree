@@ -6,7 +6,8 @@ class_name SapBlob
 ## 앞(+x)이 둥근 물방울, 뒤로 끌리는 꼬리와 작은 방울, 반짝임. 투사체가 진행 방향으로 도므로 꼬리는 늘 뒤.
 ## 저스트 가드로 되받으면 금빛이 되고, **중력 없이 쏜 쪽의 몸통 한가운데(맞는 영역)를 똑바로 겨눠** 돌아간다
 ## (바탕 규칙대로면 쏜 쪽의 발을 겨누고 중력이 남아 앞 바닥에 떨어진다).
-## 스킨 자리: 진짜 그림이 오면 _draw 를 Sprite2D 로 바꾸면 된다.
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 꼬리 달린 물방울(그림 묶음 "sap_blob", scripts/fx/fx_art.gd).
+## 아래 _draw 의 코드 그림은 그림 묶음이 없을 때만 쓴다.
 
 const SAP_COLOR := Color(0.35, 0.82, 0.88)
 const GOLD := Color(1.0, 0.85, 0.5)
@@ -27,12 +28,20 @@ static func make(spd: float, dmg: float, diameter: float) -> SapBlob:
 	p.reflectable = true
 	p.size = Vector2(diameter, diameter)
 	p.color = SAP_COLOR
+	p.look = "sap_blob"
 	return p
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	queue_redraw()
+
+
+## 쏘는 순간 관·대롱 끝에서 짧은 물줄기가 뿜어진다 (이펙트 리뉴얼 F2 — 작은 펌프의 물줄기, 무쇠 펌프의 분사)
+func launch(dir: Vector2, src: Node2D, player_owned := false) -> void:
+	super.launch(dir, src, player_owned)
+	if not player_owned and is_inside_tree():
+		Fx.spawn("sap_jet", global_position - direction * 24.0, {"rot": rad_to_deg(direction.angle())})
 
 
 func _reflect(by: Node) -> void:
@@ -56,6 +65,9 @@ func aim_point(target: Node2D) -> Vector2:
 
 
 func _draw() -> void:
+	if has_art():
+		_draw_art()
+		return
 	var tint := GOLD if from_player else color
 	var r := size.x * 0.45
 	var wob := 1.0 + 0.1 * sin(_t * 17.0)

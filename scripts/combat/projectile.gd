@@ -13,6 +13,10 @@ class_name Projectile
 ## 모든 그림은 size 에 비례해 그려지므로, 다른 묶음이 size 를 키우면 그림도 함께 커진다.
 ## 자기 그림(_draw)을 따로 그리는 하위 클래스(예: 확장판 SapProjectile)에는 바탕의 발광·꼬리를 붙이지 않는다
 ## (_uses_base_look). 모양은 크기·종류가 바뀔 때만 다시 만들어 매 프레임 배열을 새로 만들지 않는다 (_ensure_geo).
+##
+## 그림 묶음 look (2026-10-19 이펙트 리뉴얼 F2): look = "bird_feather" 처럼 이름을 주면 코드로 그린 몸 대신
+## 기획자 이펙트 시트의 그림(scripts/fx/fx_art.gd 의 LOOKS)을 그린다. 꼬리 잔상도 같은 그림을 옅게 겹쳐 그린다.
+## **판정(size·hit_radius)은 그대로** — 그림만 바뀐다. 저스트 가드로 되받으면 금빛 팔레트로 바뀐다.
 
 enum Kind { FEATHER, LEAF, GUST, ORB }
 
@@ -53,6 +57,10 @@ var pass_one_way := false
 ## 생길 때 이 시간(초) 동안 서서히 나타난다 (0 = 바로). 화면 안에서 툭 생겨나 보이지 않게.
 @export var fade_in := 0.0
 
+@export_group("그림 묶음")
+## scripts/fx/fx_art.gd 의 LOOKS 이름. 주면 코드로 그린 몸 대신 그 그림을 그린다 (판정은 size 그대로).
+@export var look := ""
+
 ## 잔상 사이 거리 = clamp(speed * TRAIL_STEP_TIME, TRAIL_STEP_MIN, TRAIL_STEP_MAX) — 빠른 깃털은 긴 줄, 느린 잎은 짧은 떨림
 const TRAIL_STEP_TIME := 0.03
 const TRAIL_STEP_MIN := 6.0
@@ -67,6 +75,7 @@ const LEAF_BACK := 0.8
 const GUST_ANGLE := 1.15
 const GUST_OUTLINE := 2.0
 const BASE_SCRIPT_PATH := "res://scripts/combat/projectile.gd"
+const FxArtTable := preload("res://scripts/fx/fx_art.gd")
 
 static var _glow_tex: GradientTexture2D
 static var _glow_mat: CanvasItemMaterial
@@ -97,6 +106,15 @@ var _tr_pts := PackedVector2Array()
 var _tr_cols := PackedColorArray()
 var _tr_idx := PackedInt32Array()
 
+## 그림 묶음 (look) 상태 — _apply_look 이 채운다
+var _art_tex: Texture2D
+var _art_def := {}
+var _art_scale := Vector2.ONE
+var _art_rot := 0.0
+var _art_off := Vector2.ZERO        # 그림 좌표(픽셀)에서 head 를 가운데로 옮기는 만큼 (배율·회전 전)
+var _art_color := Color.WHITE
+var _art_trail_alpha := 0.3
+
 
 func _ready() -> void:
 	add_to_group("projectile")
@@ -110,7 +128,9 @@ func _ready() -> void:
 	monitoring = true
 	monitorable = false
 	rotation = direction.angle()
-	if not _uses_base_look():
+	if look != "" and FxArtTable.has(look):
+		_apply_look()
+	elif not _uses_base_look():
 		glow = 0.0
 		trail_count = 0
 	if fade_in > 0.0:
@@ -133,6 +153,8 @@ func hit_radius() -> float:
 
 ## 몸통 그림의 범위 (자기 좌표; 테두리·발광·꼬리 제외). probe 가 예전 그림 크기와 비교한다.
 func body_bounds() -> Rect2:
+	if _art_tex:
+		return art_bounds()
 	_ensure_geo()
 	if kind == Kind.GUST:
 		return _gust_bounds(0.0)
@@ -141,6 +163,8 @@ func body_bounds() -> Rect2:
 
 ## 테두리까지 넣은 그림 범위 (자기 좌표; 발광·꼬리 제외). 바람은 실제 호(선 굵기 포함)를 계산한다.
 func draw_bounds() -> Rect2:
+	if _art_tex:
+		return art_bounds()
 	_ensure_geo()
 	if kind == Kind.GUST:
 		return _gust_bounds(GUST_OUTLINE)
@@ -300,6 +324,10 @@ func _reflect(by: Node) -> void:
 	outline_color = Color(1.0, 1.0, 0.9, 1.0)
 	core_color = Color(1.0, 0.95, 0.7, 1.0)
 	_trail.clear()
+	if _art_tex:
+		# 그림 묶음: 되받은 투사체는 금빛 (소녀 편이 됐다는 표시)
+		material = Fx.shared_material(String(_art_def.get("reflect", "gold")), bool(_art_def.get("add", false)), 0.25)
+		_art_color = Color(1.1, 1.08, 1.0)
 	var target := source
 	if is_instance_valid(target):
 		direction = (target.global_position - global_position).normalized()
@@ -467,6 +495,9 @@ func _ensure_geo() -> void:
 
 
 func _draw() -> void:
+	if _art_tex:
+		_draw_art()
+		return
 	_ensure_geo()
 	var ol := _outline()
 	var co := _core()
@@ -610,3 +641,88 @@ func _draw_orb(ol: Color, co: Color) -> void:
 	draw_circle(Vector2(-r * 0.15, -r * 0.15), r * 0.45, Color(ol.lerp(Color(1, 1, 1), 0.5), color.a * 0.85))
 	draw_arc(Vector2.ZERO, r * 0.68, 0.0, TAU, 20, Color(co, co.a * 0.5), 1.2, true)
 	draw_polyline(_body_closed, ol, lw, true)
+
+
+# ---------- 그림 묶음 (look, 이펙트 리뉴얼 F2) ----------
+
+## LOOKS 의 한 줄을 읽어 그림·재질·발광·꼬리를 정한다 (_ready 에서 한 번).
+func _apply_look() -> void:
+	_art_def = FxArtTable.get_look(look)
+	_art_tex = Fx.texture(String(_art_def.get("tex", "")))
+	if _art_tex == null:
+		_art_def = {}
+		return
+	var sc = _art_def.get("scale", 1.0)
+	_art_scale = sc if sc is Vector2 else Vector2(float(sc), float(sc))
+	if bool(_art_def.get("flip_x", false)):
+		_art_scale.x = -_art_scale.x
+	_art_rot = deg_to_rad(float(_art_def.get("rot", 0.0)))
+	var head: Vector2 = _art_def.get("head", Vector2(0.5, 0.5))
+	var ts := _art_tex.get_size()
+	# 그림 안의 head 자리가 원점(판정 가운데)에 오게: 그림 픽셀 좌표에서 head 의 반대만큼 옮긴 뒤 배율·회전한다
+	_art_off = -Vector2((head.x - 0.5) * ts.x, (head.y - 0.5) * ts.y)
+	_art_color = _art_def.get("color", Color.WHITE)
+	_art_trail_alpha = float(_art_def.get("trail_alpha", 0.3))
+	if _art_def.has("glow"):
+		glow = float(_art_def["glow"])
+	if _art_def.has("trail"):
+		trail_count = int(_art_def["trail"])
+	var pal := String(_art_def.get("palette", ""))
+	var add := bool(_art_def.get("add", false))
+	material = Fx.shared_material(pal, add, float(_art_def.get("keep", 0.0)))
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+
+## 그림 묶음을 쓰는가
+func has_art() -> bool:
+	return _art_tex != null
+
+
+## 그림의 자기 좌표 변환 (도는 그림·날갯짓·똑바로 세우기 포함). k 는 크기 배수(잔상은 조금 작게).
+func _art_transform(k: float) -> Transform2D:
+	var sc := _art_scale * k
+	var rot := _art_rot
+	var spin := float(_art_def.get("spin", 0.0))
+	if spin != 0.0:
+		rot += deg_to_rad(spin) * _time
+	var flap := float(_art_def.get("flap", 0.0))
+	if flap > 0.0:
+		sc.x *= 0.35 + 0.65 * absf(cos(_time * flap + _wobble))
+	var pulse := float(_art_def.get("pulse", 0.0))
+	if pulse > 0.0:
+		sc *= 1.0 + pulse * sin(_time * 14.0 + _wobble)
+	if bool(_art_def.get("upright", false)):
+		# 투사체 회전을 되돌려 똑바로 세우고, 왼쪽으로 날면 좌우만 뒤집는다
+		rot -= rotation
+		if direction.x < 0.0:
+			sc.x = -sc.x
+	return Transform2D(rot, sc, 0.0, Vector2.ZERO) * Transform2D(0.0, _art_off)
+
+
+## 그림 (꼬리 잔상 → 몸). 잔상은 지나온 자리마다 같은 그림을 옅고 조금 작게.
+func _draw_art() -> void:
+	var ts := _art_tex.get_size()
+	var rect := Rect2(-ts * 0.5, ts)
+	var n := _trail.size()
+	if n > 0:
+		var inv := global_transform.affine_inverse()
+		for i in range(n - 1, -1, -1):
+			var k := 1.0 - float(i) / float(n)
+			draw_set_transform_matrix(inv * _trail[i] * _art_transform(0.78 + 0.22 * k))
+			draw_texture_rect(_art_tex, rect, false, Color(_art_color, _art_color.a * _art_trail_alpha * (0.3 + 0.7 * k)))
+	draw_set_transform_matrix(_art_transform(1.0))
+	draw_texture_rect(_art_tex, rect, false, _art_color)
+	draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## 그림이 차지하는 범위 (자기 좌표, 도는 그림·맥동은 빼고). 시험이 판정과 비교한다.
+func art_bounds() -> Rect2:
+	if _art_tex == null:
+		return Rect2()
+	var ts := _art_tex.get_size()
+	var xf := Transform2D(_art_rot, _art_scale, 0.0, Vector2.ZERO) * Transform2D(0.0, _art_off)
+	var pts := [xf * Vector2(-ts.x, -ts.y) * 0.5, xf * Vector2(ts.x, -ts.y) * 0.5, xf * Vector2(ts.x, ts.y) * 0.5, xf * Vector2(-ts.x, ts.y) * 0.5]
+	var r := Rect2(pts[0], Vector2.ZERO)
+	for pt in pts:
+		r = r.expand(pt)
+	return r

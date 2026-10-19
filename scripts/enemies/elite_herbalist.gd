@@ -112,6 +112,7 @@ func _throw_bolt(i: int) -> void:
 	p.lifetime = 3.6
 	p.size = Vector2(40, 28)
 	p.color = Color(0.72, 1.0, 0.55)
+	p.look = "spore_bolt"   # 이펙트 리뉴얼 F2: 포자 안개 덩이
 	get_parent().add_child(p)
 	var origin := global_position + Vector2(facing * 60.0 * EliteTraits.SIZE_MULT, -hurt_height * 0.5)
 	p.global_position = origin

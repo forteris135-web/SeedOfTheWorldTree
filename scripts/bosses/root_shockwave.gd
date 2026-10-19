@@ -2,6 +2,8 @@ extends Area2D
 class_name RootShockwave
 ## 지팡이 내려찍기 충격파 (뿌리지기 2페이즈): 바닥을 달리는 흙 두둑. 가드 불가(붉은 예고) — 점프로 넘는다(높이 90 < 점프 260).
 ## 아레나 끝(min_x~max_x)에 닿으면 흩어진다.
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 흙과 뿌리 가시 덩어리(art/fx/root_burst)를 붉게(가드 불가) 칠해
+## 바닥을 따라 달리게 하고, 뒤로 흙먼지를 흘린다. 판정 사각형은 그대로.
 
 var damage := 20.0
 var speed := 760.0
@@ -14,8 +16,12 @@ var _t := 0.0
 var _dead := false
 var _targets: Array = []
 var _dirt: CPUParticles2D
+var _art: Sprite2D
+var _puff_t := 0.0
 const H := 90.0
 const W := 120.0
+const ART := "root_burst"
+const ART_SCALE := 0.72
 
 
 func _ready() -> void:
@@ -43,6 +49,13 @@ func _ready() -> void:
 	_dirt.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	_dirt.emission_rect_extents = Vector2(W * 0.4, 3)
 	add_child(_dirt)
+	_art = Sprite2D.new()
+	_art.texture = Fx.texture(ART)
+	_art.material = Fx.shared_material("danger", false, 0.5)
+	_art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_art.centered = false
+	_art.visible = false
+	add_child(_art)
 
 
 func _physics_process(delta: float) -> void:
@@ -53,6 +66,7 @@ func _physics_process(delta: float) -> void:
 	if global_position.x < min_x or global_position.x > max_x or _t > lifetime:
 		_vanish()
 		return
+	_update_art(delta)
 	for area in get_overlapping_areas():
 		if area is Hurtbox and not _targets.has(area):
 			_targets.append(area)
@@ -61,6 +75,22 @@ func _physics_process(delta: float) -> void:
 			hit.hitstop = 0.05
 			area.receive(hit)
 	queue_redraw()
+
+
+## 그림: 처음 0.12초에 땅에서 솟고, 달리며 살짝 들썩인다. 뒤로 흙먼지.
+func _update_art(delta: float) -> void:
+	if _art == null or _art.texture == null:
+		return
+	var k := clampf(_t / 0.12, 0.0, 1.0)
+	_art.visible = k > 0.02
+	var ts := _art.texture.get_size()
+	var bob := 1.0 + 0.08 * sin(_t * 26.0)
+	_art.scale = Vector2(ART_SCALE * float(dir), ART_SCALE * k * bob)
+	_art.position = Vector2(-ts.x * ART_SCALE * 0.5 * float(dir), -ts.y * ART_SCALE * k * bob + 10.0)
+	_puff_t -= delta
+	if _puff_t <= 0.0:
+		_puff_t = 0.09
+		Fx.spawn("dust_puff", global_position + Vector2(-dir * 50.0, -10.0), {"vel": Vector2(-dir * 120.0, -50.0)})
 
 
 func _vanish() -> void:
@@ -73,6 +103,8 @@ func _vanish() -> void:
 
 
 func _draw() -> void:
+	if _art and _art.texture:
+		return   # 그림(Sprite2D)이 그린다
 	var k := clampf(_t / 0.12, 0.0, 1.0)   # 처음 0.12초에 솟는다
 	var h := H * k
 	if h < 2.0:

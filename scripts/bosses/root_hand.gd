@@ -4,6 +4,8 @@ class_name RootHand
 ## 흐름: delay 대기 → 솟음(RISE) → 움켜쥠(CLOSE 끝에 한 번 판정) → 쥔 채(HOLD; 잡혔으면 소녀가 묶인다) → 가라앉음(SINK)
 ## 잡히면: 피해 + hold_time 동안 손 안에 묶였다가(피격 상태 유지) 밖으로 던져진다(피격 상태로 날아가 가로 속도가 산다).
 ## 예고(붉은 타원)는 보스 그림(root_keeper_visual)이 예비 동안 그리고, delay 로 늦게 솟는 손(2페이즈 두 번째)은 기다리는 동안 스스로 그린다.
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 뒤틀린 뿌리 손 — 손가락을 벌린 손(root_hand_open)이 땅에서 솟고,
+## 움켜쥘 때 쥔 손(root_hand_grip)으로 바뀐다. 가드 불가라 붉은 기운이 살짝 돈다. 판정 원은 그대로.
 
 var damage := 22.0
 var hold_time := 0.7
@@ -19,7 +21,12 @@ var _grabbed := false
 var _closed := false
 var _dirt: CPUParticles2D
 var _rose := false
+var _art: Sprite2D
+var _gripped_tex := false
 const RISE := 0.2
+## 그림 배율·색 (가드 불가: 붉은 기운)
+const ART_SCALE := 1.0
+const ART_COLOR := Color(1.15, 0.92, 0.88)
 const CLOSE := 0.14
 const SINK := 0.45
 const GRAB_RADIUS := 115.0
@@ -60,6 +67,14 @@ func _ready() -> void:
 	_dirt.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	_dirt.emission_rect_extents = Vector2(90, 4)
 	add_child(_dirt)
+	_art = Sprite2D.new()
+	_art.texture = Fx.texture("root_hand_open")
+	_art.material = Fx.shared_material("", false, 0.0)
+	_art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_art.centered = false
+	_art.modulate = ART_COLOR
+	_art.visible = false
+	add_child(_art)
 
 
 ## 흐름 단계 이름 (시험용): wait / rise / close / hold / sink / done
@@ -100,6 +115,7 @@ func _physics_process(delta: float) -> void:
 			_dirt.emitting = true
 			Juice.shake(7.0)
 			Sfx.play("root_rise", -2.0, 0.1)
+			Fx.spawn("root_burst_fx", global_position)
 	elif u < RISE + CLOSE:
 		_rise = 1.0
 		_close = Motion.ease_in(( u - RISE) / CLOSE, 1.6)
@@ -120,7 +136,25 @@ func _physics_process(delta: float) -> void:
 			_release()
 		queue_free()
 		return
+	_update_art()
 	queue_redraw()
+
+
+## 그림: 땅(y=0)에서 세로로 자라 솟고, 움켜쥐면 쥔 손 그림으로 바뀐다 (판정 원보다 조금 크게)
+func _update_art() -> void:
+	if _art == null or _art.texture == null:
+		return
+	_art.visible = _rise > 0.01
+	if not _art.visible:
+		return
+	var grip := _close > 0.5
+	if grip != _gripped_tex:
+		_gripped_tex = grip
+		_art.texture = Fx.texture("root_hand_grip" if grip else "root_hand_open")
+	var ts := _art.texture.get_size()
+	var sy := ART_SCALE * _rise
+	_art.scale = Vector2(ART_SCALE, sy)
+	_art.position = Vector2(-ts.x * ART_SCALE * 0.5, -ts.y * sy + 14.0)
 
 
 ## 손가락이 닫히는 순간 한 번: 손 안에 있는 소녀를 움켜쥔다 (가드 불가).
@@ -175,6 +209,10 @@ func _draw() -> void:
 		_draw_telegraph()
 		return
 	if _rise <= 0.01:
+		return
+	if _art and _art.texture:
+		# 그림이 손을 그린다: 여기는 움켜쥘수록 짙어지는 붉은 기운만 (가드 불가)
+		draw_circle(Vector2(0, GRAB_CENTER_Y * _rise), 110.0, Color(1.0, 0.25, 0.15, 0.05 + 0.1 * _close))
 		return
 	# 땅(y=0)에서 자라 나오게 세로 배율로 솟는다
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, _rise))

@@ -3,12 +3,19 @@ class_name SapProjectile
 ## 수액의 여왕이 쓰는 투사체 (확장판). 바탕(Projectile)의 날아가기·맞추기·되받기는 그대로 쓰고 그림만 바꾼다.
 ##  - "dust"      날개가루: 반짝이는 작은 가루 알갱이. 천천히 떨어진다(fall_gravity). 가드 가능, 되받기 불가.
 ##  - "butterfly" 작은 수액 나비: 날갯짓하며 소녀를 쫓는다(homing). **저스트 가드로 되받으면** 여왕에게 돌아간다(reflectable).
-## 스킨 자리: 진짜 그림이 오면 여기 _draw 를 Sprite2D 로 바꾸면 된다.
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 가루 = 반짝이 그림(그림 묶음 "queen_dust"), 나비 = 기획자 시트의 수액 나비("queen_butterfly",
+## 날갯짓·똑바로 세우기). 아래 _draw 의 코드 그림은 그림 묶음이 없을 때만 쓴다.
 
 @export_enum("dust", "butterfly") var sap_kind := "dust"
 
 var _flap := randf() * TAU
 var _spin := randf_range(-2.0, 2.0)
+
+
+func _ready() -> void:
+	if look == "":
+		look = "queen_butterfly" if sap_kind == "butterfly" else "queen_dust"
+	super._ready()
 
 
 func _physics_process(delta: float) -> void:
@@ -17,6 +24,9 @@ func _physics_process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if has_art():
+		_draw_art()
+		return
 	var glow := Color(0.6, 0.95, 1.0, 0.18)
 	if from_player:
 		glow = Color(1.0, 0.85, 0.5, 0.25)

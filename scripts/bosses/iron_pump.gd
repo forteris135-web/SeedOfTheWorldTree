@@ -112,6 +112,7 @@ var _idle_gap := 2.0 * BEAT
 
 func _ready() -> void:
 	add_to_group("boss")
+	add_child(preload("res://scripts/fx/iron_pump_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	hp = max_hp
 	_home = global_position
 	visible = false
@@ -340,6 +341,7 @@ func _slam() -> void:
 		p.lifetime = 1.5
 		p.size = Vector2(84, 50)
 		p.color = Color(0.95, 0.5, 0.25)
+		p.look = "pump_shock"   # 이펙트 리뉴얼 F2: 땅을 달리는 물 초승달
 		get_parent().add_child(p)
 		p.global_position = at + Vector2(dir * 40.0, -24.0)
 		p.launch(Vector2(dir, 0), self, false)

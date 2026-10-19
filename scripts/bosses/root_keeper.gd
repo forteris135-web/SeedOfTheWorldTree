@@ -120,6 +120,7 @@ const WALL_FX := preload("res://scenes/bosses/root_wall.tscn")
 
 func _ready() -> void:
 	add_to_group("boss")
+	add_child(preload("res://scripts/fx/root_keeper_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	hp = max_hp
 	_home = global_position
 	visible = false
