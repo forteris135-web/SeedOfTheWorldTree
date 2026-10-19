@@ -43,6 +43,8 @@ var _floor_off := 0.0    # 바닥선의 이 노드 기준 높이 (게임 px) = R
 var _base_root_y := 0.0  # 서 있을 때의 뿌리 높이 (RigMotion.stand_root_y 처음 값)
 var _air_h := 0.0        # 바닥 위로 떠 있는 높이 (뼈대 단위)
 var _wing_chains: Array = []   # 땅 막기할 날개 사슬 [[어깨, 손목], [접은 날개] …] (뼈 번호)
+var _wing_dir: Array = []      # 사슬마다 들어 올리는 회전 방향 (+1 / −1)
+var _wing_lift := {}           # 뼈 번호 → 지금 들어 올린 각도 (라디안)
 var _prev_state := -1
 var _state_t := 0.0
 var _from := {}          # 상태에 들어설 때 보이던 자세 (예비·쓰러짐이 여기서 출발)
@@ -206,13 +208,22 @@ func _ready() -> void:
 			rig.scl[_idx[bn]] = Vector2(k, k)
 	rig.setup_ghosts(rig.data.get("ghost", ["wing_f_in", "wing_f_out", "head"]), 6)
 	_base_root_y = motion.stand_root_y
-	for chain in [["wing_f_in", "wing_f_out"], ["wing_b_in", "wing_b_out"], ["wing_f_fold"], ["wing_b_fold"]]:
+	# 몸·발 채널의 단위 L: 새 발은 발톱까지 높아(발목이 땅에서 높다) RigMotion 이 잰 L(다리 + 발 높이)로는 보폭이 다리가 닿는 거리보다 길어
+	# 뒷발이 닿지 못하는 순간 엉덩이가 툭 튀었다 → 두 마디(허벅지·정강이) 길이의 0.95 배로 줄인다. 자세 파일(bird.json)의 몸·발 값은 이 단위.
+	var reach := 0.0
+	for leg in motion.legs:
+		reach += (leg.a + leg.b) / maxf(motion.legs.size(), 1)
+	if reach > 1.0:
+		motion.L = reach * 0.95
+	motion.snap_feet()
+	for entry in [[["wing_f_in", "wing_f_out"], -1.0], [["wing_b_in", "wing_b_out"], 1.0], [["wing_f_fold"], 1.0], [["wing_b_fold"], 1.0]]:
 		var ids := PackedInt32Array()
-		for bn in chain:
+		for bn in entry[0]:
 			if _idx.has(bn):
 				ids.append(_idx[bn])
 		if ids.size() > 0:
 			_wing_chains.append(ids)
+			_wing_dir.append(entry[1])
 	if _boss:
 		_face.v = float(_boss.facing)
 		_last_face_sign = signf(_face.v)
@@ -387,7 +398,7 @@ func _process(delta: float) -> void:
 		p["wing_f_out"] = float(p["wing_f_out"]) - _flap_amp * 0.75 * lag
 		# 몸 들썩임: 날개가 위에 있을 때 가라앉고, 내려칠 때 떠오른다. 고개는 몸과 반대로 조금 버틴다.
 		var bob := _flap_amp / 40.0
-		p["hip_y"] = float(p["hip_y"]) + 0.05 * bob * s - 0.02 * bob * down
+		p["hip_y"] = float(p["hip_y"]) + 0.08 * bob * s - 0.032 * bob * down
 		p["lean"] = float(p["lean"]) + 3.0 * bob * cos(_flap_phase)
 		p["head"] = float(p["head"]) - 4.0 * bob * cos(_flap_phase)
 	var ghost: bool = p.get("_ghost", false)
@@ -410,7 +421,7 @@ func _process(delta: float) -> void:
 	motion.update(delta, {"speed": speed_rig if grounded else 0.0, "dx": speed_rig * delta if grounded else 0.0,
 		"vy": _boss.velocity.y / maxf(k, 0.0001), "grounded": grounded})
 	_apply_folds()
-	_clamp_wings()
+	_clamp_wings(delta)
 	var sq := clampf(motion.spring_value("squash"), -0.25, 0.3) * 0.08
 	# 누운 몸은 바닥에 조금 묻힌다 (잎 끝이 바닥 풀에 묻혀 무게가 실려 보이게 — 껍질 점은 삐죽한 잎 끝까지라 그대로면 떠 보인다)
 	rig.position = Vector2(0.0, _floor_off + LIE_SINK * _lie)
@@ -588,6 +599,8 @@ func _pose_for(st: int, ph: String, delta: float) -> Dictionary:
 			p = _three_beat("peck_windup", "peck", "peck_ready", ph)
 			p["_ghost"] = ph == "active"
 			p["_breath"] = 0.0
+			if ph == "active":
+				p["_feet"] = RigMotion.Feet.AIR   # 돌진 찍기는 두 발을 띄워 폴짝 뛰어든다 (딛은 발이 뒤에 끌려 남지 않게)
 			if ph == "active" or (ph == "recovery" and _boss.phase_progress() < 0.3):
 				head = "scream"
 		S.TAKEOFF:
@@ -738,39 +751,50 @@ func _apply_folds() -> void:
 			rig.scl[wi] = Vector2(kk, kk)
 
 
-## 날개 땅 막기: 펼친 날개·접은 날개가 바닥선 아래로 들어가면 어깨(그다음 손목)를 돌려 날개 끝을 바닥 위에 눕힌다
+## 날개 땅 막기: 펼친 날개·접은 날개가 바닥선 아래로 들어가면 어깨(그다음 손목)를 '들어 올리는 쪽'으로 돌려 날개 끝을 바닥 위에 눕힌다
 ## (축 없는 뼈라 RigMotion 의 무기 땅 막기를 못 쓴다 — 같은 방법을 여기서). 날개는 설계도에서 '부드러운 부위'라 몸을 받쳐 띄우지 않는다.
+## 돌리는 쪽은 날개마다 고정 (가까운 날개는 앞으로 뻗어 있어 − 가 들기, 먼 날개·접은 날개는 뒤로 뻗어 + 가 들기) — 두 해 사이를 오가며
+## 날개가 한 프레임에 뒤집히지 않게. 든 각도는 필요하면 바로 늘리고, 필요 없어지면 천천히(WING_RELEASE) 푼다.
 const WING_MARGIN := 2.0
+const WING_RELEASE := 5.0
 
-func _clamp_wings() -> void:
+func _clamp_wings(delta: float) -> void:
 	var bx := rig.body_xf
 	var changed := false
-	for chain: PackedInt32Array in _wing_chains:
+	for ci in _wing_chains.size():
+		var chain: PackedInt32Array = _wing_chains[ci]
+		var dir: float = _wing_dir[ci]
 		for c in chain.size():
 			var jb := chain[c]
-			for iter in 2:
-				var deepest := -INF
-				var q := Vector2.ZERO
-				for j in range(c, chain.size()):
-					var t := bx * rig.xf[chain[j]]
-					for hp in rig.hulls[chain[j]]:
-						var w := t * hp
-						if w.y > deepest:
-							deepest = w.y
-							q = w
-				if deepest <= -WING_MARGIN:
-					break
-				var pj := bx * rig.xf[jb].origin
+			var need := 0.0
+			var deepest := -INF
+			var q := Vector2.ZERO
+			for j in range(c, chain.size()):
+				var t := bx * rig.xf[chain[j]]
+				for hp in rig.hulls[chain[j]]:
+					var w := t * hp
+					if w.y > deepest:
+						deepest = w.y
+						q = w
+			var pj := bx * rig.xf[jb].origin
+			if deepest > -WING_MARGIN and pj.y < -WING_MARGIN:
 				var rr := (q - pj).length()
-				if rr < 1.0 or pj.y > -WING_MARGIN:
-					break
-				var want := clampf((-WING_MARGIN - pj.y) / rr, -1.0, 1.0)
-				var cur := (q - pj).angle()
-				var s1 := asin(want)
-				var d1 := wrapf(s1 - cur, -PI, PI)
-				var d2 := wrapf(PI - s1 - cur, -PI, PI)
-				var dd := clampf(d1 if absf(d1) <= absf(d2) else d2, -1.6, 1.6)
-				rig.rot[jb] += dd
+				if rr > 1.0:
+					var want := clampf((-WING_MARGIN - pj.y) / rr, -1.0, 1.0)
+					var cur := (q - pj).angle()
+					var s1 := asin(want)
+					var best := INF
+					for sol in [s1, PI - s1]:
+						var d := wrapf(sol - cur, -PI, PI)
+						if d * dir >= -0.001 and absf(d) < best:
+							best = absf(d)
+					if best < INF:
+						need = minf(best, 1.5)
+			var held: float = _wing_lift.get(jb, 0.0)
+			var lift := maxf(need, held - WING_RELEASE * delta) if delta > 0.0 else need
+			_wing_lift[jb] = lift
+			if lift > 0.0001:
+				rig.rot[jb] += dir * lift
 				rig.compute_from(jb)
 				changed = true
 		for jb in chain:

@@ -833,11 +833,16 @@ func _bird() -> void:
 	var pair := _spawn(BIRD)
 	var boss = pair[0]
 	var vis: Sprite2D = pair[1]
+	# 2026-10-20 부위 뼈대(PartRig)로 바뀐 새: 그림 노드(Sprite)는 자리만 지키고 자식 Rig 가 관절로 움직인다
+	# → 예전의 '그림 전체 기울기·배율' 대신 뼈의 세계 각도·몸통 자리·발바닥·누운 몸 높이를 잰다 (_bird_run).
+	var rig: PartRig = vis.rig
+	_ok(rig != null and rig.names.size() >= 15, "새 그림이 부위 뼈대 (%d 부위)" % (rig.names.size() if rig else 0))
 	boss.facing = -1
 	boss.set_collision_mask_value(1, true)
 	boss._set_state(boss.State.GROUND_IDLE)
 	boss._timer = 99.0
-	_run(boss, vis, func() -> bool: return false, 1.0)
+	var r := _bird_run(boss, vis, func() -> bool: return false, 1.2)
+	_bird_report("새 땅 대기", r, true)
 	# SWEEP (날개 휘두르기)
 	boss._set_state(boss.State.SWEEP)
 	boss._timer = 0.55
@@ -845,9 +850,9 @@ func _bird() -> void:
 	boss.attack_phase = "startup"
 	boss.windup_progress = 0.0
 	boss.startup_len = 0.55
-	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.GROUND_IDLE and boss._timer < 0.05, 6.0)
-	_check_active_window(r, 0.22)
-	_report("새 SWEEP", r)
+	r = _bird_run(boss, vis, func() -> bool: return boss.state == boss.State.GROUND_IDLE and boss._timer < 0.05, 6.0)
+	_bird_report("새 SWEEP", r, true)
+	_bird_peak("새 SWEEP 날개", r, "wing", 0.22)
 	# PECK (부리 찍기, 돌진)
 	boss._timer = 99.0
 	boss._set_state(boss.State.PECK)
@@ -856,23 +861,201 @@ func _bird() -> void:
 	boss.attack_phase = "startup"
 	boss.windup_progress = 0.0
 	boss.startup_len = 0.45
-	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.GROUND_IDLE and boss._timer < 0.05, 6.0)
-	_check_active_window(r, 0.3)
-	_report("새 PECK", r)
-	# 공중: HOVER 에서 WIND 로, 다시 HOVER (날갯짓 위상 연속)
+	r = _bird_run(boss, vis, func() -> bool: return boss.state == boss.State.GROUND_IDLE and boss._timer < 0.05, 6.0)
+	_bird_report("새 PECK", r, true)
+	_bird_peak("새 PECK 부리", r, "beak", 0.3)
+	# 걷기 (잎 더미로): 딛은 발은 미끄러지지 않고 바닥에
+	boss._timer = 99.0
+	var pile := Node2D.new()
+	pile.set_script(load("res://scripts/world/leaf_pile.gd"))
+	get_tree().root.add_child(pile)
+	pile.global_position = boss.global_position + Vector2(-900, 0)
+	boss._target_pile = pile
+	boss._set_state(boss.State.WALK_TO_PILE)
+	r = _bird_run(boss, vis, func() -> bool: return boss.state != boss.State.WALK_TO_PILE, 1.2)
+	_bird_report("새 걷기", r, true, true)
+	pile.queue_free()
+	boss._target_pile = null
+	# 공중: HOVER 에서 WIND 로, 다시 HOVER (날갯짓 위상 연속, 날개가 크게 오르내린다)
 	boss.hover_points = [Vector2(600, 500), Vector2(1200, 500), Vector2(1800, 500)]
 	boss._hover_target = Vector2(1200, 500)
 	boss.set_collision_mask_value(1, false)
 	boss.global_position = Vector2(1200, 520)
 	boss._set_state(boss.State.HOVER)
 	boss._timer = 99.0
-	_run(boss, vis, func() -> bool: return false, 1.0)
+	r = _bird_run(boss, vis, func() -> bool: return false, 1.2)
+	_bird_report("새 HOVER", r, false)
+	var span: float = r.wing_max - r.wing_min
+	_ok(span >= 40.0, "새 날갯짓: 먼 날개 어깨가 %.0f도 오르내린다 (40 이상)" % span)
+	_ok(absf(r.torso_y + 150.0) < 40.0, "새 날 때 몸통 가운데가 맞는 영역 가운데(원점 위 150) 근처 (%.0f)" % r.torso_y)
 	boss._set_state(boss.State.WIND)
 	boss._timer = boss.wind_telegraph + boss.wind_time
-	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.HOVER, 4.0)
-	_report("새 HOVER→WIND→HOVER", r, 0.1, 0.06, 14.0)
-	# 날갯바람 끝에서 붉은색이 한 프레임에 돌아오지 않는다
+	r = _bird_run(boss, vis, func() -> bool: return boss.state == boss.State.HOVER, 4.0)
+	_bird_report("새 HOVER→WIND→HOVER", r, false)
 	_bird_shots(boss, vis)
+	_bird_fall()
+	boss.queue_free()
+
+
+## 새 한 사이클을 돌리며 뼈대 값을 기록한다. 돌려주는 값: 뼈 세계 각도의 프레임 간 최대 변화(도), 몸통 자리 최대 점프(px),
+## 발바닥 최대 어긋남(px, 땅 상태), 날개·부리 정점 시각, 히트박스 켜진 시각 등.
+func _bird_run(boss: Node, vis: Sprite2D, done: Callable, max_time := 6.0) -> Dictionary:
+	var rig: PartRig = vis.rig
+	var motion: RigMotion = vis.motion
+	var watch := ["torso", "head", "wing_f_in", "wing_f_out", "wing_b_in", "leg_f_up", "leg_b_up"]
+	var prev := {}
+	var r := {"max_d": {}, "at": {}, "max_jump": 0.0, "feet": 0.0, "frames": 0, "states": [], "active_t": -1.0,
+		"wing_peak_t": -1.0, "beak_peak_t": -1.0, "wing_min": INF, "wing_max": -INF, "torso_y": 0.0, "nan": false}
+	var wing_best := -INF
+	var beak_best := -INF
+	var t := 0.0
+	var last_state := -1
+	var last_phase := ""
+	var prev_torso := Vector2.INF
+	while t < max_time:
+		boss._physics_process(DT)
+		vis._process(DT)
+		t += DT
+		r.frames += 1
+		if boss.state != last_state:
+			last_state = boss.state
+			r.states.append("%.2f %s" % [t, boss.state_name()])
+		if boss.attack_phase != last_phase:
+			last_phase = boss.attack_phase
+			if last_phase == "active" and r.active_t < 0.0:
+				r.active_t = t
+		var fs := signf(rig.scale.x)
+		for bn in watch:
+			var i := rig.bone_index(bn)
+			var a := rad_to_deg((rig.body_xf * rig.xf[i]).get_rotation()) * fs
+			if prev.has(bn):
+				var d := absf(wrapf(a - float(prev[bn]), -180.0, 180.0))
+				if d > float(r.max_d.get(bn, 0.0)):
+					r.max_d[bn] = d
+					r.at[bn] = "%.2f %s/%s" % [t, boss.state_name(), boss.attack_phase]
+			prev[bn] = a
+		var wb := rad_to_deg((rig.body_xf * rig.xf[rig.bone_index("wing_b_in")]).get_rotation())
+		r.wing_min = minf(r.wing_min, wb)
+		r.wing_max = maxf(r.wing_max, wb)
+		# 몸통 가운데 (세계)
+		var ti := rig.bone_index("torso")
+		var c := Vector2.ZERO
+		for q in rig.hulls[ti]:
+			c += rig.body_xf * rig.xf[ti] * q
+		c /= maxf(rig.hulls[ti].size(), 1)
+		var tw: Vector2 = rig.to_global(c * rig.game_scale)
+		r.torso_y = tw.y - boss.global_position.y
+		if prev_torso != Vector2.INF:
+			r.max_jump = maxf(r.max_jump, (tw - prev_torso).length())
+		prev_torso = tw
+		# 땅 상태: 발바닥이 바닥선(ground_y)에
+		if boss.is_ground() and boss.state_name() not in ["BROKEN", "FALLEN"]:
+			var gy: float = boss.ground_y
+			for k in motion.legs.size():
+				var leg: RigMotion.Leg = motion.legs[k]
+				if leg.swing:
+					continue
+				var sw: Vector2 = rig.to_global(rig.to_rig_local(rig.xf[leg.foot] * leg.sole))
+				r.feet = maxf(r.feet, absf(sw.y - gy))
+		# 날개 정점: 가까운 날개가 가장 앞·아래로 휘둘린 순간 (보이는 쪽 기준 각도가 가장 큰 순간)
+		var wf := rad_to_deg((rig.body_xf * rig.xf[rig.bone_index("wing_f_in")]).get_rotation())
+		if boss.state_name() == "SWEEP" and wf > wing_best:
+			wing_best = wf
+			r.wing_peak_t = t
+		# 부리 정점: 부리 끝이 가장 낮은(앞으로 내리찍은) 순간
+		if boss.state_name() == "PECK":
+			var bk: Vector2 = vis.socket_global("beak")
+			if bk.y > beak_best:
+				beak_best = bk.y
+				r.beak_peak_t = t
+		for x in rig.xf:
+			if is_nan(x.origin.x) or is_nan(x.origin.y):
+				r.nan = true
+		if done.call():
+			break
+	return r
+
+
+## 이어짐 기준: 몸통 7도·머리 20도·날개 40도·다리 25도 / 프레임, 몸통 자리 점프 30px, 땅에선 발바닥 ±4px.
+## (날개 휘두르기·부리 찍기는 일부러 빠르다 — 기사 창의 0.7rad(40도)/프레임 기준과 같다. 그보다 빠르면 잔상이 있어도 끊겨 보인다.)
+func _bird_report(label: String, r: Dictionary, ground: bool, walking := false) -> void:
+	var lim := {"torso": 7.0, "head": 20.0, "wing_f_in": 40.0, "wing_f_out": 40.0, "wing_b_in": 40.0, "leg_f_up": 25.0, "leg_b_up": 25.0}
+	var ok: bool = not r.nan and r.max_jump < 30.0
+	var parts := ""
+	for bn in lim:
+		var d := float(r.max_d.get(bn, 0.0))
+		parts += "%s %.1f  " % [bn, d]
+		if d > float(lim[bn]):
+			ok = false
+			parts += "(%s 끊김!) " % r.at.get(bn, "")
+	var feet_ok: bool = (not ground) or r.feet <= 4.0
+	print("[probe] %s: 프레임 %d, 뼈 각도 프레임 간 최대 변화(도) %s| 몸통 점프 %.1fpx%s → %s" % [label, r.frames, parts, r.max_jump,
+		("  발바닥 어긋남 %.1fpx" % r.feet) if ground else "", "이어짐" if ok and feet_ok else "끊김/발 뜸!"])
+	print("[probe]    상태: %s" % ", ".join(r.states))
+	if not (ok and feet_ok):
+		_fail += 1
+
+
+## 세 박자 타격 정점(날개가 가장 휘둘린·부리가 가장 내리찍은 순간)이 히트박스 켜진 구간(+채널이 따라오는 0.1초) 안인가
+func _bird_peak(label: String, r: Dictionary, kind: String, active_len: float) -> void:
+	var pt: float = r.wing_peak_t if kind == "wing" else r.beak_peak_t
+	var inside: bool = r.active_t >= 0.0 and pt >= r.active_t - 0.001 and pt <= r.active_t + active_len + 0.1
+	print("[probe]    %s 정점 %.2f초, 히트박스 %.2f~%.2f초 → %s" % [label, pt, r.active_t, r.active_t + active_len, "안 OK" if inside else "밖!"])
+	if not inside:
+		_fail += 1
+
+
+## 쓰러짐: 공중에서 맞아 쓰러지면 바닥에 떨어져 옆으로 눕는다 (몸통 가운데가 낮고, 가장 낮은 몸 점이 바닥선 근처 — 뜨지도 파고들지도 않게).
+## 정화를 기다리는 동안 그대로 누워 있고(움직임 작음), 정화하면 살아난 빛(초록)으로 물든다.
+func _bird_fall() -> void:
+	var pair := _spawn(BIRD)
+	var boss = pair[0]
+	var vis: Sprite2D = pair[1]
+	var rig: PartRig = vis.rig
+	boss.facing = 1
+	boss.global_position = Vector2(1200, 600)
+	boss._hover_target = boss.global_position
+	boss.hover_points = [boss.global_position]
+	boss.set_collision_mask_value(1, false)
+	boss._set_state(boss.State.HOVER)
+	boss._timer = 99.0
+	_bird_run(boss, vis, func() -> bool: return false, 0.5)
+	boss.hp = 1.0
+	boss.receive_hit(HitData.make(5.0, 0.0, null), null)
+	var landed := {"t": -1.0}
+	var r := _bird_run(boss, vis, func() -> bool:
+		if landed.t < 0.0 and boss.is_on_floor():
+			landed.t = 0.0
+		return false, 2.6)
+	_bird_report("새 쓰러짐(공중 → 바닥 → 눕기)", r, false)
+	# 누운 끝: 몸통·머리 가운데 높이 (바닥 위 px), 가장 낮은 몸통·머리 점
+	var gy: float = boss.ground_y
+	var stand_h := 300.0
+	var h := {}
+	for bn in ["torso", "head"]:
+		var i := rig.bone_index(bn)
+		var c := Vector2.ZERO
+		var low := -INF
+		for q in rig.hulls[i]:
+			var w: Vector2 = rig.to_global(rig.to_rig_local(rig.xf[i] * q))
+			c += w
+			low = maxf(low, w.y)
+		c /= maxf(rig.hulls[i].size(), 1)
+		h[bn] = gy - c.y
+		h[bn + "_low"] = low - gy
+	print("[probe]    누운 끝: 몸통 가운데 바닥 위 %.0fpx, 머리 가운데 %.0fpx, 가장 낮은 몸통 점 %+.0fpx·머리 점 %+.0fpx (+ = 바닥 아래), 보스 바닥 %s" % [
+		h.torso, h.head, h.torso_low, h.head_low, boss.is_on_floor()])
+	_ok(h.torso <= stand_h * 0.4 and h.head <= stand_h * 0.4, "새가 쓰러져 정말 눕는다 (몸통·머리 가운데 ≤ %.0fpx)" % (stand_h * 0.4))
+	_ok(minf(h.torso_low, h.head_low) >= -10.0 and maxf(h.torso_low, h.head_low) <= 16.0, "누운 몸이 바닥에 닿는다 (뜨지 않고 조금만 묻힌다)")
+	# 누워 기다리는 동안 그대로 (몸통이 거의 안 움직인다)
+	r = _bird_run(boss, vis, func() -> bool: return false, 1.0)
+	_ok(r.max_jump < 2.0 and float(r.max_d.get("torso", 0.0)) < 1.0, "정화를 기다리는 동안 누운 채 (몸통 점프 %.2fpx)" % r.max_jump)
+	# 정화: 초록으로 물든다
+	boss.purified_by(null)
+	_bird_run(boss, vis, func() -> bool: return false, 1.4)
+	var col: Color = rig.modulate
+	print("[probe]    정화 뒤 새 색 %s" % col)
+	_ok(col.g > col.r + 0.1, "정화하면 잿빛이 걷히고 초록빛이 돈다")
 	boss.queue_free()
 
 
