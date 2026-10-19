@@ -1,0 +1,91 @@
+{
+  "_설명": "새 원형(잿빛 잎새의 새). 뼈: torso(뿌리) / head / wing_b_in·wing_b_out(먼 날개, 뒤) / wing_f_in·wing_f_out(가까운 날개, 앞) / wing_*_fold(접은 날개 그림) / tail_a·tail_c(꼬리, 흔들림) / leg_f·leg_b(무릎이 뒤로 꺾이는 새 다리, IK). 날개는 축 없는 뼈라 값 = 시트에 그려진 펼친 각도에 더하는 도: 먼 날개 + = 날개 끝이 위로, 가까운 날개 − = 위로. lean + = 몸이 앞으로 숙음(설계도에서 몸통이 이미 28도 앞으로 기울어 있다), head + = 부리가 아래로. fold_f/fold_b(0~1) = 펼친 날개 ↔ 접은 날개 그림을 바꿔 보이는 몫 (그림 쪽이 읽는다). 날갯짓·고개 끄덕임은 그림 쪽(gray_leaf_bird_visual.gd)이 더한다. 몸·발 채널(hip_*, foot_*, step_*)의 단위 L 은 _motion.leg_unit_reach 로 '다리 두 마디 길이 × 0.95' (새 발은 발톱까지 높아서 발 높이까지 넣은 L 로는 보폭이 다리보다 길었다).",
+  "base": {"hip_x": 0.0, "hip_y": 0.08, "lean": 0.0, "head": 0.0, "wing_b_in": 0.0, "wing_b_out": 0.0, "wing_f_in": 0.0, "wing_f_out": 0.0, "wing_b_fold": 0.0, "wing_f_fold": 0.0, "fold_f": 0.0, "fold_b": 0.0, "tail_a": 40.0, "tail_c": 50.0, "foot_f": 0.256, "foot_b": -0.192, "toe_f": 0.0, "toe_b": 0.0},
+  "hover": {"lean": 10.0, "hip_y": 0.0, "head": -10.0},
+  "hover_wide": {"lean": 6.0, "hip_y": 0.0, "head": -6.0, "wing_b_in": 8.0, "wing_f_in": -8.0},
+  "feather_cock": {"lean": -10.0, "hip_y": -0.032, "head": -22.0, "wing_f_in": -70.0, "wing_f_out": -40.0, "wing_b_in": 18.0, "wing_b_out": 10.0},
+  "feather_release": {"lean": 10.0, "head": 8.0, "wing_f_in": 27.0, "wing_f_out": 5.0, "wing_b_in": 6.0, "wing_b_out": 4.0},
+  "gust_windup": {"lean": -16.0, "hip_y": -0.048, "head": -24.0, "wing_b_in": 60.0, "wing_b_out": 35.0, "wing_f_in": -60.0, "wing_f_out": -35.0},
+  "gust": {"lean": 20.0, "head": 6.0, "wing_b_in": -5.0, "wing_f_in": 5.0},
+  "glide": {"lean": 2.0, "head": -4.0, "wing_b_in": 30.0, "wing_b_out": 14.0, "wing_f_in": -30.0, "wing_f_out": -14.0},
+  "brake": {"lean": -14.0, "hip_y": -0.064, "head": -10.0, "wing_b_in": 20.0, "wing_f_in": -20.0},
+  "crouch": {"lean": 24.0, "hip_y": 0.576, "head": -10.0, "wing_b_in": 50.0, "wing_b_out": 30.0, "wing_f_in": -50.0, "wing_f_out": -30.0, "step_thr": 0.64},
+  "takeoff": {"lean": 6.0, "hip_y": 0.0, "head": -12.0},
+  "idle": {"lean": 6.0, "hip_y": 0.32, "head": -6.0, "fold_f": 1.0, "fold_b": 1.0, "wing_f_in": 40.0, "wing_f_out": 25.0, "wing_b_in": -35.0, "wing_b_out": -25.0},
+  "walk": {"lean": 14.0, "hip_y": 0.352, "head": -2.0, "fold_f": 1.0, "fold_b": 1.0, "wing_f_in": 40.0, "wing_f_out": 25.0, "wing_b_in": -35.0, "wing_b_out": -25.0, "step_dur": 0.22},
+  "flinch": {"lean": -20.0, "hip_y": 0.128, "head": -30.0, "fold_f": 0.0, "fold_b": 0.0, "wing_f_in": -40.0, "wing_b_in": 40.0},
+  "eat": {"lean": 46.0, "hip_y": 0.672, "head": 62.0, "fold_f": 1.0, "fold_b": 1.0, "wing_f_in": 40.0, "wing_f_out": 25.0, "wing_b_in": -35.0, "wing_b_out": -25.0, "foot_f": 0.384, "foot_b": -0.224},
+  "sweep_windup": {"lean": -12.0, "hip_x": -0.128, "hip_y": 0.16, "head": -14.0, "fold_f": 0.0, "fold_b": 1.0, "wing_f_in": -85.0, "wing_f_out": -50.0, "wing_b_in": 5.0, "foot_f": 0.32, "foot_b": -0.256, "step_thr": 0.56},
+  "sweep": {"lean": 22.0, "hip_x": 0.192, "hip_y": 0.32, "head": 14.0, "fold_f": 0.0, "fold_b": 1.0, "wing_f_in": 60.0, "wing_f_out": 35.0, "wing_b_in": -15.0, "foot_f": 0.32, "foot_b": -0.256, "step_thr": 0.56, "step_dur": 0.1},
+  "sweep_ready": {"lean": 6.0, "hip_y": 0.24, "head": 4.0, "fold_f": 0.0, "fold_b": 1.0, "wing_f_in": 30.0, "wing_f_out": 18.0, "wing_b_in": -20.0, "foot_f": 0.32, "foot_b": -0.256, "step_thr": 0.56},
+  "peck_windup": {"lean": -16.0, "hip_y": 0.08, "head": -40.0, "fold_f": 0.0, "fold_b": 0.0, "wing_f_in": -45.0, "wing_b_in": 40.0, "foot_f": 0.352, "foot_b": -0.256, "step_thr": 0.56, "wing_f_out": -25.0, "wing_b_out": 20.0},
+  "peck": {"lean": 44.0, "hip_x": 0.192, "hip_y": 0.448, "head": 55.0, "fold_f": 0.0, "fold_b": 0.0, "wing_f_in": -75.0, "wing_b_in": 25.0, "foot_f": 0.352, "foot_b": -0.256, "step_thr": 0.56, "step_dur": 0.1, "wing_f_out": -30.0, "wing_b_out": 15.0},
+  "peck_ready": {"lean": 12.0, "hip_y": 0.288, "head": 10.0, "fold_f": 1.0, "fold_b": 1.0, "wing_f_in": 30.0, "wing_b_in": -25.0, "foot_f": 0.352, "foot_b": -0.256, "step_thr": 0.56},
+  "windup": {"lean": -12.0, "hip_x": -0.128, "hip_y": 0.16, "head": -14.0, "fold_f": 0.0, "fold_b": 1.0, "wing_f_in": -85.0, "wing_f_out": -50.0, "wing_b_in": 5.0, "foot_f": 0.32, "foot_b": -0.256, "step_thr": 0.56},
+  "strike": {"lean": 22.0, "hip_x": 0.192, "hip_y": 0.32, "head": 14.0, "fold_f": 0.0, "fold_b": 1.0, "wing_f_in": 60.0, "wing_f_out": 35.0, "wing_b_in": -15.0, "foot_f": 0.32, "foot_b": -0.256, "step_thr": 0.56, "step_dur": 0.1},
+  "ready": {"lean": 6.0, "hip_y": 0.24, "head": 4.0, "fold_f": 0.0, "fold_b": 1.0, "wing_f_in": 30.0, "wing_f_out": 18.0, "wing_b_in": -20.0, "foot_f": 0.32, "foot_b": -0.256, "step_thr": 0.56},
+  "hit": {"lean": -10.0, "hip_y": 0.224, "head": -16.0, "fold_f": 1.0, "fold_b": 1.0, "wing_f_in": 30.0, "wing_f_out": 20.0, "wing_b_in": -25.0, "wing_b_out": -20.0},
+  "broken": {"lean": 40.0, "hip_y": 0.64, "head": 30.0, "fold_f": 0.0, "fold_b": 0.0, "wing_f_in": -15.0, "wing_f_out": 25.0, "wing_b_in": -60.0, "wing_b_out": -20.0, "tail_a": 30.0, "tail_c": 40.0, "foot_f": 0.352, "foot_b": -0.288, "step_thr": 0.64},
+  "kneel": {"lean": 40.0, "hip_y": 0.64, "head": 30.0, "fold_f": 0.0, "fold_b": 0.0, "wing_f_in": -15.0, "wing_f_out": 25.0, "wing_b_in": -60.0, "wing_b_out": -20.0, "tail_a": 30.0, "tail_c": 40.0, "foot_f": 0.352, "foot_b": -0.288, "step_thr": 0.64},
+  "fall_air": {"lean": 48.0, "head": -34.0, "fold_f": 0.0, "fold_b": 0.0, "wing_b_in": 80.0, "wing_b_out": 45.0, "wing_f_in": -80.0, "wing_f_out": -45.0, "tail_a": 60.0, "tail_c": 70.0},
+  "crash": {"lean": 36.0, "hip_y": 0.8, "head": 30.0, "fold_f": 0.0, "fold_b": 0.0, "wing_b_in": 40.0, "wing_b_out": 20.0, "wing_f_in": -40.0, "wing_f_out": -20.0, "step_thr": 0.96},
+  "dead": {"lean": 66.0, "hip_y": 0.8, "head": 46.0, "fold_f": 1.0, "fold_b": 0.0, "wing_f_in": -110.0, "wing_f_out": 20.0, "wing_b_in": -10.0, "wing_b_out": -10.0, "wing_f_fold": 5.0, "tail_a": -12.0, "tail_c": -6.0, "foot_f": -0.8, "foot_b": -1.12, "step_thr": 0.96, "step_dur": 0.25},
+  "purified": {"lean": 52.0, "hip_y": 0.72, "head": -18.0, "fold_f": 1.0, "fold_b": 0.0, "wing_f_in": -100.0, "wing_f_out": 10.0, "wing_b_in": 0.0, "wing_b_out": 0.0, "wing_f_fold": 0.0, "tail_a": -4.0, "tail_c": 4.0, "foot_f": -0.8, "foot_b": -1.12, "step_thr": 0.96},
+  "_motion": {
+      "leg_unit_reach": 0.95,
+      "strike_lag": {
+          "wing_f_out": 0.18,
+          "wing_b_out": 0.12,
+          "head": 0.12
+      },
+      "early": [
+          "lean",
+          "hip_x"
+      ],
+      "heavy": [
+          "lean",
+          "hip_x",
+          "hip_y"
+      ],
+      "impact": {
+          "lean": -0.45,
+          "head": -1.2,
+          "wing_f_in": -0.5,
+          "wing_b_in": 0.5
+      },
+      "parry": {
+          "wing_f_in": -1.0,
+          "wing_f_out": -0.6
+      },
+      "recoil": {
+          "head": -0.8,
+          "lean": -0.2
+      },
+      "parry_bounce": [
+          "wing_f_in",
+          "wing_f_out",
+          "head",
+          "lean"
+      ],
+      "breath": {
+          "lean": [
+              0.8,
+              0.0
+          ],
+          "head": [
+              1.4,
+              0.7
+          ],
+          "wing_f_in": [
+              1.2,
+              0.3
+          ],
+          "wing_b_in": [
+              -1.2,
+              0.3
+          ]
+      },
+      "swing": {},
+      "swing_abs": {}
+  }
+}
