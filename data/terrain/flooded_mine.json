@@ -6,6 +6,11 @@
   "tint": [0.86, 0.82, 0.8],
   "fill": {"top": 0.92, "deep": 0.72, "deep_px": 340, "rim": 0.76, "rim_px": 30, "wall": 0.88},
   "lift": 2,
+  "depth": {
+    "ash": {"haze": 0.28, "haze_color": "#b2b6ba", "contrast": 0.66, "sat": 0.8, "fore_value": 0.96, "fore_contrast": 1.0, "shadow": 0.6},
+    "alive": {"haze": 0.12, "haze_color": "#d6b59c", "contrast": 0.86, "sat": 0.92, "fore_value": 1.0, "fore_contrast": 1.0, "shadow": 0.5},
+    "shadow_lod": 4.5, "shadow_offset": [0, 9]
+  },
   "roles": {
     "branch": ["aqueduct_a", "lintel_a", "aqueduct_c", "aqueduct_a"],
     "slab": ["arch_a", "arch_b", "aqueduct_b", "lintel_b"],
@@ -16,7 +21,7 @@
     "ground": {"band": 44, "fade": 40, "cap": 150, "overlap": 110, "caps": ["deck_a"]},
     "slab": {"max_w": 360},
     "probe": {"rail": 34, "note": "다리·수로 조각은 뒤 난간이 발 선 위로 솟아 있다 (시험의 윗선 허용 px)"},
-    "water": {"tint": [0.62, 0.9, 0.8], "tint_ash": [0.8, 0.82, 0.78], "alpha": [0.34, 0.72], "alpha_ash": [0.45, 0.8], "band": 0.62, "wave_alpha": 0.45, "wave_h": 22, "line": [0.7, 1.0, 0.86]},
+    "water": {"deep": "#4f8f86", "deep_ash": "#7f8580", "alpha": [0.18, 0.55], "alpha_ash": [0.26, 0.66], "tint": [0.66, 0.9, 0.82], "tint_ash": [0.8, 0.82, 0.78], "art_alpha": 0.38, "art_alpha_ash": 0.32, "band": 0.62, "wave_alpha": 0.45, "wave_h": 22, "line": [0.7, 1.0, 0.86]},
     "hang": {"gap": 2.0},
     "wall": {"scale": 0.9, "inset": 0.78, "tile": "grid", "art_faces": -1, "repeat": {"column_a": [112, 222], "column_b": [110, 223]}},
     "ceiling": {"scale": 0.8, "inset": 0.3},

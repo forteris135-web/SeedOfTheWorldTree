@@ -137,7 +137,7 @@ func _ready() -> void:
 		shape.one_way_collision = true
 		shape.one_way_collision_margin = 24.0
 	add_child(shape)
-	material = preload("res://shaders/ash_purify.tres")
+	material = preload("res://shaders/ash_purify_fore.tres")   # 앞 지형 재질 (앞뒤 가르기 — TERRAIN.md 5장)
 	_apply_style()
 	_skin = TerrainSkin.for_node(self, style_region)
 	if _skin != null and _wants_layers():

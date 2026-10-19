@@ -17,7 +17,7 @@ extends Node2D
 ##  - '드러남'은 옆 지형(neighbors — 부서지는 벽은 뺀다)과 방 경계로 판단한다 (덮인 곳·방 밖에는 장식 없음).
 ##  - 드러난 충돌 끝(절벽 끝·가지 끝) 밖으로는 그림이 발 높이에 CLIP_START px 남짓만 남는다 (piece 의 clip_l/clip_r):
 ##    조각의 걷는 구간 밖(둥근 끝·늘어진 뿌리)은 비스듬한 선 위쪽을 지워, 서지 못하는 자리가 발판처럼 보이지 않게 한다.
-##  - 그리는 순서: 몸통 결(가로·세로)은 부모 묶음(보통 Terrain) 맨 아래 겹에 따로 그린다 (_make_fill_item).
+##  - 그리는 순서: 뒤 그림자(조각 실루엣의 흐린 어두운 테 — 앞뒤 가르기)와 몸통 결(가로·세로)은 부모 묶음(보통 Terrain) 맨 아래 겹에 따로 그린다 (_make_group_items).
 ##    그래서 나중 형제의 몸통이 앞 형제의 끝 조각·뿌리를 덮어 세로로 잘린 자국이 생기지 않는다 (모든 몸통 → 모든 조각).
 
 ## 시험용 누적: 만드는 데 든 시간(µs)·만든 수·삼각형 수
@@ -54,8 +54,10 @@ const CLIP_SLOPE := 1.4
 const CLIP_SOFT := 18.0
 ## 이웃 지형에 덮인 끝: 가지는 이만큼 이웃 속으로 서서히 사라지고, 벽에 닿은 바닥 띠는 이만큼만 들어간다
 const WALL_TUCK := 8.0
-## 몸통 결을 부모 묶음 맨 아래에 그릴 때의 그리기 순서 (노드 자식들은 0 이상 — 그보다 먼저)
+## 몸통 결·뒤 그림자를 부모 묶음 맨 아래에 그릴 때의 그리기 순서 (노드 자식들은 0 이상 — 그보다 먼저; 그림자가 가장 먼저)
 const FILL_DRAW_INDEX := -100000
+const SHADOW_DRAW_INDEX := -200000
+const SHADOW_MAT := preload("res://shaders/terrain_shadow.tres")
 
 var skin: TerrainSkin
 var host: Node2D
@@ -69,6 +71,9 @@ var _has_room := false
 var _mod := Color(1, 1, 1, 1)
 ## 몸통 결을 따로 그리는 캔버스 항목 (부모 묶음 맨 아래 겹). 비어 있으면 이 노드의 _draw 가 몸통 결도 그린다.
 var _fill_ci := RID()
+## 뒤 그림자 항목 (부모 묶음 가장 아래 겹 — 앞뒤 가르기). cast_shadow 를 끄면 안 만든다 (웅덩이 물 그림 등).
+var _shadow_ci := RID()
+var cast_shadow := true
 var _clip_phase := 0.0
 var _layer_fill := false
 ## 한 조각으로 맞춘 가지의 선택 (가까이 쌓인 같은 크기 발판이 똑같은 그림이 되지 않게 이웃이 본다)
@@ -123,58 +128,70 @@ func _add_buf(ci: RID, i: int) -> void:
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_ENTER_TREE:
-			if _layer_fill and not _fill_ci.is_valid():
-				_make_fill_item()
+			if _layer_fill and not _fill_ci.is_valid() and not _shadow_ci.is_valid():
+				_make_group_items()
 		NOTIFICATION_EXIT_TREE, NOTIFICATION_PREDELETE:
-			_free_fill_item()
+			_free_group_items()
 		NOTIFICATION_VISIBILITY_CHANGED:
-			if _fill_ci.is_valid():
-				RenderingServer.canvas_item_set_visible(_fill_ci, is_visible_in_tree())
+			for ci in [_fill_ci, _shadow_ci]:
+				if ci.is_valid():
+					RenderingServer.canvas_item_set_visible(ci, is_visible_in_tree())
 		NOTIFICATION_TRANSFORM_CHANGED:
-			_place_fill_item()
+			_place_group_items()
 
 
-## 몸통 결(가로·세로)을 부모 묶음(보통 Terrain)의 맨 아래 겹에 그린다 — 형제 지형의 끝 조각·뿌리(atlas)를
-## 나중 형제의 몸통이 덮어 세로로 잘린 자국이 생기지 않게 (모든 몸통 → 모든 조각 순서).
-## 노드를 새로 붙이지 않고 RenderingServer 캔버스 항목 하나를 부모 묶음 아래에 둔다 (방 _ready 중에도 붙일 수 있고, 가볍다).
-func _make_fill_item() -> void:
-	_free_fill_item()
-	if host == null or not is_inside_tree():
+## 부모 묶음(보통 Terrain) 맨 아래 겹에 그리는 두 항목 — 노드를 새로 붙이지 않고 RenderingServer 캔버스 항목을 둔다 (방 _ready 중에도 붙일 수 있고, 가볍다):
+##  - 뒤 그림자 (SHADOW_DRAW_INDEX — 가장 먼저): 조각(atlas)을 그림자 재질(terrain_shadow)로 한 번 더 — 실루엣보다 조금 넓은 어두운 테 (앞뒤 가르기, TERRAIN.md 5장)
+##  - 몸통 결 (FILL_DRAW_INDEX): 가로·세로 결 — 형제 지형의 끝 조각·뿌리를 나중 형제의 몸통이 덮어 세로로 잘린 자국이 생기지 않게 (모든 몸통 → 모든 조각 순서)
+func _make_group_items() -> void:
+	_free_group_items()
+	if host == null or not is_inside_tree() or not (host.get_parent() is CanvasItem):
 		return
-	var group := host.get_parent() as CanvasItem
-	if group == null:
-		return
-	if (_bufs[BUF_FILL]["idx"] as PackedInt32Array).size() < 3 and (_bufs[BUF_FILL_V]["idx"] as PackedInt32Array).size() < 3:
-		return
+	if (_bufs[BUF_FILL]["idx"] as PackedInt32Array).size() >= 3 or (_bufs[BUF_FILL_V]["idx"] as PackedInt32Array).size() >= 3:
+		_fill_ci = _group_item(FILL_DRAW_INDEX, host.material)
+		_add_buf(_fill_ci, BUF_FILL)
+		_add_buf(_fill_ci, BUF_FILL_V)
+	if cast_shadow and (_bufs[BUF_ATLAS]["idx"] as PackedInt32Array).size() >= 3:
+		_shadow_ci = _group_item(SHADOW_DRAW_INDEX, SHADOW_MAT)
+		_add_buf(_shadow_ci, BUF_ATLAS)
+	if _fill_ci.is_valid() or _shadow_ci.is_valid():
+		_place_group_items()
+		set_notify_transform(true)
+
+
+func _group_item(draw_index: int, mat: Material) -> RID:
 	var rs := RenderingServer
-	_fill_ci = rs.canvas_item_create()
-	rs.canvas_item_set_parent(_fill_ci, group.get_canvas_item())
-	rs.canvas_item_set_draw_index(_fill_ci, FILL_DRAW_INDEX + host.get_index())
-	var mat: Material = host.material
+	var ci := rs.canvas_item_create()
+	rs.canvas_item_set_parent(ci, (host.get_parent() as CanvasItem).get_canvas_item())
+	rs.canvas_item_set_draw_index(ci, draw_index + host.get_index())
 	if mat:
-		rs.canvas_item_set_material(_fill_ci, mat.get_rid())
-	rs.canvas_item_set_default_texture_filter(_fill_ci, RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS)
-	rs.canvas_item_set_default_texture_repeat(_fill_ci, RenderingServer.CANVAS_ITEM_TEXTURE_REPEAT_ENABLED)
-	rs.canvas_item_set_visible(_fill_ci, is_visible_in_tree())
-	_place_fill_item()
-	_add_buf(_fill_ci, BUF_FILL)
-	_add_buf(_fill_ci, BUF_FILL_V)
-	set_notify_transform(true)
+		rs.canvas_item_set_material(ci, mat.get_rid())
+	rs.canvas_item_set_default_texture_filter(ci, RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS)
+	rs.canvas_item_set_default_texture_repeat(ci, RenderingServer.CANVAS_ITEM_TEXTURE_REPEAT_ENABLED)
+	rs.canvas_item_set_visible(ci, is_visible_in_tree())
+	return ci
 
 
-func _place_fill_item() -> void:
-	if not _fill_ci.is_valid() or not is_inside_tree():
+func _place_group_items() -> void:
+	if host == null or not is_inside_tree() or not (host.get_parent() is CanvasItem):
 		return
-	var group := host.get_parent() as CanvasItem
-	if group == null:
-		return
-	RenderingServer.canvas_item_set_transform(_fill_ci, group.get_global_transform().affine_inverse() * get_global_transform())
+	var xf := (host.get_parent() as CanvasItem).get_global_transform().affine_inverse() * get_global_transform()
+	for ci in [_fill_ci, _shadow_ci]:
+		if ci.is_valid():
+			RenderingServer.canvas_item_set_transform(ci, xf)
 
 
-func _free_fill_item() -> void:
-	if _fill_ci.is_valid():
-		RenderingServer.free_rid(_fill_ci)
-		_fill_ci = RID()
+func _free_group_items() -> void:
+	for ci in [_fill_ci, _shadow_ci]:
+		if ci.is_valid():
+			RenderingServer.free_rid(ci)
+	_fill_ci = RID()
+	_shadow_ci = RID()
+
+
+## 시험용: 뒤 그림자를 그리는가
+func has_shadow() -> bool:
+	return _shadow_ci.is_valid()
 
 
 ## 시험용: 몸통 결이 부모 묶음 맨 아래 겹에 그려지는가 (몸통 결이 없으면 true)
@@ -208,7 +225,7 @@ func _begin(seed_extra: int) -> void:
 
 func _finish(t0: int) -> void:
 	_layer_fill = true
-	_make_fill_item()
+	_make_group_items()
 	if _glow_on and not _glow_spots.is_empty():
 		var gc: Array = skin.param("glow", "color", [1.0, 0.8, 0.55])
 		TerrainStyle.add_glow_light.call_deferred(host, Array(_glow_spots), {"mushroom_glow": Color(float(gc[0]), float(gc[1]), float(gc[2]))})

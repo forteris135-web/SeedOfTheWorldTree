@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://c1seedashmatfore"]
+
+[ext_resource type="Shader" path="res://shaders/ash_purify.gdshader" id="1_shader"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/purity = 0.0
+shader_parameter/center = Vector2(0.5, 0.5)
+shader_parameter/radius = 0.0
+shader_parameter/softness = 0.3

@@ -6,7 +6,11 @@ extends Node
 signal progress(value: float)
 signal region_changed(region: String, purified: bool)
 
-const MATERIALS := [preload("res://shaders/ash_purify.tres"), preload("res://shaders/ash_purify_add.tres")]
+## 공용 재질: 가운데 겹(안개·잎·기록물…) / 더하기(빛) / 배경 그림(far) / 앞 지형(fore) / 앞 지형 뒤 그림자 — 정화 값(purity·center·radius·ash_lut)은 모두 함께 받는다
+const MATERIALS := [preload("res://shaders/ash_purify.tres"), preload("res://shaders/ash_purify_add.tres"), preload("res://shaders/ash_purify_far.tres"), preload("res://shaders/ash_purify_fore.tres"), preload("res://shaders/terrain_shadow.tres")]
+const FAR_MAT := preload("res://shaders/ash_purify_far.tres")
+const FORE_MAT := preload("res://shaders/ash_purify_fore.tres")
+const SHADOW_MAT := preload("res://shaders/terrain_shadow.tres")
 
 ## 지역별 정화 여부. (세이브는 14단계에서)
 var regions := {"canopy": false, "village": false, "mine": false, "abyss": false}
@@ -16,6 +20,7 @@ var _tween: Tween
 func _ready() -> void:
 	# 방이 뜨기 전(타이틀 등)에도 표가 비어 있지 않게 첫 지역 팔레트를 넣어 둔다
 	_set_param("ash_lut", ash_lut("canopy"))
+	apply_depth({})
 
 
 func is_purified(region: String) -> bool:
@@ -41,6 +46,44 @@ func apply_region(region: String) -> void:
 	_set_param("purity", p)
 	_set_param("radius", 0.0)
 	progress.emit(p)
+
+
+## 앞뒤 가르기 기본값 — 아무것도 안 함. 방의 그림 옷 데이터("depth", TerrainSkin.depth_of)가 덮어쓴다 (TERRAIN.md 5장).
+##   ash / alive (정화 전 / 후): haze·haze_color·contrast·sat·value = 배경 그림, fore_contrast·fore_value·fore_sat = 앞 지형, shadow = 뒤 그림자 진하기
+##   shadow_lod (그림자 흐림, 밉맵 단계), shadow_offset [x, y] (px), shadow_color_ash / shadow_color_alive
+const DEPTH_STATE := {"haze": 0.0, "haze_color": "#cccccc", "contrast": 1.0, "sat": 1.0, "value": 1.0, "fore_contrast": 1.0, "fore_value": 1.0, "fore_sat": 1.0, "shadow": 0.0}
+const DEPTH_DEFAULT := {"shadow_lod": 3.5, "shadow_offset": [0.0, 4.0], "shadow_color_ash": "#0b0c10", "shadow_color_alive": "#0e0905"}
+## 지금 방에 넣은 값 (시험용)
+var depth := {}
+
+
+## 방이 시작될 때 (Room._ready): 배경 그림·앞 지형·뒤 그림자 재질에 그 방의 앞뒤 가르기 값을 넣는다.
+func apply_depth(spec: Dictionary) -> void:
+	var a: Dictionary = DEPTH_STATE.duplicate()
+	a.merge(spec.get("ash", {}), true)
+	var b: Dictionary = DEPTH_STATE.duplicate()
+	b.merge(spec.get("alive", {}), true)
+	var g: Dictionary = DEPTH_DEFAULT.duplicate()
+	for k in spec:
+		if k != "ash" and k != "alive":
+			g[k] = spec[k]
+	depth = {"ash": a, "alive": b, "shared": g}
+	var v2 := func(key: String) -> Vector2: return Vector2(float(a[key]), float(b[key]))
+	FAR_MAT.set_shader_parameter("haze", v2.call("haze"))
+	FAR_MAT.set_shader_parameter("haze_color_ash", _col(a["haze_color"]))
+	FAR_MAT.set_shader_parameter("haze_color_alive", _col(b["haze_color"]))
+	FAR_MAT.set_shader_parameter("contrast", v2.call("contrast"))
+	FAR_MAT.set_shader_parameter("sat", v2.call("sat"))
+	FAR_MAT.set_shader_parameter("value", v2.call("value"))
+	FORE_MAT.set_shader_parameter("contrast", v2.call("fore_contrast"))
+	FORE_MAT.set_shader_parameter("sat", v2.call("fore_sat"))
+	FORE_MAT.set_shader_parameter("value", v2.call("fore_value"))
+	SHADOW_MAT.set_shader_parameter("strength", v2.call("shadow"))
+	SHADOW_MAT.set_shader_parameter("lod", float(g["shadow_lod"]))
+	var off: Array = g["shadow_offset"]
+	SHADOW_MAT.set_shader_parameter("offset", Vector2(float(off[0]), float(off[1])))
+	SHADOW_MAT.set_shader_parameter("color_ash", _col(g["shadow_color_ash"]))
+	SHADOW_MAT.set_shader_parameter("color_alive", _col(g["shadow_color_alive"]))
 
 
 ## 색이 번져 돌아오는 연출. screen_center 는 화면 비율 좌표(0~1).

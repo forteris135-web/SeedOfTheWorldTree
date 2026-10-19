@@ -12,12 +12,13 @@ class_name SapPool
 ##    방이 뜰 때의 상태로 시작하고, 그 뒤로는 Purity.region_changed 신호(색이 번져 돌아오는 연출·초기화)가 올 때만 바뀐다
 ##    → 회상에서 돌아와 잠깐 잿빛으로 돌렸다가 번지게 하는 BossRoom 연출과 맞물려 '살아남 → 잿빛 → 차오름'으로 깜빡이지 않는다.
 ##  - 방의 지형 그림 옷(TerrainSkin — 방마다 다르면 room_skins)에 water 조각(기획자의 '물 지형' 시트)이 있으면 몸통을 그림으로 그린다:
-##      몸통: water 조각의 가운데 토막을 웅덩이 폭에 이어 붙인다. **비친다** — 위는 옅고 깊을수록 진하며(params.water.alpha [위, 아래]),
-##            지역 색(tint)을 입힌다. 조각 아랫부분(그려진 바위 바닥)은 쓰지 않고(band), 몸통 아래끝은 웅덩이 밑 바닥 윗면 아래로
-##            FLOOR_SINK px 동안 녹아들어 '바닥이 비치는 고인 물'로 읽힌다.
+##      물빛(Deep): 지역 물 색(params.water.deep)의 비치는 그라데이션 — 위는 옅고 깊을수록 진하다(alpha [위, 아래]). 물의 색과 깊이를 맡는다.
+##      결(Body): water 조각의 가운데 토막을 웅덩이 폭에 이어 붙여 그 위에 옅게(art_alpha, tint) — 물결무늬·수면 테두리를 맡는다.
+##            조각 아랫부분(그려진 바위 바닥)은 쓰지 않는다(band).
+##      두 겹 모두 아래끝은 웅덩이 밑 바닥 윗면 아래로 FLOOR_SINK px 동안 녹아들어 '바닥이 비치는 고인 물'로 읽힌다.
 ##      끝: 옆이 지형에 막혔으면 지형 속으로 TUCK px, 열려 있으면 판정 끝 밖 SHORE_OUT px 까지 서서히 사라지는 물가.
 ##      물결: wave 조각을 수면에 얹고 천천히 흔든다 (위치만 — 다시 만들지 않음).
-##      정화 전에는 탁하다 (tint_ash·alpha_ash — 잿빛 표를 거쳐 회색이 된다), 정화되면(방의 지역 Purity) 맑아지고, 수액 위 걷기가 있으면 조금 밝다.
+##      정화 전에는 탁하다 (deep_ash·alpha_ash·tint_ash·art_alpha_ash — 잿빛 표를 거쳐 회색이 된다), 정화되면(방의 지역 Purity) 맑아지고, 수액 위 걷기가 있으면 조금 밝다.
 ##    water 조각이 없는 그림 옷이면 몸통을 코드로 그린다 (깊이 그라데이션 6줄).
 ##  - 그 위에 코드로: 흐르는 빛 띠, 떠오르는 방울, 일렁이는 수면선(밝은 테두리), 소녀 발 자리의 납작한 잔물결 고리.
 ## 세기 조절: 아래 상수들과 data/terrain/<그림 옷>.json 의 params.water (TERRAIN.md 6장).
@@ -71,6 +72,7 @@ var _seed := 0
 var _rng := RandomNumberGenerator.new()   # 그릴 때마다 같은 씨앗으로 되감아 쓴다 (매 프레임 새로 만들지 않게)
 ## 물 그림 (그림 옷에 water 조각이 있을 때만): Water 노드 아래 몸통·물결 (TerrainArt — 방에 들어올 때 한 번 만든다)
 var _art: Node2D
+var _deep: TerrainArt
 var _body: TerrainArt
 var _waves: TerrainArt
 var _wp := {}           # params.water 를 읽어 둔 값
@@ -237,10 +239,14 @@ func _build_art() -> void:
 		return
 	var t0 := Time.get_ticks_usec()
 	_wp = {
+		"deep": _col(skin.param("water", "deep", "#1f5f80")),
+		"deep_ash": _col(skin.param("water", "deep_ash", "#44504c")),
+		"alpha": skin.param("water", "alpha", [0.2, 0.62]),
+		"alpha_ash": skin.param("water", "alpha_ash", [0.32, 0.74]),
 		"tint": _col(skin.param("water", "tint", [0.8, 0.95, 1.0])),
 		"tint_ash": _col(skin.param("water", "tint_ash", [0.85, 0.88, 0.86])),
-		"alpha": skin.param("water", "alpha", [0.32, 0.7]),
-		"alpha_ash": skin.param("water", "alpha_ash", [0.45, 0.8]),
+		"art_alpha": float(skin.param("water", "art_alpha", 0.42)),
+		"art_alpha_ash": float(skin.param("water", "art_alpha_ash", 0.36)),
 		"band": float(skin.param("water", "band", 0.62)),
 		"wave_alpha": float(skin.param("water", "wave_alpha", 0.45)),
 		"wave_h": float(skin.param("water", "wave_h", 24.0)),
@@ -261,9 +267,12 @@ func _build_art() -> void:
 	# 물 깊이: 웅덩이 밑 바닥 윗면까지 (없으면 웅덩이 바닥까지). 차오름(살아난 수액)만큼 더 — 차올라도 아래가 비지 않게
 	var floor_y := minf(_floor_below(), size.y)
 	var water_d := maxf(floor_y - surf0, 20.0) + (FILL_RISE if region != "" else 0.0)
+	_deep = _new_art("Deep", skin, int(size.x) * 3 + 1)
+	_lay_deep(water_d, left_open, right_open)
+	_deep._finish(t0)
 	_body = _new_art("Body", skin, int(size.x) * 7 + 3)
 	_lay_body(skin, water_d, left_open, right_open)
-	_body._finish(t0)
+	_body._finish(Time.get_ticks_usec())
 	if skin.has_role("wave"):
 		_waves = _new_art("Waves", skin, int(size.x) * 5 + 11)
 		_lay_waves(skin, left_open, right_open)
@@ -275,6 +284,7 @@ func _build_art() -> void:
 func _new_art(n: String, skin: TerrainSkin, seed_extra: int) -> TerrainArt:
 	var a := TerrainArt.new(skin, self)
 	a.name = n
+	a.cast_shadow = false   # 물은 앞 지형 뒤 그림자를 드리우지 않는다
 	_art.add_child(a)
 	a._begin(seed_extra)
 	a._mod = Color(1, 1, 1, 1)
@@ -284,6 +294,8 @@ func _new_art(n: String, skin: TerrainSkin, seed_extra: int) -> TerrainArt:
 static func _col(v) -> Color:
 	if v is Array and v.size() >= 3:
 		return Color(float(v[0]), float(v[1]), float(v[2]))
+	if v is String:
+		return Color.html(v)
 	return Color.WHITE
 
 
@@ -327,16 +339,42 @@ func _floor_below() -> float:
 	return best - global_position.y if best < INF else INF
 
 
-## 몸통: water 조각들의 가운데 토막(조각 양 끝의 비탈은 피함)을 이어 깐다. 조각의 위(수면 테두리)~band 까지만 쓰고
-## water_d px 아래(바닥 윗면)부터 FLOOR_SINK px 동안 사라진다. 위는 옅고 깊을수록 진하다(top_alpha).
+## 물빛: 수면(0)에서 water_d(바닥 윗면)까지 위가 옅고 깊을수록 진한 그라데이션, 그 아래 FLOOR_SINK px 동안 사라진다.
+## 양 끝은 막혔으면 지형 속으로 짧게, 열렸으면(물가) SHORE_FADE px 동안 서서히. 흰색으로 만들고 색·진하기는 _tick_art 가 modulate 로 입힌다.
+func _lay_deep(water_d: float, left_open: bool, right_open: bool) -> void:
+	var al: Array = _wp["alpha"]
+	var top_a := clampf(float(al[0]) / maxf(float(al[1]), 0.01), 0.0, 1.0)
+	var a := -SHORE_OUT if left_open else -TUCK
+	var b := size.x + (SHORE_OUT if right_open else TUCK)
+	var fl := SHORE_FADE if left_open else TUCK + 4.0
+	var fr := SHORE_FADE if right_open else TUCK + 4.0
+	var xs := PackedFloat32Array([a, minf(a + fl, (a + b) * 0.5), maxf(b - fr, (a + b) * 0.5), b])
+	var xa := PackedFloat32Array([0.0, 1.0, 1.0, 0.0])
+	var ys := PackedFloat32Array([0.0, water_d, water_d + FLOOR_SINK])
+	var ya := PackedFloat32Array([top_a, 1.0, 0.0])
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	for xi in 4:
+		for yi in 3:
+			pts.append(Vector2(xs[xi], ys[yi]))
+			cols.append(Color(1, 1, 1, xa[xi] * ya[yi]))
+	var idx := PackedInt32Array()
+	for xi in 3:
+		for yi in 2:
+			var p := xi * 3 + yi
+			idx.append_array(PackedInt32Array([p, p + 1, p + 3, p + 1, p + 4, p + 3]))
+	_deep._tris(TerrainArt.BUF_PLAIN, pts, PackedVector2Array(), cols, idx)
+
+
+## 결: water 조각들의 가운데 토막(조각 양 끝의 비탈은 피함)을 이어 깐다. 조각의 위(수면 테두리)~band 까지만 쓰고
+## water_d px 아래(바닥 윗면)부터 FLOOR_SINK px 동안 사라진다 (물빛 위에 옅게 — 진하기는 _tick_art 가 art_alpha 로).
 func _lay_body(skin: TerrainSkin, water_d: float, left_open: bool, right_open: bool) -> void:
 	var names := skin.list("water")
 	var rng := _body._rng
 	var top := func(_x: float) -> float: return 0.0
 	var a := -SHORE_OUT if left_open else -TUCK
 	var b := size.x + (SHORE_OUT if right_open else TUCK)
-	var al: Array = _wp["alpha"]
-	var top_a := clampf(float(al[0]) / maxf(float(al[1]), 0.01), 0.0, 1.0)
+	var top_a := 0.75   # 수면 바로 아래 결은 조금 옅게 (테두리는 남는다)
 	var x := a
 	var first := true
 	var guard := 0
@@ -405,13 +443,15 @@ func _tick_art() -> void:
 	var look := Vector3(snappedf(_clear, 0.004), 1.0 if walk else 0.0, 0.0)
 	if look != _last_look:
 		_last_look = look
-		var c: Color = (_wp["tint_ash"] as Color).lerp(_wp["tint"], _clear)
 		var aa: Array = _wp["alpha_ash"]
 		var al: Array = _wp["alpha"]
-		var a := lerpf(float(aa[1]), float(al[1]), _clear)
+		var d: Color = (_wp["deep_ash"] as Color).lerp(_wp["deep"], _clear)
+		var c: Color = (_wp["tint_ash"] as Color).lerp(_wp["tint"], _clear)
 		if walk:
+			d = d.lightened(0.08)
 			c = c.lightened(0.08)
-		_body.modulate = Color(c.r, c.g, c.b, a)
+		_deep.modulate = Color(d.r, d.g, d.b, lerpf(float(aa[1]), float(al[1]), _clear))
+		_body.modulate = Color(c.r, c.g, c.b, lerpf(float(_wp["art_alpha_ash"]), float(_wp["art_alpha"]), _clear))
 		if _waves:
 			_waves.modulate = Color(1, 1, 1, float(_wp["wave_alpha"]) * (0.7 + 0.3 * _clear))
 	if _waves:

@@ -42,7 +42,7 @@ var _skin: TerrainSkin
 
 
 func _ready() -> void:
-	material = preload("res://shaders/ash_purify.tres")
+	material = preload("res://shaders/ash_purify_far.tres")   # 배경 장식: 배경 그림과 같은 재질 (앞뒤 가르기 — 발판으로 오해받지 않게 아지랑이 뒤로)
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 

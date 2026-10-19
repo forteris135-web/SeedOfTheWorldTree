@@ -83,6 +83,33 @@ static func for_room(room: Node, region := "") -> TerrainSkin:
 	return skin
 
 
+## 방의 앞뒤 가르기 값 (Purity.apply_depth 에 넣는다 — TERRAIN.md 5장): 지역 그림 옷의 "depth" 에 방 그림 옷(room_skins)의 "depth" 를,
+## 다시 그 위에 "room_depth": {방 id: {…}} 를 덮어쓴다 ("ash"·"alive" 안은 열쇠마다 합친다). 그림 옷이 없으면 빈 사전(아무것도 안 함).
+static func depth_of(room: Node) -> Dictionary:
+	var out := {}
+	if room == null or not ("region" in room):
+		return out
+	var reg := for_region(str(room.get("region")))
+	var own := for_room(room)
+	var rid := str(room.get("room_id")) if "room_id" in room else ""
+	for s in ([reg] if own == reg else [reg, own]):
+		if s == null:
+			continue
+		_merge_depth(out, s.data.get("depth", {}))
+		_merge_depth(out, (s.data.get("room_depth", {}) as Dictionary).get(rid, {}))
+	return out
+
+
+static func _merge_depth(out: Dictionary, add: Dictionary) -> void:
+	for k in add:
+		if (k == "ash" or k == "alive") and add[k] is Dictionary:
+			if not out.has(k):
+				out[k] = {}
+			(out[k] as Dictionary).merge(add[k], true)
+		else:
+			out[k] = add[k]
+
+
 ## 시험용: 기억한 것을 비운다 (그림을 다시 자른 뒤 등).
 static func clear_cache() -> void:
 	_cache.clear()

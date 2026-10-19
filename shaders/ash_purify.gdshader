@@ -13,6 +13,15 @@ uniform vec2 center = vec2(0.5, 0.5);                  // 색이 번져 나오�
 uniform float radius = 0.0;                            // 번진 반지름 (화면 높이 = 1)
 uniform float softness = 0.3;                          // 경계의 부드러움
 uniform sampler2D ash_lut : filter_linear, repeat_disable;
+// 앞뒤 가르기 (TERRAIN.md 5장): 같은 셰이더를 재질 세 벌이 쓴다 — ash_purify(가운데 겹: 안개·잎·기록물 등, 아래 값은 기본 = 아무것도 안 함),
+//   ash_purify_far(배경 그림: 아지랑이 색으로 옅게·대비 낮게), ash_purify_fore(앞 지형: 조금 진하고 또렷하게).
+//   Purity.apply_depth 가 방의 그림 옷 데이터("depth")로 값을 넣는다. vec2 는 (정화 전, 정화 후) — 번지는 연출 중에는 화면 자리마다 섞인다.
+uniform vec2 haze = vec2(0.0, 0.0);                     // 아지랑이 색으로 섞는 양 (0~1)
+uniform vec3 haze_color_ash : source_color = vec3(0.8, 0.8, 0.8);
+uniform vec3 haze_color_alive : source_color = vec3(0.8, 0.8, 0.8);
+uniform vec2 contrast = vec2(1.0, 1.0);                 // 대비 배수 (밝기 0.5 를 기준으로; 배경은 1 보다 작게, 앞 지형은 크게)
+uniform vec2 value = vec2(1.0, 1.0);                    // 밝기 배수
+uniform vec2 sat = vec2(1.0, 1.0);                      // 채도 배수
 // 옛 값 (지금은 쓰지 않지만 다른 곳에서 넣어도 오류가 나지 않게 남겨 둔다)
 uniform vec3 ash_tint : source_color = vec3(0.66, 0.70, 0.78);
 uniform float ash_contrast = 0.7;
@@ -44,6 +53,22 @@ vec3 ash_of(vec3 rgb) {
 	return a * max(lum, 1.0);
 }
 
+// 앞뒤 가르기: 채도 → 대비(0.5 기준) → 밝기 → 아지랑이. 1 넘는 빛(발광)은 넘는 만큼 그대로 지킨다.
+vec3 depth_of(vec3 col, float k) {
+	vec2 w = vec2(1.0 - k, k);
+	float st = dot(sat, w);
+	float ct = dot(contrast, w);
+	float va = dot(value, w);
+	float hz = dot(haze, w);
+	vec3 over = max(col - 1.0, vec3(0.0));
+	vec3 c = min(col, vec3(1.0));
+	float lum = dot(c, vec3(0.299, 0.587, 0.114));
+	c = mix(vec3(lum), c, st);
+	c = clamp((c - 0.5) * ct + 0.5, 0.0, 1.0) * va;
+	c = mix(c, mix(haze_color_ash, haze_color_alive, k), hz);
+	return c + over;
+}
+
 void fragment() {
 	vec4 c = COLOR;
 	vec2 aspect = vec2(SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x, 1.0);
@@ -56,6 +81,7 @@ void fragment() {
 	if (k < 0.999) {
 		col = mix(ash_of(c.rgb), c.rgb, k);   // 정화된 곳은 표를 찾지 않는다 (가벼움)
 	}
+	col = depth_of(col, k);
 	col += vec3(1.0, 0.85, 0.5) * edge * 0.25 * float(radius > 0.001 && radius < 3.0);
 	COLOR = vec4(col, c.a);
 }

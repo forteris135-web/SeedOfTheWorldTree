@@ -44,7 +44,7 @@ func _ready() -> void:
 	_skin = TerrainSkin.for_region(r)
 	if _skin == null or not _skin.pieces.has("wheel_ring") or not _skin.pieces.has("wheel_hub"):
 		return
-	material = preload("res://shaders/ash_purify.tres")
+	material = preload("res://shaders/ash_purify_far.tres")   # 배경 장식: 배경 그림과 같은 재질 (앞뒤 가르기 — 발판으로 오해받지 않게 아지랑이 뒤로)
 	var k := art_scale
 	# 뒤: 관 탑 (바퀴 왼쪽 뒤, 관 끝이 바퀴 왼쪽 위에 오게)
 	var outlet := Vector2(-R_RING * 0.78, -R_RING * 1.02) * k

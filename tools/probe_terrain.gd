@@ -739,10 +739,12 @@ func _probe_art_rooms(ids: Array) -> void:
 	var fill_bad := []
 	var tip_bad := []
 	var tip_worst := 0.0
+	var depth_bad := []
 	var verbose := "--verbose" in OS.get_cmdline_user_args()
 	for id in ids:
 		var room := await _load_room(id)
 		var want := TerrainSkin.for_room(room)
+		depth_bad.append_array(_depth_issues(id, room))
 		var solids := _solids(room)
 		var bounds: Rect2 = room.get("bounds")
 		for t in room.get_node("Terrain").get_children():
@@ -766,6 +768,11 @@ func _probe_art_rooms(ids: Array) -> void:
 			# 몸통 결은 부모 묶음 맨 아래 겹 (나중 형제의 몸통이 앞 형제의 끝 조각을 덮지 않게)
 			if not art.fill_in_layer():
 				fill_bad.append(nm)
+			# 앞뒤 가르기: 앞 지형 재질, 조각이 있으면 뒤 그림자
+			if t.material != FORE_MAT:
+				depth_bad.append("%s 앞 지형 재질 아님" % nm)
+			if (art._bufs[TerrainArt.BUF_ATLAS]["idx"] as PackedInt32Array).size() >= 3 and not art.has_shadow():
+				depth_bad.append("%s 뒤 그림자 없음" % nm)
 			# 한쪽 방향 발판의 빛 점선 단서
 			if t is Platform and t.one_way and (art._bufs[TerrainArt.BUF_PLAIN]["idx"] as PackedInt32Array).size() < 6:
 				dash_bad.append(nm)
@@ -854,6 +861,47 @@ func _probe_art_rooms(ids: Array) -> void:
 	_check(ends_checked > 250 and over_bad.is_empty(), "드러난 충돌 끝 %d곳: 끝 밖 발 높이(윗면 +2·+8px)에 그림이 %.0fpx 넘게 남지 않는다 (가장 긴 %s) %s" % [ends_checked, OVERHANG_MAX, ("%.0fpx %s" % [over_all[0][0], over_all[0][1]]) if not over_all.is_empty() else "-", over_bad.slice(0, 6)])
 	_check(fill_bad.is_empty(), "몸통 결은 지형 묶음 맨 아래 겹에 그린다 (모든 몸통 → 모든 조각; 아닌 것 %s)" % [fill_bad.slice(0, 6)])
 	_check(tip_bad.is_empty(), "방의 가시: 그림이 판정을 덮고, 끝이 상자 위로 0.5h 넘게 솟지 않는다 (가장 높은 %.2fh) %s" % [tip_worst, tip_bad.slice(0, 4)])
+	_check(depth_bad.is_empty(), "앞뒤 가르기 (방 %d곳): 배경 그림·배경 장식은 배경 재질, 지형은 앞 지형 재질 + 뒤 그림자, 웅덩이는 그림자 없음, 방의 값이 그림 옷 데이터대로이고 범위 안 %s" % [ids.size(), depth_bad.slice(0, 6)])
+
+
+const FAR_MAT := preload("res://shaders/ash_purify_far.tres")
+const FORE_MAT := preload("res://shaders/ash_purify_fore.tres")
+const SHADOW_MAT := preload("res://shaders/terrain_shadow.tres")
+
+
+## 앞뒤 가르기 (TERRAIN.md 5장) — 방 하나: 배경 그림(ArtBackdrop)·배경 장식(TerrainProp·Waterwheel)은 배경 재질, 웅덩이 물은 그림자 없음,
+## Purity 가 넣은 값 = 그 방의 그림 옷 데이터(TerrainSkin.depth_of), 값의 범위 (배경은 정화 전에 더 흐리고 대비가 낮다, 앞 지형은 너무 어둡지 않다).
+func _depth_issues(id: String, room: Node) -> Array:
+	var out := []
+	for n in room.find_children("*", "Sprite2D", true, false):
+		if n.get_script() == preload("res://scripts/world/art_backdrop.gd") and n.material != FAR_MAT:
+			out.append("%s/%s 배경 그림 재질 아님" % [id, n.name])
+	for n in room.find_children("*", "Node2D", true, false):
+		if (n is TerrainProp or n is Waterwheel) and n.material != FAR_MAT:
+			out.append("%s/%s 배경 장식 재질 아님" % [id, n.name])
+	for pool in room.find_children("*", "SapPool", true, false):
+		for a in pool.find_children("*", "TerrainArt", true, false):
+			if (a as TerrainArt).has_shadow():
+				out.append("%s/%s 물이 그림자를 드리운다" % [id, pool.name])
+	var spec := TerrainSkin.depth_of(room)
+	var d: Dictionary = Purity.depth
+	if not spec.has("ash") or not spec.has("alive"):
+		out.append("%s 그림 옷 데이터에 depth 가 없다" % id)
+		return out
+	for st in ["ash", "alive"]:
+		for k in (spec[st] as Dictionary):
+			if str(d[st].get(k)) != str(spec[st][k]):
+				out.append("%s %s.%s 이 %s ≠ 데이터 %s" % [id, st, k, d[st].get(k), spec[st][k]])
+	var a: Dictionary = d["ash"]
+	var b: Dictionary = d["alive"]
+	if not (float(a["haze"]) >= float(b["haze"]) and float(a["contrast"]) <= float(b["contrast"]) and float(a["contrast"]) <= 1.0):
+		out.append("%s 배경: 정화 전이 더 흐리고 대비가 낮아야 (흐림 %.2f/%.2f, 대비 %.2f/%.2f)" % [id, a["haze"], b["haze"], a["contrast"], b["contrast"]])
+	for st in [a, b]:
+		if float(st["fore_value"]) < 0.8 or float(st["fore_value"]) > 1.15 or float(st["shadow"]) < 0.0 or float(st["shadow"]) > 1.0 or float(st["haze"]) > 0.5:
+			out.append("%s 범위 밖 (앞 지형 밝기 %.2f, 그림자 %.2f, 흐림 %.2f)" % [id, st["fore_value"], st["shadow"], st["haze"]])
+	if FAR_MAT.get_shader_parameter("haze") != Vector2(float(a["haze"]), float(b["haze"])) or SHADOW_MAT.get_shader_parameter("strength") != Vector2(float(a["shadow"]), float(b["shadow"])) or FORE_MAT.get_shader_parameter("value") != Vector2(float(a["fore_value"]), float(b["fore_value"])):
+		out.append("%s 재질 값이 방의 값과 다르다" % id)
+	return out
 
 
 ## c) 충돌은 그대로: 그림 옷을 끈 채(옛 방식) 읽은 방과 켠 채 읽은 방의 지형·가시·웅덩이 충돌 모양·자리가 똑같다
@@ -1366,27 +1414,34 @@ func _probe_pools(ids: Array) -> void:
 				bad.append("%s 그림 %s 이 웅덩이 폭 %.0f 을 덮지 않음" % [nm, ab, pool.size.x])
 			if ab.position.x < -SapPool.SHORE_OUT - 2.0 or ab.end.x > pool.size.x + SapPool.SHORE_OUT + 2.0:
 				bad.append("%s 그림이 물가보다 멀리 %s" % [nm, ab])
-			# 비침: 몸통 꼭짓점 알파(위·아래) × 노드 투명도
-			var cols: PackedColorArray = body._bufs[TerrainArt.BUF_ATLAS]["cols"]
-			var pts: PackedVector2Array = body._bufs[TerrainArt.BUF_ATLAS]["pts"]
-			var a_top := 0.0
-			var a_mid := 0.0
-			for i in pts.size():
-				if absf(pts[i].y) < 0.5:
-					a_top = maxf(a_top, cols[i].a)
-				else:
-					a_mid = maxf(a_mid, cols[i].a)
-			var ma: float = body.modulate.a
-			alphas.append("%s %.2f/%.2f" % [pool.name, a_top * ma, a_mid * ma])
-			if not (a_top < a_mid and a_mid * ma < 0.9 and a_top * ma < 0.6):
-				bad.append("%s 비치지 않음 (위 %.2f 아래 %.2f)" % [nm, a_top * ma, a_mid * ma])
+			# 비침: 물빛(위가 옅고 깊을수록 진한 그라데이션) + 결(옅은 그림) — 위·깊은 곳의 덮임이 0.9 미만
+			var deep: TerrainArt = pool.get("_deep")
+			if deep == null:
+				bad.append("%s 물빛 겹 없음" % nm)
+				continue
+			var dcols: PackedColorArray = deep._bufs[TerrainArt.BUF_PLAIN]["cols"]
+			var dpts: PackedVector2Array = deep._bufs[TerrainArt.BUF_PLAIN]["pts"]
+			var d_top := 0.0
+			var d_mid := 0.0
+			for i in dpts.size():
+				if absf(dpts[i].y) < 0.5:
+					d_top = maxf(d_top, dcols[i].a)
+				elif dcols[i].a > 0.0:
+					d_mid = maxf(d_mid, dcols[i].a)
+			var da: float = deep.modulate.a
+			var ba: float = body.modulate.a
+			var cover_top := 1.0 - (1.0 - d_top * da) * (1.0 - ba * 0.75)
+			var cover_mid := 1.0 - (1.0 - d_mid * da) * (1.0 - ba)
+			alphas.append("%s %.2f/%.2f" % [pool.name, cover_top, cover_mid])
+			if not (d_top < d_mid and cover_mid < 0.9 and cover_top < 0.6):
+				bad.append("%s 비치지 않음 (위 %.2f 깊은 곳 %.2f)" % [nm, cover_top, cover_mid])
 			# 아래끝: 바닥 윗면(없으면 웅덩이 바닥) 아래 FLOOR_SINK 안에서 사라진다 (그려진 바위 바닥이 보이지 않게)
 			var floor_y: float = minf(pool._floor_below(), pool.size.y)
 			if ab.end.y + top > floor_y + SapPool.FLOOR_SINK + SapPool.FILL_RISE + 2.0:
 				bad.append("%s 몸통 아래끝 %.0f 이 바닥 %.0f 아래로 길다" % [nm, ab.end.y + top, floor_y])
 		await _free_room(room)
-	_check(n >= 12 and bad.is_empty(), "수액 웅덩이 %d곳: 물 그림, 비침, 폭·물가, 수면 = 맞는 영역 윗변, 아래끝 바닥에서 사라짐, 판정·surface_y 그대로 %s" % [n, bad.slice(0, 6)])
-	print("[probe]   웅덩이 비침(위/아래 알파): %s" % [alphas])
+	_check(n >= 12 and bad.is_empty(), "수액 웅덩이 %d곳: 물빛·결 두 겹, 비침(덮임 위 0.6·깊은 곳 0.9 미만), 폭·물가, 수면 = 맞는 영역 윗변, 아래끝 바닥에서 사라짐, 판정·surface_y 그대로 %s" % [n, bad.slice(0, 6)])
+	print("[probe]   웅덩이 덮임(위/깊은 곳): %s" % [alphas])
 
 
 ## i) 지역마다 따로 정한 것 (데이터·방 파일): 지역 그림 옷 시험(9 a~h)은 위에서 모든 지역을 같은 기준으로 쟀다.

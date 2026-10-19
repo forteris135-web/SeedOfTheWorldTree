@@ -5,8 +5,14 @@
   "scale": 1.0,
   "tint": [0.82, 0.78, 0.72],
   "room_tint": {"village_02": [1.0, 0.95, 0.88], "village_mini_1": [1.0, 0.95, 0.88], "village_hidden_2": [1.0, 0.95, 0.88]},
+  "room_depth": {"village_02": {"ash": {"haze": 0.38, "haze_color": "#30343c", "contrast": 0.62, "fore_value": 1.08, "fore_contrast": 1.0, "shadow": 0.3}, "alive": {"haze": 0.2, "haze_color": "#262c3e", "contrast": 0.8, "fore_value": 1.04, "fore_contrast": 1.0, "shadow": 0.22}, "shadow_color_ash": "#8d96a8", "shadow_color_alive": "#f0b070"}, "village_mini_1": {"ash": {"haze": 0.38, "haze_color": "#30343c", "contrast": 0.62, "fore_value": 1.08, "fore_contrast": 1.0, "shadow": 0.3}, "alive": {"haze": 0.2, "haze_color": "#262c3e", "contrast": 0.8, "fore_value": 1.04, "fore_contrast": 1.0, "shadow": 0.22}, "shadow_color_ash": "#8d96a8", "shadow_color_alive": "#f0b070"}, "village_hidden_2": {"ash": {"haze": 0.38, "haze_color": "#30343c", "contrast": 0.62, "fore_value": 1.08, "fore_contrast": 1.0, "shadow": 0.3}, "alive": {"haze": 0.2, "haze_color": "#262c3e", "contrast": 0.8, "fore_value": 1.04, "fore_contrast": 1.0, "shadow": 0.22}, "shadow_color_ash": "#8d96a8", "shadow_color_alive": "#f0b070"}},
   "fill": {"top": 1.0, "deep": 0.76, "deep_px": 360, "rim": 0.78, "rim_px": 30, "wall": 0.95},
   "lift": 2,
+  "depth": {
+    "ash": {"haze": 0.26, "haze_color": "#dcd8d2", "contrast": 0.68, "sat": 0.8, "fore_value": 0.88, "fore_contrast": 1.04, "shadow": 0.6},
+    "alive": {"haze": 0.1, "haze_color": "#f2e2c4", "contrast": 0.87, "sat": 0.94, "fore_value": 0.96, "fore_contrast": 1.03, "shadow": 0.45},
+    "shadow_lod": 4.5, "shadow_offset": [0, 9]
+  },
   "roles": {
     "ground": ["top_e", "top_e", "top_a", "top_b", "top_c", "top_d"],
     "branch": ["branch_a", "branch_b", "isle_a", "isle_b", "bridge_a"],

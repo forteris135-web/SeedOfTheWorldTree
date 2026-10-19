@@ -68,7 +68,7 @@ func _ready() -> void:
 	var shape := CollisionPolygon2D.new()
 	shape.polygon = polygon
 	add_child(shape)
-	material = preload("res://shaders/ash_purify.tres")
+	material = preload("res://shaders/ash_purify_fore.tres")   # 앞 지형 재질 (앞뒤 가르기 — TERRAIN.md 5장)
 	var skin := TerrainSkin.for_node(self, style_region)
 	if skin != null:
 		_art = TerrainArt.new(skin, self)
