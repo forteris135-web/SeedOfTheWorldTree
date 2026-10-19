@@ -858,6 +858,9 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 			polys = next
 	for pp in polys:
 		fill_polygon(pp, vertical, shade)
+	# 1b) 기둥 그림 (덧붙인 역할 — 지역에 pillar 조각이 있을 때만; 수관 등은 그대로): 세로로 긴 장식 덩어리에 세로로 이어 입힌다
+	if decorate and vertical and skin.has_role("pillar"):
+		_pillar_run(poly, sides)
 	# 2) 윗면 띠
 	if decorate and skin.has_role("ground"):
 		for t in tops:
@@ -884,6 +887,79 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 					_hang_at(Vector2(top_pt.x + nrm.x * 6.0, y), nrm.x, _rng.randf_range(0.6, 0.85))
 				first = false
 				y += _rng.randf_range(260.0, 480.0)
+
+
+## 기둥 그림 (pillar 역할 — 매달린 뿌리 기둥처럼 세로로 긴 그림): 덩어리의 드러난 옆면 높이만큼 위에서 아래로 이어 붙인다.
+## 폭은 덩어리 폭의 params.pillar.wide 배(기본 1.25, 가운데 맞춤 — 몸통 결의 곧은 옆선을 덮는다), 이음매는 아래 토막의 윗부분이
+## overlap 비율만큼 서서히 나타나며 겹친다. 위끝은 덮인 쪽(천장 등) 속으로 조금 밀어 넣고, 아래끝이 드러났으면 그림의 가늘어지는
+## 끝이 tail 비율만큼 아래로 늘어진다. 아래끝이 덮였으면(바닥에 선 기둥) 거기서 끝난다.
+func _pillar_run(poly: PackedVector2Array, sides: Array) -> void:
+	if sides.is_empty():
+		return
+	var bb := Rect2(poly[0], Vector2.ZERO)
+	for p in poly:
+		bb = bb.expand(p)
+	var y0 := INF
+	var y1 := -INF
+	for sd in sides:
+		y0 = minf(y0, minf((sd[0] as Vector2).y, (sd[1] as Vector2).y))
+		y1 = maxf(y1, maxf((sd[0] as Vector2).y, (sd[1] as Vector2).y))
+	if y1 - y0 < 60.0:
+		return
+	var names := skin.list("pillar")
+	var name: String = names[_rng.randi_range(0, names.size() - 1)]
+	var sz := skin.size_of(name)
+	var r := skin.rect_of(name)
+	var wide := float(skin.param("pillar", "wide", 1.25))
+	var ov_k := float(skin.param("pillar", "overlap", 0.2))
+	var tail_k := float(skin.param("pillar", "tail", 0.22))
+	var w := bb.size.x * wide
+	var k := w / sz.x
+	var th := sz.y * k
+	var top_cov := _covered(Vector2(bb.get_center().x, y0 - OUT))
+	var bot_free := not _covered(Vector2(bb.get_center().x, y1 + OUT))
+	var a := y0 - (TUCK if top_cov else 0.0)
+	var b := y1 + (th * tail_k if bot_free else 0.0)
+	var ov := th * ov_k
+	var n := maxi(1, int(round((b - a - ov) / (th - ov))))
+	# 토막 높이를 맞춰 a..b 를 꼭 채운다 (세로 늘이기는 0.75~1.35 배 안 — 넘으면 토막 수가 바뀐다)
+	var tile := (b - a + (n - 1) * ov) / n
+	if tile > th * 1.35:
+		n += 1
+		tile = (b - a + (n - 1) * ov) / n
+	var x0 := bb.get_center().x - w * 0.5
+	var flip := _rng.randf() < 0.5
+	for i in n:
+		var ty := a + i * (tile - ov)
+		var fade_top := ov if i > 0 else 0.0
+		# 마지막 토막이 바닥에 선 기둥이면 끝에서 잘린다 (그림의 가는 끝이 바닥 속으로 들어가지 않게 끝 18px 동안 서서히)
+		var fade_bot := 18.0 if (i == n - 1 and not bot_free) else 0.0
+		_vtile(r, x0, ty, w, tile, flip, fade_top, fade_bot)
+		flip = not flip
+
+
+## 세로 토막 하나 (atlas 상자 r 전체를 x0, y0, w × h 에 펴서): 위 fade_top px 동안 서서히 나타나고 아래 fade_bot px 동안 사라진다.
+func _vtile(r: Rect2, x0: float, y0: float, w: float, h: float, flip: bool, fade_top: float, fade_bot: float) -> void:
+	var vs := PackedFloat32Array([0.0, clampf(fade_top / h, 0.0, 0.5), 1.0 - clampf(fade_bot / h, 0.0, 0.5), 1.0])
+	var al := PackedFloat32Array([0.0 if fade_top > 0.0 else 1.0, 1.0, 1.0, 0.0 if fade_bot > 0.0 else 1.0])
+	var cols_n := 3
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var cols := PackedColorArray()
+	for ci in cols_n:
+		var t := float(ci) / (cols_n - 1)
+		var ut := 1.0 - t if flip else t
+		for ri in 4:
+			pts.append(Vector2(x0 + w * t, y0 + h * vs[ri]))
+			uvs.append(Vector2((r.position.x + r.size.x * ut) / skin.atlas_size.x, (r.position.y + r.size.y * vs[ri]) / skin.atlas_size.y))
+			cols.append(Color(_mod.r, _mod.g, _mod.b, _mod.a * al[ri]))
+	var idx := PackedInt32Array()
+	for ci in cols_n - 1:
+		for ri in 3:
+			var p := ci * 4 + ri
+			var q := p + 4
+			idx.append_array(PackedInt32Array([p, p + 1, q, p + 1, q + 1, q]))
+	_tris(BUF_ATLAS, pts, uvs, cols, idx)
 
 
 ## 드러난 옆변·아랫변을 나무껍질 혹처럼 살짝 울퉁불퉁하게 (그림만 — 충돌은 곧은 그대로). 바깥 +9 ~ 안 -3 px.

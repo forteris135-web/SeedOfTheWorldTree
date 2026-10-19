@@ -4,14 +4,15 @@
   "note": "심연 지형 그림 조각 (금빛 뿌리·보랏빛 등나무·수정 시트). 자르기: tools/terrain_cut.gd abyss → art/terrain/abyss/. 설명은 TERRAIN.md. 달빛 정원·정원의 끝은 room_skins 로 abyss_garden(푸른 버섯 정원 시트)을 쓴다. 잿빛 팔레트(ash)는 심연 지역 전체가 이 파일 것을 쓴다.",
   "room_skins": {"moon_garden": "abyss_garden", "abyss_boss": "abyss_garden"},
   "scale": 1.0,
-  "tint": [0.86, 0.82, 0.8],
-  "fill": {"top": 1.0, "deep": 0.62, "deep_px": 320, "rim": 0.78, "rim_px": 30, "wall": 0.84},
+  "tint": [0.8, 0.76, 0.76],
+  "fill": {"top": 0.86, "deep": 0.5, "deep_px": 300, "rim": 0.74, "rim_px": 30, "wall": 0.8},
   "lift": 2,
-  "roles": {"branch": ["vine_a"], "log": ["log_a"], "ground": ["log_a", "deck_a"]},
+  "roles": {"branch": ["vine_a", "vine_b", "vine_c"], "log": ["log_a"], "ground": ["log_a", "vine_b", "deck_a"]},
   "params": {
     "ground": {"band": 40, "fade": 55, "cap": 150, "overlap": 110, "caps": ["log_a"]},
     "branch": {"thin_poly": 110},
     "glow": {"color": [1.0, 0.76, 0.48]},
+    "pillar": {"wide": 1.3, "overlap": 0.22, "tail": 0.2},
     "thorn": {"tint": [0.92, 0.74, 0.68], "reach_min": 0.9, "reach_max": 1.35, "sink": 22}
   },
   "ash": {
@@ -30,6 +31,9 @@
     "glow": {"lum": 0.8, "cell": 40, "min_px": 40, "max": 6},
     "pieces": [
       {"name": "vine_a", "role": "branch", "src": [785, 11, 739, 280], "keep": "largest", "ignore": [[995, 30, 60, 80], [1093, 100, 25, 40], [1432, 5, 30, 50]]},
+      {"name": "vine_b", "role": "branch", "src": [866, 227, 660, 486], "keep": "largest", "ignore": [[1300, 230, 50, 70], [1380, 245, 40, 50]]},
+      {"name": "vine_c", "role": "branch", "src": [898, 393, 440, 383], "keep": "largest"},
+      {"name": "pillar_a", "role": "pillar", "src": [866, 227, 660, 486], "keep": "largest", "clip": [1352, 300, 178, 420]},
       {"name": "log_a", "role": "branch", "src": [739, 720, 786, 290], "keep": "largest", "ignore": [[840, 745, 25, 45], [885, 770, 20, 35], [950, 745, 25, 50], [1050, 775, 20, 40], [1335, 750, 40, 55]]},
       {"name": "deck_a", "role": "ground", "src": [30, 440, 290, 280], "clip": [30, 440, 290, 280], "keep": "largest", "ignore": [[160, 440, 40, 45], [260, 440, 40, 40]]},
       {"name": "hang_a", "role": "hang", "src": [15, 19, 410, 382], "scale": 0.6},
