@@ -67,8 +67,13 @@ func _rig_enemy_scenes() -> Array:
 			for k in st.get_node_property_count(i):
 				if st.get_node_property_name(i, k) == "script":
 					var sc = st.get_node_property_value(i, k)
-					if sc is Script and (sc as Script).resource_path.ends_with("enemy_rig_visual.gd"):
-						out.append(path)
+					# EnemyRigVisual 과 그것을 물려받은 그림(경비병·오웬처럼 몹만의 연출을 더한 것)도 찾는다
+					var base_sc = sc
+					while base_sc is Script:
+						if (base_sc as Script).resource_path.ends_with("enemy_rig_visual.gd"):
+							out.append(path)
+							break
+						base_sc = (base_sc as Script).get_base_script()
 	out.sort()
 	return out
 
@@ -286,6 +291,8 @@ func _probe_enemy_fall(path: String, from_front: bool) -> void:
 		e._physics_process(STEP)
 		vis._process(STEP)
 	e.hp = 1.0
+	if "_block_open" in e:
+		e.set("_block_open", 99.0)   # 방패 몹(경비병): 방패가 들린 채로 — 앞에서 친 공격을 막지 않게 (막으면 쓰러지지 않는다)
 	var src: Node2D = null
 	if from_front:
 		src = Node2D.new()

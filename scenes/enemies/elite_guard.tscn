@@ -1,8 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://c1seedeliteguard"]
+[gd_scene load_steps=6 format=3 uid="uid://c1seedeliteguard"]
 
 [ext_resource type="Script" path="res://scripts/enemies/elite_guard.gd" id="1_enemy"]
-[ext_resource type="Script" path="res://scripts/enemies/enemy_sprite_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://art/enemies/enemy_guard.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/enemies/guard_rig_visual.gd" id="2_visual"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 
@@ -39,10 +38,7 @@ shape = SubResource("CapsuleShape2D_body")
 [node name="Visual" type="Node2D" parent="."]
 modulate = Color(0.85, 0.82, 0.8, 1)
 script = ExtResource("2_visual")
-texture = ExtResource("3_tex")
-art_faces_right = true
-art_scale = 0.17
-foot_offset = 30.0
+rig_id = "guard"
 
 [node name="Hurtbox" type="Area2D" parent="."]
 position = Vector2(0, -5)

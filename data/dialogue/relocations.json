@@ -24,7 +24,8 @@
     "facing": -1,
     "texture": "res://art/enemies/enemy_guard_savable.png",
     "art_scale": 0.17,
-    "art_faces_right": false
+    "art_faces_right": false,
+    "rig": "guard_savable"
   },
   "owen": {
     "scene": "village_02",
@@ -33,7 +34,8 @@
     "npc_id": "owen",
     "texture": "res://art/enemies/enemy_owen.png",
     "art_scale": 0.17,
-    "art_faces_right": false
+    "art_faces_right": false,
+    "rig": "owen"
   },
   "herbalist_abyss": {
     "scene": "village_shrine",
