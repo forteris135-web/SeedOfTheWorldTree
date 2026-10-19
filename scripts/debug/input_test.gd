@@ -11,10 +11,9 @@ const ACTIONS := [
 	["move_down", "아래 (메뉴·사다리)", "L스틱 ↓", "L스틱 ↓", "S, ↓"],
 	["jump", "점프", "×", "A", "Space"],
 	["dodge", "회피 / 달리기", "○", "B", "Shift"],
-	["attack_light", "약공격", "R1", "RB", "J"],
-	["attack_heavy", "강공격 / 차지", "R2", "RT", "K"],
+	["attack_light", "약공격 (공중 ↓ = 낙하 공격)", "R1", "RB", "J"],
 	["guard", "가드 / 저스트 가드", "L1", "LB", "L"],
-	["soul_ability", "영혼 능력", "L2", "LT", "I"],
+	["soul_ability", "영혼 기술", "L2, R2", "LT, RT", "I, K"],
 	["heal", "회복 (이슬 방울)", "□", "X", "R, H"],
 	["interact", "상호작용 / 정화의 손길", "△", "Y", "E, U"],
 	["soul_prev", "영혼 전환 ←", "십자키 ←", "십자키 ←", "-"],
@@ -101,10 +100,10 @@ func _build_ui() -> void:
 	_stick = StickView.new()
 	_stick.custom_minimum_size = Vector2(300, 300)
 	left.add_child(_stick)
-	left.add_child(_make_label("L2 / LT (영혼 능력)", 20, TEXT_DIM))
+	left.add_child(_make_label("L2 / LT (영혼 기술)", 20, TEXT_DIM))
 	_trigger_left = _make_bar()
 	left.add_child(_trigger_left)
-	left.add_child(_make_label("R2 / RT (강공격)", 20, TEXT_DIM))
+	left.add_child(_make_label("R2 / RT (영혼 기술, 옛 강공격 자리)", 20, TEXT_DIM))
 	_trigger_right = _make_bar()
 	left.add_child(_trigger_right)
 	_touch_label = _make_label("터치: 없음", 20, TEXT_DIM)
@@ -195,7 +194,7 @@ func _process(_delta: float) -> void:
 		# 키보드만 있을 때도 이동 방향을 스틱 그림으로 보여 준다.
 		stick = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 		_trigger_left.value = Input.get_action_strength("soul_ability")
-		_trigger_right.value = Input.get_action_strength("attack_heavy")
+		_trigger_right.value = Input.get_action_strength("soul_ability")
 	_stick.set_stick(stick)
 
 	# 가드를 누른 순간 진동 (저스트 가드 손맛의 기초)

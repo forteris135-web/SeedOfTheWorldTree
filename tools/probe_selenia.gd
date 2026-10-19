@@ -2,9 +2,10 @@ extends SceneTree
 ## 셀레니아 뼈대 애니메이션의 '연속성'을 숫자로 확인하는 독립 시험 (화면 없이 돈다).
 ## 실행: godot --headless --path <프로젝트> -s res://tools/probe_selenia.gd
 ## 하는 일: 진짜 소녀(player.tscn)를 바닥 위에 세우고 상태를 흐름대로 꽂으며 1/120초마다 뼈대를 한 번씩 돌린다.
-##   흐름: 대기 → 약공격 3연타 → 대기 → 걷기 → 달리기 → 점프 → 낙하 → 착지 → 방향 전환 → 강공격.
+##   흐름: 대기 → 약공격 3연타 → 대기 → 걷기 → 달리기 → 점프 → 낙하 → 착지 → 방향 전환 → 씨앗 베기 → 낙하 공격 → …
 ## 찍는 것: 관절마다 프레임 사이 최대 변화량(라디안), '툭' 하는 프레임(직전 변화의 3배 넘게 갑자기 뛴 곳),
-##   약공격·강공격마다 칼팔이 가장 빠른 순간과 몸 앞을 지나는 순간이 히트박스 구간(active) 어디에 오는지.
+##   약공격·씨앗 베기마다 칼팔이 가장 빠른 순간과 몸 앞을 지나는 순간이 히트박스 구간(active) 어디에 오는지.
+##   (강공격은 2026-10-18 없앴다. 그 자리의 영혼 기술 '씨앗 베기'와 새 '낙하 공격'을 본다.)
 ## 마지막 줄 "[probe] 결과: 통과/실패" 로 판정한다.
 
 const DT := 1.0 / 120.0
@@ -23,6 +24,7 @@ var _seg_max := {}
 var _log := []          # [시각, 관절, 변화량] 끊김 기록
 var _arm_track := []    # [시각, 칼팔 각도] (정점 계산용)
 var _landed := false
+var _plunge_landed := false   # 낙하 공격 착지 신호 (람다는 지역 변수를 값으로 잡으므로 멤버로 둔다)
 var _cur_dt := DT       # 마지막 틱의 길이 (정점 속도 계산용)
 var _cross_pct := -1.0  # 마지막 _report_peaks 가 찾은 '앞 지남' 위치 (구간의 %)
 
@@ -140,23 +142,49 @@ func _run() -> void:
 	await _steps(40, Callable())
 	_end()
 
-	_begin("강공격(최대 차지)")
-	_player.charge = 0.0
-	_player._set_state(S["HEAVY_CHARGE"])
-	await _steps(int(_player.heavy_max_charge / DT) + 2, func(): _player.charge = minf(_player.charge + DT, _player.heavy_max_charge))
-	_player._start_heavy_swing()
+	_begin("씨앗 베기(넓은 호)")
+	_player._start_soul_slash()
 	_arm_track.clear()
-	var hwindows := []
+	var swindows := []
 	last_phase = ""
-	while _player.state == S["HEAVY_SWING"] and _t < 40.0:
+	var windup_min := 10.0
+	while _player.state == S["SOUL_SLASH"] and _t < 40.0:
 		await _step(Callable())
+		if _player.attack_phase == "startup":
+			windup_min = minf(windup_min, _visual._out["arm_sword"])
 		if _player.attack_phase == "active" and last_phase != "active":
-			hwindows.append([0, _hit_on_time(_player.heavy_active)])
+			swindows.append([0, _hit_on_time(_player.slash_active)])
 		last_phase = _player.attack_phase
 	_end()
-	_report_peaks(hwindows, _player.heavy_active, "강공격")
+	_report_peaks(swindows, _player.slash_active, "씨앗 베기")
+	print("[probe]   씨앗 베기 예비동작 끝 칼팔 %.2f (설계 %.2f: 머리 위 뒤로 크게)" % [windup_min, _visual.WINDUP_S["arm_sword"]])
+	if windup_min > _visual.WINDUP_S["arm_sword"] + 0.35:
+		_fail = true
+		print("[probe]   !! 씨앗 베기 예비동작이 칼을 충분히 들어 올리지 못한다")
 
-	_begin("강공격 뒤 대기")
+	_begin("씨앗 베기 뒤 대기")
+	await _steps(60, Callable())
+	_end()
+
+	_begin("낙하 공격(점프 → 공중에서 멈칫 → 급강하 → 착지)")
+	_player._do_jump(false)
+	await _steps(30, Callable())
+	_player._start_plunge()
+	var phases := []
+	var max_vy := 0.0
+	_plunge_landed = false
+	_player.plunge_landed.connect(func(): _plunge_landed = true)
+	n = 0
+	while _player.state == S["PLUNGE"] and n < 600:
+		await _step(Callable())
+		n += 1
+		if _player.state == S["PLUNGE"] and (phases.is_empty() or phases[-1] != _player.attack_phase):
+			phases.append(_player.attack_phase)
+		max_vy = maxf(max_vy, _player.velocity.y)
+	print("[probe]   낙하 공격 국면 흐름: %s | 최고 낙하 속도 %.0f (설정 %.0f) | 착지 신호 %s | %.2f초 뒤 상태 %s" % [", ".join(phases), max_vy, _player.plunge_speed, _plunge_landed, n * DT, _player.state_name()])
+	if not (phases.has("pause") and phases.has("dive") and phases.has("land") and phases.has("recovery")) or not _plunge_landed:
+		_fail = true
+		print("[probe]   !! 낙하 공격 국면(pause→dive→land→recovery)이 빠졌다")
 	await _steps(60, Callable())
 	_end()
 
@@ -406,37 +434,53 @@ func _check_60fps() -> void:
 		print("[probe]   !! 60fps 1타 앞 지남이 히트박스 구간 35~55%% 를 벗어났다")
 	await _steps60(30)
 
-	# 강공격: 크게 돌아 지나침(설계 -1.35, 지나침 포함 -1.6 아래)
-	_begin("60fps 강공격")
-	_player.charge = 0.0
-	_player._set_state(S["HEAVY_CHARGE"])
-	await _steps60(int(_player.heavy_max_charge / D60) + 2, func(): _player.charge = minf(_player.charge + D60, _player.heavy_max_charge))
-	_player._start_heavy_swing()
+	# 씨앗 베기: 머리 위 뒤(-3.5)에서 앞 아래(-0.35)까지 크게 돌아 지나친다. 되돌림(READY 0.15)은 빼고 휘두르는 동안(startup·active)만 잰다
+	_begin("60fps 씨앗 베기")
+	_player._start_soul_slash()
 	_arm_track.clear()
 	windows = []
 	last_phase = ""
-	arm_min = 10.0
-	out_min = 10.0
-	tgt_min = 10.0
-	while _player.state == S["HEAVY_SWING"] and _t < 200.0:
+	var swing_min := 10.0     # 당긴 끝 (가장 작은 값)
+	var swing_max := -10.0    # 휘두른 끝 (startup·active 동안 가장 큰 값, 지나침 포함)
+	var world_max := -10.0
+	while _player.state == S["SOUL_SLASH"] and _t < 200.0:
 		await _step(Callable(), D60)
-		arm_min = minf(arm_min, (_visual._bones["arm_sword"] as Node2D).rotation)
-		out_min = minf(out_min, _visual._out["arm_sword"])
-		tgt_min = minf(tgt_min, _visual._tgt["arm_sword"])
+		if _player.state == S["SOUL_SLASH"] and _player.attack_phase in ["startup", "active"]:
+			swing_min = minf(swing_min, _visual._out["arm_sword"])
+			swing_max = maxf(swing_max, _visual._out["arm_sword"])
+			world_max = maxf(world_max, (_visual._bones["arm_sword"] as Node2D).rotation)
 		if _player.attack_phase == "active" and last_phase != "active":
-			windows.append([0, _hit_on_time(_player.heavy_active)])
+			windows.append([0, _hit_on_time(_player.slash_active)])
 		last_phase = _player.attack_phase
 	_end()
-	_report_peaks(windows, _player.heavy_active, "60fps 강공격")
-	var design_h: float = _visual.STRIKE_H["arm_sword"]
-	var design_h_world: float = design_h + _visual.STRIKE_H["torso"]
-	print("[probe]   60fps 강공격 칼팔 최소: 팔 %.2f (목표 %.2f, 설계 %.2f, 지나침 포함 -1.6 아래여야) | 화면(팔+몸통) %.2f (설계 %.2f) | 앞 지남 구간의 %.0f%%" % [out_min, tgt_min, design_h, arm_min, design_h_world, _cross_pct])
-	if out_min > -1.6 or arm_min > design_h_world - 0.1:
+	_report_peaks(windows, _player.slash_active, "60fps 씨앗 베기")
+	var design_s: float = _visual.STRIKE_S["arm_sword"]
+	var design_s_world: float = design_s + _visual.STRIKE_S["torso"]
+	print("[probe]   60fps 씨앗 베기 칼팔: 당긴 끝 %.2f (설계 %.2f) → 휘두른 끝 %.2f (설계 %.2f, 지나침 포함 %.2f 위여야) | 화면(팔+몸통) %.2f (설계 %.2f) | 앞 지남 구간의 %.0f%%" % [swing_min, _visual.WINDUP_S["arm_sword"], swing_max, design_s, design_s - 0.05, world_max, design_s_world, _cross_pct])
+	if swing_max < design_s - 0.05 or swing_min > _visual.WINDUP_S["arm_sword"] + 0.35:
 		_fail = true
-		print("[probe]   !! 60fps 에서 강공격 칼팔이 지나침(-1.6)까지 못 간다")
+		print("[probe]   !! 60fps 에서 씨앗 베기 칼팔이 당긴 자세나 휘두른 자세에 닿지 못한다")
 	if _cross_pct < 35.0 or _cross_pct > 55.0:
 		_fail = true
-		print("[probe]   !! 60fps 강공격 앞 지남이 히트박스 구간 35~55%% 를 벗어났다")
+		print("[probe]   !! 60fps 씨앗 베기 앞 지남이 히트박스 구간 35~55%% 를 벗어났다")
+	await _steps60(30)
+
+	# 낙하 공격 (60fps): 착지에서 깊게 웅크리는지
+	_player._do_jump(false)
+	await _steps60(15)
+	_player._start_plunge()
+	_plunge_landed = false
+	var pn := 0
+	var pl_crouch := 0.0
+	while _player.state == S["PLUNGE"] and pn < 300:
+		await _step(Callable(), D60)
+		pn += 1
+		if _plunge_landed:
+			pl_crouch = maxf(pl_crouch, _visual._hip.position.y - 22.0)
+	print("[probe]   60fps 낙하 공격: %.2f초, 착지 뒤 엉덩이 최대 %.1fpx 내려감 (착지 신호 %s)" % [pn * D60, pl_crouch, _plunge_landed])
+	if not _plunge_landed or pl_crouch < 6.0:
+		_fail = true
+		print("[probe]   !! 60fps 낙하 공격 착지 웅크림이 작다")
 	await _steps60(30)
 
 	# 방향 전환: 프레임마다 고르게 돌아야 한다 (첫 프레임에 3/4 이 돌면 '툭')

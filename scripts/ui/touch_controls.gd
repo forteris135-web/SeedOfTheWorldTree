@@ -2,8 +2,10 @@ extends CanvasLayer
 ## 터치 조작 (기획서 8장 "터치 조작").
 ## - 왼쪽 화면 어디든 누르면 그 자리에 스틱.
 ## - 오른쪽 엄지: 싸움 버튼 다섯 개만. 아래 모서리를 축으로 안쪽 호에 점프(가장 가까움)·약공격(가장 큼),
-##   바깥 호에 회피(점프 위)·가드(약공격 왼쪽, 저스트 가드를 같은 엄지로)·강공격(약공격 위).
-## - 왼쪽 가장자리 세로 줄: 회복 / 영혼 / 전환 (급하지 않은 버튼). 걷기 고정은 L3·키보드만 (터치 버튼은 없앴다).
+##   바깥 호에 회피(점프 위)·가드(약공격 왼쪽, 저스트 가드를 같은 엄지로)·영혼 기술(약공격 위, 옛 강공격 자리).
+##   낙하 공격은 스틱을 절반 넘게 아래로 내린 채 약공격, 하단 점프는 스틱 절반 넘게 아래 + 점프
+##   (살짝 처진 엄지로는 안 걸린다 — player.gd DOWN_HOLD_STRENGTH 0.5).
+## - 왼쪽 가장자리 세로 줄: 회복 / 전환 (급하지 않은 버튼). 걷기 고정은 L3·키보드만 (터치 버튼은 없앴다).
 ## - 상황 버튼(손길): 상호작용이 가능할 때만 나타난다. 달빛풀에서 쉬는 중엔 '이동', 포탈 앞에선 '들어가기'.
 ## - 위 모서리: 왼쪽 '메뉴'(Esc), 오른쪽 '지도'. 이 둘은 방이 입력 이벤트로 받으므로 InputEventAction 을 함께 보낸다.
 ## - 밝은 배경에서도 보이게: 어두운 반투명 바탕 + 흰 테두리 + 테두리 있는 글자.
@@ -66,18 +68,18 @@ func _buttons() -> Dictionary:
 	var br := Vector2(s.x, s.y)   # 오른쪽 아래 모서리 (오른손 엄지의 축)
 	var b := {
 		# 오른쪽 엄지 (2026-10-18 기획자 결정: 오른쪽은 싸움 버튼 다섯 개만) — 모서리에 가까운 안쪽 호:
-		# 점프(가장 가까움) → 약공격(가장 큼). 바깥 호: 회피(점프 위), 가드(약공격 왼쪽, 저스트 가드를 같은 엄지로), 강공격(약공격 위).
+		# 점프(가장 가까움) → 약공격(가장 큼). 바깥 호: 회피(점프 위), 가드(약공격 왼쪽, 저스트 가드를 같은 엄지로),
+		# 영혼 기술(약공격 위 — 강공격이 있던 자리. 강공격은 없앴다).
 		"jump": {"pos": br + Vector2(-160, -140), "r": 80.0, "text": "점프", "action": "jump"},
 		"attack_light": {"pos": br + Vector2(-360, -210), "r": 96.0, "text": "약공격", "action": "attack_light"},
 		"dodge_r": {"pos": br + Vector2(-170, -350), "r": 66.0, "text": "회피", "action": "dodge"},
 		"guard": {"pos": br + Vector2(-560, -140), "r": 76.0, "text": "가드", "action": "guard"},
-		"attack_heavy": {"pos": br + Vector2(-390, -430), "r": 66.0, "text": "강공격", "action": "attack_heavy"},
-		# 왼쪽 엄지: 왼쪽 가장자리 세로 줄 (스틱은 그 오른쪽 빈 자리에서 시작한다). 회복·영혼·전환은 급하지 않은 버튼.
-		# x=170: 가로로 쥔 아이폰의 노치(가장자리 가운데, 깊이 약 130px)를 피한다. 셋 다 아래쪽 절반에 두어
+		"soul": {"pos": br + Vector2(-390, -430), "r": 66.0, "text": "영혼", "action": "soul_ability"},
+		# 왼쪽 엄지: 왼쪽 가장자리 세로 줄 (스틱은 그 오른쪽 빈 자리에서 시작한다). 회복·전환은 급하지 않은 버튼.
+		# x=170: 가로로 쥔 아이폰의 노치(가장자리 가운데, 깊이 약 130px)를 피한다. 둘 다 아래쪽 절반에 두어
 		# 버튼 크기 설정으로 키워도 같은(왼쪽 아래) 모서리 기준으로 함께 벌어진다.
-		"heal": {"pos": Vector2(170, s.y - 560), "r": 50.0, "text": "회복", "action": "heal"},
-		"soul": {"pos": Vector2(170, s.y - 430), "r": 54.0, "text": "영혼", "action": "soul_ability"},
-		"soul_next": {"pos": Vector2(170, s.y - 310), "r": 42.0, "text": "전환", "action": "soul_next"},
+		"heal": {"pos": Vector2(170, s.y - 480), "r": 50.0, "text": "회복", "action": "heal"},
+		"soul_next": {"pos": Vector2(170, s.y - 340), "r": 42.0, "text": "전환", "action": "soul_next"},
 		# 위 모서리
 		"map": {"pos": Vector2(s.x - 76, 76), "r": 46.0, "text": "지도", "action": "map"},
 		"menu": {"pos": Vector2(76, 76), "r": 46.0, "text": "메뉴", "action": "pause"},
@@ -189,7 +191,7 @@ func _set_axis(neg: String, pos: String, value: float) -> void:
 
 func _release_all() -> void:
 	_touches.clear()
-	for a in ["jump", "dodge", "run_toggle", "attack_light", "attack_heavy", "guard", "heal", "interact", "soul_ability", "soul_next", "map", "pause", "move_left", "move_right", "move_up", "move_down"]:
+	for a in ["jump", "dodge", "run_toggle", "attack_light", "guard", "heal", "interact", "soul_ability", "soul_next", "map", "pause", "move_left", "move_right", "move_up", "move_down"]:
 		Input.action_release(a)
 
 

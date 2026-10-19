@@ -57,6 +57,13 @@ func launch(dir: Vector2, src: Node2D, player_owned := false) -> void:
 	from_player = player_owned
 	_update_mask()
 	rotation = direction.angle()
+	if from_player:
+		# 소녀의 바람·빛은 그림 크기만큼 맞는다 (2026-10-18 영혼 기술 강화: 커진 크기가 판정에도 그대로)
+		for c in get_children():
+			if c is CollisionShape2D:
+				var rect := RectangleShape2D.new()
+				rect.size = size * 0.9
+				c.shape = rect
 
 
 func _physics_process(delta: float) -> void:
@@ -162,6 +169,11 @@ func _draw() -> void:
 				Vector2(-s, 0), Vector2(-s * 0.3, -s * 0.55), Vector2(s, 0), Vector2(-s * 0.3, s * 0.55)]), color)
 			draw_line(Vector2(-s, 0), Vector2(s, 0), color.darkened(0.3), 1.5, true)
 		Kind.GUST:
+			# 바람: 겹친 초승달 호 세 겹, 앞쪽이 가장 크고 뒤로 갈수록 작아진다. 크기(size)를 따라 커지되
+			# 세로는 size.y 의 ±절반 안(판정 상자 0.9×size 와 맞게), 가로는 앞 size.x*0.43 ~ 뒤 size.x*0.21.
 			for i in 3:
-				var r := size.y * (0.6 + i * 0.35)
-				draw_arc(Vector2(-i * 10.0, 0), r, -1.1, 1.1, 12, Color(color, 0.7 - i * 0.2), 3.0, true)
+				var r := size.y * (0.26 + i * 0.11)
+				var c := Vector2(size.x * (0.28 - i * 0.3), 0)
+				draw_arc(c, r, -1.15, 1.15, 16, Color(color, 0.75 - i * 0.2), 2.5 + 1.5 * (2 - i), true)
+			if from_player:
+				draw_circle(Vector2(size.x * 0.05, 0), size.y * 0.35, Color(color, 0.12))
