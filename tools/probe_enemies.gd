@@ -212,7 +212,9 @@ func _probe_guard_charge() -> void:
 	var max_sy := 0.0
 	var hints := []
 	var t := 0.0
-	while t < 2.5 and e.state != EnemyBase.State.CHASE:
+	# 예고 ×1.3 + 돌진(바닥이 없어 첫 틱에 박힘) + 박힘 stuck_time 까지 한 바퀴를 다 본다
+	var cycle: float = e.windup_time * 1.3 + e.charge_time + e.stuck_time + 0.5
+	while t < cycle and e.state != EnemyBase.State.CHASE:
 		e._physics_process(STEP)
 		vis._process(STEP)
 		t += STEP
@@ -232,6 +234,7 @@ func _probe_guard_charge() -> void:
 	_check(first >= 0.0 and not neg and last > 0.95, "경비병 돌진 예고 windup_progress 0→1, 음수 없음 (처음 %.3f 마지막 %.3f)" % [first, last])
 	_check(hints.has("red") and hints.has("charge") and hints.has("stuck"), "red → charge → stuck 힌트가 그대로 나온다")
 	_check(max_d < 0.12 and max_sy < 0.05, "charge→stuck 전환에서도 자세가 뛰지 않는다 (rot %.3f, sy %.3f)" % [max_d, max_sy])
+	_check(e.state == EnemyBase.State.CHASE and e._timer > e.charge_cooldown - 0.05, "박힘이 풀리면 추격으로 돌아오고 charge_cooldown(%.1f초) 동안 쉰다 (상태 %s, 남은 %.2f)" % [e.charge_cooldown, e.state_name(), e._timer])
 	e.free()
 
 

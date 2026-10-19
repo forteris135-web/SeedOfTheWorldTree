@@ -25,3 +25,14 @@ static func make(p_damage: float, p_poise: float, p_source: Node2D, p_knockback 
 	h.source = p_source
 	h.knockback = p_knockback
 	return h
+
+
+## 같은 내용의 새 HitData. Hitbox 는 한 번의 휘두름에 닿은 모든 상대에게 **같은 객체**를 넘기므로,
+## 상대마다 값을 바꿔 쓰고 싶으면(경비병 박힘 중 흐트러짐 2배 등) 원본을 고치지 말고 이것으로 복사해 쓴다.
+## (필드를 하나하나 적지 않고 스크립트 변수 전부를 복사한다 — 나중에 필드가 늘어도 빠지지 않는다.)
+func copy() -> HitData:
+	var h := HitData.new()
+	for p in get_property_list():
+		if p.usage & PROPERTY_USAGE_SCRIPT_VARIABLE:
+			h.set(p.name, get(p.name))
+	return h

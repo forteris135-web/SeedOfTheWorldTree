@@ -214,6 +214,23 @@ func _on_state_changed(_old: int, new_state: int) -> void:
 	_entered = new_state
 
 
+## 지금 그림이 실제로 보고 있는 방향(±1). 뒤집는 도중이면 아직 지나온 쪽이다.
+func visible_facing() -> int:
+	var right := (_mir.v >= 0.0) == art_faces_right
+	return 1 if right else -1
+
+
+## 보이는 방향이 논리 방향(facing)에 자리 잡았는가. 아직 돌아서는 중(0.1초 유지 대기, 또는 뒤집는 보간이 60% 미만)이면 false.
+## 경비병의 방패 판정이 이것을 본다: 그림이 저쪽을 보고 있는데 공격이 튕기는 일을 막는다.
+func is_facing_settled() -> bool:
+	if _enemy == null:
+		return true
+	if _face_target != _enemy.facing:
+		return false
+	var want := -1.0 if ((_enemy.facing > 0) != art_faces_right) else 1.0
+	return signf(_mir.v) == signf(want) and absf(_mir.v) >= 0.6
+
+
 ## 상태 진입 1회 연출 (먼지·번쩍임). 자세는 여기서 바꾸지 않는다 — 자세는 늘 보간으로만 움직인다.
 func _on_entered(st: int, hint: String) -> void:
 	match st:
