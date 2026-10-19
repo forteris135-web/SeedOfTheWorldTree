@@ -71,6 +71,11 @@ func _process(delta: float) -> void:
 
 
 func _condition_ok(when: String) -> bool:
+	return condition_ok(when)
+
+
+## 깃발 조건 글자를 판단한다 ("flag" 서 있을 때, "!flag" 안 서 있을 때, 쉼표로 여러 개). 구원된 사람의 집 대사(RescuedPerson)도 쓴다.
+static func condition_ok(when: String) -> bool:
 	if when.strip_edges() == "":
 		return true
 	for part in when.split(","):

@@ -13,6 +13,8 @@ var _active := false
 var _done_callback: Callable
 var _player: Node
 var _t := 0.0
+## 대화가 끝난 뒤 소녀의 입력을 돌려줄 차례를 기다리는 중 (끝낸 그 누름을 소녀가 다시 받지 않게 — _physics_process).
+var _restore_player: Node = null
 
 
 func _ready() -> void:
@@ -39,6 +41,7 @@ func start(lines: Array, on_done := Callable()) -> void:
 	_active = true
 	_panel.visible = true
 	_player = get_tree().get_first_node_in_group("player")
+	_restore_player = null
 	if _player:
 		_player.input_enabled = false
 	_since = 0.0
@@ -57,8 +60,10 @@ func _next() -> void:
 func _end() -> void:
 	_active = false
 	_panel.visible = false
+	# 입력은 바로 돌려주지 않는다: 이 대화를 끝낸 누름(손길·점프·공격)이 같은 물리 틱에 소녀에게 다시 들어가
+	# 말 걸기가 처음부터 열리거나(손길) 뛰어오르지(점프) 않게, 넘김 버튼이 '방금 눌림'이 아닌 다음 틱에 돌려준다.
 	if _player and is_instance_valid(_player):
-		_player.input_enabled = true
+		_restore_player = _player
 	finished.emit()
 	if _done_callback.is_valid():
 		_done_callback.call()
@@ -80,6 +85,10 @@ func _process(delta: float) -> void:
 func _physics_process(_delta: float) -> void:
 	if _active and _advance_pressed():
 		_process_advance()
+	elif not _active and _restore_player != null and not _advance_pressed():
+		if is_instance_valid(_restore_player):
+			_restore_player.input_enabled = true
+		_restore_player = null
 
 
 var _since := 0.0

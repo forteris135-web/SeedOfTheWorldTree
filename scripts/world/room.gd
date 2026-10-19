@@ -85,6 +85,7 @@ func _ready() -> void:
 		if player:
 			player.set_light(true)
 	Game.fade_in(1.2)
+	RescuedHomes.spawn_into(self)   # 구원되어 '집'으로 돌아간 사람들을 세운다 (data/dialogue/relocations.json)
 	var args := OS.get_cmdline_user_args()
 	if "--lantern" in args:
 		Progress.gain_ability("lantern")
