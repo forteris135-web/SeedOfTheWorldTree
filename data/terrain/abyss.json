@@ -4,7 +4,7 @@
   "note": "심연 지형 그림 조각 (금빛 뿌리·보랏빛 등나무·수정 시트). 자르기: tools/terrain_cut.gd abyss → art/terrain/abyss/. 설명은 TERRAIN.md. 달빛 정원·정원의 끝은 room_skins 로 abyss_garden(푸른 버섯 정원 시트)을 쓴다. 잿빛 팔레트(ash)는 심연 지역 전체가 이 파일 것을 쓴다.",
   "room_skins": {"moon_garden": "abyss_garden", "abyss_boss": "abyss_garden"},
   "scale": 1.0,
-  "tint": [0.8, 0.76, 0.76],
+  "tint": [0.7, 0.66, 0.68],
   "fill": {"top": 0.86, "deep": 0.5, "deep_px": 300, "rim": 0.74, "rim_px": 30, "wall": 0.8},
   "lift": 2,
   "roles": {"branch": ["vine_a", "vine_b", "vine_c"], "log": ["log_a"], "ground": ["log_a", "vine_b", "deck_a"]},
