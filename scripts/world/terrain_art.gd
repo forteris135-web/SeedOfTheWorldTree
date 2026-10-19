@@ -558,6 +558,30 @@ func branch_run(xa: float, xb: float, y_at: Callable, left_free: bool, right_fre
 		if not skin.has_role(role):
 			return
 	var avoid := _stacked_picks(w)
+	# 방 파일에서 이 발판의 조각을 정해 둘 수 있다 (노드 metadata "terrain_piece" = 조각 이름 — 예: 마을의 흔들다리).
+	# 한 조각으로 맞으면 그것, 아니면 그 조각으로 이어 붙인다. 충돌은 그대로 (그림만 고른다).
+	var forced := str(host.get_meta("terrain_piece", "")) if host != null and host.has_meta("terrain_piece") else ""
+	if forced != "" and skin.pieces.has(forced):
+		if left_free and right_free:
+			var ff := _fit_single([forced], w, thick, [])
+			if not ff.is_empty():
+				var fk: float = ff["k"]
+				var fwalk := skin.walk_of(forced)
+				var fsize := skin.size_of(forced)
+				var fflip: bool = ff["flip"]
+				var fx0 := xa - fwalk.x * fk
+				var fx1 := xa + (fsize.x - fwalk.x) * fk
+				if fflip:
+					fx0 = xb - (fsize.x - fwalk.x) * fk
+					fx1 = xb + fwalk.x * fk
+				piece(forced, 0.0, fsize.x, fx0, fx1, y_at, ff["u"] * skin.scale, fflip, {"clip_l": xa, "clip_r": xb})
+				pick = forced
+				pick_flip = fflip
+				pick_w = w
+				return
+		_chain([forced], xa, xb, y_at, left_free, right_free, thick, tuck_l, tuck_r, [])
+		pick_w = w
+		return
 	# 끝이 이웃에 덮인 발판도 한 조각으로 맞출지 (params.<역할>.fit_tucked — 기본 false: 이어 붙이기).
 	# 켜면 덮인 끝 밖의 그림(둥근 끝·기둥)은 이웃 속에서 서서히 사라진다 (흔들다리처럼 이어 붙이면 어색한 조각용).
 	var fit_tucked: bool = (not left_free or not right_free) and bool(skin.param(role, "fit_tucked", false))

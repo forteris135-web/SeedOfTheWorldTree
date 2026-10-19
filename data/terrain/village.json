@@ -13,11 +13,11 @@
     "slab": ["slab_a", "slab_b", "slab_c", "slab_d", "slab_e", "slab_f", "isle_c", "branch_c"]
   },
   "params": {
-    "ground": {"band": 110, "fade": 50, "cap": 150, "overlap": 110, "caps": ["top_a", "top_b"]},
+    "ground": {"band": 75, "fade": 45, "cap": 150, "overlap": 110, "caps": ["top_a", "top_b"]},
     "slab": {"max_w": 380},
     "branch": {"thin_poly": 110, "fit_tucked": true},
     "thorn": {"tint": [0.92, 0.74, 0.64], "reach_min": 0.9, "reach_max": 1.35, "sink": 22},
-    "prop": {"gap_min": 420, "gap_max": 900, "edge": 170, "sink": 14, "min_len": 600, "clear": 170, "size": [0.95, 1.1]}
+    "prop": {"gap_min": 300, "gap_max": 700, "edge": 170, "sink": 14, "min_len": 600, "clear": 170, "size": [1.0, 1.15]}
   },
   "ash": {
     "neutral": [[0.0, "#1f1d1e"], [0.25, "#4e4946"], [0.55, "#8e8781"], [0.8, "#c3bcb4"], [1.0, "#ece7e0"]],

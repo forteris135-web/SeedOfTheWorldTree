@@ -171,6 +171,7 @@ position = Vector2(1500, 950)
 size = Vector2(400, 50)
 one_way = true
 label_text = "계단"
+metadata/terrain_piece = "bridge_a"
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2100, 760)
