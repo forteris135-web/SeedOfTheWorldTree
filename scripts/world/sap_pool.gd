@@ -11,6 +11,8 @@ class_name SapPool
 ##    방이 뜰 때의 상태로 시작하고, 그 뒤로는 Purity.region_changed 신호(색이 번져 돌아오는 연출·초기화)가 올 때만 바뀐다
 ##    → 회상에서 돌아와 잠깐 잿빛으로 돌렸다가 번지게 하는 BossRoom 연출과 맞물려 '살아남 → 잿빛 → 차오름'으로 깜빡이지 않는다.
 ##  - 소녀가 안에 있으면 발 자리에 잔물결 고리
+##  - 방의 지형 그림 옷에 물 조각(water 역할)이 있으면 몸통·수면은 그림(SapWaterArt — 기획자의 '물 지형' 시트)으로 그리고,
+##    이 코드는 그 위에 빛 띠·방울·잔물결 고리·옅은 수면선만 얹는다 (판정은 그대로). 그림 옷이 없는 지역(잠긴 채굴장 등)은 옛 그림 그대로.
 ## 세기 조절: 아래 상수들.
 
 @export var size := Vector2(600, 120):
@@ -46,6 +48,7 @@ var _alive_target := 0.0
 var _players_in: Array = []
 var _seed := 0
 var _rng := RandomNumberGenerator.new()   # 그릴 때마다 같은 씨앗으로 되감아 쓴다 (매 프레임 새로 만들지 않게)
+var _water: SapWaterArt   # 그림 겉모습 (없으면 null → 코드로 몸통까지 그린다)
 
 
 func _ready() -> void:
@@ -56,6 +59,7 @@ func _ready() -> void:
 	_seed = int(global_position.x * 3.0 + global_position.y * 7.0 + size.x)
 	_alive_target = 1.0 if _is_alive() else 0.0
 	_alive = _alive_target
+	_water = SapWaterArt.attach(self, size, FILL_RISE)
 	Purity.region_changed.connect(_on_region_changed)
 	# 방(BossRoom)의 _ready 가 이 뒤에 지역 상태를 바꿀 수 있다 (회상에서 막 돌아와 잠깐 잿빛으로 돌림) → 한 번 더 맞춘다
 	_sync_start.call_deferred()
@@ -98,6 +102,9 @@ func surface_y() -> float:
 func _process(delta: float) -> void:
 	_t += delta
 	_alive = lerpf(_alive, _alive_target, 1.0 - exp(-1.2 * delta))
+	if _water:
+		_water.position.y = -FILL_RISE * _alive
+		_water.tick(_t, _alive, can_walk())
 	queue_redraw()
 
 
@@ -129,8 +136,8 @@ func _draw() -> void:
 	if walk:
 		base = Color(base.r + 0.08, base.g + 0.12, base.b + 0.08, minf(base.a + 0.15, 0.85))
 	var rise := FILL_RISE * _alive
-	# 깊이 그라데이션: 수면 띠는 밝고 아래로 갈수록 어둡고 진하다 (가로 띠 6줄)
-	var rows := 6
+	# 깊이 그라데이션: 수면 띠는 밝고 아래로 갈수록 어둡고 진하다 (가로 띠 6줄) — 그림 겉모습이 있으면 그림이 대신한다
+	var rows := 0 if _water else 6
 	for i in rows:
 		var t0 := float(i) / rows
 		var t1 := float(i + 1) / rows
@@ -165,6 +172,8 @@ func _draw() -> void:
 		pts2.append(Vector2(x2, _surface_y(x2 + 40.0, rise) + 5.0))
 		x2 += SURFACE_STEP
 	var line_a := (0.85 if walk else 0.6) + 0.15 * _alive
+	if _water:
+		line_a *= 0.45   # 그림의 수면 테두리 위에 옅게만
 	draw_polyline(pts2, Color(0.6, 0.9, 1.0, line_a * 0.35), SURFACE_WIDTH * 1.6, true)
 	draw_polyline(pts, Color(0.75, 0.95, 1.0, line_a), SURFACE_WIDTH, true)
 	# 소녀가 빠져 있으면 발 자리의 잔물결 고리

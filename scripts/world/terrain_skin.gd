@@ -56,7 +56,13 @@ static func for_region(region: String) -> TerrainSkin:
 
 
 ## 지형 노드가 쓸 그림 옷: override 가 있으면 그 지역, 없으면 조상 Room 의 region.
+## 방 하나만 지역과 다른 그림 옷을 입히려면 방(Room) 노드에 메타 "terrain_skin" 을 둔다
+## (예: 숨은 내리막 — 지역은 sap_lake 그대로(정화·음악·잿빛 표), 지형 그림만 data/terrain/sap_descent.json).
 static func for_node(node: Node, override := "") -> TerrainSkin:
+	if override == "":
+		var room := TerrainStyle.room_of(node)
+		if room != null and room.has_meta("terrain_skin"):
+			override = str(room.get_meta("terrain_skin"))
 	return for_region(override if override != "" else TerrainStyle.region_of(node))
 
 
