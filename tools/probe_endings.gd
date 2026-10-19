@@ -213,7 +213,8 @@ func _probe_theme_once() -> void:
 
 # ---------- 3) 허밍은 엔딩·클리어 후 타이틀에만 ----------
 func _probe_humming_refs() -> void:
-	var allowed := ["res://scripts/autoload/music.gd", "res://scripts/ui/ending_scene.gd"]
+	# 음악 감상의 곡 목록(music_titles.json)은 엔딩을 본 뒤 타이틀에서만 열린다 (title_screen.gd 가 막는다 — probe_music_room 이 확인)
+	var allowed := ["res://scripts/autoload/music.gd", "res://scripts/ui/ending_scene.gd", "res://data/dialogue/music_titles.json"]
 	var bad: Array = []
 	for needle in ["selenia_humming", "ENDING_TRACK", "title_track"]:
 		for p in _grep(["res://scripts", "res://scenes", "res://data"], needle):
