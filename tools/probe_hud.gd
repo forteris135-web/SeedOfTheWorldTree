@@ -8,6 +8,9 @@ extends Node
 ##  - 성장 표시 문자열("+10%", "+15")이 맞는지, 성장이 없을 땐 비는지
 ##  - 영혼 원이 soul 값("wind"/"light"/"seed"/"")에 상관없이 오류 없이 나오는지
 ##  - 성장 순간의 짧은 글자(flash)가 뜨고, 같은 때 가운데 안내(show_message)가 있으면 하나만 남는지
+##  - 빛 가루 네모 칸 (2026-10-19): 칸이 있고, 1920×1080 / 2338×1080 / 아이패드 4:3(2048×1536 → 캔버스 1920×1440) × 터치 버튼 크기 3단계 ×
+##    이슬 한 줄·두 줄에서 체력·가드 막대, 이슬, 성장 표시, 영혼 줄(번쩍임 번짐 포함), 터치 버튼(누르는 범위), 보스 아래 띠, 대화 상자,
+##    영혼 전환 알림(보통·보스 이름 떠 있을 때), 보스 등장 이름과 겹치지 않는지 (칸 + 잎 장식 + "+N" 떠오르는 자리)
 ## 를 찍는다. headless 라 그림은 못 보지만 draw 콜백은 돌므로 그리기 오류(SCRIPT ERROR)는 출력에 드러난다.
 
 const S := 0.36
@@ -46,6 +49,93 @@ func _no_overlap(slots: Array) -> bool:
 	return true
 
 
+## 사각형과 원이 겹치는가
+func _rect_hits_circle(r: Rect2, c: Vector2, rad: float) -> bool:
+	var p := Vector2(clampf(c.x, r.position.x, r.end.x), clampf(c.y, r.position.y, r.end.y))
+	return p.distance_to(c) < rad
+
+
+## 빛 가루 칸이 다른 화면 요소와 겹치지 않는지 (세 화면 비율 × 터치 버튼 크기 3단계)
+func _test_dust_box_layout(room: Node, label: String) -> void:
+	var touch: Node = room.get_node("TouchControls")
+	var saved_scale = Settings.data.get("touch_scale", 1)
+	var all_ok := true
+	var report := []
+	for win in [Vector2i(1920, 1080), Vector2i(2338, 1080), Vector2i(2048, 1536)]:
+		get_window().size = win
+		await _frames(3)
+		var size: Vector2 = _hud._canvas.size
+		var box: Rect2 = _hud.dust_box_full_rect()
+		var orn: Rect2 = _hud.dust_ornament_rect()
+		var core: Rect2 = _hud.dust_box_rect()
+		# "+N" 이 나타나 오른쪽으로 흘러가는 자리
+		var pop: Rect2 = _hud.dust_pop_rect()
+		_check(pop.position.x >= orn.end.x and absf(pop.get_center().y - core.get_center().y) < 4.0, "%s: '+N' 자리는 잎 장식 오른쪽, 칸 높이 (%s)" % [win, pop])
+		var mine: Array[Rect2] = [box, pop]
+		var others := {}
+		var pieces: Array = _hud.hp_frame_pieces(_hud.hp_bar_scale())
+		for i in pieces.size():
+			others["체력 틀 %d" % i] = pieces[i]["dst"]
+		others["가드"] = Rect2(_hud._s(_hud.GUARD_TRACK_POS), Vector2(_hud.BAR_GUARD.get_width(), 120.0) * S)
+		var slots: Array = _hud.dew_slots()
+		for i in slots.size():
+			others["이슬 %d" % (i + 1)] = Rect2(slots[i], _hud.dew_size(i))
+		var go: Vector2 = _hud.growth_origin()
+		if _hud.growth_end_x() > go.x:
+			others["성장"] = Rect2(go.x, go.y - 14.0, _hud.growth_end_x() - go.x, 28.0)
+		for d in _hud.soul_dots():
+			var rr: float = d["radius"] * 2.7   # 번쩍일 때 번짐
+			others["영혼 원 %s" % d["soul"]] = Rect2(d["center"] - Vector2(rr, rr), Vector2(rr, rr) * 2.0)
+		var so: Vector2 = _hud.soul_origin()
+		var font := ThemeDB.fallback_font
+		others["영혼 글자"] = Rect2(so.x, so.y - _hud.SOUL_CD_FONT_SIZE, 40.0 + font.get_string_size(_hud.soul_label() + "   7", HORIZONTAL_ALIGNMENT_LEFT, -1, _hud.SOUL_FONT_SIZE).x + 30.0, _hud.SOUL_CD_FONT_SIZE + 8.0)
+		var band := size.y * 0.12
+		others["보스 아래 띠"] = Rect2(0, size.y - band, size.x, band)
+		var dw := minf(1400.0, size.x - 120.0)
+		others["대화 상자"] = Rect2((size.x - dw) / 2.0, size.y - 250.0, dw, 190.0)
+		# 영혼 전환 알림 (보통 / 보스 이름이 떠 있을 때)
+		_hud._soul_notice_soul = "wind"
+		_hud._soul_notice_timer = 1.0
+		others["전환 알림"] = _hud.soul_notice_rect()
+		var fake_boss: Node = load("res://scenes/ui/boss_hud.tscn").instantiate()
+		fake_boss.name = "BossHUD"
+		room.add_child(fake_boss)
+		await get_tree().process_frame
+		fake_boss.set("_name", "잿빛 잎새의 새")
+		fake_boss.set("_subtitle", "수관을 지키던 노래")
+		fake_boss.set("_title", 2.0)
+		others["전환 알림(보스 이름 중)"] = _hud.soul_notice_rect()
+		var ty: float = fake_boss.title_y()
+		var tw := font.get_string_size("잿빛 잎새의 새", HORIZONTAL_ALIGNMENT_LEFT, -1, 72).x
+		others["보스 등장 이름"] = Rect2(size.x / 2.0 - tw / 2.0, ty - 62.0, tw, 114.0)
+		fake_boss.queue_free()
+		_hud._soul_notice_timer = 0.0
+		await get_tree().process_frame
+		var hits := []
+		for k in others:
+			for m in mine:
+				if m.intersects(others[k]):
+					hits.append(k)
+		# 터치 버튼 (누르는 범위 = 반지름 × 1.2), 버튼 크기 3단계
+		for sc in [0, 1, 2]:
+			Settings.data["touch_scale"] = sc
+			var bt: Dictionary = touch._buttons(size, 1)
+			for n in bt:
+				for m in mine:
+					if _rect_hits_circle(m, bt[n]["pos"], bt[n]["r"] * touch.GAP_RATIO):
+						hits.append("터치 %s(크기 %d)" % [n, sc])
+		Settings.data["touch_scale"] = saved_scale
+		var inside := Rect2(Vector2.ZERO, size).encloses(box) and Rect2(Vector2.ZERO, size).encloses(pop)
+		report.append("%s 칸 %s 겹침 %s 화면 안 %s" % [size, core, hits, inside])
+		if not hits.is_empty() or not inside:
+			all_ok = false
+	get_window().size = Vector2i(1920, 1080)
+	await _frames(2)
+	for r in report:
+		print("[probe]   %s" % r)
+	_check(all_ok, "빛 가루 칸 (%s): 세 화면 비율 × 터치 버튼 크기 3단계에서 HUD·터치 버튼·보스 띠·대화 상자·전환 알림·보스 이름과 겹치지 않는다" % label)
+
+
 func _ready() -> void:
 	print("[probe] 시작: HUD 성장 반영")
 	await _frames(2)
@@ -76,6 +166,8 @@ func _ready() -> void:
 	_check(_hud.growth_labels().is_empty(), "성장이 없으면 성장 표시 없음 (%s)" % str(_hud.growth_labels()))
 	print("[probe] 영혼 없음: soul='%s' dots=%d" % [_player.soul, _hud.soul_dots().size()])
 	_check(_hud.soul_dots().size() == _hud.soul_list().size(), "영혼 원 수 = 표시할 영혼 수 (%d)" % _hud.soul_dots().size())
+
+	await _test_dust_box_layout(room, "이슬 한 줄")
 
 	# ── 이슬 +2 (아무도 가운데 안내를 띄우지 않는 경우 → 짧은 글자가 뜬다)
 	_hud._flash_text = ""
@@ -199,6 +291,7 @@ func _ready() -> void:
 	print("[probe] 영혼 줄 기준선 y %.1f, 둘째 줄 이슬 아래 %.1f" % [soul_y, slots[7].y + _hud.dew_size(7).y])
 	_check(soul_y >= slots[7].y + _hud.dew_size(7).y, "영혼 줄은 둘째 이슬 줄 아래로 내려간다")
 	_check(_hud.growth_origin().x >= slots[6].x + _hud.dew_size(6).x, "성장 표시는 첫 줄의 마지막(7번째) 이슬 오른쪽")
+	await _test_dust_box_layout(room, "이슬 두 줄·성장 둘")
 	await _frames(3)
 	print("[probe] draw 호출 수 %d" % _draws)
 	_check(_draws > 20, "HUD draw 가 돌았다")

@@ -11,6 +11,10 @@ extends Node
 ##  - 낙하 버튼: 땅에서 꺼짐·무시, 공중에서 켜짐·누르면 낙하 공격
 ##  - 영혼 전환 알림(큰 글자·설명·투명도) / HUD 영혼 줄 '지금: …' / 빛 가루 숫자·"+N" 떠오름
 ##  - 터치 안내 글자 '공격'·'낙하', 입력 확인 화면 표, 키 바꾸기 화면 줄 수가 화면에 든다
+##  - 터치 버튼 그림 (2026-10-19): 모든 버튼에 그림이 있고(192px, 밉맵), 영혼 버튼 그림이 고른 영혼을 따라가고(씨앗→바람→빛),
+##    상황 버튼 그림이 손길 / 들어가기(포탈) / 이동(쉬는 중, 다른 달빛풀 있음) / 성장(쉬는 중, 달빛풀 하나뿐)으로 바뀌고,
+##    쿨다운 부채꼴 각도(cooldown_sweep)가 남은 비율만큼, 쿨다운 중에도 오류 없이 그려진다
+##  - 빛 가루 칸: 영혼 줄 아래, 숫자가 0.6초에 걸쳐 차오르고 쓰면 바로 줄어든다
 ## 마지막 줄 "[probe] 끝: 실패 N".
 
 var _fail := 0
@@ -77,6 +81,7 @@ func _run() -> void:
 	_check(InputDevice.current == InputDevice.Kind.TOUCH and _touch._shown and _touch._canvas.visible, "터치 장치로 치면 터치 버튼이 보인다")
 
 	await _test_button_names()
+	await _test_icons()
 	await _test_soul_button_and_notice()
 	await _test_overlap()
 	await _test_plunge_button()
@@ -111,6 +116,59 @@ func _test_button_names() -> void:
 	_check(_touch.ALL_ACTIONS.has("plunge"), "숨길 때 떼는 동작 목록에 plunge")
 
 
+# ---------- 터치 버튼 그림 ----------
+func _test_icons() -> void:
+	var b: Dictionary = _touch._buttons(Vector2.ZERO, 1)
+	var want := {"attack_light": "attack", "guard": "guard", "jump": "jump", "dodge_r": "dodge", "plunge": "plunge", "soul": "soul_seed",
+		"soul_next": "soul_next", "heal": "heal", "map": "map", "menu": "menu", "interact": "hand"}
+	var bad := []
+	for name in b:
+		var key: String = b[name].get("icon", "")
+		var tex: Texture2D = _touch.icon_texture(key)
+		if key != want.get(name, "?") or tex == null:
+			bad.append("%s→%s" % [name, key])
+	print("[probe] 버튼 그림: %s" % [b.keys().map(func(k): return "%s=%s" % [k, b[k].get("icon", "")])])
+	_check(bad.is_empty() and b.size() == want.size(), "버튼 %d개 모두 맞는 그림이 있다 (틀림 %s)" % [b.size(), bad])
+	var sizes_ok := true
+	var mip_ok := true
+	for key in _touch.ICONS:
+		var tex: Texture2D = _touch.ICONS[key]
+		if tex.get_width() != 192 or tex.get_height() != 192:
+			sizes_ok = false
+		var img := tex.get_image()
+		if img == null or not img.has_mipmaps():
+			mip_ok = false
+	_check(sizes_ok and _touch.ICONS.size() == 16, "그림 %d장, 모두 192×192" % _touch.ICONS.size())
+	_check(mip_ok, "그림은 밉맵을 켜고 들여왔다 (작게 그려도 매끈하게)")
+	_check(_touch._canvas.texture_filter == CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS, "터치 캔버스가 밉맵 거르기를 쓴다")
+	# 상황 버튼: 손길 → 포탈 앞 들어가기 → 쉬는 중(달빛풀 하나) 성장 → (둘) 이동
+	var kinds := [_touch.interact_kind()]
+	var portal: Node = load("res://scenes/world/portal.tscn").instantiate()
+	_player.interactables.append(portal)
+	kinds.append(_touch.interact_kind())
+	_player.interactables.erase(portal)
+	portal.free()
+	var st := _player.state
+	_player.state = Player.State.REST
+	Progress.grasses.clear()
+	Progress.grasses["g_a"] = {"scene": "x", "name": "a"}
+	kinds.append(_touch.interact_kind())
+	Progress.grasses["g_b"] = {"scene": "y", "name": "b"}
+	kinds.append(_touch.interact_kind())
+	kinds.append(_touch._buttons(Vector2.ZERO, 1)["interact"]["icon"])
+	_player.state = st
+	Progress.grasses.clear()
+	print("[probe] 상황 버튼 그림: 보통 / 포탈 / 쉬기(달빛풀 1) / 쉬기(2) / 표 = %s" % [kinds])
+	_check(kinds == ["hand", "door", "grow", "travel", "travel"], "상황 버튼 그림이 손길·들어가기·성장·이동으로 바뀐다")
+	# 쿨다운 부채꼴 각도
+	var full: Array = _touch.cooldown_sweep(1.0)
+	var half: Array = _touch.cooldown_sweep(0.5)
+	var none: Array = _touch.cooldown_sweep(0.0)
+	_check(full.size() == 2 and is_equal_approx(full[0], -PI / 2.0) and is_equal_approx(full[1], PI * 1.5), "막 쓴 순간(남은 1.0): 부채꼴이 위에서 한 바퀴 전부 덮는다")
+	_check(half.size() == 2 and is_equal_approx(half[0], PI / 2.0) and is_equal_approx(half[1], PI * 1.5), "남은 0.5: 아래에서 위까지 왼쪽 절반만 (위에서 시계 방향으로 걷힘)")
+	_check(none.is_empty(), "쿨다운 끝: 부채꼴 없음")
+
+
 # ---------- (12, 4) 영혼 버튼·전환 알림·쿨다운 ----------
 func _test_soul_button_and_notice() -> void:
 	Progress.gain_ability("wind")
@@ -123,6 +181,15 @@ func _test_soul_button_and_notice() -> void:
 	await _tap("soul_next")
 	await _frames(1)
 	_check(_player.soul == "wind" and _touch._buttons()["soul"]["text"] == "바람", "전환하면 영혼 버튼 글자가 '바람' (%s)" % _touch._buttons()["soul"]["text"])
+	_check(_touch._buttons()["soul"]["icon"] == "soul_wind" and _touch.button_icon("soul") == "soul_wind", "전환하면 영혼 버튼 그림이 초승달 검기(soul_wind)")
+	_player.soul = "light"
+	var light_icon: String = _touch.button_icon("soul")
+	_player.soul = "seed"
+	var seed_icon: String = _touch.button_icon("soul")
+	_player.soul = "foo"
+	var odd_icon: String = _touch.button_icon("soul")
+	_player.soul = "wind"
+	_check(light_icon == "soul_light" and seed_icon == "soul_seed" and odd_icon == "soul_seed", "빛 → 별(soul_light), 씨앗 → 새싹(soul_seed), 모르는 값 → 새싹 (%s / %s / %s)" % [light_icon, seed_icon, odd_icon])
 	_check(_player.next_soul() == "light" and _player.soul_color("light").is_equal_approx(Color(1.0, 0.9, 0.7)), "전환 버튼이 띨 다음 영혼은 빛(금빛)")
 	_check(_hud._soul_notice_timer > 1.0 and _hud.soul_notice_title() == "바람의 영혼", "전환 순간 알림 1.2초 시작: '%s'" % _hud.soul_notice_title())
 	_check("쿨 5초" in _hud.soul_notice_desc(), "알림 설명에 쿨다운: '%s'" % _hud.soul_notice_desc())
@@ -159,6 +226,13 @@ func _test_soul_button_and_notice() -> void:
 	_check(enabled == [false, false, false, false, false, false, false, true], "쿨다운 중엔 영혼 버튼이 꺼지고 0 이면 켜진다")
 	_player._soul_cooldown = 2.5
 	_check(is_equal_approx(_player.soul_cooldown_ratio(), 0.5) and _player.soul_cooldown_text() == "3", "바람(쿨 5초) 2.5초 남음 → 비율 0.5, 글자 3")
+	var draws := {"n": 0}
+	var cbd := func(): draws["n"] += 1
+	_touch._canvas.draw.connect(cbd)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_touch._canvas.draw.disconnect(cbd)
+	_check(draws["n"] >= 1, "쿨다운 중(부채꼴·남은 초) 터치 버튼이 오류 없이 그려진다 (draw %d)" % draws["n"])
 	_player._soul_cooldown = 0.0
 	# 실제로 쏘면 쿨다운이 걸린다 (바람 5초)
 	await _tap("soul_ability")
@@ -233,34 +307,41 @@ func _test_plunge_button() -> void:
 	_check(_player.is_on_floor() and _player.state in Player.LOCOMOTION, "착지 뒤 대기 (%s)" % _player.state_name())
 
 
-# ---------- 빛 가루 HUD ----------
+# ---------- 빛 가루 HUD (네모 칸) ----------
 func _test_dust() -> void:
-	_check(_hud.dust_text() == str(Progress.dust) and Progress.dust == 0, "빛 가루 글자 = Progress.dust (%s)" % _hud.dust_text())
-	var o: Vector2 = _hud.dust_origin()
-	_check(o.x >= _hud.growth_end_x() + _hud.DUST_GAP and absf(o.y - _hud.growth_origin().y) < 0.5, "빛 가루 아이콘은 이슬 줄 오른쪽(성장 표시 뒤), 이슬 세로 가운데 (%s)" % o)
+	_check(_hud.dust_text() == str(Progress.dust) and Progress.dust == 0 and _hud.dust_shown_text() == "0", "빛 가루 글자 = Progress.dust (%s), 칸 숫자 '0'" % _hud.dust_text())
+	var box: Rect2 = _hud.dust_box_rect()
+	var soul_y: float = _hud.soul_origin().y
+	_check(box.position.y >= soul_y + 10.0 and is_equal_approx(box.position.x, _hud.DUST_BOX_X) and box.size.y >= 40.0, "빛 가루 칸은 영혼 줄 아래 왼쪽 (%s, 영혼 줄 기준선 %.0f)" % [box, soul_y])
+	_check(box.has_point(_hud.dust_origin()), "빛 가루 그림은 칸 안 (%s)" % _hud.dust_origin())
 	Progress.add_dust(12)
 	await get_tree().process_frame
-	_check(_hud.dust_text() == "12" and _hud._dust_pops.size() == 1 and int(_hud._dust_pops[0]["amount"]) == 12 and _hud._dust_glow > 0.9, "+12 → 글자 '12', '+12' 떠오름 시작, 아이콘 밝아짐")
+	var mid_text: String = _hud.dust_shown_text()
+	_check(_hud.dust_text() == "12" and int(mid_text) < 12 and _hud._dust_pops.size() == 1 and int(_hud._dust_pops[0]["amount"]) == 12 and _hud._dust_glow > 0.9, "+12 → 목표 '12', 칸 숫자는 차오르는 중 ('%s'), '+12' 떠오름, 칸이 부푼다" % mid_text)
 	Progress.add_dust(3)
 	await get_tree().process_frame
 	_check(_hud.dust_text() == "15" and _hud._dust_pops.size() == 2, "연달아 +3 → '15', 떠오르는 글자 둘")
+	await get_tree().create_timer(0.75).timeout
+	_check(_hud.dust_shown_text() == "15", "0.6초 남짓 뒤 칸 숫자가 15 까지 찼다 ('%s')" % _hud.dust_shown_text())
 	Progress.spend_dust(5)
 	await get_tree().process_frame
-	_check(_hud.dust_text() == "10" and _hud._dust_pops.size() == 2, "쓰면(−5) 글자만 줄고 떠오르는 글자는 안 생긴다")
-	await get_tree().create_timer(1.3).timeout
+	_check(_hud.dust_text() == "10" and _hud.dust_shown_text() == "10" and _hud._dust_pops.size() == 2, "쓰면(−5) 칸 숫자가 바로 10, 떠오르는 글자는 안 생긴다")
+	await get_tree().create_timer(0.6).timeout
 	_check(_hud._dust_pops.is_empty(), "1.1초 뒤 떠오른 글자가 사라진다")
 	Progress.add_upgrade("attack", 0.1)
 	_player._apply_abilities()
 	await get_tree().process_frame
-	_check(_hud.dust_origin().x > o.x + 20.0, "성장 표시가 생기면 빛 가루가 그 오른쪽으로 밀린다 (%.1f → %.1f)" % [o.x, _hud.dust_origin().x])
+	_check(_hud.dust_box_rect().position.is_equal_approx(box.position), "성장 표시가 생겨도 칸 자리는 그대로 (%s)" % _hud.dust_box_rect().position)
+	_check(_hud._thousands(1234567) == "1,234,567" and _hud._thousands(999) == "999" and _hud._thousands(1000) == "1,000", "천 단위 쉼표")
 	# 메뉴의 '불러오기': SaveGame 이 dust 를 넣고 dust_changed 를 낸 뒤 같은 호출에서 Game.go_to 로 전환을 시작한다 → '+N' 은 안 뜬다
 	Game._busy = true   # (go_to 가 하는 것처럼; 진짜 전환은 이 시험 장면을 지우므로 깃발만)
 	Progress.dust = 50
 	Progress.dust_changed.emit(50)
 	await get_tree().process_frame
 	var pops_while_loading: int = _hud._dust_pops.size()
+	var shown_loading: String = _hud.dust_shown_text()
 	Game._busy = false
-	_check(pops_while_loading == 0 and _hud.dust_text() == "50", "장면 전환 중(불러오기) 빛 가루가 바뀌면 숫자만 바뀌고 '+N' 은 안 뜬다 (떠오름 %d)" % pops_while_loading)
+	_check(pops_while_loading == 0 and _hud.dust_text() == "50" and shown_loading == "50", "장면 전환 중(불러오기) 빛 가루가 바뀌면 숫자만 바로 바뀌고 '+N' 은 안 뜬다 (떠오름 %d, 칸 '%s')" % [pops_while_loading, shown_loading])
 	Progress.add_dust(5)
 	await get_tree().process_frame
 	_check(_hud._dust_pops.size() == 1, "전환이 끝난 뒤 번 빛 가루는 다시 '+N' 이 뜬다")
