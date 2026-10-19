@@ -236,19 +236,23 @@ func _process(delta: float) -> void:
 	var settle := 0.0
 	var tremor := 0.0
 	var surge := false
+	var plant := 0.0   # 지팡이 끝을 땅에 짚는가 (서 있을 때 — 몸이 흔들려도 지팡이 끝은 땅에 남고 손이 자루를 따라 미끄러진다)
 	match st:
 		RootKeeper.State.WAIT:
 			p = motion.pose("idle")
+			plant = 1.0
 		RootKeeper.State.INTRO:
 			# 고개 숙여 웅크린 채 → 천천히 일어서고 → 지팡이를 땅에 짚는다 (2.6초)
 			var k := _state_t / 2.6
 			p = motion.mix(motion.pose("intro_bow"), motion.pose("idle"), Motion.ease_in_out(clampf((k - 0.15) / 0.6, 0.0, 1.0)))
 			drive = RigMotion.Drive.SOFT
 			breath = 0.4
+			plant = 1.0
 		RootKeeper.State.STANCE:
 			p = _stance_pose(speed_rig)
 			feet = RigMotion.Feet.GAIT
 			breath = 1.0 if speed < 20.0 else 0.4
+			plant = 1.0 if speed < 30.0 else 0.0
 		RootKeeper.State.SPIKES:
 			p = _beat("spike_up", "spike_down", "idle", 0.5)
 			drive = _beat_drive()
@@ -383,6 +387,7 @@ func _process(delta: float) -> void:
 			_surge_t = 0.0
 			_puff(4, -float(_boss.facing) * 40.0)
 	motion.update(delta, {"speed": speed_rig, "dx": dx_rig, "vy": _boss.velocity.y / gs, "grounded": true})
+	_staff_plant(delta, plant)
 	_staff_ground(delta)
 	rig.position = Vector2.ZERO
 	rig.scale = Vector2(_mir.v, 1.0)
@@ -499,6 +504,28 @@ func _fall_pose() -> Array:
 	return [p, RigMotion.Drive.QUICK if lie < 1.0 else RigMotion.Drive.SOFT, lie]
 
 
+## 지팡이 짚기: 서 있을 때 지팡이 끝이 땅에 닿도록 지팡이를 자루 방향으로 밀고 당긴다 (손이 자루를 따라 미끄러진다).
+## 숨쉬기·흔들림으로 손이 오르내려도 지팡이 끝은 땅에 남는다. 지팡이가 곧게 서 있을 때만 (기울면 하지 않는다). _plant 는 부드럽게 오간다.
+const PLANT_MAX := 120.0   # 자루를 따라 밀고 당기는 한계 (뼈대 단위 = 시트 px)
+var _plant := 0.0
+func _staff_plant(delta: float, target: float) -> void:
+	_plant = Motion.damp(_plant, target, 6.0, delta) if delta > 0.0 else target
+	if _plant < 0.01 or _staff_i < 0:
+		return
+	var axis := (rig.body_xf * rig.xf[_staff_i]).basis_xform(Vector2.DOWN).normalized()
+	if axis.y < 0.6:
+		return
+	var depth := _staff_depth()
+	var want := -STAFF_MARGIN - 1.0
+	var k := clampf((depth - want) / axis.y, -PLANT_MAX, PLANT_MAX) * _plant
+	if absf(k) < 0.05:
+		return
+	var par := rig.parent[_staff_i]
+	rig.off[_staff_i] += (rig.body_xf * rig.xf[par]).basis_xform_inv(-axis * k)
+	rig.compute_from(_staff_i)
+	rig.apply()
+
+
 ## 지팡이 땅 막기 (RigMotion 의 무기 땅 막기는 관절마다 한계가 있어, 엎드리는 동안 지팡이가 땅속으로 들어갈 때가 있다):
 ## 지팡이(staff·staff_lo) 껍질의 가장 낮은 점이 땅 아래면 손 안에서 지팡이를 돌려 땅 위에 얹는다. 돌리는 각도(_staff_fix)는
 ## 5도씩 양쪽으로 견줘 '지난 프레임의 각도에 가장 가까운' 해를 고르고(처음이면 지팡이 머리가 몸 앞쪽에 남는 쪽) 부드럽게 쫓는다
@@ -511,7 +538,15 @@ func _staff_ground(delta: float) -> void:
 		return
 	var base := rig.rot[_staff_i]
 	var want := 0.0
-	if _staff_depth() > -STAFF_MARGIN:
+	var need := _staff_depth() > -STAFF_MARGIN
+	if need and absf(_staff_fix) > 0.0005:
+		# 지난 프레임의 각도로 아직 땅 위면 그대로 (매 프레임 다시 찾지 않는다 — 지팡이를 짚고 선 대기 자세에서 늘 이 경우)
+		rig.rot[_staff_i] = base + _staff_fix
+		rig.compute_from(_staff_i)
+		if _staff_depth() <= -STAFF_MARGIN:
+			want = _staff_fix
+			need = false
+	if need:
 		var best := INF
 		var best_cost := INF
 		var least := INF

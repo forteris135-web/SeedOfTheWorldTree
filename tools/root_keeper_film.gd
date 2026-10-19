@@ -265,7 +265,7 @@ func _print_bones(seq: String) -> void:
 		var low := rig.lowest_y(PackedInt32Array([i])) * rig.game_scale
 		if low > -12.0:
 			parts.append("%s %+.1f" % [rig.names[i], low])
-	print("[bones] %s: 발바닥 %s, 땅 닿기 들어 올림 %.1f, %s" % [seq, str(m.sole_ys()), rig.body_xf.origin.y * rig.game_scale, ", ".join(parts)])
+	print("[bones] %s: 발바닥 %s, 땅 닿기 들어 올림 %.1f, 지팡이 돌림 %.1f도, %s" % [seq, str(m.sole_ys()), rig.body_xf.origin.y * rig.game_scale, rad_to_deg(vis._staff_fix), ", ".join(parts)])
 
 
 func _grab(crop := 1.0) -> Image:
