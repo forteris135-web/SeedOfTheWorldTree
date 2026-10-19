@@ -140,31 +140,40 @@ func _ready() -> void:
 	var items: Array = _hud.growth_items()
 	_check(items.size() == 2 and items[0]["kind"] == "attack" and items[1]["kind"] == "heal", "아이콘 종류: 검, 물방울")
 
-	# ── 영혼: wind → wind+light → seed(목록에 없는 값) → ""
+	# ── 영혼: 씨앗은 처음부터 있다(플레이어 묶음) → wind 획득 → wind 선택 → light 획득·선택 → seed 로 되돌림 → ""
 	var draws0 := _draws
+	var dots: Array = _hud.soul_dots()
+	print("[probe] 영혼 처음: soul='%s' dots=%d %s" % [_player.soul, dots.size(), str(dots)])
+	_check(dots.size() == 1 and dots[0]["soul"] == "seed" and dots[0]["selected"] and dots[0]["color"].is_equal_approx(Color(0.85, 1.0, 0.75)) and is_equal_approx(dots[0]["radius"], 9.0), "처음엔 씨앗 원 하나, 연둣빛, 고른 것은 반지름 9")
 	Progress.gain_ability("wind")
 	_player._apply_abilities()
 	await _frames(2)
-	var dots: Array = _hud.soul_dots()
-	print("[probe] 영혼 wind: soul='%s' dots=%d %s" % [_player.soul, dots.size(), str(dots)])
-	_check(dots.size() == 1 and dots[0]["selected"] and dots[0]["color"].is_equal_approx(Color(0.85, 1.0, 0.9)) and is_equal_approx(dots[0]["radius"], 9.0), "영혼 하나면 원 하나, 민트색, 고른 것은 반지름 9")
-	Progress.gain_ability("light")
+	dots = _hud.soul_dots()
+	print("[probe] 영혼 wind 획득: soul='%s' dots=%d %s" % [_player.soul, dots.size(), str(dots)])
+	_check(dots.size() == 2 and dots[0]["selected"] and not dots[1]["selected"] and dots[1]["color"].is_equal_approx(Color(0.85, 1.0, 0.9)) and is_equal_approx(dots[1]["radius"], 7.0), "바람을 얻어도 고른 것은 씨앗 그대로, 바람 원은 민트색 작게(반지름 7)")
+	Progress.soul = "wind"
 	_player._apply_abilities()
-	_player.soul = "light"
+	_player.soul_changed.emit("wind")
+	await _frames(1)
+	dots = _hud.soul_dots()
+	_check(dots.size() == 2 and dots[1]["selected"] and is_equal_approx(dots[1]["radius"], 9.0), "바람으로 전환하면 바람 원이 크게(반지름 9)")
+	_check(_hud._soul_flash > 0.8, "전환 순간 번쩍 시작 (%.2f)" % _hud._soul_flash)
+	Progress.gain_ability("light")
+	Progress.soul = "light"
+	_player._apply_abilities()
 	_player.soul_changed.emit("light")
 	await _frames(1)
 	dots = _hud.soul_dots()
-	print("[probe] 영혼 wind+light(고른 것 light): dots=%d flash=%.2f" % [dots.size(), _hud._soul_flash])
-	_check(dots.size() == 2 and dots[1]["selected"] and not dots[0]["selected"] and dots[1]["color"].is_equal_approx(Color(1.0, 0.9, 0.7)) and is_equal_approx(dots[0]["radius"], 7.0), "원 둘, light 금빛·크게, wind 작게(반지름 7)")
-	_check(_hud._soul_flash > 0.8, "전환 순간 번쩍 시작 (%.2f)" % _hud._soul_flash)
-	_check(dots[1]["center"].x - dots[0]["center"].x >= 16.0, "원끼리 겹치지 않는다 (간격 %.1f)" % (dots[1]["center"].x - dots[0]["center"].x))
+	print("[probe] 영혼 seed+wind+light(고른 것 light): dots=%d flash=%.2f" % [dots.size(), _hud._soul_flash])
+	_check(dots.size() == 3 and dots[2]["selected"] and not dots[1]["selected"] and dots[2]["color"].is_equal_approx(Color(1.0, 0.9, 0.7)) and is_equal_approx(dots[1]["radius"], 7.0), "원 셋, light 금빛·크게, wind 작게(반지름 7)")
+	_check(dots[1]["center"].x - dots[0]["center"].x >= 16.0 and dots[2]["center"].x - dots[1]["center"].x >= 16.0, "원끼리 겹치지 않는다 (간격 %.1f)" % (dots[1]["center"].x - dots[0]["center"].x))
 	await get_tree().create_timer(0.4).timeout
 	_check(is_zero_approx(_hud._soul_flash), "번쩍은 0.3초 뒤 꺼진다 (%.2f)" % _hud._soul_flash)
-	_player.soul = "seed"   # 다른 묶음의 새 영혼: owned_souls 에 없어도 표시되어야 한다
+	_player.soul = "foo"   # 모르는 영혼 값: owned_souls 에 없어도 맨 앞에 흰 원으로 표시되고 오류가 없어야 한다
 	await _frames(2)
 	dots = _hud.soul_dots()
-	print("[probe] 영혼 seed(목록 밖): dots=%d 첫 원 %s" % [dots.size(), str(dots[0]) if dots.size() > 0 else "-"])
-	_check(dots.size() == 3 and dots[0]["soul"] == "seed" and dots[0]["selected"] and dots[0]["color"].is_equal_approx(Color(0.85, 1.0, 0.75)), "모르는 영혼 값도 맨 앞에 연둣빛 원으로 (오류 없음)")
+	print("[probe] 영혼 foo(목록 밖): dots=%d 첫 원 %s" % [dots.size(), str(dots[0]) if dots.size() > 0 else "-"])
+	_check(dots.size() == 4 and dots[0]["soul"] == "foo" and dots[0]["selected"], "모르는 영혼 값도 맨 앞에 원으로 (오류 없음)")
 	_player.soul = ""
 	await _frames(2)
 	dots = _hud.soul_dots()
@@ -172,8 +181,9 @@ func _ready() -> void:
 	for d in dots:
 		if d["selected"]:
 			any_sel = true
-	_check(dots.size() == 2 and not any_sel, "soul='' 이면 고른 원 없이 가진 영혼만 (%d)" % dots.size())
-	_player.soul = "wind"
+	_check(dots.size() == 3 and not any_sel, "soul='' 이면 고른 원 없이 가진 영혼만 (%d)" % dots.size())
+	Progress.soul = "wind"
+	_player._apply_abilities()
 	await _frames(1)
 	_check(_draws > draws0 + 5, "영혼 상태를 바꾸는 동안 HUD 가 계속 그려졌다 (%d회)" % (_draws - draws0))
 

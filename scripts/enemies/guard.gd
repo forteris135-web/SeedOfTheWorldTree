@@ -37,11 +37,6 @@ var _block_reset := 0.0  # 막은 횟수가 돌아가기까지 남은 시간
 var _block_open := 0.0   # 방패가 들려 있는 남은 시간
 
 
-func _init() -> void:
-	# 방패를 든 몸은 늦게 돌아선다 (씬에서 turn_delay 로 바꿀 수 있다)
-	turn_delay = 0.45
-
-
 func _begin_windup() -> void:
 	super._begin_windup()
 	if randf() < charge_chance:
@@ -139,9 +134,11 @@ func receive_hit(hit: HitData, hb: Hurtbox) -> String:
 			_block_count = 0
 			_block_reset = 0.0
 			_block_open = block_open_time
-			hit.poise += block_break_poise
+			# Hitbox 는 한 휘두름에 닿은 모든 상대에게 같은 HitData 를 넘기므로 원본을 고치지 않고 복사해 쓴다
+			var opened := hit.copy()
+			opened.poise += block_break_poise
 			Juice.hitstop(0.04, 0.1)
-			return super.receive_hit(hit, hb)
+			return super.receive_hit(opened, hb)
 		_block_count += 1
 		_block_reset = block_reset_time
 		_flash = 0.6
@@ -150,5 +147,15 @@ func receive_hit(hit: HitData, hb: Hurtbox) -> String:
 		_visual_call("block", [-facing, clampf(hit.poise / 40.0, 0.6, 1.5)])
 		return "blocked"
 	if stuck:
-		hit.poise *= 2.0
+		var doubled := hit.copy()
+		doubled.poise *= 2.0
+		return super.receive_hit(doubled, hb)
 	return super.receive_hit(hit, hb)
+
+
+## 박힌 동안은 맞아도 박힌 채로 남는다 (HIT 로 빠져나가면 stuck_time 무방비가 첫 타에 끝나 버린다).
+## 흐트러짐이 가득 차면 EnemyBase 가 _break 로 무너뜨리므로 그 길은 그대로 열려 있다.
+func _is_armored(hit: HitData) -> bool:
+	if _mode == "stuck":
+		return true
+	return super._is_armored(hit)

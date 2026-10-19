@@ -241,8 +241,14 @@ var slow_factor := 1.0
 ## 지금 고른 영혼: "seed"(처음부터) / "wind" / "light"
 var soul := ""
 ## 마지막으로 안전하게 서 있던 자리 (가시에 떨어지면 여기로 돌아온다).
+## 가시는 몸이 닿는 순간 발동하므로 '바로 직전' 자리는 가시 판정 안일 수 있다 → 0.45초쯤 전의 자리를 쓴다
+## (안전 자리 후보를 SAFE_SAMPLE 간격으로 기억해 두고 가장 오래된 것을 돌려준다).
 var last_safe_position := Vector2.ZERO
 var _safe_timer := 0.0
+const SAFE_SAMPLE := 0.15
+const SAFE_HISTORY := 4   # 0.15 × 4 = 0.6초 전까지 기억 (가장 오래된 것이 0.45~0.6초 전)
+var _safe_history: Array[Vector2] = []
+var _safe_sample_timer := 0.0
 ## 성장: 공격 배수 (구원한 사람의 보상 등)
 var attack_multiplier := 1.0
 var _wind := 0.0   # 이번 물리 프레임에 받는 바람 (픽셀/초²)
@@ -391,11 +397,17 @@ func _physics_process(delta: float) -> void:
 		landed.emit(_last_fall_speed)
 	_was_on_floor = is_on_floor()
 	_resolve_locomotion_state()
-	# 안전한 자리 기억 (땅에 서 있고, 조금 지난 뒤)
+	# 안전한 자리 기억 (땅에 서 있고, 조금 지난 뒤). 가시에 닿기 직전 자리는 피하려고 조금 전 자리를 쓴다.
 	if is_on_floor() and _invuln_timer <= 0.0:
 		_safe_timer += delta
 		if _safe_timer > 0.35:
-			last_safe_position = global_position
+			_safe_sample_timer += delta
+			if _safe_history.is_empty() or _safe_sample_timer >= SAFE_SAMPLE:
+				_safe_sample_timer = 0.0
+				_safe_history.append(global_position)
+				while _safe_history.size() > SAFE_HISTORY:
+					_safe_history.pop_front()
+			last_safe_position = _safe_history[0]
 	else:
 		_safe_timer = 0.0
 
@@ -1030,6 +1042,8 @@ func take_hazard(damage: float) -> void:
 	if state == State.DEAD:
 		return
 	global_position = last_safe_position if last_safe_position != Vector2.ZERO else global_position
+	_safe_history.clear()
+	_safe_sample_timer = 0.0
 	velocity = Vector2.ZERO
 	var cam := get_node_or_null("Camera2D")
 	if cam:

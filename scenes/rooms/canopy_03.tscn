@@ -211,11 +211,11 @@ size = Vector2(300, 40)
 one_way = true
 
 [node name="SecretStalk" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1050, -100)
+position = Vector2(990, -100)
 size = Vector2(200, 700)
 
 [node name="SecretCeiling1" parent="Terrain" instance=ExtResource("51_secret_ceiling")]
-position = Vector2(1050, 600)
+position = Vector2(990, 600)
 size = Vector2(200, 160)
 secret_id = "secret_canopy_03_1"
 
@@ -252,7 +252,7 @@ spawn_name = "FromCanopy03"
 [node name="Interactables" type="Node2D" parent="."]
 
 [node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
-position = Vector2(1150, 690)
+position = Vector2(1090, 690)
 pickup_id = "pick_canopy_03_1"
 kind = "max_hp"
 amount = 10.0

@@ -1,13 +1,13 @@
 extends Node
 ## Claude Code용 지형 주행 시험 (화면 없이 돈다). 방을 통째로 띄우고 소녀를 **입력만으로** 조종한다.
 ## 실행: godot --headless --path . res://tools/probe_levels.tscn
-##  1) mine_01: 마을에서 들어온 자리(FromVillage)에서 선반 끝 가시(160px)를 뛰어넘어 디딤 가지(P1b) → (1800,600) 발판(P2)
-##     → 왼쪽으로 내려서며 P7 → P9 → 바닥 → Exit2 포탈 앞까지. 가시에 닿으면 take_hazard 로 체력이 줄고 자리가 되돌아가므로
+##  1) mine_01: 마을에서 들어온 자리(FromVillage, 선반 윗면 440)에서 선반 가운데 가시(1000~1160, 160px)를 달리기 점프로 뛰어넘고
+##     선반 끝(1360)에서 디딤 가지 P1b(1380~1710, 560) → 달려 내려서 P2(1760~2600, 600) → 왼쪽으로 내려서며 디딤 가지들 → 바닥 → Exit2 포탈 앞까지. 가시에 닿으면 take_hazard 로 체력이 줄고 자리가 되돌아가므로
 ##     hit_taken 신호와 hp 로 판정한다.
 ##  2) mine_01: 바닥에서 이단 점프로 one_way 발판 P9 를 아래에서 통과해 올라서는지 (채굴장은 이단 점프 보유 지역).
 ##  3) canopy_02: 좁힌 가시 구덩이(1220~1400)를 달리기 점프로 오른쪽→왼쪽 양방향 건너기 (오른쪽 바닥이 막다른 곳이 아님).
 ##  4) canopy_02: 이단 점프 없이 바닥에서 one_way 발판 P4(250 위)를 통과해 올라서기.
-##  5) canopy_03 두 구덩이(1500~1800, 3400~3700)를 위의 가지 다리로 건너기(양방향), mine_02 구덩이(1980~2300) 달리기 점프로 건너기.
+##  5) canopy_03 두 구덩이(1700~1940, 3400~3640)를 바닥 달리기 점프로 건너기(양방향; 머리 위에 가지 없음), mine_02 구덩이(2040~2280) 달리기 점프.
 ##  6) 포탈 앞에서 ↑를 눌러도 들어가지 않고, 손길(interact)로만 들어간다 (next_spawn 으로 판정, 실제 장면 전환은 막는다).
 ## 마지막에 "[probe] 끝: 실패 N" 을 찍고 그 수로 종료한다.
 
@@ -25,8 +25,12 @@ func _ready() -> void:
 	await _probe_pit("canopy_02", "FromCanopy01", 2400.0, 900.0, 1140.0, 1500.0, "바람의 틈 구덩이(1220~1400) →")
 	await _probe_pit("canopy_02", "FromCanopy01", 2400.0, 1700.0, 1480.0, 1100.0, "바람의 틈 구덩이 ←(오른쪽 바닥에서 되돌아오기)")
 	await _probe_canopy02_oneway_up()
-	await _probe_canopy03_bridges()
-	await _probe_pit("mine_02", "FromMine01", 1200.0, 1600.0, 1920.0, 2400.0, "관의 복도 구덩이(1980~2300) →")
+	await _probe_pit("canopy_03", "FromCanopy02", 1100.0, 1300.0, 1620.0, 2050.0, "잎의 회랑 첫 구덩이(1700~1940) →")
+	await _probe_pit("canopy_03", "FromCanopy02", 1100.0, 2300.0, 2020.0, 1600.0, "잎의 회랑 첫 구덩이 ←")
+	await _probe_pit("canopy_03", "FromCanopy02", 1100.0, 3000.0, 3320.0, 3750.0, "잎의 회랑 둘째 구덩이(3400~3640) →")
+	await _probe_pit("canopy_03", "FromCanopy02", 1100.0, 4000.0, 3720.0, 3300.0, "잎의 회랑 둘째 구덩이 ←")
+	await _probe_pit("mine_02", "FromMine01", 1200.0, 1600.0, 1960.0, 2400.0, "관의 복도 구덩이(2040~2280) →")
+	await _probe_pit("mine_02", "FromMine01", 1200.0, 2600.0, 2360.0, 1900.0, "관의 복도 구덩이 ←")
 	await _probe_portal_interact_only()
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
@@ -161,60 +165,26 @@ func _go(dir: int, jump_x: float, done: Callable, walk := false, limit := 4.0) -
 	return ok
 
 
-## canopy_03: 구덩이 위의 가지 다리로 건너기 (가지가 턱 위 220~340 에 걸려 있어 바닥 점프는 머리를 박는다 — 설계상 다리로 건넌다)
-func _probe_canopy03_bridges() -> void:
-	await _open("canopy_03", "FromCanopy02")
-	# 첫 구덩이(1500~1800): 바닥 → P6(1400~1620, 윗면 880) → P7(1700~1940, 윗면 760) → 오른쪽으로 달려 내려서 P3 바닥
-	_player.global_position = Vector2(1000.0, 1100.0 - 67.0)
-	_player.velocity = Vector2.ZERO
-	await _until(func(): return _player.is_on_floor(), 1.0)
-	var hp0 := _player.hp
-	var a := await _go(1, 1250.0, func(): return absf(_feet() - 880.0) < 6.0 and _player.global_position.x >= 1400.0, true)
-	# 달리기 점프는 240px 짜리 P7 을 넘어가 버리므로(그래도 구덩이 건너편 바닥에 떨어진다) 걷기 점프로 P7 에 올라선다
-	var b := await _go(1, 1560.0, func(): return absf(_feet() - 760.0) < 6.0 and _player.global_position.x >= 1700.0, true, 2.5)
-	var c := await _go(1, INF, func(): return absf(_feet() - 1100.0) < 6.0 and _player.global_position.x >= 1950.0, false, 2.5)
-	print("[probe] canopy_03 첫 구덩이 다리: P6 %s → P7 %s → 건너편 바닥 %s, 자리 %s, 피격 %d, hp %.0f→%.0f" % [a, b, c, _player.global_position, _hits, hp0, _player.hp])
-	_check(a and b and c and _hits == 0, "canopy_03 첫 구덩이(1500~1800)를 가지 다리 P6→P7 로 건넘 (피격 없음)")
-	# 둘째 구덩이(3400~3700): 바닥 → P9(3200~3440, 윗면 860) → P10(3550~3810, 윗면 720) → 내려서 P5 바닥
-	_player.global_position = Vector2(2850.0, 1100.0 - 67.0)
-	_player.velocity = Vector2.ZERO
-	await _until(func(): return _player.is_on_floor(), 1.0)
-	_hits = 0
-	a = await _go(1, 3060.0, func(): return absf(_feet() - 860.0) < 6.0 and _player.global_position.x >= 3200.0, true)
-	b = await _go(1, 3400.0, func(): return absf(_feet() - 720.0) < 6.0 and _player.global_position.x >= 3550.0, false, 2.5)
-	c = await _go(1, INF, func(): return absf(_feet() - 1100.0) < 6.0 and _player.global_position.x >= 3750.0, false, 2.5)
-	print("[probe] canopy_03 둘째 구덩이 다리: P9 %s → P10 %s → 건너편 바닥 %s, 자리 %s, 피격 %d" % [a, b, c, _player.global_position, _hits])
-	_check(a and b and c and _hits == 0, "canopy_03 둘째 구덩이(3400~3700)를 가지 다리 P9→P10 로 건넘 (피격 없음)")
-	# 되돌아오기: P5 바닥 → P11(3900~4140, 860) → P10 → P9 → P3 바닥 (왼쪽)
-	_player.global_position = Vector2(4300.0, 1100.0 - 67.0)
-	_player.velocity = Vector2.ZERO
-	await _until(func(): return _player.is_on_floor(), 1.0)
-	_hits = 0
-	a = await _go(-1, 4280.0, func(): return absf(_feet() - 860.0) < 6.0 and _player.global_position.x <= 4140.0, true)
-	b = await _go(-1, 3960.0, func(): return absf(_feet() - 720.0) < 6.0 and _player.global_position.x <= 3810.0, true, 2.5)   # 걷기 점프 (달리면 P10 왼쪽 끝에 떨어져 미끄러진다)
-	c = await _go(-1, 3600.0, func(): return absf(_feet() - 860.0) < 6.0 and _player.global_position.x <= 3440.0, true, 2.5)   # 걷기 점프 (달리면 P9 를 넘어 바닥에 떨어진다)
-	var d := await _go(-1, INF, func(): return absf(_feet() - 1100.0) < 6.0 and _player.global_position.x <= 3300.0, false, 2.5)
-	print("[probe] canopy_03 둘째 구덩이 되돌아오기: P11 %s → P10 %s → P9 %s → 바닥 %s, 자리 %s, 피격 %d" % [a, b, c, d, _player.global_position, _hits])
-	_check(a and b and c and d and _hits == 0, "canopy_03 둘째 구덩이를 반대로(P11→P10→P9) 건너 돌아옴 (피격 없음)")
-
-
 # ---------- 1) mine_01 내려가기 ----------
 func _probe_mine01_descent() -> void:
 	await _open("mine_01", "FromVillage")
 	var p0 := _player.global_position
-	_check(absf(p0.x - 120.0) < 5.0 and absf(_feet() - 300.0) < 6.0 and _player.is_on_floor(), "mine_01 FromVillage 선반(P1, 윗면 300)에 섰다: %s" % p0)
+	_check(absf(p0.x - 120.0) < 5.0 and absf(_feet() - 440.0) < 6.0 and _player.is_on_floor(), "mine_01 FromVillage 선반(P1, 윗면 440)에 섰다: %s" % p0)
 	var hp0 := _player.hp
-	# 선반 끝 가시(1204~1356)를 달리기 점프로 넘어 디딤 가지 P1b(1450~1710, 윗면 480)에
-	var p := await _run_and_jump(1, 1120.0, 1480.0, 3.0)
-	var on_p1b := _player.is_on_floor() and absf(_feet() - 480.0) < 6.0 and p.x >= 1450.0 and p.x <= 1710.0
+	# 선반 가운데 가시(판정 1004~1156)를 달리기 점프로 넘어 선반 끝 쪽(1170~1360)에 내려선다 (머리 공간 440 → 점프가 끊기지 않는다)
+	var p := await _run_and_jump(1, 870.0, 1200.0, 3.0)
+	var on_ledge := _player.is_on_floor() and absf(_feet() - 440.0) < 6.0 and p.x >= 1170.0 and p.x <= 1360.0
 	print("[probe] 가시 넘은 뒤 자리 %s (발 y %.0f), 피격 %d, hp %.0f→%.0f" % [p, _feet(), _hits, hp0, _player.hp])
-	_check(on_p1b and _hits == 0, "선반 끝 가시 160px 를 달리기 점프로 넘어 디딤 가지 P1b 에 착지 (피격 없음)")
-	# P1b 에서 오른쪽으로 달려 내려서면 P2(1800~2600, 윗면 600)
+	_check(on_ledge and _hits == 0, "선반 가운데 가시 160px 를 달리기 점프로 넘어 선반 끝 쪽에 착지 (피격 없음)")
+	# 선반 끝(1360)에서 오른쪽으로 달려 내려서면 디딤 가지 P1b(1380~1710, 윗면 560), 계속 달리면 P2(1760~2600, 윗면 600)
 	Input.action_press("move_right")
-	var ok := await _until(func(): return _player.is_on_floor() and absf(_feet() - 600.0) < 6.0 and _player.global_position.x >= 1800.0, 3.0)
+	var ok := await _until(func(): return _player.is_on_floor() and absf(_feet() - 560.0) < 6.0 and _player.global_position.x >= 1380.0, 3.0)
+	print("[probe] P1b 도착 자리 %s (발 y %.0f), 피격 %d" % [_player.global_position, _feet(), _hits])
+	_check(ok and _hits == 0, "선반 끝에서 달려 내려서 디딤 가지 P1b 에 착지")
+	ok = await _until(func(): return _player.is_on_floor() and absf(_feet() - 600.0) < 6.0 and _player.global_position.x >= 1760.0, 3.0)
 	_release_all()
 	print("[probe] P2 도착 자리 %s (발 y %.0f), 피격 %d" % [_player.global_position, _feet(), _hits])
-	_check(ok and _hits == 0, "P1b 에서 달려 내려서 (1800,600) 발판 P2 에 착지")
+	_check(ok and _hits == 0, "P1b 에서 달려 내려서 (1760,600) 발판 P2 에 착지")
 	# P2 에서 왼쪽으로 계속 달리면 one_way 디딤 가지들을 차례로 밟고 내려간다: P4b(900) → P4(1150) → P6(1700) → P8(2250) → 바닥(3000)
 	await _until(func(): return _player.is_on_floor() and absf(_player.velocity.x) < 5.0, 1.0)
 	var trace: Array[int] = [int(_feet())]
@@ -242,23 +212,25 @@ func _probe_mine01_descent() -> void:
 	var near_exit := absf(_player.global_position.x - 2410.0) < 130.0 and absf(_feet() - 3000.0) < 6.0
 	print("[probe] 바닥 Exit2 앞 %s (발 y %.0f), 피격 %d, hp %.0f, 상호작용 가능 %s" % [_player.global_position, _feet(), _hits, _player.hp, _player.can_interact])
 	_check(ok and near_exit and _player.can_interact and _hits == 0 and is_equal_approx(_player.hp, hp0), "FromVillage → Exit2 포탈 앞까지 가시에 한 번도 닿지 않고 도착 (hp 그대로, 포탈 상호작용 가능)")
-	# 가시 판정 자체는 살아 있다: 선반 끝 가시에 걸어 들어가면 15 피해 + 마지막 안전 자리로 복귀
-	_player.global_position = Vector2(1000.0, 300.0 - 67.0)
+	# 가시 판정 자체는 살아 있다: 선반 가운데 가시에 걸어 들어가면 15 피해 + 조금 전 안전 자리(가시 밖)로 복귀, 가만히 있어도 다시 찔리지 않는다
+	_player.global_position = Vector2(760.0, 440.0 - 67.0)
 	_player.velocity = Vector2.ZERO
 	_player.walk_locked = true
 	await _until(func(): return _player.is_on_floor(), 1.0)
 	await get_tree().create_timer(0.5).timeout   # 안전 자리 기억(0.35초) 뒤
-	var safe := _player.last_safe_position
 	var hp_before := _player.hp
 	Input.action_press("move_right")
 	ok = await _until(func(): return _hits > 0, 4.0)
 	_release_all()
 	_player.walk_locked = false
 	await get_tree().create_timer(0.6).timeout
-	# 안전 자리는 걷는 동안 계속 갱신되므로(0.35초 뒤부터 매 프레임) 가시 바로 앞 선반 위로 돌아온다
-	print("[probe] 선반 끝 가시에 걸어 들어감: 피격 %d, hp %.0f→%.0f, 되돌아온 자리 %s (출발 때 안전 자리 %s)" % [_hits, hp_before, _player.hp, _player.global_position, safe])
-	_check(ok and _player.hp < hp_before and _player.is_on_floor() and absf(_feet() - 300.0) < 6.0 and _player.global_position.x < 1200.0 and _player.input_enabled,
-		"선반 끝 가시(1200~1360)에 닿으면 15 피해 + 가시 앞 선반(P1) 위로 돌아오고 다시 움직일 수 있다")
+	var back := _player.global_position
+	var hits_after_return := _hits
+	await get_tree().create_timer(2.6).timeout   # 무적(1.2초)이 끝난 뒤에도 그 자리에 가만히 서 있으면
+	print("[probe] 선반 가시에 걸어 들어감: 피격 %d, hp %.0f→%.0f, 되돌아온 자리 %s, 3초 뒤 피격 %d hp %.0f" % [hits_after_return, hp_before, _player.hp, back, _hits, _player.hp])
+	_check(ok and _player.hp < hp_before and _player.is_on_floor() and absf(_feet() - 440.0) < 6.0 and back.x < 1000.0 and _player.input_enabled,
+		"선반 가시(1000~1160)에 닿으면 15 피해 + 가시 앞 선반(P1) 위로 돌아오고 다시 움직일 수 있다")
+	_check(_hits == hits_after_return, "되돌아온 자리에 가만히 있어도 다시 찔리지 않는다 (재찔림 없음)")
 
 
 # ---------- 2) mine_01 one_way 위로 통과 (이단 점프) ----------

@@ -38,7 +38,8 @@ const GUARD_FILL := Rect2(560, 331, 1100, 70)
 const GUARD_GREEN_SLICE := Rect2(360, 13, 40, 70)
 const GUARD_DARK_SLICE := Rect2(910, 13, 40, 70)
 const DEW_POS := [Vector2(405, 445), Vector2(560, 445), Vector2(735, 445)]   # 시트에 그려진 세 자리 (첫 자리만 기준으로 쓴다)
-const DEW_STEP := 155.0         # 이슬 사이 간격 (시트 px)
+const DEW_STEP := 155.0         # 이슬 사이 간격 (시트 px; 성장 표시 자리 계산용)
+const DEW_STEP_EXTRA := 175.0   # 4번째부터의 간격 (시트의 둘째→셋째 간격과 같게; 처음 세 자리는 DEW_POS 그대로)
 const DEW_PER_ROW := 7          # 한 줄에 이 개수까지, 넘으면 둘째 줄
 const DEW_ROW_STEP := 200.0     # 줄 사이 간격 (시트 px)
 const DEW_POP_TIME := 0.6       # 새 이슬 반짝임 시간
@@ -170,6 +171,9 @@ func show_message(text: String, seconds := 2.0) -> void:
 	_message = text
 	_message_timer = seconds
 	_message_set_at = _time
+	# 아이템·구원 보상은 add_upgrade 직후 같은 호출 안에서 가운데 안내를 띄운다 → 짧은 성장 글자는 버린다
+	# (프레임이 끊겨도 둘 다 뜨지 않게, 시간이 아니라 여기서 바로 지운다)
+	_pending_flash = ""
 
 
 func flash(text: String) -> void:
@@ -235,7 +239,8 @@ func dew_slots(count := -1) -> Array[Vector2]:
 	for i in count:
 		var col := i % DEW_PER_ROW
 		var row := floori(float(i) / DEW_PER_ROW)
-		out.append(_s(DEW_POS[0] + Vector2(DEW_STEP * col, DEW_ROW_STEP * row)))
+		var base: Vector2 = DEW_POS[col] if col < DEW_POS.size() else DEW_POS[DEW_POS.size() - 1] + Vector2(DEW_STEP_EXTRA * (col - DEW_POS.size() + 1), 0)
+		out.append(_s(base + Vector2(0, DEW_ROW_STEP * row)))
 	return out
 
 
@@ -270,7 +275,8 @@ func growth_labels() -> Array[String]:
 ## 성장 표시 줄의 시작점 (화면 좌표: 첫 아이콘 가운데 높이의 왼쪽 끝) — 이슬 첫 줄 오른쪽
 func growth_origin() -> Vector2:
 	var n := mini(_player.max_dews if _player else 3, DEW_PER_ROW)
-	return _s(DEW_POS[0] + Vector2(DEW_STEP * (n - 1), 0)) + Vector2(dew_size(n - 1).x + GROWTH_GAP * SHEET_SCALE, DEWS[0].get_height() * 0.5 * SHEET_SCALE)
+	var slots := dew_slots(mini(n, DEW_PER_ROW))   # 첫 줄 마지막 이슬의 오른쪽
+	return slots[slots.size() - 1] + Vector2(dew_size(mini(n, DEW_PER_ROW) - 1).x + GROWTH_GAP * SHEET_SCALE, DEWS[0].get_height() * 0.5 * SHEET_SCALE)
 
 
 ## 표시할 영혼 목록: 가진 영혼들, 고른 영혼이 그 안에 없으면(다른 묶음의 새 영혼 등) 맨 앞에 더한다

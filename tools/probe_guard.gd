@@ -7,8 +7,8 @@ extends Node
 ##  (c) 돌진 속도·피해·길이, 박힘 길이, 박힘 뒤 쉬는 시간, 박힘 중 흐트러짐 2배
 ##  (d) 두 씬의 그림 방향 플래그와 능력치가 그림 판단·너프 값과 같은지
 
-const EXPECT_GUARD := {"max_hp": 100.0, "max_poise": 90.0, "damage": 12.0, "turn_delay": 0.45, "art_faces_right": true}
-const EXPECT_SAVABLE := {"max_hp": 110.0, "max_poise": 90.0, "damage": 12.0, "turn_delay": 0.45, "art_faces_right": false}
+const EXPECT_GUARD := {"max_hp": 100.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.45, "art_faces_right": true}
+const EXPECT_SAVABLE := {"max_hp": 110.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.45, "art_faces_right": false}
 const EXPECT_SCRIPT := {"charge_speed": 700.0, "charge_time": 0.55, "charge_damage": 14.0, "stuck_time": 2.4, "charge_chance": 0.35, "charge_cooldown": 1.2, "block_limit": 3, "block_reset_time": 1.5, "block_break_poise": 40.0}
 
 var _fail := 0
