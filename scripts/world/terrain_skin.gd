@@ -11,6 +11,7 @@ extends RefCounted
 ##   ground : 큰 바닥·덩어리 윗면에 이어 까는 띠 (윗면에서 band px 아래까지만 그리고 fade px 동안 몸통 결로 녹아든다).
 ##   hang   : 천장·덩어리 아랫면·드러난 옆면에 매다는 장식 (덩굴·꽃).
 ##   bush   : 윗면에 가끔 얹는 작은 덤불.
+##   prop   : 윗면에 띄엄띄엄 세우는 장식 (마을의 난간·등불 줄 토막 — 있는 지역만).
 ##   thorn  : 가시 (Thorns). cracked : 금 간 벽 (SecretWall·SecretCeiling·CrackedWall).
 
 const DATA_DIR := "res://data/terrain/"

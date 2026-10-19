@@ -8,7 +8,7 @@
   "fill": {"top": 1.0, "deep": 0.76, "deep_px": 360, "rim": 0.78, "rim_px": 30, "wall": 0.95},
   "lift": 2,
   "roles": {
-    "ground": ["top_a", "top_b", "top_c", "top_d"],
+    "ground": ["top_e", "top_e", "top_a", "top_b", "top_c", "top_d"],
     "branch": ["branch_a", "branch_b", "isle_a", "isle_b", "bridge_a"],
     "slab": ["slab_a", "slab_b", "slab_c", "slab_d", "slab_e", "slab_f", "isle_c", "branch_c"]
   },
@@ -46,6 +46,7 @@
       {"name": "top_b", "role": "ground", "src": [650, 11, 427, 209], "keep": "largest"},
       {"name": "top_c", "role": "ground", "src": [0, 1, 630, 389], "keep": "largest", "clip": [70, 0, 335, 230]},
       {"name": "top_d", "role": "ground", "sheet": "res://익스펜션/그림/지형/6AB07322-CD84-4AAE-B887-BCB40027B820 2.PNG", "src": [1211, 343, 315, 226], "keep": "largest"},
+      {"name": "top_e", "role": "ground", "src": [11, 699, 939, 376], "keep": "largest", "clip": [190, 905, 590, 175]},
       {"name": "isle_a", "role": "branch", "sheet": "res://익스펜션/그림/지형/6AB07322-CD84-4AAE-B887-BCB40027B820 2.PNG", "src": [1211, 343, 315, 226], "keep": "largest"},
       {"name": "isle_b", "role": "branch", "sheet": "res://익스펜션/그림/지형/6AB07322-CD84-4AAE-B887-BCB40027B820 2.PNG", "src": [629, 831, 338, 177], "keep": "largest"},
       {"name": "isle_c", "role": "slab", "sheet": "res://익스펜션/그림/지형/6AB07322-CD84-4AAE-B887-BCB40027B820 2.PNG", "src": [433, 857, 215, 153], "keep": "largest"},
@@ -53,7 +54,6 @@
       {"name": "rail_b", "role": "prop", "src": [15, 293, 325, 232], "keep": "largest", "clip": [45, 286, 130, 72]},
       {"name": "rail_c", "role": "prop", "src": [497, 725, 193, 158], "keep": "largest", "clip": [500, 718, 152, 86]},
       {"name": "rail_d", "role": "prop", "src": [926, 384, 522, 476], "keep": "largest", "clip": [925, 488, 205, 92]},
-      {"name": "rail_e", "role": "prop", "src": [926, 384, 522, 476], "keep": "largest", "clip": [1235, 674, 140, 58]},
       {"name": "lamp_tower", "role": "hang", "src": [994, 695, 82, 230], "keep": "largest"},
       {"name": "banner_a", "role": "hang", "sheet": "res://익스펜션/그림/지형/6AB07322-CD84-4AAE-B887-BCB40027B820 2.PNG", "src": [1100, 638, 51, 185], "keep": "largest"},
       {"name": "vine_a", "role": "hang", "sheet": "res://익스펜션/그림/지형/3905F02A-6961-4152-9C08-A5779251BE1C.PNG", "src": [16, 782, 211, 283]},
