@@ -1,0 +1,109 @@
+{
+  "_설명": "첫 보스 '잿빛 잎새의 새' 부위 뼈대 설계도. tools/rig_cut.gd 가 읽어 art/rigs/gray_leaf_bird/ 를 만든다. 좌표는 모두 원본 시트 px. 쓰는 법: RIGS.md. 그림 쪽은 scripts/bosses/gray_leaf_bird_visual.gd (머리·날개·꼬리 크기 배율도 거기 BONE_SCALE).",
+  "id": "gray_leaf_bird",
+  "sheet": "res://익스펜션/그림/리뉴얼-보스/01D81E31-FDEA-4DAA-B30C-C830AAA1247B.PNG",
+  "faces": "right",
+  "segment": {"alpha": 0.5, "erode": 3, "min_pixels": 600, "soft_alpha": 0.03, "min_small": 150},
+  "out_scale": 0.9,
+  "game_scale": 0.84,
+  "archetype": "bird",
+  "chains": {
+    "leg_f": ["leg_f_up", "leg_f_lo", "foot_f"],
+    "leg_b": ["leg_b_up", "leg_b_lo", "foot_b"]
+  },
+  "legs": [{"chain": "leg_f", "knee_back": true}, {"chain": "leg_b", "knee_back": true}],
+  "ghost": ["wing_f_in", "wing_f_out", "head"],
+  "sockets": {"beak": {"bone": "head", "at": [978, 138]}, "wing_tip": {"bone": "wing_f_out", "at": [1470, 305]}},
+  "soft": ["wing_b_in", "wing_b_out", "wing_f_in", "wing_f_out", "wing_b_fold", "wing_f_fold"],
+  "parts": {
+    "torso": {
+      "comps": [15],
+      "pivot": [117, 600], "rest": 28, "z": 0
+    },
+    "head": {
+      "comps": [1],
+      "pivot": [905, 198], "parent": "torso", "attach": [112, 515], "rest": 0, "z": 8,
+      "variants": {
+        "scream": {"comps": [4], "pivot": [1410, 160]},
+        "down": {"comps": [2], "pivot": [1062, 220]}
+      }
+    },
+    "wing_b_in": {
+      "comps": [5],
+      "clip": [[[995, 200], [1145, 200], [1145, 535], [960, 535], [965, 330]]],
+      "pivot": [1118, 325], "parent": "torso", "attach": [72, 548], "rest": 0, "z": -8
+    },
+    "wing_b_out": {
+      "comps": [5],
+      "clip": [[[750, 200], [1020, 200], [992, 330], [985, 535], [750, 535]]],
+      "pivot": [985, 245], "parent": "wing_b_in", "rest": 0, "z": -9
+    },
+    "wing_b_fold": {
+      "comps": [17],
+      "pivot": [512, 506], "mirror": true, "parent": "torso", "attach": [78, 548], "rest": 0, "z": -7,
+      "modulate": [0.78, 0.78, 0.8, 1.0]
+    },
+    "wing_f_in": {
+      "comps": [6],
+      "clip": [[[1155, 200], [1325, 200], [1340, 330], [1365, 530], [1155, 530]]],
+      "pivot": [1172, 326], "parent": "torso", "attach": [98, 552], "rest": 0, "z": 6
+    },
+    "wing_f_out": {
+      "comps": [6],
+      "clip": [[[1300, 200], [1530, 200], [1530, 530], [1342, 530], [1318, 330]]],
+      "pivot": [1318, 240], "parent": "wing_f_in", "rest": 0, "z": 5
+    },
+    "wing_f_fold": {
+      "comps": [17],
+      "pivot": [512, 506], "mirror": true, "parent": "torso", "attach": [100, 552], "rest": 0, "z": 4
+    },
+    "tail_a": {
+      "comps": [32],
+      "clip": [[[290, 700], [860, 700], [860, 1000], [290, 1000]]],
+      "pivot": [310, 722], "tip": [800, 960], "mirror": true, "parent": "torso", "attach": [118, 712], "rest": 68, "z": -5,
+      "chain": {"stiffness": 26, "damping": 4.5, "drag": 0.00025, "gravity": 0.06, "max": 28}
+    },
+    "tail_c": {
+      "comps": [32],
+      "clip": [[[0, 700], [332, 700], [332, 900], [0, 900]]],
+      "pivot": [310, 722], "tip": [30, 830], "parent": "torso", "attach": [110, 708], "rest": 78, "z": -4,
+      "chain": {"stiffness": 34, "damping": 5, "drag": 0.0003, "gravity": 0.05, "max": 30}
+    },
+    "leg_f_up": {
+      "comps": [50],
+      "clip": [[[795, 715], [955, 715], [955, 830], [945, 862], [905, 868], [870, 840], [795, 800]]],
+      "pivot": [895, 755], "mirror": true, "parent": "torso", "attach": [168, 612], "z": 3
+    },
+    "leg_f_lo": {
+      "comps": [50],
+      "clip": [[[888, 822], [956, 832], [950, 872], [912, 915], [866, 915], [866, 888]]],
+      "pivot": [925, 845], "mirror": true, "parent": "leg_f_up", "z": 2
+    },
+    "foot_f": {
+      "comps": [50],
+      "clip": [[[780, 1000], [780, 935], [820, 905], [860, 890], [900, 888], [935, 895], [960, 915], [960, 1000]]],
+      "pivot": [885, 905], "sole": [840, 984], "mirror": true, "parent": "leg_f_lo", "rest": 0, "z": 1
+    },
+    "leg_b_up": {
+      "comps": [36],
+      "clip": [[[905, 700], [1062, 700], [1062, 840], [1042, 860], [1010, 852], [960, 802], [905, 792]]],
+      "pivot": [1000, 748], "mirror": true, "parent": "torso", "attach": [142, 618], "z": -1,
+      "modulate": [0.82, 0.82, 0.84, 1.0]
+    },
+    "leg_b_lo": {
+      "comps": [36],
+      "clip": [[[995, 800], [1062, 810], [1058, 852], [1010, 915], [962, 915], [962, 888]]],
+      "pivot": [1035, 822], "mirror": true, "parent": "leg_b_up", "z": -2,
+      "modulate": [0.82, 0.82, 0.84, 1.0]
+    },
+    "foot_b": {
+      "comps": [36],
+      "clip": [[[895, 1010], [895, 940], [930, 912], [965, 895], [1000, 893], [1035, 900], [1060, 920], [1060, 1010]]],
+      "pivot": [978, 905], "sole": [950, 1004], "mirror": true, "parent": "leg_b_lo", "rest": 0, "z": -3,
+      "modulate": [0.82, 0.82, 0.84, 1.0]
+    },
+    "leaf_a": {"comps": [52], "pivot": [1191, 786], "parent": "torso", "attach": [117, 600], "hidden": true},
+    "leaf_b": {"comps": [40], "pivot": [1265, 784], "parent": "torso", "attach": [117, 600], "hidden": true},
+    "leaf_c": {"comps": [31], "pivot": [1490, 602], "parent": "torso", "attach": [117, 600], "hidden": true}
+  }
+}
