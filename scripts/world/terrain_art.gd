@@ -897,6 +897,9 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 	# 1b) 기둥 그림 (덧붙인 역할 — 지역에 pillar 조각이 있을 때만; 수관 등은 그대로): 세로로 긴 장식 덩어리에 세로로 이어 입힌다
 	if decorate and vertical and skin.has_role("pillar"):
 		_pillar_run(poly, sides)
+	# 1b) 드러난 높은 옆면의 벽 조각 (그림 옷에 wall 역할이 있을 때만 — TerrainWall. 바닥 띠·매단 장식이 그 위에 얹힌다)
+	if skin.has_role("wall"):
+		TerrainWall.lay(self, sides, tops)
 	# 2) 윗면 띠
 	if decorate and skin.has_role("ground"):
 		for t in tops:
@@ -1238,6 +1241,11 @@ func _ground_run(a: Vector2, b: Vector2, cap_l: bool, cap_r: bool, cont_l: bool,
 			opts["band"] = band * 1.8   # 절벽 끝은 뿌리가 더 보이게
 			if i == 0 and segs.size() > 1:
 				opts["fade_r"] = ov   # 깊은 뿌리가 다음 토막 아래에서 딱 잘려 보이지 않게
+			# params.ground.flip_right_cap: 오른쪽 절벽 끝에 조각의 왼끝을 뒤집어 쓴다 (오른끝이 비탈인 조각 — 숨은 내리막.
+			# 비탈이 충돌 끝 밖으로 이어져 내려가는 길처럼 보이지 않게). 기본 꺼짐 → 수관은 그대로.
+			if i > 0 and i == segs.size() - 1 and bool(skin.param("ground", "flip_right_cap", false)):
+				piece(name, 0.0, walk.x + cap, xb - cap * k, xb + walk.x * k, y_at, k, true, opts)
+				continue
 			piece(name, sg[0], sg[1], x0, x1, y_at, k, false, opts)
 			continue
 		# 가운데 토막은 바닥 조각 여럿을 섞는다 (한 조각만 되풀이하면 무늬가 줄지어 보인다)

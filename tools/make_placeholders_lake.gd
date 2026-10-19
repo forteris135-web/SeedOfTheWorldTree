@@ -5,7 +5,7 @@ extends SceneTree
 ## 만드는 것 (모두 1536×1024, 진짜 그림과 같은 크기라 배율·자리가 그대로 맞는다):
 ##   art/bosses/boss_sap_queen_now.png (투명, 나비 실루엣 + 갈라진 날개)  / boss_sap_queen_past.png (가득 찬 호수 위, 맑은 날개)
 ##   art/enemies/enemy_sap_fisher.png (투명, 오른쪽을 보는 사람 실루엣 + 낚싯대, 줄은 코드가 그림) / enemy_sap_fisher_savable.png (가슴 온기)
-##   art/backgrounds/bg_hidden_descent.png / bg_sap_lake_1.png / bg_sap_lake_boss.png (3:2 그라데이션 + 층층 수면 자국)
+##   (배경 bg_hidden_descent / bg_sap_lake_1 / bg_sap_lake_boss 는 기획자 그림으로 바뀌어 더는 만들지 않는다)
 ##   art/memories/memory_queen_1.png / _2.png / _3.png (바랜 색, 장면 암시)
 ## 그림은 절반 크기(768×512)로 계산한 뒤 두 배로 키운다 (수채화처럼 부드럽고, 계산이 4배 빠르다).
 
@@ -23,13 +23,12 @@ func _init() -> void:
 	_make("res://art/bosses/boss_sap_queen_past.png", false, _queen_past)
 	_make("res://art/enemies/enemy_sap_fisher.png", true, func(u: float, v: float) -> Color: return _fisher(u, v, false))
 	_make("res://art/enemies/enemy_sap_fisher_savable.png", true, func(u: float, v: float) -> Color: return _fisher(u, v, true))
-	_make("res://art/backgrounds/bg_hidden_descent.png", false, _bg_descent)
-	_make("res://art/backgrounds/bg_sap_lake_1.png", false, _bg_lake)
-	_make("res://art/backgrounds/bg_sap_lake_boss.png", false, _bg_lake_boss)
+	# 배경 세 장은 기획자 그림으로 바뀌었다 (익스펜션/그림/배경 4-1 → bg_sap_lake_1, 4-2 → bg_sap_lake_boss, 5 → bg_hidden_descent).
+	# 진짜 그림을 덮어쓰지 않게 다시 만들지 않는다 (_bg_* 함수는 참고용으로 남겨 둔다).
 	_make("res://art/memories/memory_queen_1.png", false, _memory_1)
 	_make("res://art/memories/memory_queen_2.png", false, _memory_2)
 	_make("res://art/memories/memory_queen_3.png", false, _memory_3)
-	print("임시 그림 10장 생성 완료 (%.1f초)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+	print("임시 그림 7장 생성 완료 (%.1f초)" % ((Time.get_ticks_msec() - t0) / 1000.0))
 	quit()
 
 

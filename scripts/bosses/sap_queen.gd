@@ -654,9 +654,11 @@ func _sink_stones() -> void:
 			continue
 		var tw := create_tween()
 		tw.tween_property(s, "position:y", _stone_home[s].y + 220.0, 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(s, "modulate:a", 0.0, 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)   # 그림: 호수 바닥 속에 비치지 않게
 		tw.tween_callback(func() -> void:
 			if is_instance_valid(s):
-				s.collision_layer = 0)
+				s.collision_layer = 0
+				s.visible = false)   # 몸통 결(묶음 맨 아래 겹)까지 숨긴다
 
 
 func _raise_stones() -> void:
@@ -666,6 +668,8 @@ func _raise_stones() -> void:
 			continue
 		s.position = _stone_home[s]
 		s.collision_layer = 1
+		s.modulate.a = 1.0
+		s.visible = true
 
 
 # ---------- 맞기 ----------
