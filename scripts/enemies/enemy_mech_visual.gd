@@ -295,7 +295,12 @@ func _process(delta: float) -> void:
 			_steam_timer = randf_range(0.7, 1.2) if moving else randf_range(1.6, 3.0)
 
 
-func _glow_texture() -> GradientTexture2D:
+## 빛 그림 (모든 기계 그림이 함께 쓴다 — 몹마다 텍스처를 새로 만들지 않게)
+static var _glow_tex: GradientTexture2D
+
+static func _glow_texture() -> GradientTexture2D:
+	if _glow_tex != null:
+		return _glow_tex
 	var grad := Gradient.new()
 	grad.offsets = PackedFloat32Array([0.0, 0.35, 1.0])
 	grad.colors = PackedColorArray([Color(1, 1, 1, 0.9), Color(1, 1, 1, 0.3), Color(1, 1, 1, 0.0)])
@@ -306,6 +311,7 @@ func _glow_texture() -> GradientTexture2D:
 	gt.fill = GradientTexture2D.FILL_RADIAL
 	gt.fill_from = Vector2(0.5, 0.5)
 	gt.fill_to = Vector2(1, 0.5)
+	_glow_tex = gt
 	return gt
 
 
