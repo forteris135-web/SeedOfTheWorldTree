@@ -275,13 +275,10 @@ func piece(name: String, u0: float, u1: float, x0: float, x1: float, y_at: Calla
 		if warp and not hang:
 			line = skin.top_at(name, su)
 		var base_y: float = y_at.call(x)
+		# fade_l / fade_r 은 놓인 자리(화면)의 왼쪽·오른쪽 끝 기준이다 (뒤집기와 상관없이)
 		var a := 1.0
 		var xl := x - x0
 		var xr := x1 - x
-		if flip:
-			var t := xl
-			xl = xr
-			xr = t
 		if fade_l > 0.0:
 			a *= smoothstep(0.0, fade_l, xl)
 		if fade_r > 0.0:

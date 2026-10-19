@@ -836,7 +836,7 @@
       ]
     },
     "ledge_a": {
-      "role": "ledge",
+      "role": "ground",
       "size": [
         441,
         313

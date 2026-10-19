@@ -1,6 +1,7 @@
 class_name TerrainStyle
 extends RefCounted
 ## 지역별 지형 팔레트와 장식 규칙 (2026-10-19 기획자 요청: 지형지물 디테일 업그레이드).
+## ※ 코드로 그리는 옛 지형이다. 그림 옷(TerrainSkin, data/terrain/<지역>.json)이 생긴 지역은 그림 조각 지형(TerrainArt)으로 그린다 — TERRAIN.md.
 ## 발판(Platform)·경사(TerrainPolygon)·가시(Thorns)가 이 표 하나를 같이 쓴다. 방 파일은 손대지 않는다:
 ## 각 지형이 조상 Room 의 region 을 읽어 팔레트를 고른다 (Room 이 없으면 수관).
 ##

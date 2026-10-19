@@ -14,7 +14,7 @@ extends SceneTree
 ##            scale 을 주면 그만큼 줄여서 넣는다 (아주 큰 그림 — 금 간 벽·가시).
 ##            walk 를 주면 자동으로 잰 '걷는 구간' 대신 그 값(조각 안 x, 원래 크기 px)을 쓴다.
 ##            atlas: false 면 atlas 에 넣지 않는다 (몸통 결 재료로만 쓰는 큰 그림).
-##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, hue:[도], sat:[], val:[]}
+##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright}
 ##            from 조각들에서 나무껍질 색(hue·sat·val 범위)만 있는 작은 네모(patch)를 찾아 이어 붙여 size×size 무늬를 만든다.
 ##   exports: [{name, src, sheet?, out:"res://...png", max:긴 변 px}] — 지형 밖에서 쓰는 단독 그림 (기록물 양피지 등)
 ##   extras : 금 간 벽처럼 조각을 가공한 그림 (cracked: 틈 빛을 끈 그림 / 틈 빛만 / 원래 그림)
@@ -500,7 +500,7 @@ func _make_extra(e: Dictionary, cut: Dictionary) -> void:
 						if known[nq] == 1 and closed[nq * 4 + 3] > 0:
 							rr += closed[nq * 4]; gg += closed[nq * 4 + 1]; bb += closed[nq * 4 + 2]; cnt += 1
 					if cnt > 0:
-						nc[q * 4] = int(rr / cnt * 0.82); nc[q * 4 + 1] = int(gg / cnt * 0.8); nc[q * 4 + 2] = int(bb / cnt * 0.8)
+						nc[q * 4] = int(rr / cnt * 0.92); nc[q * 4 + 1] = int(gg / cnt * 0.9); nc[q * 4 + 2] = int(bb / cnt * 0.9)
 						nk[q] = 1
 						changed = true
 			closed = nc
@@ -511,9 +511,17 @@ func _make_extra(e: Dictionary, cut: Dictionary) -> void:
 		for q in w * h:
 			var k := mask[q]
 			if k > 0.15:
-				var dark := 1.0 - 0.55 * k
+				var dark := 1.0 - 0.35 * k
 				closed[q * 4] = int(closed[q * 4] * dark); closed[q * 4 + 1] = int(closed[q * 4 + 1] * dark); closed[q * 4 + 2] = int(closed[q * 4 + 2] * dark)
 		var name := str(e["name"])
+		# 밝기 맞추기 (bright): 나무 그림이 주변 지형보다 어두우면 굽기 전에 밝힌다 (틈 빛 그림은 그대로)
+		var br := float(e.get("bright", 1.0))
+		if absf(br - 1.0) > 0.001:
+			for arr in [d, closed]:
+				for q in w * h:
+					for ch in 3:
+						arr[q * 4 + ch] = mini(255, int(arr[q * 4 + ch] * br))
+			img = Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, d)
 		var ims := {name: img, name + "_closed": Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, closed), name + "_glow": Image.create_from_data(w, h, false, Image.FORMAT_RGBA8, glow)}
 		# 틈이 지나는 가로 자리(틈 빛 무게중심, 0~1) — 좁은 벽은 이 둘레를 잘라 쓴다
 		var sx := 0.0
@@ -607,6 +615,12 @@ func _make_fill(f: Dictionary) -> Image:
 			mask[y * patch + x] = smoothstep(0.0, edge, minf(dx, dy))
 	for i in int(float(size * size) / float(patch * patch) * float(f.get("cover", 6.0))):
 		_paste(od, size, _pick_patch(cands, rng), Vector2i(rng.randi_range(0, size - 1), rng.randi_range(0, size - 1)), patch, mask)
+	# 밝기 맞추기 (bright): 재료 그림이 어두우면 굽기 전에 밝힌다 (게임의 색 곱하기는 1 을 넘지 못한다)
+	var br := float(f.get("bright", 1.0))
+	if absf(br - 1.0) > 0.001:
+		for q in size * size:
+			for ch in 3:
+				od[q * 4 + ch] = mini(255, int(od[q * 4 + ch] * br))
 	out.set_data(size, size, false, Image.FORMAT_RGBA8, od)
 	return out
 

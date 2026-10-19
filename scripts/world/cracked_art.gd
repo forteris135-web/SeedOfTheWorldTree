@@ -93,9 +93,8 @@ func _layer(piece_name: String) -> Polygon2D:
 	for u in _uv_local:
 		uv.append(u + o)
 	pg.uv = uv
-	# 나무 그림은 주변 지형보다 어두워서 밝기를 맞춘다 (data 의 params.cracked.bright)
-	var br := float(skin.param("cracked", "bright", 1.35))
-	pg.color = Color(skin.tint.r * br, skin.tint.g * br, skin.tint.b * br) if piece_name != "cracked_glow" else Color(1, 1, 1)
+	# 나무 그림의 밝기는 자르기 도구가 굽는다 (data 의 cut.extras[].bright)
+	pg.color = Color(skin.tint.r, skin.tint.g, skin.tint.b) if piece_name != "cracked_glow" else Color(1, 1, 1)
 	pg.use_parent_material = true
 	pg.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	add_child(pg)
