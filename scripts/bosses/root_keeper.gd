@@ -460,7 +460,8 @@ func _pick_chain(st: State, dist: float) -> int:
 		State.ORBS:
 			return State.SPIKES if (p2 and randf() < 0.3) else -1
 		State.HAND:
-			return State.SWEEP if (p2 and dist < 420.0 and randf() < 0.3) else -1
+			# 뿌리 손 → 휘두르기 연계는 없앴다: 손에 잡혀 던져진 뒤 경직(0.4초) 동안 이어지는 휘두르기를 피할 수 없었다 (통합 검토)
+			return -1
 		State.SWEEP2:
 			return State.STOMP if (p2 and randf() < 0.3) else -1
 	return -1

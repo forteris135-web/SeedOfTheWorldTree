@@ -199,7 +199,7 @@ spawn_name = "FromDescent"
 [node name="Enemies" type="Node2D" parent="."]
 
 [node name="Fisher1" parent="Enemies" instance=ExtResource("61_fisher")]
-position = Vector2(850, 2632)
+position = Vector2(700, 2632)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(200, 232)

@@ -602,7 +602,7 @@ func _draw_marks() -> void:
 			# 지나갈 띠 전체가 붉게 (가드 불가)
 			var x0 := bx
 			var x1 := (_boss.arena.end.x if f > 0.0 else _boss.arena.position.x) if _boss.arena.size.x > 0.0 else bx + f * 1600.0
-			var lane := Rect2(minf(x0, x1), g - 300.0, absf(x1 - x0), 300.0)
+			var lane := Rect2(minf(x0, x1), g - 330.0, absf(x1 - x0), 330.0)   # 판정 윗끝(발밑 기준 320)보다 조금 높게
 			_marks.draw_rect(lane, _tg((0.1 + 0.14 * p) * fade, false))
 			_marks.draw_rect(Rect2(lane.position.x, g - 8, lane.size.x, 10), _tg((0.4 + 0.4 * p) * fade, false))
 			# 벽 실루엣
@@ -642,6 +642,10 @@ func _draw_marks() -> void:
 				half.append(Vector2(bx + cos(a) * 150.0, g + sin(a) * 150.0))
 			_marks.draw_colored_polygon(half, _tg((0.12 + 0.2 * p) * fade, false))
 			_marks.draw_arc(Vector2(bx, g), 150.0, PI, TAU, 24, _tg((0.5 + 0.4 * p) * fade, false), 3.0, true)
+			# 내려찍기 판정 기둥 (발밑 기준 좌우 130, 높이 190 — 반원만으로는 판정 위쪽 모서리가 예고 밖이었다)
+			var col := Rect2(bx - 150.0, g - 205.0, 300.0, 205.0)
+			_marks.draw_rect(col, _tg((0.08 + 0.12 * p) * fade, false))
+			_marks.draw_rect(col, _tg((0.45 + 0.4 * p) * fade, false), false, 2.5)
 			# 충격파가 달릴 방향 화살
 			for d: float in [-1.0, 1.0]:
 				var x: float = bx + d * (200.0 + 300.0 * p)

@@ -66,7 +66,7 @@ size = Vector2(80, 300)
 
 [node name="VillageShrine" type="Node2D"]
 script = ExtResource("1_room")
-bounds = Rect2(0, 0, 2400, 1200)
+bounds = Rect2(0, 0, 3200, 1200)
 region = "village"
 room_id = "village_shrine"
 display_name = "마을 · 세계수의 사당"
@@ -138,18 +138,18 @@ size = Vector2(100, 1400)
 decorate = false
 
 [node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(2400, -100)
+position = Vector2(3200, -100)
 size = Vector2(100, 1400)
 decorate = false
 
 [node name="Ceiling" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, -100)
-size = Vector2(2400, 100)
+size = Vector2(3200, 100)
 decorate = false
 
 [node name="P1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, 1000)
-size = Vector2(2400, 200)
+size = Vector2(3200, 200)
 label_text = "사당"
 
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
