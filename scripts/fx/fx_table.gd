@@ -244,8 +244,9 @@ const EFFECTS := {
 		"palette": "ash", "keep": 0.5, "priority": 1, "children": [["gust_leaf", 4, Vector2(60, 20)]]},
 	# ===================== 등불 기사 =====================
 	# 창 찌르기: 창끝을 따라 앞으로 뻗는 불빛 줄기 (뒤끝 기준으로 자란다)
-	"spear_thrust": {"tex": "lance_streak", "blend": "mix", "life": 0.28, "scale": [1.25, 1.6], "ease": 3.0, "fade_out": 0.4, "scale_xy": Vector2(1.0, 0.75),
-		"pivot": Vector2(0.04, 0.58), "palette": "fire", "keep": 0.2, "energy": 1.05, "priority": 2,
+	# (그림은 창끝이 왼쪽 → 좌우로 뒤집어 창끝이 앞(멀리)에 오게, 기준점은 그림 오른쪽 끝 = 기사 쪽)
+	"spear_thrust": {"tex": "lance_streak", "blend": "mix", "life": 0.28, "scale": [1.25, 1.6], "ease": 3.0, "fade_out": 0.4, "scale_xy": Vector2(-1.0, 0.75),
+		"pivot": Vector2(0.97, 0.58), "palette": "fire", "keep": 0.2, "energy": 1.05, "priority": 2,
 		"children": [["ember", 3, Vector2(120, 20), {"offset": Vector2(220, 0)}]]},
 	# 창·등불 휘두르기: 앞을 가르는 불꽃 초승달
 	"spear_swing": {"tex": "gust_crescent", "blend": "mix", "life": 0.32, "scale": [0.6, 0.68], "ease": 3.0, "fade_out": 0.45, "palette": "fire", "keep": 0.15,
@@ -372,6 +373,12 @@ const EFFECTS := {
 	# 방패·몸이 벽에 박힘 / 기계가 부딪힘
 	"slam_impact": {"tex": "star_burst", "life": 0.3, "scale": [0.28, 0.52], "ease": 3.0, "fade_out": 0.35, "rot_rand": 180.0, "palette": "gold", "keep": 0.3,
 		"energy": 1.08, "priority": 1, "children": [["spark", 6, Vector2(10, 10)], ["dust_puff", 2, Vector2(20, 30)]]},
+	# 잿가지 거인 내려찍기 착지: 잿빛 잎 무더기 터짐 + 땅 고리 + 양옆 먼지
+	"ash_slam": {"tex": "leaf_burst", "blend": "mix", "life": 0.6, "scale": [0.8, 1.1], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.86),
+		"palette": "ash", "keep": 0.45, "priority": 2,
+		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 2.4, "palette": "ash"}],
+			["dust_puff", 2, Vector2(20, 4), {"vel": Vector2(-220, -50), "offset": Vector2(-90, -8), "scale": 1.5}],
+			["dust_puff", 2, Vector2(20, 4), {"vel": Vector2(220, -50), "offset": Vector2(90, -8), "scale": 1.5}]]},
 	# 기계 드릴의 불똥 (들이받는 동안)
 	"drill_spark": {"tex": "star_burst", "life": 0.14, "scale": [0.1, 0.18], "ease": 3.0, "fade_out": 0.3, "rot_rand": 180.0, "palette": "fire",
 		"energy": 1.1, "priority": 0, "children": [["spark", 3, Vector2(6, 6)]]},

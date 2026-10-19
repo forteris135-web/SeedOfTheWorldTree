@@ -47,6 +47,7 @@ func _physics_process(delta: float) -> void:
 			velocity.x = 0.0
 			anim_hint = "land"
 			_visual_call("impact", [0, 1.8])
+			Fx.spawn("ash_slam", global_position)   # 이펙트 리뉴얼 F2: 잿빛 잎 터짐 + 땅 고리 + 먼지
 			_set_state(State.RECOVER)
 			_timer = recover_time + 0.3
 		if _timer <= 0.0:   # 어딘가 걸렸다
