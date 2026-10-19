@@ -94,7 +94,7 @@ func _on_boss_died(_purified: bool) -> void:
 	Progress.add_upgrade(reward_type, reward_amount)
 	$BossHUD.hide_boss()
 	$GateIn.open()
-	Music.play_region(region)
+	Music.play_region(region, room_id)
 	var hud := get_node_or_null("CombatHUD")
 	if hud:
 		hud.show_message(reward_text, 4.0)

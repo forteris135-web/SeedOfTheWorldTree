@@ -1,6 +1,6 @@
 extends Control
 ## 엔딩. 선택에 따라 두 종류. 그림 위로 자막이 천천히 흐르고, 마지막에 주제 문장. 그 뒤 제작진과 타이틀로.
-## 자막은 data/dialogue/endings.json. 음악(C장조로 끝나는 주제곡)은 13단계에서.
+## 자막은 data/dialogue/endings.json. 음악은 selenia_humming (Music.ENDING_TRACK).
 
 const DATA_PATH := "res://data/dialogue/endings.json"
 const LINE_TIME := 6.0
@@ -38,7 +38,8 @@ func _ready() -> void:
 	if str(Progress.last_grass.get("scene", "")) != "":
 		SaveGame.save_now()
 	Game.fade_in(1.5)
-	Music.play(ending_track(which), 3.0, true)
+	# 세 엔딩 모두 selenia_humming 한 곡, 한 번만 (반복 없이 크레딧까지) — ENDINGS.md 0장
+	Music.play(ending_track(which), {"fade": 3.0, "from": 0.0, "loop": false})
 	var tw := create_tween()
 	tw.tween_property(art, "modulate", Color(0.75, 0.72, 0.68, 1), 4.0)
 	tw.parallel().tween_property(title, "modulate:a", 1.0, 2.0).set_delay(1.0)
@@ -54,11 +55,9 @@ func _ready() -> void:
 		get_tree().quit()
 
 
-## 엔딩 곡: 제3의 길은 기획자의 E♭장조 버전(theme_ending_third.wav)이 있으면 그것, 없으면 theme_ending.
-static func ending_track(which: String) -> String:
-	if which == "third" and ResourceLoader.exists(Music.DIR + "theme_ending_third.wav"):
-		return "theme_ending_third"
-	return "theme_ending"
+## 엔딩 곡: 세 엔딩 모두 셀레니아의 허밍 selenia_humming (ENDINGS.md 0장 — 주제곡 엔딩 버전·E♭장조 버전은 엔딩에 쓰지 않는다).
+static func ending_track(_which: String) -> String:
+	return Music.ENDING_TRACK
 
 
 func _process(delta: float) -> void:

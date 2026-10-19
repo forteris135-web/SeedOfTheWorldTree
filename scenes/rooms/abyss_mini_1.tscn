@@ -57,7 +57,7 @@ defeat_flag = "miniboss_spore_mother_defeated"
 reward_type = "max_hp"
 reward_amount = 10.0
 reward_text = "포자 어미의 숨결이 가라앉았다 — 최대 체력 +10"
-boss_music = "boss_root"
+boss_music = "boss_rootkeeper_p1"
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_glow")

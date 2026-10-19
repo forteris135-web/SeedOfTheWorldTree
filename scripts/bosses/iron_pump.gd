@@ -2,7 +2,7 @@ extends CharacterBody2D
 class_name IronPump
 ## 확장판 보스 '무쇠 펌프' (EXPANSION.md 4장). 마력을 뽑아내던 거대한 채굴 펌프. 장인들이 만들었고, 의지를 갖게 되었다.
 ## 땅에서 싸운다. 소녀 몇 배 크기. **기계적 반복 리듬**: 1페이즈 공격은 정해진 순서(피스톤 → 분사 → 빨아들이기 → …)로
-## 돌고 예고는 보스곡 128bpm 의 2박(0.94초)이라, 규칙을 읽으면 쉽다.
+## 돌고 예고는 보스곡 124.5bpm 의 2박(0.96초)이라, 규칙을 읽으면 쉽다.
 ## 패턴: 피스톤 내려찍기(붉은 예고·가드 불가·땅 충격파 양쪽) / 수액 분사(관에서 수액 덩어리 3연속, 저스트 가드로 되받기)
 ##       / 관 빨아들이기(2초 동안 소녀를 초당 suck_pull px 씩 끌어당김 → 끝에 물기(가드 가능); 반대로 달리거나 구르면 벗어난다)
 ## 장갑: 평소엔 약공격이 35% 만 먹힌다. 씨앗 베기·낙하 공격·되받은 분사가 장갑 게이지(=흐트러짐)를 채우면
@@ -18,8 +18,10 @@ enum State { WAIT, INTRO, IDLE, PISTON, SPRAY, SUCK, STAGGER, BROKEN, FALLEN, PU
 const ATTACK_STATES := [State.PISTON, State.SPRAY, State.SUCK]
 ## 1페이즈의 고정 순서
 const CYCLE := [State.PISTON, State.SPRAY, State.SUCK]
-## 보스곡 한 박 (128bpm). 예고·쉼은 이 박의 배수.
-const BEAT := 60.0 / 128.0
+## 보스곡 한 박. 예고·쉼은 이 박의 배수 (재생 위치에 맞추지는 않고 길이만 곡의 박과 같게 — 여왕과 달리 박자 동기화는 없다).
+## 기획서의 Suno 요청은 128bpm 이었지만 기획자의 정식 곡을 재 보니 124.5bpm (tools/measure_tempo.gd, 2026-10-19: 124.47~124.48bpm,
+## 4/4, 첫 박 0.36초, 154.6초 동안 박 자리 어긋남 5ms 아래) → 곡에 맞춰 바꿈.
+const BEAT := 60.0 / 124.5
 
 signal hp_changed(hp: float, max_hp: float)
 signal poise_changed(poise: float, max_poise: float)

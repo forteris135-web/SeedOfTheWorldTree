@@ -14,6 +14,8 @@ class_name BossRoom
 @export var final_boss := false
 ## 보스곡 이름 (audio/music/)
 @export var boss_track := "boss_bird"
+## 2페이즈 보스곡 (비우면 바꾸지 않는다). 뿌리지기는 무너졌다 다시 일어서는 순간(RISE) boss_rootkeeper_p2 로 바뀐다.
+@export var boss_track_2 := ""
 ## 보스를 정화하면 떨어지는 재화 '빛 가루' (2026-10-19 기획자 요청 9번). 처음 한 번만 — 깃발 "dust_<defeat_flag>" 로 막는다.
 @export var dust_reward := 200
 
@@ -96,8 +98,9 @@ func _on_boss_telegraph(kind: String) -> void:
 		"wall": hud.flash("뿌리 벽!")
 		"rise":
 			hud.show_message("뿌리지기가 다시 일어선다…", 3.0)
-			# 주제곡이 격렬하게 터진다 (기획서 10장)
-			Music.play("theme_battle", 0.6, true)
+			# 2페이즈 곡이 터진다 (기획서 10장)
+			if boss_track_2 != "":
+				Music.play(boss_track_2, 0.6, true)
 
 
 func _on_player_died() -> void:
@@ -122,7 +125,7 @@ func _on_player_died() -> void:
 	gate_out.open()
 	boss_hud.hide_boss()
 	_set_battle_camera(false)
-	Music.play_region(region)
+	Music.play_region(region, room_id)
 	for p in get_tree().get_nodes_in_group("projectile"):
 		p.queue_free()
 	player.revive(rest_point)

@@ -316,7 +316,7 @@ func _mini_room_checks() -> void:
 		var r: Node = load("res://scenes/rooms/%s.tscn" % rid).instantiate()
 		music[rid] = r.get("boss_music")
 		r.free()
-	_check(music["village_mini_1"] == "boss_knight" and music["mine_mini_1"] == "boss_knight" and music["abyss_mini_1"] == "boss_root" and music["canopy_mini_1"] == "boss_bird",
+	_check(music["village_mini_1"] == "boss_knight" and music["mine_mini_1"] == "boss_knight" and music["abyss_mini_1"] == "boss_rootkeeper_p1" and music["canopy_mini_1"] == "boss_bird",
 		"중간 보스 방 곡: %s" % [music])
 
 	# (가) 잠든 보스: 정원사 장로(발견 거리가 가장 멀다)의 방 입구(문과 시작 선 사이)에서 4초 기다려도 싸움이 시작되지 않고 맞지도 않는다

@@ -1,6 +1,6 @@
 extends Control
 ## 타이틀 화면. 타이틀 일러스트 위로 천천히 움직이는 카메라, 떠다니는 빛, 제목과 메뉴.
-## 음악(주제곡)은 13단계에서 넣는다. 클리어 후에는 엔딩 버전 곡·그림으로 바뀐다(기획서 2장).
+## 음악: 클리어 전 title, 엔딩을 본 뒤 selenia_humming (Music.title_track). 클리어 후에는 그림·부제도 바뀐다(기획서 2장).
 
 @onready var art: TextureRect = $Art
 @onready var menu: VBoxContainer = $Layout/Menu
@@ -12,6 +12,8 @@ var _items: Array[Button] = []
 var _index := 0
 var _time := 0.0
 var _started := false
+## 설정 화면 (일시정지 메뉴의 설정 부분을 그대로 쓴다: 음량·터치 크기·키 바꾸기 등)
+var _settings: PauseMenu
 
 
 func _ready() -> void:
@@ -26,16 +28,14 @@ func _ready() -> void:
 	_select(0)
 	var seen := cleared_state()
 	if seen["cleared"]:
-		# 클리어 후: 밝은 일러스트, 바뀐 부제, 엔딩 버전 곡. 제3의 길(확장판)을 보았으면 부제와 곡이 또 바뀐다.
+		# 클리어 후: 밝은 일러스트, 바뀐 부제. 제3의 길(확장판)을 보았으면 부제가 또 바뀐다.
 		art.texture = load("res://art/characters/title_selenia_alt_b.png")
 		if seen["third"]:
 			subtitle.text = "— 등불 하나면 충분해."
-			Music.play(_ending_track_name("third"), 2.0)
 		else:
 			subtitle.text = "— 그리고 세계는 다시 숨을 쉰다."
-			Music.play("theme_ending", 2.0)
-	else:
-		Music.play("theme_full", 2.0)
+	# 타이틀 곡: 클리어 전 title, 엔딩을 본 뒤 셀레니아의 허밍(엔딩에선 한 번만 흐르는 곡을 여기선 반복) — ENDINGS.md 5장
+	Music.play(Music.title_track(seen["cleared"]), {"fade": 2.0, "loop": true})
 	InputDevice.device_changed.connect(func(_k): _refresh_hint())
 	_refresh_hint()
 	# 느리게 다가가는 카메라
@@ -77,13 +77,6 @@ static func cleared_state() -> Dictionary:
 	return out
 
 
-## 제3의 길 곡(theme_ending_third.wav)이 있으면 그것, 없으면 theme_ending (엔딩 씬과 같은 규칙).
-static func _ending_track_name(which: String) -> String:
-	if which == "third" and ResourceLoader.exists(Music.DIR + "theme_ending_third.wav"):
-		return "theme_ending_third"
-	return "theme_ending"
-
-
 func _process(delta: float) -> void:
 	_time += delta
 	# 선택된 항목이 은은하게 숨 쉰다
@@ -99,7 +92,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _started:
+	if _started or settings_open():
 		return
 	if event.is_action_pressed("move_down") or event.is_action_pressed("ui_down"):
 		_select((_index + 1) % _items.size())
@@ -120,11 +113,13 @@ func _on_item_pressed(b: Button) -> void:
 
 
 func _activate(i: int) -> void:
-	if _started or i < 0:
+	if _started or i < 0 or settings_open():
 		return
 	var b := _items[i]
 	Sfx.play("select")
 	match b.name:
+		"Settings":
+			open_settings()
 		"Continue":
 			_started = true
 			var scene := SaveGame.load_game()
@@ -136,6 +131,19 @@ func _activate(i: int) -> void:
 		"InputTest":
 			_started = true
 			Game.go_to("res://scenes/debug/input_test.tscn", 0.5, 0.6)
+
+
+## 설정 화면을 연다 (시험도 부른다).
+func open_settings() -> PauseMenu:
+	if _settings == null or not is_instance_valid(_settings):
+		_settings = PauseMenu.new()
+		add_child(_settings)
+	_settings.open(true)
+	return _settings
+
+
+func settings_open() -> bool:
+	return _settings != null and is_instance_valid(_settings) and _settings.is_open()
 
 
 func _refresh_hint() -> void:

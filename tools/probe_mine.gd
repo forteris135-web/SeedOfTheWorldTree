@@ -7,7 +7,7 @@ extends Node
 ##  4) 작은 펌프: 2초 리듬으로 쏜다, 약공격은 절반
 ##  5) 무쇠 펌프: 1페이즈 순서 고정(피스톤→분사→빨아들이기), 장갑(약공격 35%·되받은 분사·BROKEN ×2), 빨아들이기(바람), 2페이즈 무작위·엇박·수액 기둥, 쓰러짐→정화
 ##  6) 경비병 방패·기계 장갑이 벽 부수기 + 무거운 공격에 깨진다
-##  7) 회상 주제곡 표 (보스 수 1·2·3·4·5, 뿌리지기는 전체)
+##  7) 회상 곡: 모든 회상이 정식 곡 recollection (옛 '보스 수에 따라 길어지는 임시 주제곡'은 없앰) + 정화한 보스 수 세기
 ##  8) 대사 데이터: 오웬·티아 추가 대사(priority 로 먼저 골라짐), 광부, 경전 조각·완성 구절, 회상·엔딩
 ##  9) 세 번째 선택지: 네 능력 없으면 숨고(능력만 있고 뿌리지기 깃발이 없어도 숨김) 있으면 보이며 five_souls 깃발 → 엔딩 씬 "제3의 길" 로드 → interact 로 ending "third"
 ## 10) 회상에서 돌아온 무쇠 펌프 방: 영혼이 깃들어 벽 부수기(wall_break)를 얻고, 멈춘 펌프 위의 싹(PumpRemains)이 보인다
@@ -17,7 +17,7 @@ extends Node
 ##     (바닥에 떨어지지 않음), 작은 펌프는 사거리 끝에서도 방울이 소녀에게 닿는다
 ## 13) 피스톤 판정이 보이는 망치 자리(앞 150~370)에만: 300 에 서면 피스톤 28, 450 이면 피스톤 없음(충격파만)
 ## 14) 빨아들이기 실제 물리(펌프 방): 가만히 서 있으면 300px 넘게 끌리고, 반대로 달리면 벗어난다
-## 15) 정화하는 순간 멈춘 펌프+싹이 펌프 자리에 나타나고 회상 뒤에도 같은 자리, 2페이즈 음악(boss_iron_pump_2), 옛 저장 지도 바로잡기(MapOffsetFix)
+## 15) 정화하는 순간 멈춘 펌프+싹이 펌프 자리에 나타나고 회상 뒤에도 같은 자리, 2페이즈 음악(곡은 그대로, 한 번 휘청 — Music.falter), 옛 저장 지도 바로잡기(MapOffsetFix)
 ## -- --linked : 통합 뒤(link_flooded_mine.py 를 돌린 뒤) 엄격 모드 — 기존 방에 잠긴 채굴장 입구·벽장·등장 자리가 없으면 실패.
 ##    (이 묶음의 브랜치에는 기존 방을 기준판 그대로 두었으므로 기본 모드에서는 '연결 전' 으로 적고 넘어간다)
 ## 마지막 줄 "[probe] 끝: 실패 N".
@@ -316,16 +316,11 @@ func _probe_data() -> void:
 	Progress.reset()
 
 
-# ---------- 7) 회상 주제곡 표 ----------
+# ---------- 7) 회상 곡 ----------
 func _probe_memory_theme() -> void:
-	var t1: Array = MemoryScene.theme_for("memory_bird", 1)
-	var t2: Array = MemoryScene.theme_for("memory_knight", 2)
-	var t3: Array = MemoryScene.theme_for("memory_pump", 3)
-	var t4: Array = MemoryScene.theme_for("memory_queen", 4)
-	var t5: Array = MemoryScene.theme_for("memory_root", 5)
-	var t3r: Array = MemoryScene.theme_for("memory_root", 3)
-	_check(t1[0] == "theme_a" and t2[0] == "theme_ab" and t3[0] == "theme_ab" and t4[0] == "theme_full" and t4[1] > 70.0 and t4[1] < 75.0 and t5[0] == "theme_full" and t5[1] == 0.0 and t3r[0] == "theme_full",
-		"회상 주제곡: 1 %s / 2 %s / 3 %s / 4 %s(%.1f초까지) / 뿌리지기 %s (1편 셋째=뿌리지기 %s)" % [t1[0], t2[0], t3[0], t4[0], t4[1], t5[0], t3r[0]])
+	var src := FileAccess.get_file_as_string("res://scripts/ui/memory_scene.gd")
+	_check(Music.RECOLLECTION == "recollection" and ResourceLoader.exists(Music.DIR + "recollection.wav") and src.contains("Music.play(Music.RECOLLECTION") and not src.contains("theme_for"),
+		"회상 곡: 모든 회상이 %s (정식 곡 한 곡, 보스 수에 따라 길어지는 임시 주제곡 없음)" % Music.RECOLLECTION)
 	Progress.reset()
 	Progress.set_flag("boss_bird_defeated")
 	Progress.set_flag("boss_knight_defeated")
@@ -869,10 +864,12 @@ func _probe_remains_and_music() -> void:
 	for i in 110:
 		await get_tree().physics_frame
 	var grown: float = remains.grow
-	# 2페이즈 음악
+	# 2페이즈 음악: 곡은 그대로 두고 한 번 휘청인다
+	Music.play(room.boss_track, 0.0, true)
 	room.fight_started = true
 	room._on_pump_phase(2)
 	var track := Music.current()
+	var faltered := Music.is_faltering()
 	room.fight_started = false
 	room.queue_free()
 	await _frames(3)
@@ -886,7 +883,7 @@ func _probe_remains_and_music() -> void:
 	var r2: Node2D = room2.get_node("PumpRemains")
 	var kept: bool = r2.visible and absf(r2.position.x - 2100.0) < 1.0 and r2.scale.x < 0.0
 	_check(hidden_before and shown and grown > 0.95 and kept, "정화 순간 멈춘 펌프+싹: 처음 숨김 %s → 펌프 자리(2100, 오른쪽을 봄)에 나타남 %s, 싹 자람 %.2f, 회상 뒤 같은 자리 %s" % [hidden_before, shown, grown, kept])
-	_check(track == "boss_iron_pump_2", "2페이즈 음악: %s" % track)
+	_check(track == "boss_iron_pump" and faltered, "2페이즈 음악: 곡 그대로 %s, 휘청 %s" % [track, faltered])
 	room2.queue_free()
 	await _frames(3)
 	Progress.remove_meta(IronPumpRoom.REMAINS_META)

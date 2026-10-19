@@ -39,6 +39,7 @@ var _explore_timer := 0.0
 func _ready() -> void:
 	player = get_tree().get_first_node_in_group("player") as Player
 	EnemyBase.arrival_grace_until = 0.0
+	var arrived_resting := false   # 달빛풀로 이동해 와서 쉬는 자세로 도착 (음악: 쉼터 곡을 이어 간다)
 	if player:
 		# 다른 방에서 넘어왔다면 그 출구에 맞는 자리에 선다
 		if Progress.next_spawn != "":
@@ -51,6 +52,7 @@ func _ready() -> void:
 						player.position = g.global_position + Vector2(60, -2)
 						rest_point = g.global_position + Vector2(0, -2)
 						g.arrive(player)
+						arrived_resting = true
 			else:
 				var marker := get_node_or_null("Markers/" + Progress.next_spawn)
 				if marker:
@@ -71,6 +73,7 @@ func _ready() -> void:
 			cam.set_room_bounds(bounds)
 		player.died.connect(_on_player_died)
 		player.rest_started.connect(_on_player_rested)
+		player.state_changed.connect(_on_player_state_for_music)
 	var overrides := _scene_overrides()
 	for e in get_tree().get_nodes_in_group("enemy"):
 		if e is Node2D and e.scene_file_path != "":
@@ -83,8 +86,9 @@ func _ready() -> void:
 	Progress.flag_changed.connect(_on_explore_flag_changed)
 	_apply_room_settings()
 	Settings.changed.connect(_apply_room_settings)
-	if not (self is BossRoom) or Progress.has(get("defeat_flag") if "defeat_flag" in self else ""):
-		Music.play_region(region)
+	# 들판 곡 (지역·방에 따라, Music.region_track). 아직 정화하지 않은 보스 방은 앞 방의 곡이 이어지다 싸움이 시작되면 보스곡으로.
+	var field_now: bool = not (self is BossRoom) or Progress.has(get("defeat_flag") if "defeat_flag" in self else "")
+	Music.enter_room(region, room_id, field_now, arrived_resting)
 	if dark:
 		var cm := CanvasModulate.new()
 		cm.color = dark_color
@@ -362,6 +366,17 @@ static func _clean_path(p: String) -> String:
 func _on_player_rested(grass: Node2D) -> void:
 	rest_point = grass.global_position + Vector2(0, -2)
 	respawn_enemies()
+	_rest_music = true
+	Music.rest_begin()   # 쉬는 동안 쉼터 곡 (rest_moonlight_grass)
+
+
+## 쉬는 자세에서 어떤 식으로든 벗어나면(일어서기 등) 들판 곡으로 돌아간다.
+## (쉬기 전의 상태 변화는 보지 않는다: 달빛풀로 이동해 와서 쉬는 자세가 되기 직전에 쉼터 곡이 끊기지 않게)
+var _rest_music := false
+func _on_player_state_for_music(new_state: int) -> void:
+	if _rest_music and new_state != Player.State.REST:
+		_rest_music = false
+		Music.rest_end()
 
 
 func _on_player_died() -> void:
