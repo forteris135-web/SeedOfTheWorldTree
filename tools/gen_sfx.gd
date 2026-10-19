@@ -1,11 +1,16 @@
 extends SceneTree
 ## 임시 효과음을 코드로 합성해 audio/sfx/*.wav 로 저장한다. (나중에 무료 에셋으로 바꿔도 이름만 같으면 된다)
 ## 사용: Godot --headless --path . --script tools/gen_sfx.gd
+##   일부만 다시 만들기: … --script tools/gen_sfx.gd -- --only=root_rise,root_grab   (쉼표로 이름 나열; 나머지 파일은 건드리지 않는다)
 
 const RATE := 22050
+var _only: PackedStringArray = []
 
 
 func _init() -> void:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--only="):
+			_only = a.trim_prefix("--only=").split(",", false)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://audio/sfx"))
 	_save("jump", _tone_sweep(0.14, 320.0, 640.0, 0.6, 2.0))
 	_save("land", _noise(0.09, 0.5, 14.0, 900.0))
@@ -43,7 +48,23 @@ func _init() -> void:
 	_save("charge_dash", _mix([_whoosh(0.6, 0.6, 300.0, 1400.0, 0.5), _tone_sweep(0.5, 70.0, 160.0, 0.4, 3.0)]))
 	# 창이 벽에 박힘: 둔탁한 충격 + 금속 쇳소리 + 돌가루
 	_save("spear_stuck", _mix([_tone_sweep(0.3, 220.0, 70.0, 0.8, 7.0), _tone(0.35, 1480.0, 0.35, 12.0), _tone(0.25, 2210.0, 0.2, 16.0), _noise(0.18, 0.6, 12.0, 1500.0)]))
-	print("효과음 생성 완료")
+	# ---- 뿌리지기 (2026-10-19 패턴 개편) ----
+	# 뿌리 가시·뿌리 손이 땅을 뚫고 솟는 소리: 낮은 울림 + 흙이 갈라지는 노이즈
+	_save("root_rise", _mix([_noise(0.4, 0.6, 5.0, 520.0), _tone_sweep(0.32, 130.0, 55.0, 0.6, 6.0), _noise(0.12, 0.5, 18.0, 2600.0)]))
+	# 뿌리 손이 움켜쥐는 소리: 짧은 으스러짐
+	_save("root_grab", _mix([_noise(0.14, 0.7, 18.0, 1500.0), _tone_sweep(0.26, 240.0, 70.0, 0.7, 8.0)]))
+	# 지팡이 휘두르기: 굵고 낮은 바람 가르기
+	_save("staff_swing", _mix([_whoosh(0.38, 0.65, 380.0, 1900.0, 0.35), _tone_sweep(0.2, 160.0, 90.0, 0.2, 8.0)]))
+	# 씨앗이 떨어지는 휘파람 / 땅에 박히는 소리
+	_save("seed_fall", _tone_sweep(0.55, 1500.0, 520.0, 0.22, 2.2))
+	_save("seed_land", _mix([_noise(0.1, 0.55, 20.0, 1800.0), _tone_sweep(0.14, 260.0, 110.0, 0.45, 9.0)]))
+	# 지팡이 내려찍기: 낮은 쿵 + 흙
+	_save("stomp", _mix([_noise(0.5, 0.7, 4.5, 320.0), _tone_sweep(0.6, 85.0, 36.0, 0.9, 4.0), _noise(0.08, 0.6, 24.0, 1600.0)]))
+	# 달빛 고리가 피어나는 맑은 울림
+	_save("ring_hum", _mix([_tone(0.9, 440.0, 0.25, 2.0), _tone(0.9, 659.25, 0.2, 2.2), _tone(0.7, 880.0, 0.12, 3.0)]))
+	# 뿌리 벽이 솟아 밀려오는 소리
+	_save("root_wall", _mix([_noise(0.6, 0.6, 3.0, 420.0), _tone_sweep(0.5, 100.0, 48.0, 0.7, 5.0)]))
+	print("효과음 생성 완료" + ("" if _only.is_empty() else " (--only %s)" % ",".join(_only)))
 	quit()
 
 
@@ -142,6 +163,8 @@ func _mix(parts: Array) -> PackedFloat32Array:
 
 
 func _save(name: String, samples: PackedFloat32Array) -> void:
+	if not _only.is_empty() and not (name in _only):
+		return
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = RATE

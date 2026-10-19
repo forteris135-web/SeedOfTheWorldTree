@@ -573,7 +573,260 @@ func _root_keeper() -> void:
 	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss._timer < 0.2, 6.0)
 	_report("뿌리지기 2페이즈(SPIKES→RISE→STANCE)", r)
 	_facing_hold(boss, vis, "뿌리지기", boss.State.STANCE)
+	_root_new_patterns(boss, vis)
 	boss.queue_free()
+
+
+## 2026-10-19 개편: 새 패턴(뿌리 손·씨앗 비·달빛 고리·내려찍기·되돌려 베기)의 흐름·판정·예고·효과 수, 고르기 규칙, 가시 크기.
+func _root_new_patterns(boss: Node, vis: Sprite2D) -> void:
+	var player: Player = PLAYER.instantiate()
+	get_tree().root.add_child(player)
+	player.set_physics_process(false)
+	player.set_process(false)
+	player._invuln_timer = 9999.0
+	boss.player = player
+	boss.phase = 2
+	boss.facing = -1
+	boss.gravity = 0.0   # 바닥이 없는 시험 씬: 보스가 떨어지지 않게 (고리 구슬의 땅 높이 비교용)
+	boss.velocity = Vector2.ZERO
+	boss.global_position = Vector2(1200, 1000)
+	player.global_position = Vector2(800, 1000)
+	boss._set_state(boss.State.STANCE)
+	boss._timer = 99.0
+	_run(boss, vis, func() -> bool: return false, 0.5)
+	var root := get_tree().root
+	# 예고 글자
+	var labels := {"wall": "뿌리 벽!", "hand": "뿌리 손!", "seeds": "씨앗 비!", "ring": "달빛 고리!", "stomp": "내려찍기!", "rise": ""}
+	var label_ok := true
+	for k in labels:
+		if boss.telegraph_label(k) != labels[k]:
+			label_ok = false
+	print("[probe] 뿌리지기 예고 글자(wall/hand/seeds/ring/stomp, rise 는 빈 글자): %s" % ("OK" if label_ok else "다름!"))
+	if not label_ok:
+		_fail += 1
+	# ---- 뿌리 손 (2페이즈: 손 2개, 붉은 예고, 예비 60% 까지 소녀를 따라감) ----
+	var before := _count(root, "RootHand")
+	boss.force_pattern("HAND")
+	var red_seen: bool = boss.is_red()
+	# 예비 0.56초의 60%(0.336초)까지만 소녀를 따라간다: 0.15초까지 700, 0.38초까지 600, 그 뒤 300 으로 옮겨도 자리는 600 에 잠겨야 한다
+	var tracked := {"early": 0.0, "late": 0.0}
+	var r := _run(boss, vis, func() -> bool: return boss.attack_phase == "active", 3.0, func(t: float) -> void:
+		if t < 0.15:
+			player.global_position.x = 700.0
+			tracked.early = boss.hand_targets[0] if boss.hand_targets.size() > 0 else -1.0
+		elif t < 0.38:
+			player.global_position.x = 600.0
+		else:
+			player.global_position.x = 300.0
+			if boss.attack_phase == "startup" and t > 0.45 and boss.hand_targets.size() > 0:
+				tracked.late = boss.hand_targets[0])
+	var hands := _count(root, "RootHand") - before
+	print("[probe] 뿌리 손: 예비 %.2f초(2페이즈 0.56 기준) 동안 붉은 예고 %s, 자리 추적 초반 %.0f(700) → 잠근 뒤 %.0f(600 이어야 함; 300 이면 끝까지 따라간 것), 솟은 손 %d개(2 기준)" % [
+		boss.startup_len, "예" if red_seen else "아니오!", tracked.early, tracked.late, hands])
+	if not red_seen or hands != 2 or absf(tracked.late - 600.0) > 1.0 or absf(tracked.early - 700.0) > 1.0:
+		_fail += 1
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 4.0)
+	_report("뿌리지기 HAND", r)
+	_free_effects(root)
+	# 손 자체의 흐름: 솟음 → 움켜쥠 → (안 잡힘) 짧게 쥠 → 가라앉음 → 사라짐
+	var hand: RootHand = load("res://scenes/bosses/root_hand.tscn").instantiate()
+	root.add_child(hand)
+	hand.set_physics_process(false)
+	hand.global_position = Vector2(500, 1000)
+	var stages := []
+	for i in 90:
+		hand._physics_process(DT)
+		if not is_instance_valid(hand) or hand.is_queued_for_deletion():
+			break
+		var st := hand.stage()
+		if stages.is_empty() or stages[-1] != st:
+			stages.append(st)
+	var hand_ok: bool = stages == ["rise", "close", "hold", "sink"] and hand.is_queued_for_deletion()
+	print("[probe] 뿌리 손 흐름: %s, 끝에 사라짐 %s → %s" % [", ".join(stages), hand.is_queued_for_deletion(), "OK" if hand_ok else "다름!"])
+	if not hand_ok:
+		_fail += 1
+	# ---- 씨앗 비 (2페이즈 7개, 예약된 일로 차례로 떨어짐) ----
+	boss._timer = 99.0
+	boss._set_state(boss.State.STANCE)
+	before = _count(root, "RootSeed")
+	boss.force_pattern("SEEDS")
+	var guard_color: bool = boss.is_guardable_pattern()
+	_run(boss, vis, func() -> bool: return boss.attack_phase == "recovery", 4.0)
+	var seeds := _count(root, "RootSeed") - before
+	print("[probe] 씨앗 비: 예비 %.2f초, 주황(가드 가능) 예고 %s, 떨어진 씨앗 %d개(7 기준), 예약 남음 %d(0 기준)" % [boss.startup_len, "예" if guard_color else "아니오!", seeds, boss._events.size()])
+	if seeds != 7 or not guard_color or boss._events.size() != 0:
+		_fail += 1
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 4.0)
+	_report("뿌리지기 SEEDS", r)
+	# 씨앗 하나의 낙하: 0.9초 안에 땅에 닿고 터진 뒤 사라진다
+	var seed: RootSeed = load("res://scenes/bosses/root_seed.tscn").instantiate()
+	root.add_child(seed)
+	seed.set_physics_process(false)
+	seed.ground_y = 1000.0
+	seed.global_position = Vector2(500, 1000.0 - RootSeed.FALL_HEIGHT)
+	var land_t := -1.0
+	for i in 100:
+		seed._physics_process(DT)
+		if seed.landed() and land_t < 0.0:
+			land_t = (i + 1) * DT
+		if seed.is_queued_for_deletion():
+			break
+	print("[probe] 씨앗 낙하: 땅에 닿기 %.2f초(0.85~0.95), 끝에 사라짐 %s" % [land_t, seed.is_queued_for_deletion()])
+	if land_t < 0.85 or land_t > 0.95 or not seed.is_queued_for_deletion():
+		_fail += 1
+	_free_effects(root)
+	# ---- 달빛 고리 (2페이즈 8개, 고리가 넓어짐, 땅 아래에서는 숨음) ----
+	boss._timer = 99.0
+	boss._set_state(boss.State.STANCE)
+	before = _count(root, "RootOrb")
+	boss.force_pattern("RING")
+	_run(boss, vis, func() -> bool: return boss.attack_phase == "active", 3.0)
+	var orbs := _count(root, "RootOrb") - before
+	var orb_list: Array = []
+	for n in root.get_children():
+		if n is RootOrb:
+			orb_list.append(n)
+	var r0: float = orb_list[0].orbit_r if orb_list.size() > 0 else 0.0
+	for i in 60:
+		for o in orb_list:
+			o._physics_process(DT)
+		boss._physics_process(DT)
+	var r1: float = orb_list[0].orbit_r if orb_list.size() > 0 else 0.0
+	var hidden := 0
+	for o in orb_list:
+		if not o.visible:
+			hidden += 1
+	print("[probe] 달빛 고리: 구슬 %d개(8 기준), 반지름 %.0f → 1초 뒤 %.0f(넓어져야 함), 땅 아래 숨은 구슬 %d개(1 이상)" % [orbs, r0, r1, hidden])
+	if orbs != 8 or r1 <= r0 + 100.0 or hidden < 1:
+		_fail += 1
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0)
+	_report("뿌리지기 RING", r)
+	_free_effects(root)
+	# ---- 내려찍기 (2페이즈 전용: 붉은 예고 1.0초, 충격파 양쪽 2개 + 0.55초 뒤 2개 더) ----
+	boss._timer = 99.0
+	boss._set_state(boss.State.STANCE)
+	before = _count(root, "RootShockwave")
+	boss.force_pattern("STOMP")
+	red_seen = boss.is_red()
+	_run(boss, vis, func() -> bool: return boss.attack_phase == "active", 3.0)
+	var waves_first := _count(root, "RootShockwave") - before
+	_run(boss, vis, func() -> bool: return boss.attack_phase == "recovery" and boss.phase_progress() > 0.4, 3.0)
+	var waves_all := _count(root, "RootShockwave") - before
+	print("[probe] 내려찍기: 예비 %.2f초(1.0 기준) 붉은 예고 %s, 충격파 처음 %d개(2) → 0.55초 뒤 모두 %d개(4)" % [boss.startup_len, "예" if red_seen else "아니오!", waves_first, waves_all])
+	if not red_seen or waves_first != 2 or waves_all != 4 or absf(boss.startup_len - 1.0) > 0.001:
+		_fail += 1
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0)
+	_report("뿌리지기 STOMP", r)
+	# 충격파 하나: 아레나 끝까지 달려가 사라진다 (점프로 넘을 높이 90)
+	var wave: RootShockwave = load("res://scenes/bosses/root_shockwave.tscn").instantiate()
+	root.add_child(wave)
+	wave.set_physics_process(false)
+	wave.dir = 1
+	wave.min_x = 0.0
+	wave.max_x = 1500.0
+	wave.global_position = Vector2(1200, 1000)
+	var moved := 0.0
+	for i in 60:
+		wave._physics_process(DT)
+		if wave._dead:
+			moved = (i + 1) * DT
+			break
+	print("[probe] 충격파: 300px 를 %.2f초에 달려 끝에서 흩어짐(%.2f 근처, 속도 760), 높이 %.0f(점프 260 보다 낮음)" % [moved, 300.0 / wave.speed, RootShockwave.H])
+	if moved <= 0.0 or absf(moved - 300.0 / wave.speed) > 0.05 or RootShockwave.H >= 200.0:
+		_fail += 1
+	_free_effects(root)
+	# ---- 되돌려 베기 (SWEEP → SWEEP2 연계, 히트박스 두 번) ----
+	boss._timer = 99.0
+	boss._set_state(boss.State.STANCE)
+	boss._last_attack = -1
+	boss.force_pattern("SWEEP")
+	boss._chain = boss.State.SWEEP2
+	# (람다는 지역 변수를 값으로 잡으므로 사전에 기록한다. 히트박스 타이머는 엔진 물리가 돌지 않아 안 꺼지므로 activate 때마다 새로 만드는 HitData 로 센다)
+	# 2페이즈의 되돌려 베기는 30% 확률로 내려찍기까지 잇는다 → 이 검사는 SWEEP→SWEEP2 두 번만 세므로 SWEEP2 가 시작되면 그 뒤 연계를 끊는다
+	var sw := {"n": 0, "last_hit": boss.hitbox.hit, "seen2": false}
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "" and boss._chain < 0 and sw.seen2, 6.0, func(_t: float) -> void:
+		if boss.hitbox.hit != sw.last_hit:
+			sw.n += 1
+			sw.last_hit = boss.hitbox.hit
+		if boss.state == boss.State.SWEEP2:
+			sw.seen2 = true
+			boss._chain = -1)
+	print("[probe] 되돌려 베기 연계: SWEEP → SWEEP2 %s, 히트박스 켜짐 %d번(2 기준)" % ["예" if sw.seen2 else "아니오!", sw.n])
+	if not sw.seen2 or sw.n != 2:
+		_fail += 1
+	_report("뿌리지기 SWEEP→SWEEP2", r)
+	# ---- 2페이즈 가시: 물결(6개, 차례로) / 겨냥(4개) 번갈아, 높이 390·폭 110 ----
+	boss._timer = 99.0
+	boss._set_state(boss.State.STANCE)
+	boss._spike_wave = false
+	boss.force_pattern("SPIKES")
+	var marks_a: int = boss.spike_marks.size()
+	var delays_a: Array = boss.spike_delays.duplicate()
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0)
+	boss._timer = 99.0
+	boss._last_attack = -1
+	boss.force_pattern("SPIKES")
+	var marks_b: int = boss.spike_marks.size()
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0)
+	var spike: RootSpike = load("res://scenes/combat/root_spike.tscn").instantiate()
+	root.add_child(spike)
+	spike.set_physics_process(false)
+	var max_h := 0.0
+	for i in 30:
+		spike._physics_process(DT)
+		max_h = maxf(max_h, spike.height())
+	var shape_w: float = (spike._shape.shape as RectangleShape2D).size.x
+	print("[probe] 2페이즈 가시: 물결 %d개(6, 지연 %s) / 겨냥 %d개(4) 번갈아, 가시 높이 %.0f(390 = 옛 260 의 1.5배), 판정 폭 %.0f(110)" % [marks_a, delays_a[-1] if delays_a.size() > 0 else -1, marks_b, max_h, shape_w])
+	if marks_a != 6 or marks_b != 4 or absf(max_h - 390.0) > 6.0 or absf(shape_w - 110.0) > 0.1:   # 서 있을 때 ±4px 떨림
+		_fail += 1
+	_free_effects(root)
+	# ---- 고르기: 200번 골라도 같은 패턴이 연달아 나오지 않고, 1페이즈에는 벽·내려찍기가 없다 ----
+	var repeats := 0
+	var p1_red := 0
+	var seen := {}
+	for ph in [1, 2]:
+		boss.phase = ph
+		var prev := -1
+		for i in 200:
+			boss._timer = 99.0
+			boss._set_state(boss.State.STANCE)
+			boss._chain = -1
+			boss._events.clear()
+			var dist: float = [200.0, 500.0, 900.0][i % 3]
+			player.global_position.x = boss.global_position.x - dist
+			boss._choose(dist)
+			var st: int = boss.state
+			seen[boss.state_name()] = true
+			if st == prev:
+				repeats += 1
+			if ph == 1 and st in [boss.State.WALL, boss.State.STOMP]:
+				p1_red += 1
+			prev = st
+	_free_effects(root)
+	boss._events.clear()
+	var names: Array = seen.keys()
+	names.sort()
+	print("[probe] 패턴 고르기 400번: 연속 반복 %d(0 기준), 1페이즈에 벽·내려찍기 %d(0 기준), 나온 패턴 %s" % [repeats, p1_red, ", ".join(names)])
+	if repeats > 0 or p1_red > 0 or names.size() < 8:
+		_fail += 1
+	boss.player = null
+	player.queue_free()
+
+
+func _count(root: Node, cls: String) -> int:
+	var n := 0
+	for c in root.get_children():
+		if c.get_class() == "Area2D" or c.get_class() == "Node2D":
+			if c.get_script() and c.get_script().get_global_name() == cls and not c.is_queued_for_deletion():
+				n += 1
+	return n
+
+
+func _free_effects(root: Node) -> void:
+	for c in root.get_children():
+		if c.is_in_group("root_effect"):
+			root.remove_child(c)
+			c.queue_free()
 
 
 func _bird() -> void:
