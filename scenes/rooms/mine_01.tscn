@@ -1,4 +1,4 @@
-[gd_scene load_steps=33 format=3 uid="uid://c1seedmine01"]
+[gd_scene load_steps=34 format=3 uid="uid://c1seedmine01"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -35,6 +35,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 [ext_resource type="PackedScene" uid="uid://c1seedsecretwall" path="res://scenes/world/secret_wall.tscn" id="50_secret_wall"]
 [ext_resource type="PackedScene" uid="uid://c1seedpickup" path="res://scenes/world/pickup.tscn" id="52_pickup"]
+[ext_resource type="Script" path="res://scripts/world/terrain_prop.gd" id="61_prop"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -134,6 +135,26 @@ initial_velocity_max = 26.0
 scale_amount_min = 0.25
 scale_amount_max = 0.7
 color = Color(1, 0.85, 0.45, 0.55)
+
+[node name="Props" type="Node2D" parent="."]
+
+[node name="Crane" type="Node2D" parent="Props"]
+position = Vector2(300, 3000)
+script = ExtResource("61_prop")
+piece = "crane_a"
+shade = Color(0.8, 0.78, 0.78, 1)
+
+[node name="Gallows" type="Node2D" parent="Props"]
+position = Vector2(860, 440)
+script = ExtResource("61_prop")
+piece = "gallows_a"
+shade = Color(0.8, 0.78, 0.78, 1)
+
+[node name="FrameB" type="Node2D" parent="Props"]
+position = Vector2(2150, 3000)
+script = ExtResource("61_prop")
+piece = "frame_b"
+shade = Color(0.8, 0.78, 0.78, 1)
 
 [node name="Terrain" type="Node2D" parent="."]
 

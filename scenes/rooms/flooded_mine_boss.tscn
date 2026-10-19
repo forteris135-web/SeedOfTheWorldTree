@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://c1seedfloodmineboss"]
+[gd_scene load_steps=27 format=3 uid="uid://c1seedfloodmineboss"]
 
 [ext_resource type="Script" path="res://scripts/bosses/iron_pump_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -19,6 +19,10 @@
 [ext_resource type="PackedScene" uid="uid://c1seedbosspump" path="res://scenes/bosses/iron_pump.tscn" id="56_boss_pump"]
 [ext_resource type="Script" path="res://scripts/bosses/iron_pump_remains.gd" id="58_remains"]
 [ext_resource type="Texture2D" path="res://art/backgrounds/bg_flooded_mine_boss.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/pool_art.gd" id="60_poolart"]
+[ext_resource type="Script" path="res://scripts/world/machine_lamp.gd" id="63_lamp"]
+[ext_resource type="Script" path="res://scripts/world/terrain_prop.gd" id="61_prop"]
+[ext_resource type="Script" path="res://scripts/world/waterwheel.gd" id="62_wheel"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_trigger"]
 size = Vector2(120, 900)
@@ -133,6 +137,50 @@ offset_top = 500.0
 offset_right = 3440.0
 offset_bottom = 1500.0
 
+[node name="Props" type="Node2D" parent="."]
+
+[node name="WheelL" type="Node2D" parent="Props"]
+position = Vector2(850, 1372)
+script = ExtResource("62_wheel")
+art_scale = 0.65
+speed = -0.3
+
+[node name="Gate" type="Node2D" parent="Props"]
+position = Vector2(1760, 1500)
+script = ExtResource("61_prop")
+piece = "gate_a"
+shade = Color(0.72, 0.7, 0.7, 1)
+art_scale = 1.15
+
+[node name="LampGateL" type="Node2D" parent="Props"]
+position = Vector2(1600, 1000)
+script = ExtResource("63_lamp")
+lamp = "lamp_r"
+lamp_on = "lamp_g"
+flag = "boss_pump_defeated"
+art_scale = 0.5
+
+[node name="LampGateR" type="Node2D" parent="Props"]
+position = Vector2(1920, 1000)
+script = ExtResource("63_lamp")
+lamp = "lamp_r"
+lamp_on = "lamp_g"
+flag = "boss_pump_defeated"
+art_scale = 0.5
+
+[node name="WheelR" type="Node2D" parent="Props"]
+position = Vector2(2900, 1372)
+script = ExtResource("62_wheel")
+art_scale = 0.65
+speed = 0.3
+with_tower = false
+
+[node name="LampP" type="Node2D" parent="Props"]
+position = Vector2(3300, 1150)
+script = ExtResource("63_lamp")
+lamp = "lamp_p"
+pulse = 0.3
+
 [node name="Terrain" type="Node2D" parent="."]
 
 [node name="WallLeft" parent="Terrain" instance=ExtResource("3_platform")]
@@ -179,6 +227,9 @@ one_way = true
 [node name="SapFloor" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(700, 1440)
 size = Vector2(2840, 110)
+
+[node name="Art" type="Node2D" parent="Hazards/SapFloor"]
+script = ExtResource("60_poolart")
 
 [node name="Markers" type="Node2D" parent="."]
 

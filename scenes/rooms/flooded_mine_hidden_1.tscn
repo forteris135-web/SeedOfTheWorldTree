@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://c1seedfloodhid1"]
+[gd_scene load_steps=21 format=3 uid="uid://c1seedfloodhid1"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -16,6 +16,8 @@
 [ext_resource type="PackedScene" uid="uid://c1seeddewcup" path="res://scenes/world/dew_cup.tscn" id="53_dew_cup"]
 [ext_resource type="PackedScene" uid="uid://c1seedwoodcuttersav" path="res://scenes/enemies/woodcutter_savable.tscn" id="57_woodcutter_sav"]
 [ext_resource type="Texture2D" path="res://art/backgrounds/bg_flooded_mine.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/machine_lamp.gd" id="63_lamp"]
+[ext_resource type="Script" path="res://scripts/world/terrain_prop.gd" id="61_prop"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -111,6 +113,25 @@ initial_velocity_max = 26.0
 scale_amount_min = 0.25
 scale_amount_max = 0.7
 color = Color(0.4, 0.85, 0.9, 0.5)
+
+[node name="Props" type="Node2D" parent="."]
+
+[node name="PanelB" type="Node2D" parent="Props"]
+position = Vector2(520, 700)
+script = ExtResource("61_prop")
+piece = "panel_b"
+shade = Color(0.8, 0.78, 0.78, 1)
+
+[node name="LampB" type="Node2D" parent="Props"]
+position = Vector2(520, 490)
+script = ExtResource("63_lamp")
+lamp = "lamp_b"
+
+[node name="Rock" type="Node2D" parent="Props"]
+position = Vector2(1300, 700)
+script = ExtResource("61_prop")
+piece = "rock_a"
+shade = Color(0.8, 0.78, 0.78, 1)
 
 [node name="Terrain" type="Node2D" parent="."]
 

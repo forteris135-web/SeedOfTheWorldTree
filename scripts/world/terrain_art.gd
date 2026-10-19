@@ -859,6 +859,19 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 	if decorate and skin.has_role("ground"):
 		for t in tops:
 			_ground_run(t[0], t[1], t[2], t[3], t[4], t[5])
+	# 2b) 벽·천장 전용 그림 (역할 wall_edge / ceiling_edge — 지역 그림 옷에 있을 때만. 수관에는 없어 그대로)
+	#     벽(드러난 높은 옆면)에는 기둥을 세로로 이어 세우고, 천장(드러난 아랫면)에는 들보·관을 가로로 잇는다.
+	if skin.has_role("wall_edge"):
+		var min_len := float(skin.param("wall_edge", "min_len", 140.0))
+		for sd in sides:
+			var nv: Vector2 = sd[2]
+			if absf(nv.x) >= 0.7 and absf((sd[1] as Vector2).y - (sd[0] as Vector2).y) >= min_len:
+				_wall_edge(sd[0], sd[1], nv)
+	if skin.has_role("ceiling_edge"):
+		var min_c := float(skin.param("ceiling_edge", "min_len", 160.0))
+		for bt in bottoms:
+			if (bt[1] as Vector2).x - (bt[0] as Vector2).x >= min_c:
+				_ceiling_edge(bt[0], bt[1])
 	# 3) 아랫면 매단 장식 (덩어리가 충분히 두꺼울 때 — 천장도 포함)
 	if skin.has_role("hang"):
 		for bt in bottoms:
@@ -881,6 +894,111 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 					_hang_at(Vector2(top_pt.x + nrm.x * 6.0, y), nrm.x, _rng.randf_range(0.6, 0.85))
 				first = false
 				y += _rng.randf_range(260.0, 480.0)
+
+
+## 벽 기둥 (역할 wall_edge): 드러난 옆면 a–b(세로)를 따라 기둥 조각을 세로로 이어 세운다.
+## params.wall_edge: scale(그림 배율), inset(기둥 폭 중 벽 속에 묻히는 비율, 기본 0.75 — 보이는 벽면이 충돌 면과 거의 같게),
+##   repeat {조각: [v0, v1]} (이어 붙일 세로 구간, 조각 px — 없으면 조각 전체), flip_side (오른쪽을 향한 면은 좌우 뒤집기, 기본 true).
+## 이음매는 전역 y 격자에 맞춰 이웃 벽과 높이가 맞는다. 방 경계 밖은 그리지 않는다.
+func _wall_edge(a: Vector2, b: Vector2, nrm: Vector2) -> void:
+	var names := skin.list("wall_edge")
+	var name: String = names[_rng.randi_range(0, names.size() - 1)]
+	var size := skin.size_of(name)
+	var k := float(skin.param("wall_edge", "scale", 1.0)) * skin.scale
+	var inset := float(skin.param("wall_edge", "inset", 0.75))
+	var rep: Dictionary = skin.param("wall_edge", "repeat", {})
+	var v0 := 0.0
+	var v1 := size.y
+	if rep.has(name):
+		v0 = float(rep[name][0])
+		v1 = float(rep[name][1])
+	var w := size.x * k
+	var ex := a.x
+	# 벽이 오른쪽(바깥 법선 −x)이면 기둥은 [ex − (1−inset)w, ex + inset·w]
+	var x0 := ex - (1.0 - inset) * w if nrm.x < 0.0 else ex - inset * w
+	var flip: bool = nrm.x > 0.0 and bool(skin.param("wall_edge", "flip_side", true))
+	var y0 := minf(a.y, b.y)
+	var y1 := maxf(a.y, b.y)
+	if _has_room:
+		y0 = maxf(y0, _room_box.position.y)
+		y1 = minf(y1, _room_box.end.y)
+	_vtile(name, x0, x0 + w, y0, y1, v0, v1, k, flip)
+
+
+## 천장 들보 (역할 ceiling_edge): 드러난 아랫면 a→b(왼→오)를 따라 가로 조각을 잇는다.
+## params.ceiling_edge: scale, inset(조각 높이 중 천장 속에 묻히는 비율, 기본 0.35), repeat {조각: [u0, u1]}.
+func _ceiling_edge(a: Vector2, b: Vector2) -> void:
+	var names := skin.list("ceiling_edge")
+	var name: String = names[_rng.randi_range(0, names.size() - 1)]
+	var size := skin.size_of(name)
+	var k := float(skin.param("ceiling_edge", "scale", 1.0)) * skin.scale
+	var inset := float(skin.param("ceiling_edge", "inset", 0.35))
+	var rep: Dictionary = skin.param("ceiling_edge", "repeat", {})
+	var u0 := 0.0
+	var u1 := size.x
+	if rep.has(name):
+		u0 = float(rep[name][0])
+		u1 = float(rep[name][1])
+	var seg := (u1 - u0) * k
+	if seg < 8.0:
+		return
+	var xa := a.x
+	var xb := b.x
+	if _has_room:
+		xa = maxf(xa, _room_box.position.x)
+		xb = minf(xb, _room_box.end.x)
+	var slope := (b.y - a.y) / maxf(b.x - a.x, 0.001)
+	var y_at := func(x: float) -> float: return a.y + (x - a.x) * slope
+	# 전역 x 격자에 맞춰 이음매 자리를 정한다 (이웃 천장과 이음매가 이어진다)
+	var gx := host.global_position.x
+	var x := floorf((xa + gx) / seg) * seg - gx
+	var guard := 0
+	while x < xb and guard < 400:
+		guard += 1
+		var sa := maxf(x, xa)
+		var sb := minf(x + seg, xb)
+		if sb - sa > 1.0:
+			var ua: float = u0 + (sa - x) / k
+			var ub: float = u0 + (sb - x) / k
+			piece(name, ua, ub, sa, sb, y_at, k, false, {"y_off": -inset * size.y * k, "warp": false})
+		x += seg
+
+
+## 조각의 세로 구간 v0..v1 을 x0..x1 폭으로 y0..y1 에 이어 깐다 (전역 y 격자에 맞춘 이음매, 끝은 잘라 맞춘다). flip: 좌우 뒤집기.
+func _vtile(name: String, x0: float, x1: float, y0: float, y1: float, v0: float, v1: float, k: float, flip: bool) -> void:
+	var seg := (v1 - v0) * k
+	if seg < 8.0 or y1 - y0 < 1.0:
+		return
+	var r := skin.rect_of(name)
+	var ua := r.position.x / skin.atlas_size.x
+	var ub := (r.position.x + r.size.x) / skin.atlas_size.x
+	if flip:
+		var t := ua
+		ua = ub
+		ub = t
+	var gy := host.global_position.y
+	var y := floorf((y0 + gy) / seg) * seg - gy
+	var col := Color(_mod.r, _mod.g, _mod.b, 1.0)
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	var guard := 0
+	while y < y1 and guard < 400:
+		guard += 1
+		var ya := maxf(y, y0)
+		var yb := minf(y + seg, y1)
+		if yb - ya > 0.5:
+			var va: float = (r.position.y + v0 + (ya - y) / k) / skin.atlas_size.y
+			var vb: float = (r.position.y + v0 + (yb - y) / k) / skin.atlas_size.y
+			var base := pts.size()
+			pts.append_array([Vector2(x0, ya), Vector2(x1, ya), Vector2(x1, yb), Vector2(x0, yb)])
+			uvs.append_array([Vector2(ua, va), Vector2(ub, va), Vector2(ub, vb), Vector2(ua, vb)])
+			cols.append_array([col, col, col, col])
+			idx.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
+		y += seg
+	if not idx.is_empty():
+		_tris(BUF_ATLAS, pts, uvs, cols, idx)
 
 
 ## 드러난 옆변·아랫변을 나무껍질 혹처럼 살짝 울퉁불퉁하게 (그림만 — 충돌은 곧은 그대로). 바깥 +9 ~ 안 -3 px.
@@ -1109,14 +1227,18 @@ func _hang_run(a: Vector2, b: Vector2, density: float) -> void:
 	if len < 60.0:
 		return
 	var x := a.x + _rng.randf_range(10.0, 120.0)
+	# 간격 배수 (data params.hang.gap, 기본 1 — 등불처럼 폭이 좁은 장식이 너무 촘촘해 보이지 않게)
+	var gap := float(skin.param("hang", "gap", 1.0))
 	while x < b.x - 30.0:
 		var y := lerpf(a.y, b.y, clampf((x - a.x) / maxf(len, 1.0), 0.0, 1.0))
 		var w := _hang_at(Vector2(x, y), 0.0, _rng.randf_range(0.65, 0.95), b.x - x)
-		x += maxf(w, 60.0) * _rng.randf_range(0.35, 0.7) + _rng.randf_range(0.0, 160.0) / density
+		x += (maxf(w, 60.0) * _rng.randf_range(0.35, 0.7) + _rng.randf_range(0.0, 160.0) / density) * gap
 
 
 ## 매단 장식 하나를 p(장식 맨 위가 닿을 자리)에 단다. side: 옆면이면 바깥쪽(±1)으로 붙인다. 돌려주는 값 = 놓인 폭.
 func _hang_at(p: Vector2, side: float, size_k: float, max_w := INF) -> float:
+	if side != 0.0 and skin.has_role("hang_side"):
+		return _side_hang_at(p, side, size_k)
 	var names := skin.list("hang")
 	var name: String = names[_rng.randi_range(0, names.size() - 1)]
 	var size := skin.size_of(name)
@@ -1136,6 +1258,20 @@ func _hang_at(p: Vector2, side: float, size_k: float, max_w := INF) -> float:
 	# 덩굴 뿌리(잎 달린 윗부분)가 가장자리를 덮어 곧은 아랫선이 안 보이게 조금 위에서 시작
 	var y := p.y - (14.0 if side != 0.0 else 34.0) * k
 	piece(name, 0.0, size.x, x0, x0 + w, func(_x): return y, k, _rng.randf() < 0.5, {"y_off": 0.0})
+	return w
+
+
+## 옆면 전용 매단 장식 (역할 hang_side — 벽에 박힌 등불 걸이 등). 그림은 벽이 오른쪽에 있게 그린 것으로 본다:
+## 왼쪽을 향한 면(side −1)에는 그대로, 오른쪽을 향한 면(+1)에는 뒤집어 벽에 붙인다. 돌려주는 값 = 놓인 폭.
+func _side_hang_at(p: Vector2, side: float, size_k: float) -> float:
+	var names := skin.list("hang_side")
+	var name: String = names[_rng.randi_range(0, names.size() - 1)]
+	var size := skin.size_of(name)
+	var k := skin.scale * size_k
+	var w := size.x * k
+	var x0 := p.x - w + 4.0 if side < 0.0 else p.x - 4.0
+	var y := p.y
+	piece(name, 0.0, size.x, x0, x0 + w, func(_x): return y, k, side > 0.0, {"y_off": 0.0})
 	return w
 
 

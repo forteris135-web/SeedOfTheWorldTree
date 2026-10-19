@@ -13,12 +13,15 @@ extends SceneTree
 ##            src 는 시트 위의 대략적인 상자. 그 상자에 가장 많이 들어 있는 덩어리(+ 상자 안에 절반 넘게 든 덩어리)를 조각으로 쓴다.
 ##            scale 을 주면 그만큼 줄여서 넣는다 (아주 큰 그림 — 금 간 벽·가시).
 ##            walk 를 주면 자동으로 잰 '걷는 구간' 대신 그 값(조각 안 x, 원래 크기 px)을 쓴다.
+##            mask 를 주면 src 상자 안에서 색이 맞는 픽셀(+둘레)만 남긴다 {hue:[도,도], sat, val, grow, soft} (바위에 박힌 수정 떼어 내기).
+##            top_drop 을 주면 잰 발 딛는 선을 그만큼 아래로 내린다 (속이 찬 난간·흉벽 뒤에 바닥이 있는 조각).
 ##            clip 을 주면 고른 덩어리의 상자를 그 사각형(시트 px) 안으로 줄인다 (붙은 옆 그림을 곧게 잘라 낼 때 — 다각형 자르기는 없다).
 ##            atlas: false 면 atlas 에 넣지 않는다 (몸통 결 재료로만 쓰는 큰 그림).
 ##            top_line 을 주면 자동으로 잰 '발 딛는 선' 대신 그 꺾은선을 쓴다: [[x, y], …] (시트 px — 격자 미리보기에서 읽은 값).
 ##              난간·기둥·매단 등불처럼 발판 위로 솟은 것이 빽빽한 윗면으로 잡히는 조각(다리·발코니)에 쓴다.
 ##              걷는 구간은 walk 를 주지 않으면 꺾은선의 처음~끝 x. (가운데가 처진 흔들다리도 이 선을 펴서 평평한 발판에 맞춘다)
-##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright, contrast?}
+##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright, contrast?, grey_sat?}
+##            grey_sat 를 주면 채도가 그보다 낮은 회색 픽셀은 hue 와 상관없이 받는다 (회색 돌).
 ##            from 조각들에서 나무껍질 색(hue·sat·val 범위)만 있는 작은 네모(patch)를 찾아 이어 붙여 size×size 무늬를 만든다.
 ##   exports: [{name, src, sheet?, out:"res://...png", max:긴 변 px}] — 지형 밖에서 쓰는 단독 그림 (기록물 양피지 등)
 ##   extras : 금 간 벽처럼 조각을 가공한 그림 (cracked: 틈 빛을 끈 그림 / 틈 빛만 / 원래 그림)
@@ -249,6 +252,10 @@ func _cut(p: Dictionary, cut: Dictionary) -> Image:
 			minx = mini(minx, x); maxx = maxi(maxx, x); miny = mini(miny, y); maxy = maxi(maxy, y)
 	if maxx < 0:
 		return null
+	# mask 가 있으면 src 상자 안의 색 맞는 픽셀만 남긴다 (clip 이 없으면 src 상자로 자른다 — 덩어리의 다른 곳 색은 안 섞이게)
+	if p.has("mask") and not p.has("clip") and not bool(p["mask"].get("invert", false)):
+		minx = maxi(minx, rx); miny = maxi(miny, ry)
+		maxx = mini(maxx, rx + rw - 1); maxy = mini(maxy, ry + rh - 1)
 	if p.has("clip"):
 		var c: Array = p["clip"]
 		minx = maxi(minx, int(c[0])); miny = maxi(miny, int(c[1]))
@@ -263,6 +270,8 @@ func _cut(p: Dictionary, cut: Dictionary) -> Image:
 			if keep.has(lab[q]):
 				var o := (y * cw + x) * 4
 				out[o] = src[q * 4]; out[o + 1] = src[q * 4 + 1]; out[o + 2] = src[q * 4 + 2]; out[o + 3] = src[q * 4 + 3]
+	if p.has("mask"):
+		_apply_mask(out, cw, ch, p["mask"])
 	var piece := Image.create_from_data(cw, ch, false, Image.FORMAT_RGBA8, out)
 	var used := piece.get_used_rect()
 	piece = _trim(piece)
@@ -272,6 +281,74 @@ func _cut(p: Dictionary, cut: Dictionary) -> Image:
 	if s < 0.999:
 		piece = _resize(piece, maxi(1, roundi(piece.get_width() * s)), maxi(1, roundi(piece.get_height() * s)))
 	return piece
+
+
+## 색 거르기 (mask): {hue:[h0,h1](도, h0>h1 이면 360 을 넘어 감음), sat:최소 채도, val:최소 밝기, grow:px, soft:px, min_area:px, invert:bool}
+## invert 면 거꾸로 색 맞는 픽셀(+둘레)을 지운다.
+## 색이 맞는 픽셀 + 그 둘레 grow px 만 남기고, 그 밖은 soft px 동안 서서히 투명하게 한다.
+## (바위에 박힌 수정처럼 덩어리에 붙어 있는 밝은 그림만 떼어 낼 때 — 예: 채굴장 가시 = 붉은 수정)
+static func _apply_mask(d: PackedByteArray, w: int, h: int, m: Dictionary) -> void:
+	var hue: Array = m.get("hue", [0, 360])
+	var smin := float(m.get("sat", 0.0))
+	var vmin := float(m.get("val", 0.0))
+	var grow := int(m.get("grow", 2))
+	var soft := maxi(1, int(m.get("soft", 2)))
+	var h0 := float(hue[0])
+	var h1 := float(hue[1])
+	var dist := PackedInt32Array(); dist.resize(w * h)
+	var far := 1 << 20
+	for q in w * h:
+		dist[q] = far
+		if d[q * 4 + 3] < 128:
+			continue
+		var c := Color8(d[q * 4], d[q * 4 + 1], d[q * 4 + 2])
+		var hd := c.h * 360.0
+		var hue_ok := (hd >= h0 and hd <= h1) if h0 <= h1 else (hd >= h0 or hd <= h1)
+		if hue_ok and c.s >= smin and c.v >= vmin:
+			dist[q] = 0
+	# 작은 점(min_area px 미만의 색 맞는 덩어리 — 바위에 비친 빛 등)은 버린다
+	var min_area := int(m.get("min_area", 0))
+	if min_area > 0:
+		var seen := PackedByteArray(); seen.resize(w * h)
+		var stack := PackedInt32Array()
+		var comp := PackedInt32Array()
+		for start in w * h:
+			if dist[start] != 0 or seen[start] == 1:
+				continue
+			stack.clear(); comp.clear()
+			stack.append(start); seen[start] = 1
+			while stack.size() > 0:
+				var q := stack[stack.size() - 1]
+				stack.remove_at(stack.size() - 1)
+				comp.append(q)
+				var qx := q % w
+				for nb in [q - 1, q + 1, q - w, q + w]:
+					if nb < 0 or nb >= w * h or (nb == q - 1 and qx == 0) or (nb == q + 1 and qx == w - 1):
+						continue
+					if dist[nb] == 0 and seen[nb] == 0:
+						seen[nb] = 1
+						stack.append(nb)
+			if comp.size() < min_area:
+				for q in comp:
+					dist[q] = far
+	# 맨해튼 거리 (두 번 훑기)
+	for y in h:
+		for x in w:
+			var q := y * w + x
+			if x > 0: dist[q] = mini(dist[q], dist[q - 1] + 1)
+			if y > 0: dist[q] = mini(dist[q], dist[q - w] + 1)
+	for y in range(h - 1, -1, -1):
+		for x in range(w - 1, -1, -1):
+			var q := y * w + x
+			if x < w - 1: dist[q] = mini(dist[q], dist[q + 1] + 1)
+			if y < h - 1: dist[q] = mini(dist[q], dist[q + w] + 1)
+	# invert: 색 맞는 픽셀(+둘레)을 지운다 (돌려 쓸 조각에서 아래로 떨어지는 물방울 빼기 등)
+	var inv := bool(m.get("invert", false))
+	for q in w * h:
+		var k := 1.0 - clampf(float(dist[q] - grow) / float(soft), 0.0, 1.0)
+		if inv:
+			k = 1.0 - k
+		d[q * 4 + 3] = int(d[q * 4 + 3] * k)
 
 
 ## 투명한 가장자리를 잘라 낸다 (알파 8 이하는 투명으로 본다).
@@ -380,6 +457,12 @@ func _measure(img: Image, p: Dictionary) -> Dictionary:
 				s += raw[k]
 				c += 1
 		top.append(roundi(s / c))
+	# top_drop: 발 딛는 선을 이만큼 아래로 (속이 찬 난간·흉벽 뒤에 바닥이 있는 조각 — 불투명도로는 바닥 윗면을 못 찾는다)
+	var drop := int(p.get("top_drop", 0))
+	if drop != 0:
+		for i in n:
+			if top[i] >= 0:
+				top[i] = mini(top[i] + drop, h - 1)
 	var meta := {"role": p.get("role", ""), "size": [w, h], "top": top}
 	if p.has("top_line"):
 		return _measure_line(p, meta, d, w, h, n)
@@ -621,6 +704,8 @@ func _make_fill(f: Dictionary) -> Image:
 	var hue: Array = f.get("hue", [16, 50])
 	var sat: Array = f.get("sat", [0.06, 0.6])
 	var val: Array = f.get("val", [0.25, 0.97])
+	# grey_sat: 채도가 이보다 낮은 회색 픽셀은 색상(hue)과 상관없이 받는다 (푸르스름한 회색 돌 등 — 기본 0 = 안 씀)
+	var grey_sat := float(f.get("grey_sat", 0.0))
 	var cands: Array = []   # [Image(patch)]
 	for name in f.get("from", []):
 		if not _pieces.has(name):
@@ -636,7 +721,8 @@ func _make_fill(f: Dictionary) -> Image:
 				continue
 			var c := Color8(d[q * 4], d[q * 4 + 1], d[q * 4 + 2])
 			var hd := c.h * 360.0
-			if hd >= float(hue[0]) and hd <= float(hue[1]) and c.s >= float(sat[0]) and c.s <= float(sat[1]) and c.v >= float(val[0]) and c.v <= float(val[1]):
+			var hue_ok := (hd >= float(hue[0]) and hd <= float(hue[1])) or c.s < grey_sat
+			if hue_ok and c.s >= float(sat[0]) and c.s <= float(sat[1]) and c.v >= float(val[0]) and c.v <= float(val[1]):
 				ok[q] = 1
 		# 적분 영상으로 네모 안의 '껍질' 비율을 빠르게 센다
 		var integ := PackedInt32Array(); integ.resize((w + 1) * (h + 1))
