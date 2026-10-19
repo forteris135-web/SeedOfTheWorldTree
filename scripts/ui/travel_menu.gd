@@ -6,8 +6,8 @@ class_name TravelMenu
 
 signal closed
 
-const REGION_ORDER := {"canopy": 0, "village": 1, "mine": 2, "abyss": 3}
-const REGION_NAMES := {"canopy": "수관", "village": "마을", "mine": "채굴장", "abyss": "심연"}
+const REGION_ORDER := {"canopy": 0, "village": 1, "sap_lake": 2, "mine": 3, "flooded_mine": 4, "abyss": 5}
+const REGION_NAMES := {"canopy": "수관", "village": "마을", "sap_lake": "수액의 호수", "mine": "채굴장", "flooded_mine": "잠긴 채굴장", "abyss": "심연"}
 
 var _kind := "grass"          # grass / portal
 var _title := ""
@@ -80,7 +80,8 @@ static func region_of_scene(scene: String) -> String:
 	var file := scene.get_file().get_basename()
 	if file.begins_with("moon_"):
 		return "abyss"
-	for r in REGION_ORDER:
+	# 긴 이름(flooded_mine, sap_lake)을 먼저 본다 (mine 보다 앞에)
+	for r in ["flooded_mine", "sap_lake", "canopy", "village", "mine", "abyss"]:
 		if file.begins_with(r):
 			return r
 	return "canopy"

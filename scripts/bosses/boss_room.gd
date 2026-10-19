@@ -80,6 +80,13 @@ func _on_boss_telegraph(kind: String) -> void:
 	var hud := get_node_or_null("CombatHUD")
 	if hud == null:
 		return
+	# 보스 스크립트가 telegraph_label(kind) 로 글자를 주면 그것을 쓴다 (새 패턴은 보스 쪽만 고치면 된다; "" 이면 글자 없음)
+	if is_instance_valid(boss) and boss.has_method("telegraph_label"):
+		var label: String = boss.telegraph_label(kind)
+		if label != "":
+			hud.flash(label)
+		if kind != "rise":
+			return
 	match kind:
 		# 가드 불가는 붉은 예고 빛으로 알린다 (설명 글자는 넣지 않는다 — 2026-10-18 기획자 결정)
 		"wind": hud.flash("날갯바람!")

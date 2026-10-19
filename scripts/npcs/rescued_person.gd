@@ -23,8 +23,7 @@ var _area: Area2D
 
 func _ready() -> void:
 	add_to_group("npc")
-	var text := FileAccess.get_file_as_string(DATA_PATH)
-	var all: Dictionary = JSON.parse_string(text)
+	var all: Dictionary = DialogueData.load_dialogue(DATA_PATH)
 	_data = all.get(rescue_id, {})
 	_sprite = Sprite2D.new()
 	_sprite.texture = texture

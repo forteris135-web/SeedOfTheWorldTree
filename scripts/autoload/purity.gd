@@ -18,7 +18,7 @@ func is_purified(region: String) -> bool:
 
 
 ## 방이 시작될 때: 그 지역의 상태를 바로 적용한다.
-const ASH_TINTS := {"canopy": Vector3(0.66, 0.70, 0.78), "village": Vector3(0.78, 0.72, 0.66), "mine": Vector3(0.70, 0.62, 0.58), "abyss": Vector3(0.62, 0.60, 0.76)}
+const ASH_TINTS := {"canopy": Vector3(0.66, 0.70, 0.78), "village": Vector3(0.78, 0.72, 0.66), "mine": Vector3(0.70, 0.62, 0.58), "abyss": Vector3(0.62, 0.60, 0.76), "sap_lake": Vector3(0.60, 0.70, 0.78), "flooded_mine": Vector3(0.72, 0.60, 0.56)}
 
 
 func apply_region(region: String) -> void:

@@ -22,8 +22,7 @@ var _memory_id := ""
 
 func _ready() -> void:
 	_memory_id = Progress.pending_memory if Progress.pending_memory != "" else "memory_bird"
-	var text := FileAccess.get_file_as_string(DATA_PATH)
-	var data: Dictionary = JSON.parse_string(text)
+	var data: Dictionary = DialogueData.load_dialogue(DATA_PATH)
 	var mem: Dictionary = data.get(_memory_id, {})
 	_lines = mem.get("lines", [])
 	_reward = mem.get("reward_text", "")

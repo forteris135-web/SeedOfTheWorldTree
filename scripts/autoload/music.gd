@@ -72,4 +72,8 @@ func stop(fade := 1.0) -> void:
 
 ## 지역 배경음악
 func play_region(region: String) -> void:
-	play("ambient_" + region, 2.0)
+	var name := "ambient_" + region
+	if not ResourceLoader.exists(DIR + name + ".wav"):
+		# 확장 지역의 곡이 아직 없으면 가까운 지역곡으로 (수액의 호수 → 심연, 잠긴 채굴장 → 채굴장)
+		name = "ambient_" + {"sap_lake": "abyss", "flooded_mine": "mine"}.get(region, "canopy")
+	play(name, 2.0)

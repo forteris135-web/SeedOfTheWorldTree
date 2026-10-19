@@ -7,6 +7,8 @@
 # Godot 실행 파일은 GODOT 환경변수로 준다. 없으면 흔한 자리들을 찾아본다.
 # 출력: 시험이 찍는 [..] 줄과 SCRIPT ERROR / Parse Error 줄만 남긴다. 마지막 줄 "exit N" 은 종료 코드 (124 = 시간 초과).
 set -u
+# macOS 에는 timeout 이 없다: perl alarm 으로 대신한다 (시간 초과 종료 코드 142)
+tmo(){ if command -v timeout >/dev/null 2>&1; then timeout "$@"; else perl -e 'alarm shift; exec @ARGV' "$@"; fi; }
 PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
 ROOM="${1:?방 이름}"
 FLAG="${2:?시험 플래그}"
@@ -22,7 +24,7 @@ case "$ROOM" in
 esac
 # FLAG 는 따옴표 없이 넘겨서 "--screenshot --map" 처럼 여러 플래그를 한 번에 줄 수 있게 한다
 # shellcheck disable=SC2086
-timeout "$LIMIT" "$G" --headless --path "$PROJECT" "$SCENE" -- $FLAG 2>&1 \
+tmo "$LIMIT" "$G" --headless --path "$PROJECT" "$SCENE" -- $FLAG 2>&1 \
   | grep -E "^\[|SCRIPT ERROR|Parse Error|ERROR: Failed to load|^ERROR: .*\.gd" \
   | grep -v "resources still in use\|ObjectDB instances"
 echo "exit ${PIPESTATUS[0]}"

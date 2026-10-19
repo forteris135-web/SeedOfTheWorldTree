@@ -30,6 +30,24 @@ var ending := ""
 ## 모은 것·부순 것 (id -> true): 아이템(pick_<방>_<번호>), 비밀 벽·천장(secret_<방>_<번호>).
 ## 한 번 모으거나 부순 것은 다시 와도 그대로다.
 var collected := {}
+## 재화 '빛 가루': 적을 쓰러뜨리거나 정화하면 떨어지고, 달빛풀에서 성장에 쓴다 (2026-10-19 기획자 요청).
+var dust := 0
+signal dust_changed(amount: int)
+
+
+func add_dust(n: int) -> void:
+	if n == 0:
+		return
+	dust = maxi(dust + n, 0)
+	dust_changed.emit(dust)
+
+
+func spend_dust(n: int) -> bool:
+	if n > dust:
+		return false
+	dust -= n
+	dust_changed.emit(dust)
+	return true
 
 signal upgraded(kind: String, amount: float)
 ## 무언가를 모으거나 부쉈다 (숨은 아이템이 나타나고, 지도의 탐사 수가 바뀐다).
@@ -84,4 +102,5 @@ func reset() -> void:
 	rescued.clear()
 	visited_rooms.clear()
 	collected.clear()
+	dust = 0
 	next_spawn = ""

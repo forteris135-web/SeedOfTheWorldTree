@@ -11,7 +11,7 @@ var _room: Room
 var _t := 0.0
 
 ## 지역 구분색. 방 채움이 아니라 왼쪽 가는 띠와 테두리에만 쓴다. (travel_menu.gd 도 이 이름으로 참조한다)
-const REGION_COLORS := {"canopy": Color(0.36, 0.48, 0.3), "village": Color(0.6, 0.45, 0.25), "mine": Color(0.5, 0.3, 0.25), "abyss": Color(0.35, 0.28, 0.5)}
+const REGION_COLORS := {"canopy": Color(0.36, 0.48, 0.3), "village": Color(0.6, 0.45, 0.25), "mine": Color(0.5, 0.3, 0.25), "abyss": Color(0.35, 0.28, 0.5), "sap_lake": Color(0.25, 0.45, 0.55), "flooded_mine": Color(0.55, 0.25, 0.2)}
 ## 탐사 상태 채움색: 아직 찾을 것이 남은 방 = 연초록, 모두 찾은 방 = 청명한 하늘색.
 const FILL_REMAIN := Color(0.62, 0.92, 0.45)
 const FILL_DONE := Color(0.45, 0.82, 1.0)

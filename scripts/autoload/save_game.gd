@@ -24,6 +24,7 @@ func save(grass_id: String, scene_path: String) -> void:
 		"ending": Progress.ending,
 		"purity": Purity.regions,
 		"collected": Progress.collected,
+		"dust": Progress.dust,
 	}
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
 	if f:
@@ -72,6 +73,8 @@ func load_game() -> String:
 	Progress.visited_rooms = _rooms_from_json(data.get("visited_rooms", {}))
 	Progress.ending = data.get("ending", "")
 	Progress.collected = data.get("collected", {})   # 옛 저장 파일에는 없다 → 빈 사전
+	Progress.dust = int(data.get("dust", 0))
+	Progress.dust_changed.emit(Progress.dust)
 	var pur: Dictionary = data.get("purity", {})
 	for k in pur:
 		Purity.regions[k] = pur[k]

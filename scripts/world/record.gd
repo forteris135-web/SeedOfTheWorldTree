@@ -16,7 +16,7 @@ var _t := 0.0
 
 
 func _ready() -> void:
-	var all: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+	var all: Dictionary = DialogueData.load_dialogue(DATA_PATH)
 	_data = all.get(record_id, {})
 	_prompt = Label.new()
 	_prompt.add_theme_font_size_override("font_size", 22)

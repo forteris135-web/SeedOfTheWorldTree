@@ -29,7 +29,7 @@ func _ready() -> void:
 	if require_flag != "" and not Progress.has(require_flag):
 		queue_free()
 		return
-	var all: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+	var all: Dictionary = DialogueData.load_dialogue(DATA_PATH)
 	_data = all.get(npc_id, {})
 	_sprite = Sprite2D.new()
 	_sprite.texture = texture

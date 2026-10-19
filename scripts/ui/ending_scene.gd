@@ -18,7 +18,7 @@ var _can_skip := false
 
 
 func _ready() -> void:
-	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+	var data: Dictionary = DialogueData.load_dialogue(DATA_PATH)
 	var which := Progress.ending if Progress.ending != "" else "return"
 	var e: Dictionary = data.get(which, {})
 	_lines = e.get("lines", [])
