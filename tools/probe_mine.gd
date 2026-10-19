@@ -311,8 +311,14 @@ func _probe_data() -> void:
 	_check(pieces and extra.size() == 1 and extra[0].get("when", "").contains("read_scripture_4") and recs["scripture_village"].has("lines"), "records_mine: 경전 조각 4 + 설계도, 사당 경전에 완성 구절(extra, 조건 %s) 이어짐" % [extra[0].get("when", "") if extra.size() > 0 else "-"])
 	var mems: Dictionary = DialogueData.load_dialogue("res://data/dialogue/memories.json")
 	var ends: Dictionary = DialogueData.load_dialogue("res://data/dialogue/endings.json")
-	_check(mems.get("memory_pump", {}).get("lines", []).size() == 4 and ends.get("third", {}).get("lines", []).size() == 6 and ends["third"].get("image", "").ends_with("ending_third_way.png"),
-		"memories_mine(펌프 회상 %d줄), endings_mine(제3의 길 %d줄, 그림 %s)" % [mems.get("memory_pump", {}).get("lines", []).size(), ends.get("third", {}).get("lines", []).size(), ends.get("third", {}).get("image", "").get_file()])
+	# 제3의 길: ENDINGS.md 3-1장 — 장면 9개, 진엔딩 그림 5장(ending_true_1~5, 옛 ending_third_way 한 장을 대신함). 자세한 시험은 probe_endings.
+	var third_scenes: Array = ends.get("third", {}).get("scenes", [])
+	var third_imgs := {}
+	for sc in third_scenes:
+		third_imgs[str(sc.get("image", "")).get_file()] = true
+	var five_imgs := third_imgs.has("ending_true_1.png") and third_imgs.has("ending_true_2.png") and third_imgs.has("ending_true_3.png") and third_imgs.has("ending_true_4.png") and third_imgs.has("ending_true_5.png")
+	_check(mems.get("memory_pump", {}).get("lines", []).size() == 4 and third_scenes.size() == 9 and five_imgs,
+		"memories_mine(펌프 회상 %d줄), endings_mine(제3의 길 장면 %d개, 진엔딩 그림 5장 %s)" % [mems.get("memory_pump", {}).get("lines", []).size(), third_scenes.size(), five_imgs])
 	Progress.reset()
 
 
@@ -589,9 +595,9 @@ func _probe_third_way() -> void:
 	add_child(ending)
 	await _frames(2)
 	var title: String = ending.get_node("Title").text
-	var tex = ending.get_node("Art").texture
-	_check(title == "제3의 길" and tex != null and ending._lines.size() == 6 and Progress.has("cleared") and Progress.has("cleared_third") and Progress.has("ending_third"),
-		"엔딩 씬: 제목 '%s', 그림 %s, %d줄, 깃발 cleared/cleared_third/ending_third %s/%s/%s, 곡 %s" % [title, tex != null, ending._lines.size(), Progress.has("cleared"), Progress.has("cleared_third"), Progress.has("ending_third"), Music.current()])
+	var tex: Texture2D = ending.front_texture()
+	_check(title == "제3의 길" and tex != null and tex.resource_path.ends_with("ending_true_1.png") and ending._scenes.size() == 9 and Progress.has("cleared") and Progress.has("cleared_third") and Progress.has("ending_third"),
+		"엔딩 씬: 제목 '%s', 첫 그림 %s, 장면 %d개, 깃발 cleared/cleared_third/ending_third %s/%s/%s" % [title, tex.resource_path.get_file() if tex else "없음", ending._scenes.size(), Progress.has("cleared"), Progress.has("cleared_third"), Progress.has("ending_third")])
 	ending.queue_free()
 	c2.queue_free()
 	Progress.reset()

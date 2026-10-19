@@ -1,0 +1,27 @@
+{
+ "_설명": "엔딩 뒤 이어서 탐험할 때 마을 사람들의 대사 (ENDINGS.md 0장 '엔딩 후 이어서 탐험'). 깃발 last_ending_sacrifice / last_ending_return / last_ending_third 는 마지막으로 본 엔딩 하나만 선다 (EndingScene.mark_seen). DialogueData 가 npcs.json 에 이어 붙인다 (talks 는 뒤에 붙음 → priority 로 고른다). 티아: 오웬과의 재회가 남아 있으면 재회가 먼저 (조건을 '재회 마침' / '오웬을 아직 못 구함' 둘로 나눔), 다섯 영혼 대사(priority 5, 한 번)도 먼저. 등불지기: 이름 짓기·고백이 남아 있으면 그쪽이 먼저 (조건 lampkeeper_confessed). 오웬: 펌프 대사(priority 5)보다 먼저 (priority 6). 희생의 끝 뒤의 셀레니아는 정원의 어린 나무에서 떨어진 새 씨앗(장면 8)이 달빛풀 아래에서 깨어난 것으로 본다. 대사는 초안 — 주제 문장(SCRIPT.md 4-1)은 여기서 쓰지 않는다.",
+ "tia": {
+  "talks": [
+   {"when": "last_ending_sacrifice,reunion_done", "priority": 4, "lines": ["…언니? 정말 언니야?", "할아버지가 그랬어. 정원의 어린 나무에서 금빛 씨앗이 하나 떨어졌다고.", "그 씨앗이 언니였구나. …이번엔 어디 가지 마."]},
+   {"when": "last_ending_sacrifice,!owen_rescued", "priority": 4, "lines": ["…언니? 정말 언니야?", "할아버지가 그랬어. 정원의 어린 나무에서 금빛 씨앗이 하나 떨어졌다고.", "그 씨앗이 언니였구나. …이번엔 어디 가지 마."]},
+   {"when": "last_ending_return,reunion_done", "priority": 4, "lines": ["등불이 다 꺼지니까 별이 보여. 아빠가 별 이름을 하나씩 가르쳐 줘.", "밤에는 달빛풀 곁에 다 같이 모여 앉아. 하나도 안 무서워."]},
+   {"when": "last_ending_return,!owen_rescued", "priority": 4, "lines": ["등불이 다 꺼지니까 별이 보여.", "밤에는 달빛풀 곁에 다 같이 모여 앉아. 아빠도 곧 올 거야. 하나도 안 무서워."]},
+   {"when": "last_ending_third,reunion_done", "priority": 4, "lines": ["집집마다 등불이 하나씩만 켜져 있어. 아빠가 그러는데, 그게 원래 모습이래.", "언니 등불도 하나지? 우리 똑같다."]},
+   {"when": "last_ending_third,!owen_rescued", "priority": 4, "lines": ["집집마다 등불이 하나씩만 켜져 있어. 그게 원래 모습이래.", "언니 등불도 하나지? 우리 똑같다."]}
+  ]
+ },
+ "lampkeeper": {
+  "talks": [
+   {"when": "last_ending_sacrifice,lampkeeper_confessed", "priority": 4, "lines": ["달빛풀 아래 또 하나의 씨앗이 잠들어 있었다더구나.", "…다시 너를 셀레니아라 불러도 되겠지. 이번엔 우리가 너를 지키마.", "등불은 아직 따뜻하다. 네가 지켜 준 빛이니, 이번엔 아껴 쓰겠다."]},
+   {"when": "last_ending_return,lampkeeper_confessed", "priority": 4, "lines": ["장대 등불은 내려놓았다. 이제 밤에는 달빛풀을 따라 걷는단다.", "어둡다고 불평하는 사람은 없더구나. 다들 오랜만에 서로의 얼굴을 보고 있어."]},
+   {"when": "last_ending_third,lampkeeper_confessed", "priority": 4, "lines": ["채굴장의 경전은 고쳐 두었다. '생명'. 이번엔, 잊지 않으마.", "받은 것을 돌려보내는 손… 그 구절을 사당 맨 앞에 걸어 두었다."]}
+  ]
+ },
+ "owen": {
+  "talks": [
+   {"when": "last_ending_sacrifice", "priority": 6, "lines": ["등불은 꺼지지 않았어요. 당신이 지켜 준 거라고, 티아가 그러더군요.", "이번엔 함부로 쓰지 않을 거예요. 받은 만큼만."]},
+   {"when": "last_ending_return", "priority": 6, "lines": ["광산은 멈췄어요. 손이 심심해서, 요즘은 달빛풀 곁에 씨앗을 심어요.", "다시 시작하면 돼요. …이번엔, 조금씩."]},
+   {"when": "last_ending_third", "priority": 6, "lines": ["펌프는 이제 거꾸로, 아주 천천히 돌아요. 스승님들이 설계한 대로.", "받은 만큼만 쓰고, 남은 건 땅으로. 등불 하나면 충분하더군요."]}
+  ]
+ }
+}

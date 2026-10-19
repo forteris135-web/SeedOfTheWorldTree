@@ -1,6 +1,10 @@
 extends Control
 ## 타이틀 화면. 타이틀 일러스트 위로 천천히 움직이는 카메라, 떠다니는 빛, 제목과 메뉴.
-## 음악: 클리어 전 title, 엔딩을 본 뒤 selenia_humming (Music.title_track). 클리어 후에는 그림·부제도 바뀐다(기획서 2장).
+## 음악: 클리어 전 title, 엔딩을 본 뒤 selenia_humming (Music.title_track). 클리어 후에는 그림·부제가 마지막으로 본 엔딩에 따라 바뀐다
+## (ENDINGS.md 5장: 희생 → title_after_sacrifice, 되돌림 → title_after_return, 제3의 길 → title_after_true).
+
+## 클리어 전 타이틀 그림
+const DEFAULT_ART := "res://art/characters/title_selenia.png"
 
 @onready var art: TextureRect = $Art
 @onready var menu: VBoxContainer = $Layout/Menu
@@ -28,12 +32,11 @@ func _ready() -> void:
 	_select(0)
 	var seen := cleared_state()
 	if seen["cleared"]:
-		# 클리어 후: 밝은 일러스트, 바뀐 부제. 제3의 길(확장판)을 보았으면 부제가 또 바뀐다.
-		art.texture = load("res://art/characters/title_selenia_alt_b.png")
-		if seen["third"]:
-			subtitle.text = "— 등불 하나면 충분해."
-		else:
-			subtitle.text = "— 그리고 세계는 다시 숨을 쉰다."
+		# 클리어 후: 마지막으로 본 엔딩의 타이틀 그림과 부제 (ENDINGS.md 5장 — 그림·부제는 endings*.json 의 title_image / title_subtitle)
+		var look := title_look(seen)
+		art.texture = load(look["image"])
+		if look["subtitle"] != "":
+			subtitle.text = look["subtitle"]
 	# 타이틀 곡: 클리어 전 title, 엔딩을 본 뒤 셀레니아의 허밍(엔딩에선 한 번만 흐르는 곡을 여기선 반복) — ENDINGS.md 5장
 	Music.play(Music.title_track(seen["cleared"]), {"fade": 2.0, "loop": true})
 	InputDevice.device_changed.connect(func(_k): _refresh_hint())
@@ -65,16 +68,40 @@ func _ready() -> void:
 
 ## 엔딩을 보았는가: 지금 진행(Progress) 또는 저장 파일의 깃발. 앱을 새로 켠 뒤에도 클리어한 타이틀이 보이게
 ## 저장 파일을 **읽기만** 한다 (진행은 '이어하기'를 고를 때 SaveGame.load_game 이 되돌린다).
-## {"cleared": 엔딩을 하나라도 봄, "third": 제3의 길을 봄}
+## {"cleared": 엔딩을 하나라도 봄, "third": 제3의 길을 봄, "ending": 마지막으로 본 엔딩 (sacrifice / return / third, 모르면 "")}
+## 마지막으로 본 엔딩: 지금 진행에 엔딩을 본 기록이 있으면 그것, 없으면 저장 파일 (깃발 last_ending_*, 옛 저장은 "ending" 값).
 static func cleared_state() -> Dictionary:
-	var out := {"cleared": Progress.has("cleared"), "third": Progress.has("cleared_third")}
+	var out := {"cleared": Progress.has("cleared"), "third": Progress.has("cleared_third"), "ending": ""}
+	if out["cleared"]:
+		out["ending"] = PostEnding.last_ending()
+		if out["ending"] == "" and Progress.ending in EndingScene.ENDINGS:
+			out["ending"] = Progress.ending
 	if SaveGame.has_save():
 		var data = JSON.parse_string(FileAccess.get_file_as_string(SaveGame.PATH))
 		if typeof(data) == TYPE_DICTIONARY and typeof(data.get("flags", null)) == TYPE_DICTIONARY:
 			var f: Dictionary = data["flags"]
 			out["cleared"] = out["cleared"] or bool(f.get("cleared", false))
 			out["third"] = out["third"] or bool(f.get("cleared_third", false))
+			if out["ending"] == "" and bool(f.get("cleared", false)):
+				for n in EndingScene.ENDINGS:
+					if bool(f.get("last_ending_" + n, false)):
+						out["ending"] = n
+				if out["ending"] == "" and str(data.get("ending", "")) in EndingScene.ENDINGS:
+					out["ending"] = str(data.get("ending", ""))
 	return out
+
+
+## 클리어 후 타이틀의 그림·부제: 마지막으로 본 엔딩에 따라 (ENDINGS.md 5장). 클리어 전에는 기본 그림.
+## {"image": 그림 경로, "subtitle": 부제 (""이면 장면 파일의 기본 부제)}
+static func title_look(seen: Dictionary) -> Dictionary:
+	if not seen.get("cleared", false):
+		return {"image": DEFAULT_ART, "subtitle": ""}
+	var e: Dictionary = EndingScene.ending_data(str(seen.get("ending", "")))
+	var img := str(e.get("title_image", ""))
+	if img == "" or not ResourceLoader.exists(img):
+		# 어느 엔딩인지 모르는 옛 저장: 예전처럼 밝은 일러스트
+		return {"image": "res://art/characters/title_selenia_alt_b.png", "subtitle": "— 그리고 세계는 다시 숨을 쉰다."}
+	return {"image": img, "subtitle": str(e.get("title_subtitle", ""))}
 
 
 func _process(delta: float) -> void:

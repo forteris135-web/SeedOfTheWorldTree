@@ -1,25 +1,316 @@
 {
-  "_설명": "엔딩 자막. 주제 문장은 여기서 단 한 번 쓴다 (SCRIPT.md 4-1).",
+  "_설명": "엔딩 장면 데이터 (ENDINGS.md 기준). 희생의 끝·되돌림의 끝은 여기, 제3의 길은 endings_mine.json. 대사는 모두 초안 — 문장만 고치면 된다. 셀레니아는 말하지 않는다. 주제 문장(SCRIPT.md 4-1)은 되돌림의 끝 장면 5의 등불지기 대사로 게임 전체에서 단 한 번만 쓴다 (theme: true). 허밍(selenia_humming)은 humming_scene 번째 장면(1부터 셈)이 시작될 때 처음부터 한 번 흐르고 크레딧 끝까지 끊기지 않는다.",
+  "_형식": "scenes: 장면 목록. 장면 = {id, name(ENDINGS.md 장면 이름), image(그림), view/view_to([가로 비율, 세로 비율, 확대] — 그림의 어느 곳을 얼마나 크게), bright/bright_to(밝기), tint([r,g,b] 색조), effects(연출), layers(그림 위에 올리는 인물·물건: x·y = 발 자리의 화면 비율, h = 화면 높이에 대한 키), sfx([[소리, 음량dB, 지연초]] — 장면이 시작될 때), beats(한 줄씩: text·speaker·theme·echo/echo_when·time(초) + 그 줄에서 바뀌는 image/view/bright/tint/effects/layers/move/swap/place/sfx)}. 연출 type: motes(떠오르는 금빛), glow(빛 무리, at 은 그림 비율), ash(잿빛→색, origin 에서 번짐, slow 면 한 잎씩 천천히, hold 면 잿빛 그대로), sweep(왼쪽부터 어둠이 번짐 + 등불 꺼지는 소리), seed(금빛 씨앗이 떨어짐), spin(거꾸로 도는 빛 고리), flash(번쩍), flow(빛이 아래로 흘러내림), stars(은청색 반짝임), scripture(경전 고쳐 쓰기 글자), pump_beats(허밍 박자에 맞춘 펌프 소리), blur(화면이 흐려짐).",
+  "_공통": {
+    "credits": [
+      "세계수의 씨앗",
+      "",
+      "",
+      "기획 · 이야기 · 그림 디렉션",
+      "WJ",
+      "",
+      "음악",
+      "WJ",
+      "",
+      "구현",
+      "Claude Code",
+      "",
+      "엔진",
+      "Godot Engine",
+      "",
+      "",
+      "끝까지 함께 걸어 준 당신에게",
+      "고마워요.",
+      "",
+      "",
+      "— 1편 끝 —"
+    ],
+    "_메모": "제작진 글은 초안 — 기획자가 고칠 것.",
+    "end_title": "— 끝 —",
+    "explore": "이어서 탐험하기",
+    "explore_hint": "마지막 달빛풀에서 다시 걷는다",
+    "to_title": "타이틀로"
+  },
   "sacrifice": {
     "title": "희생의 끝",
-    "image": "res://art/backgrounds/bg_moon_garden.png",
-    "lines": [
-      "셀레니아는 심연의 뿌리에 손을 얹었다.",
-      "가슴의 씨앗이 빛을 내며 뿌리 속으로 번져 갔다. 잿빛이던 줄기에 색이 돌아오고, 마을의 등불은 꺼지지 않았다.",
-      "티아는 매일 저녁 마을 끝 달빛풀에 등불을 걸어 두었다. 오웬은 등불 대신 씨앗을 심었다.",
-      "수관 꼭대기에, 아무도 본 적 없는 어린 나무가 하나 자라났다. 은빛 잎을 가진.",
-      "오직 생명만이 언제나 목적이고, 번영은 수단인 것을 왜 잊고 있었을까?"
-    ]
+    "title_image": "res://art/characters/title_after_sacrifice.png",
+    "title_subtitle": "— 그리고 세계는 다시 숨을 쉰다.",
+    "humming_scene": 4,
+    "credits_images": [
+      "res://art/memories/ending_sacrifice_2.png",
+      "res://art/memories/memory_bird_1.png",
+      "res://art/memories/memory_knight_1.png",
+      "res://art/memories/memory_root_1.png",
+      "res://art/memories/ending_sacrifice_3.png"
+    ],
+    "scenes": [
+      {
+        "id": "sacrifice_1",
+        "name": "등불을 내려놓다",
+        "image": "res://art/memories/ending_sacrifice_1.png",
+        "view": [0.72, 0.68, 1.45],
+        "view_to": [0.7, 0.66, 1.3],
+        "bright": 0.78,
+        "sfx": [["end_rumble", -12.0, 0.4], ["end_leaves", -17.0, 2.4]],
+        "effects": [{"type": "glow", "id": "lantern", "at": [0.715, 0.68], "radius": 0.16, "color": [1.0, 0.8, 0.5], "alpha": 0.35, "pulse": 0.25}],
+        "beats": [
+          {"text": "셀레니아는 허리에서 티아의 작은 등불을 풀었다."},
+          {"text": "그리고 뿌리 곁에, 조심스럽게 내려놓았다. 빌린 것을 돌려주듯이."}
+        ]
+      },
+      {
+        "id": "sacrifice_2",
+        "name": "뿌리에 손을 얹다",
+        "image": "res://art/memories/ending_sacrifice_1.png",
+        "view": [0.58, 0.5, 1.35],
+        "view_to": [0.6, 0.5, 1.22],
+        "bright": 0.85,
+        "sfx": [["end_rumble", -11.0, 0.2], ["purify", -18.0, 2.6]],
+        "effects": [
+          {"type": "glow", "id": "chest", "at": [0.525, 0.52], "radius": 0.12, "color": [1.0, 0.85, 0.45], "alpha": 0.5, "pulse": 0.35},
+          {"type": "glow", "id": "hand", "at": [0.62, 0.5], "radius": 0.1, "color": [1.0, 0.85, 0.45], "alpha": 0.0, "alpha_to": 0.45, "time": 5.0}
+        ],
+        "beats": [
+          {"text": "정화의 손길처럼, 셀레니아는 뿌리에 손을 얹었다."},
+          {"text": "가슴의 금빛 씨앗이 빛을 내며, 손을 타고 뿌리로 흘러들었다."}
+        ]
+      },
+      {
+        "id": "sacrifice_3",
+        "name": "나무가 되다",
+        "image": "res://art/memories/ending_sacrifice_1.png",
+        "view": [0.36, 0.78, 1.4],
+        "view_to": [0.5, 0.5, 1.02],
+        "bright": 0.85,
+        "bright_to": 1.0,
+        "sfx": [["end_leaves", -14.0, 0.3], ["end_rumble", -12.0, 1.5], ["end_leaves", -16.0, 6.0]],
+        "effects": [{"type": "motes", "color": [1.0, 0.85, 0.5], "amount": 26}],
+        "beats": [
+          {"text": "발끝부터 천천히 뿌리가 내렸다."},
+          {"text": "잎사귀 망토가 펼쳐져 가지가 되고, 후드 끝의 새싹이 자라 올랐다."},
+          {"text": "아프지 않게. 잠드는 것처럼."}
+        ]
+      },
+      {
+        "id": "sacrifice_4",
+        "name": "세계수의 목소리",
+        "image": "res://art/memories/ending_sacrifice_1.png",
+        "view": [0.5, 0.45, 1.06],
+        "view_to": [0.5, 0.4, 1.12],
+        "bright": 0.45,
+        "tint": [1.0, 0.86, 0.6],
+        "effects": [{"type": "motes", "color": [1.0, 0.85, 0.5], "amount": 40}],
+        "beats": [
+          {"speaker": "세계수의 목소리", "text": "…돌아왔구나, 나의 마지막 씨앗아."},
+          {"speaker": "세계수의 목소리", "text": "너는 사람들의 등불을 지켜 주었구나."},
+          {"speaker": "세계수의 목소리", "text": "이제, 내가 너를 지키마."}
+        ]
+      },
+      {
+        "id": "sacrifice_5",
+        "name": "빛이 위로 오른다",
+        "image": "res://art/backgrounds/bg_abyss_1.png",
+        "view": [0.5, 0.6, 1.05],
+        "view_to": [0.5, 0.4, 1.0],
+        "bright": 0.95,
+        "effects": [{"type": "ash", "tint": "abyss", "time": 4.0, "origin": [0.5, 1.15]}],
+        "beats": [
+          {"text": "금빛이 뿌리에서 줄기를 타고 위로 번져 올랐다.", "place": "뿌리의 심연"},
+          {"text": "채굴장의 어둠을 지나,", "time": 4.6, "place": "채굴장", "image": "res://art/backgrounds/bg_mine_1.png", "view": [0.5, 0.55, 1.04],
+           "effects": [{"type": "ash", "tint": "mine", "time": 3.8, "origin": [0.5, 1.15]}]},
+          {"text": "등불의 마을을 지나,", "time": 4.6, "place": "가지 위의 마을", "image": "res://art/backgrounds/bg_village_2.png", "view": [0.5, 0.5, 1.04],
+           "effects": [{"type": "ash", "tint": "village", "time": 3.8, "origin": [0.5, 1.15]}]},
+          {"text": "수관 끝까지. 잿빛이 걷히고, 색이 번져 돌아왔다.", "place": "수관", "image": "res://art/backgrounds/bg_canopy_2.png", "view": [0.5, 0.45, 1.04],
+           "effects": [{"type": "ash", "tint": "canopy", "time": 4.0, "origin": [0.5, 1.15]}]},
+          {"text": "깊이 침식된 이들은 그 자리에서 조용히 잠들었다. 저주는 더는 번지지 않았다.", "image": "res://art/memories/ending_sacrifice_2.png", "view": [0.5, 0.55, 1.12], "view_to": [0.5, 0.45, 1.0]}
+        ]
+      },
+      {
+        "id": "sacrifice_6",
+        "name": "마을",
+        "image": "res://art/backgrounds/bg_village_2.png",
+        "view": [0.5, 0.5, 1.02],
+        "view_to": [0.5, 0.52, 1.06],
+        "bright": 0.92,
+        "layers": [
+          {"id": "grass", "tex": "res://art/objects/moonlight_grass_open.png", "x": 0.72, "y": 0.96, "h": 0.42, "glow": [0.75, 0.9, 1.0]},
+          {"id": "tia", "tex": "res://art/npcs/npc_tia.png", "x": 0.55, "y": 0.97, "h": 0.5},
+          {"id": "lantern", "tex": "res://art/objects/tia_lantern.png", "x": 0.635, "y": 0.955, "h": 0.085, "glow": [1.0, 0.8, 0.5]}
+        ],
+        "beats": [
+          {"text": "마을의 등불은 여전히 따뜻하게 빛났다."},
+          {"text": "마을 끝 달빛풀 곁, 티아가 기다리던 자리에 작은 등불이 놓여 있었다."},
+          {"text": "티아는 그것을 두 손으로 집어 들고, 아래를 내려다보았다.", "move": {"id": "lantern", "to": [0.575, 0.73], "time": 2.2}},
+          {"speaker": "티아", "text": "…언니?"}
+        ]
+      },
+      {
+        "id": "sacrifice_7",
+        "name": "달빛 정원",
+        "image": "res://art/memories/ending_sacrifice_3.png",
+        "view": [0.52, 0.55, 1.1],
+        "view_to": [0.53, 0.45, 1.0],
+        "bright": 0.95,
+        "effects": [{"type": "stars", "color": [0.75, 0.88, 1.0], "amount": 30}],
+        "beats": [
+          {"text": "달빛 정원 한가운데, 은빛 잎을 단 어린 나무 한 그루."},
+          {"text": "그 곁에 정화된 뿌리지기의 영혼이 조용히 서 있었다. 오래도록 정원을 가꿔 온 것처럼, 이번엔 이 나무를 지킬 것이다."}
+        ]
+      },
+      {
+        "id": "sacrifice_8",
+        "name": "마지막 한 컷",
+        "image": "res://art/memories/ending_sacrifice_3.png",
+        "view": [0.6, 0.42, 1.25],
+        "view_to": [0.62, 0.55, 1.45],
+        "bright": 1.0,
+        "effects": [{"type": "seed", "from": [0.645, 0.44], "to": [0.6, 0.86], "time": 7.0}],
+        "beats": [
+          {"text": "어린 나무의 가지 끝에서, 금빛 씨앗 하나가 천천히 떨어졌다.", "time": 8.0},
+          {"text": "", "time": 3.5, "effects": [{"type": "blur", "time": 3.0}]}
+        ]
+      }
+    ],
+    "post": {}
   },
   "return": {
     "title": "되돌림의 끝",
-    "image": "res://art/backgrounds/bg_moon_garden.png",
-    "lines": [
-      "셀레니아는 마력의 관을 끊었다.",
-      "빛이 거꾸로 흘렀다. 마을의 등불이 하나씩 꺼지고, 그 아래에서 뿌리가 숨을 쉬기 시작했다.",
-      "어둠 속에서 사람들은 오랜만에 서로의 얼굴을 보았다. 티아는 아버지의 손을 잡았다. 나무껍질 자국이 남은 손을.",
-      "셀레니아는 달빛풀 아래에서 잠들었다. 이번에는 이름을 가진 채로.",
-      "오직 생명만이 언제나 목적이고, 번영은 수단인 것을 왜 잊고 있었을까?"
-    ]
+    "title_image": "res://art/characters/title_after_return.png",
+    "title_subtitle": "— 어두워도 괜찮아. 달빛풀이 있으니까.",
+    "humming_scene": 6,
+    "credits_images": [
+      "res://art/memories/ending_return_2.png",
+      "res://art/memories/memory_bird_1.png",
+      "res://art/memories/memory_knight_1.png",
+      "res://art/memories/memory_root_1.png",
+      "res://art/memories/ending_return_3.png"
+    ],
+    "scenes": [
+      {
+        "id": "return_1",
+        "name": "관을 끊다",
+        "image": "res://art/backgrounds/bg_abyss_2.png",
+        "view": [0.55, 0.5, 1.2],
+        "view_to": [0.55, 0.48, 1.12],
+        "bright": 0.42,
+        "tint": [0.9, 0.85, 1.0],
+        "sfx": [["end_rumble", -16.0, 0.3]],
+        "beats": [
+          {"text": "셀레니아는 등불을 한 번 내려다보았다."},
+          {"text": "그리고 나뭇가지 검을 들어, 심연의 거대한 마력의 관을 끊었다.", "sfx": [["slash_wide", -4.0, 0.9], ["heavy_hit", -6.0, 1.15]],
+           "effects": [{"type": "flash", "delay": 1.05, "time": 0.9}]}
+        ]
+      },
+      {
+        "id": "return_2",
+        "name": "마력이 돌아가다",
+        "image": "res://art/backgrounds/bg_abyss_2.png",
+        "view": [0.5, 0.45, 1.1],
+        "view_to": [0.5, 0.7, 1.18],
+        "bright": 0.6,
+        "sfx": [["end_rumble", -8.0, 0.2], ["stomp", -16.0, 3.2], ["end_rumble", -10.0, 4.5]],
+        "effects": [{"type": "flow", "color": [1.0, 0.82, 0.45], "amount": 40}],
+        "beats": [
+          {"text": "끊긴 관에서 빛이 쏟아져, 뿌리로 스며들었다."},
+          {"text": "땅이 낮게 울렸다."}
+        ]
+      },
+      {
+        "id": "return_3",
+        "name": "등불이 꺼지다",
+        "image": "res://art/backgrounds/bg_mine_1.png",
+        "view": [0.5, 0.5, 1.05],
+        "view_to": [0.5, 0.5, 1.1],
+        "bright": 0.85,
+        "beats": [
+          {"text": "채굴장의 기계들이 멈추었다.", "place": "채굴장", "bright": 0.35, "sfx": [["pump_creak", -12.0, 0.4]]},
+          {"text": "마을의 큰 등불들이 하나씩, 하나씩 꺼져 갔다.", "time": 7.0, "place": "가지 위의 마을", "image": "res://art/memories/ending_return_1.png", "view": [0.6, 0.55, 1.08], "bright": 0.95,
+           "effects": [{"type": "sweep", "time": 6.5, "dark": 0.72, "clicks": 7}]},
+          {"text": "마을이 어둠에 잠겼다.", "bright": 0.3},
+          {"text": "셀레니아 허리의 작은 등불도 꺼졌다.", "time": 6.0, "bright": 0.12,
+           "layers": [{"id": "lantern", "tex": "res://art/objects/tia_lantern.png", "x": 0.5, "y": 0.7, "h": 0.36, "glow": [1.0, 0.8, 0.5]}],
+           "swap": {"id": "lantern", "tex": "res://art/objects/tia_lantern_off.png", "delay": 2.2, "time": 1.6, "glow": 0.0}, "sfx": [["lamp_out", -6.0, 2.4]]}
+        ]
+      },
+      {
+        "id": "return_4",
+        "name": "저주가 풀리다",
+        "image": "res://art/backgrounds/bg_canopy_1.png",
+        "view": [0.5, 0.55, 1.08],
+        "view_to": [0.5, 0.5, 1.0],
+        "bright": 0.5,
+        "tint": [0.75, 0.82, 1.0],
+        "sfx": [["end_rumble", -15.0, 0.5], ["end_leaves", -18.0, 3.5]],
+        "effects": [
+          {"type": "glow", "id": "sap1", "at": [0.3, 0.62], "radius": 0.07, "color": [1.0, 0.6, 0.3], "alpha": 0.5, "alpha_to": 0.0, "time": 6.0},
+          {"type": "glow", "id": "sap2", "at": [0.55, 0.7], "radius": 0.06, "color": [1.0, 0.6, 0.3], "alpha": 0.5, "alpha_to": 0.0, "time": 7.0},
+          {"type": "glow", "id": "sap3", "at": [0.76, 0.58], "radius": 0.07, "color": [1.0, 0.6, 0.3], "alpha": 0.5, "alpha_to": 0.0, "time": 8.0}
+        ],
+        "beats": [
+          {"text": "침식된 이들의 몸에서 빛나던 수액 줄기가 사그라들었다."},
+          {"text": "깊이 침식된 이들은 그 자리에서 평온한 나무가 되어 섰다. 들판처럼 늘어선 작은 나무들."}
+        ]
+      },
+      {
+        "id": "return_5",
+        "name": "어둠 속에서",
+        "image": "res://art/backgrounds/bg_village_2.png",
+        "view": [0.5, 0.5, 1.02],
+        "view_to": [0.5, 0.5, 1.05],
+        "bright": 0.34,
+        "tint": [0.7, 0.78, 1.0],
+        "layers": [
+          {"id": "lampkeeper", "tex": "res://art/npcs/npc_lampkeeper.png", "x": 0.42, "y": 0.98, "h": 0.6, "mod": [0.46, 0.48, 0.62]}
+        ],
+        "beats": [
+          {"text": "어둠에 잠긴 마을. 늙은 등불지기가 꺼진 장대 등불을 내려놓았다.", "sfx": [["land", -16.0, 2.0]]},
+          {"speaker": "늙은 등불지기", "text": "빛이… 꺼졌구나."},
+          {"speaker": "늙은 등불지기", "text": "오직 생명만이 언제나 목적이고, 번영은 수단인 것을… 왜 잊고 있었을까.", "theme": true, "time": 9.0}
+        ]
+      },
+      {
+        "id": "return_6",
+        "name": "달빛풀이 피어나다",
+        "image": "res://art/memories/ending_return_2.png",
+        "view": [0.42, 0.5, 1.18],
+        "view_to": [0.5, 0.5, 1.04],
+        "bright": 0.05,
+        "bright_to": 1.0,
+        "effects": [{"type": "stars", "color": [0.7, 0.85, 1.0], "amount": 50}],
+        "beats": [
+          {"text": "나무로 돌아간 마력이 숨을 되찾았다."},
+          {"text": "마을 곳곳의 어둠 속에서, 달빛풀이 하나둘 피어나 은청색으로 빛났다."},
+          {"text": "인공의 등불 대신, 나무가 스스로 내는 빛. 사람들이 고개를 들었다."}
+        ]
+      },
+      {
+        "id": "return_7",
+        "name": "돌아온 셀레니아",
+        "image": "res://art/memories/ending_return_3.png",
+        "view": [0.5, 0.5, 1.12],
+        "view_to": [0.48, 0.55, 1.02],
+        "bright": 0.95,
+        "beats": [
+          {"text": "셀레니아가 마을로 돌아왔다. 달빛풀 아래에 티아와 오웬이 있었다."},
+          {"speaker": "오웬", "text": "괜찮아요. 다시 시작하면 돼요. …이번엔, 조금씩."},
+          {"speaker": "티아", "text": "언니, 어두워도 괜찮아. 달빛풀이 있잖아."},
+          {"text": "티아가 셀레니아의 손을 잡았다. 셋은 달빛풀 아래 나란히 앉았다.", "view": [0.45, 0.6, 1.2]}
+        ]
+      },
+      {
+        "id": "return_8",
+        "name": "마지막 한 컷",
+        "image": "res://art/memories/ending_return_2.png",
+        "view": [0.5, 0.45, 1.12],
+        "view_to": [0.5, 0.5, 1.0],
+        "bright": 1.0,
+        "effects": [{"type": "stars", "color": [0.7, 0.85, 1.0], "amount": 70}],
+        "beats": [
+          {"text": "어둠에 잠긴 마을 위로, 수많은 달빛풀이 별처럼 빛났다.", "time": 8.0},
+          {"text": "", "time": 3.5, "effects": [{"type": "blur", "time": 3.0}]}
+        ]
+      }
+    ],
+    "post": {"village_tint": [0.66, 0.72, 0.95]}
   }
 }

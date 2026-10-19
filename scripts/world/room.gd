@@ -95,6 +95,7 @@ func _ready() -> void:
 		add_child(cm)
 		if player:
 			player.set_light(true)
+	PostEnding.apply(self)   # 엔딩 뒤: 마지막으로 본 엔딩에 따라 마을의 빛이 바뀐다 (endings*.json 의 post)
 	Game.fade_in(1.2)
 	RescuedHomes.spawn_into(self)   # 구원되어 '집'으로 돌아간 사람들을 세운다 (data/dialogue/relocations.json)
 	var args := OS.get_cmdline_user_args()
