@@ -76,6 +76,9 @@ func load_game() -> String:
 	Progress.dust = int(data.get("dust", 0))
 	Progress.dust_changed.emit(Progress.dust)
 	var pur: Dictionary = data.get("purity", {})
+	# 먼저 모두 잿빛으로 (저장 파일에 없는 지역 — 예: 나중에 정화한 확장 지역 — 의 정화가 남지 않게)
+	for k in Purity.regions:
+		Purity.regions[k] = false
 	for k in pur:
 		Purity.regions[k] = pur[k]
 	var gid := str(data.get("grass", ""))

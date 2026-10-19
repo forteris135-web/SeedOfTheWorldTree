@@ -10,6 +10,7 @@ var _players: Array[AudioStreamPlayer] = []
 var _active := 0
 var _current := ""
 var _tween: Tween
+var _latency := -1.0
 
 
 func _ready() -> void:
@@ -25,6 +26,27 @@ func _ready() -> void:
 
 func current() -> String:
 	return _current
+
+
+## 지금 곡이 name 이면 그 곡의 재생 위치(초, 귀에 들리는 소리 기준), 아니면 -1.
+## 박자에 맞춰 움직이는 보스(수액의 여왕)가 읽는다 — 히트스톱·일시정지 동안에도 음악은 흐르므로 보스가 음악을 따라간다.
+func playback_time(name: String) -> float:
+	if name == "" or name != _current:
+		return -1.0
+	var p := _players[_active]
+	if p.stream == null or not p.playing:
+		return -1.0
+	if _latency < 0.0:
+		_latency = AudioServer.get_output_latency()   # 비싸서 한 번만 잰다
+	return maxf(p.get_playback_position() + AudioServer.get_time_since_last_mix() - _latency, 0.0)
+
+
+## 지금 곡의 길이(초). 곡이 없으면 0.
+func current_length() -> float:
+	var p := _players[_active]
+	if _current == "" or p.stream == null:
+		return 0.0
+	return p.stream.get_length()
 
 
 func _target_db() -> float:

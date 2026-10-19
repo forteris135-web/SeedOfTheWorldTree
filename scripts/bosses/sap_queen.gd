@@ -1,0 +1,850 @@
+extends CharacterBody2D
+class_name SapQueen
+## 확장판 보스 '수액의 여왕' (EXPANSION.md 3장). 말라 가는 호수를 홀로 지키던 나비 정령. 날아다니는 보스.
+## **3박자 리듬**: 모든 패턴이 '하나(예고)·둘(준비)·셋(공격)'으로 온다. 보스곡(boss_sap_queen, 3/4 138bpm)과 박자가 맞는다:
+##   한 박 BEAT = 60/138 = 0.435초, 예고 2박(0.87초) 뒤 셋째 박에 공격. 패턴은 마디 첫 박에서 시작한다(메트로놈 _clock).
+##   **메트로놈은 보스곡의 재생 위치를 따라간다** (Music.playback_time). 히트스톱·일시정지 동안에도 음악은 흐르므로 보스가 음악에
+##   맞춘다: 예고·공격·내려앉음의 끝은 모두 '시계 몇 초'로 정해 두고(_phase_end), 일시정지처럼 시계가 크게 건너뛰면 남은 예정을
+##   마디 단위로 미룬다(_shift_deadlines — 멈춘 사이 공격이 지나가 버리거나 풀자마자 맞지 않게). 곡이 없으면 실제 시간으로 센다.
+## 패턴 (전부 가드 가능 — 붉은 예고는 없다):
+##   DUST        날개가루: 셋째 박에 반짝이는 가루를 부채꼴로 흩뿌린다 (구르기로 피함)
+##   WAVE        수액 물결: 수면 가까이 내려와 셋째 박에 물결을 띄운다 (점프로 넘김)
+##   BUTTERFLIES 나비 떼: 작은 수액 나비 3(2페이즈 5)마리가 쫓아온다 — **저스트 가드로 되받으면** 여왕에게 돌아가 흐트러짐이 쌓인다
+##               (한 마리 = 저스트 가드 45 + 되받은 나비 28 + REFLECT_POISE 0 = 73 → 세 마리째에 무너짐)
+##   LAND        춤추듯 내려앉기: 둘째 박 끝에 내려꽂기 시작해 **셋째 박에 정확히** 디딤돌에 앉고(착지 충격) LANDED_BEATS 박 동안 쉰다
+##               — **반격의 기회**(땅에서 때릴 수 있음)
+## 공중에선 받는 피해 AIR_DAMAGE_RATIO 배 (되받은 나비는 온전히). 무너지면(흐트러짐 가득) 섬으로 내려와 BROKEN.
+## 2페이즈(체력 절반): CRACK(한 마디: 날개 갈라짐·수액 흘러내림) → 디딤돌 일부가 가라앉고(방의 Terrain/Sink*), 박자가 엇나간다
+##   (예고 길이 ±20%, 가끔 반 박 빠르게), 가루·나비가 는다. 무너진 채 2페이즈로 넘어가면 흐트러짐은 0 으로 돌아간다.
+## 체력 0 → FALLEN(섬으로 내려앉음) → 정화 → 회상 memory_queen → 수액 위 걷기(sap_walk).
+## BossRoom 과의 약속: start_fight / reset_fight / arena / ground_y / hover_points / fallen / purified / hp_changed / poise_changed /
+##   phase_changed / telegraph(kind) / telegraph_label(kind) / state_name() / debug_log / is_ground() / receive_hit / hp / poise / phase / facing.
+
+enum State { WAIT, INTRO, HOVER, DUST, WAVE, BUTTERFLIES, LAND, LANDED, TAKEOFF, CRACK, BROKEN, FALLEN, PURIFIED }
+const ATTACK_STATES := [State.DUST, State.WAVE, State.BUTTERFLIES, State.LAND]
+const AIR_STATES := [State.HOVER, State.DUST, State.WAVE, State.BUTTERFLIES, State.LAND, State.TAKEOFF, State.CRACK]
+
+signal hp_changed(hp: float, max_hp: float)
+signal poise_changed(poise: float, max_poise: float)
+signal phase_changed(phase: int)
+signal state_changed(state: State)
+signal fallen
+signal purified
+signal telegraph(kind: String)
+## 박이 바뀔 때 (0 하나, 1 둘, 2 셋) — 그림·시험이 듣는다
+signal beat(index: int)
+
+## 박자 (보스곡 138bpm, 3/4)
+const BEAT := 60.0 / 138.0
+const BAR := BEAT * 3.0
+## 내려앉아 쉬는 길이(박)와 무너진 길이
+const LANDED_BEATS := 6.0
+## 되받은 나비 한 마리에 덧붙는 흐트러짐 (저스트 가드 45 와 되받은 나비 자체의 28 은 따로 들어간다 → 지금 한 마리 73).
+## 2026-10-19 검토: 35 였을 때 한 마리 108 이라 두 마리면 바로 무너졌다 → 0. 더 세게 하려면 10~20.
+const REFLECT_POISE := 0.0
+## 공중에서 받는 피해 배수
+const AIR_DAMAGE_RATIO := 0.5
+## 하늘에 머무는 높이 (디딤돌 윗면에서 위로). 몸 중심은 그림 위치(-120)만큼 더 위.
+## 2026-10-19 검토: 640 이면 싸움 카메라 화면 맨 위(왼쪽 위 체력 HUD 뒤)에 들어가 가려졌다 → 400 (몸 중심이 바닥 위 520, 새와 비슷).
+const HOVER_HEIGHT := 400.0
+## 내려앉기의 내려꽂는 시간 (초). 셋째 박보다 이만큼 먼저 내려오기 시작해 셋째 박에 딱 앉는다.
+const LAND_DIVE := 0.2
+## 시계가 이보다 크게 건너뛰면(일시정지 등) 남은 예정을 마디 단위로 미룬다
+const SYNC_SNAP := 0.25
+## 박자를 맞출 보스곡
+const TRACK := "boss_sap_queen"
+## 내려앉을 수 있는 디딤돌의 최소 폭 (작은 바위는 고르지 않는다)
+const LAND_MIN_WIDTH := 300.0
+## 물결을 띄우려 내려오는 높이 (수면에서 위로)
+const WAVE_DIP := 170.0
+
+@export_group("능력치")
+@export var max_hp := 1300.0
+@export var max_poise := 170.0
+@export var poise_decay := 8.0
+@export var broken_time := 5.0
+@export var broken_damage_multiplier := 1.6
+
+@export_group("패턴")
+@export var dust_damage := 14.0
+@export var dust_count := 10
+@export var wave_damage := 18.0
+@export var wave_speed := 540.0
+@export var butterfly_damage := 14.0
+@export var butterfly_count := 3
+@export var butterfly_speed := 560.0
+@export var land_damage := 14.0
+@export var hover_speed := 5.0
+@export var gravity := 2600.0
+
+@export_group("움직임 연출")
+@export var face_deadzone := 80.0
+@export var face_hold := 0.35
+
+var state: State = State.WAIT
+var hp := 1300.0
+var poise := 0.0
+var phase := 1
+var facing := -1
+var player: Player
+var arena: Rect2
+var hover_points: Array = []
+var ground_y := 0.0
+var surface_y := 0.0
+
+## 그림이 읽는 공개 값
+var attack_phase := ""          # startup / active / recovery (아니면 "")
+var windup_progress := 0.0
+var startup_len := BEAT * 2.0
+var active_len := BEAT
+var recovery_len := BEAT
+var telegraph_amount := 0.0     # 예고 동안 0→1
+var crack_amount := 0.0         # 2페이즈 날개 갈라짐 (CRACK 에서 0→1, 그 뒤 1)
+var dive_amount := 0.0          # 내려앉기의 내려꽂기 진행도 (0→1, 그림이 몸을 길게 늘인다)
+var reflected_count := 0
+var _landed_touch := false      # 내려앉기·무너짐·쓰러짐에서 실제로 땅에 닿았는가
+
+var _timer := 0.0
+var _clock := 0.0               # 싸움 시작부터의 메트로놈 (INTRO 시작 = 0 = 보스곡 시작). 보스곡 재생 위치를 따른다
+var _next_at := 0.0             # 다음 패턴을 시작할 시계 시각 (마디 첫 박)
+var _phase_end := 0.0           # 지금 박자 단계(예고·공격·되돌림·내려앉음·갈라짐)가 끝나는 시계 시각
+var _music_prev := -1.0         # 보스곡 재생 위치 (지난 프레임, 반복 넘김을 알아채려고)
+var _music_loops := 0           # 보스곡이 몇 번 돌았나
+var _music_synced := false      # 이번 싸움에서 보스곡 위치를 한 번이라도 읽었나
+var _music_lost := false        # 보스곡을 따라갈 수 없게 됨 (곡이 다시 시작됨 등) → 실제 시간으로 센다
+var _diving := false
+var _dive_from := Vector2.ZERO
+var _pattern_index := 0
+var _hover_target := Vector2.ZERO
+var _glide_target := Vector2.ZERO
+var _poise_hold := 0.0
+var _flash := 0.0
+var _registered := false
+var _home := Vector2.ZERO
+var _bob_t := 0.0
+var _face_hold := 0.0
+var _land_stone: Node2D
+var _stones: Array = []
+var _stone_home := {}
+var _sunk := false
+var _spawned := 0
+var _last_beat := -1
+var _rng := RandomNumberGenerator.new()
+var debug_log := false
+var _state_started_ms := 0
+
+@onready var sprite: Sprite2D = $Sprite
+@onready var hitbox: Hitbox = $Hitbox
+@onready var hurtbox: Hurtbox = $Hurtbox
+
+const SAP_PROJECTILE := preload("res://scenes/combat/sap_projectile.tscn")
+const SAP_WAVE := preload("res://scenes/combat/sap_wave.tscn")
+
+
+func _ready() -> void:
+	add_to_group("boss")
+	hp = max_hp
+	_home = global_position
+	set_collision_mask_value(1, false)
+	visible = false
+	_rng.randomize()
+
+
+## 방이 싸움을 시작시킨다. (디딤돌·수면은 방에서 찾는다: Terrain/Sink* 발판, SapPool)
+func start_fight(p: Player) -> void:
+	player = p
+	visible = true
+	_find_room_parts()
+	global_position = Vector2(arena.get_center().x, arena.position.y - 200)
+	_clock = 0.0
+	_music_prev = -1.0
+	_music_loops = 0
+	_music_synced = false
+	_music_lost = false
+	_pattern_index = 0
+	reflected_count = 0
+	_set_state(State.INTRO)
+	_timer = BAR * 2.0
+	_hover_target = _hover_point(1)
+
+
+func _find_room_parts() -> void:
+	var room := get_parent()
+	if room == null:
+		return
+	_stones.clear()
+	var terrain := room.get_node_or_null("Terrain")
+	if terrain:
+		for c in terrain.get_children():
+			if String(c.name).begins_with("Sink") and c is Node2D:
+				_stones.append(c)
+				if not _stone_home.has(c):
+					_stone_home[c] = c.position
+	surface_y = ground_y + 60.0
+	for c in room.get_children():
+		if c is SapPool:
+			surface_y = c.surface_y()
+			break
+
+
+## 소녀가 쓰러졌을 때: 처음 상태로. 가라앉은 디딤돌도 되돌린다.
+func reset_fight() -> void:
+	_unregister()
+	hp = max_hp
+	poise = 0.0
+	phase = 1
+	crack_amount = 0.0
+	dive_amount = 0.0
+	_diving = false
+	telegraph_amount = 0.0
+	reflected_count = 0
+	visible = false
+	velocity = Vector2.ZERO
+	set_collision_mask_value(1, false)
+	hitbox.deactivate()
+	_raise_stones()
+	global_position = _home
+	_set_state(State.WAIT)
+	hp_changed.emit(hp, max_hp)
+	poise_changed.emit(poise, max_poise)
+
+
+func _hover_point(i: int) -> Vector2:
+	var x := arena.get_center().x
+	if hover_points.size() > i:
+		x = hover_points[i].x
+	return Vector2(x, ground_y - HOVER_HEIGHT)
+
+
+func _random_hover() -> Vector2:
+	if hover_points.is_empty():
+		return _hover_point(0)
+	return _hover_point(_rng.randi() % hover_points.size())
+
+
+# ---------- 박자 ----------
+## 지금 박의 번호 (0 하나, 1 둘, 2 셋)
+func beat_index() -> int:
+	return int(floorf(_clock / BEAT)) % 3
+
+
+## 지금 박 안의 진행도 0→1
+func beat_phase() -> float:
+	return fmod(_clock, BEAT) / BEAT
+
+
+## t 이후의 첫 마디 첫 박
+func _next_bar_after(t: float) -> float:
+	return ceilf(t / BAR - 0.0001) * BAR
+
+
+## 지금 박자 단계가 끝날 때까지 남은 시간 (시계 기준, 음수면 지났다)
+func _left() -> float:
+	return _phase_end - _clock
+
+
+## 보스곡의 재생 위치(초, 반복을 펼친 값). 보스곡이 안 흐르면 -1.
+## 곡이 처음부터 다시 시작된 것 같으면(반복 넘김이 아닌데 1초 넘게 뒤로 감) 이번 싸움은 실제 시간으로 센다(_music_lost).
+func _music_clock() -> float:
+	var raw: float = Music.playback_time(TRACK)
+	if raw < 0.0:
+		_music_prev = -1.0
+		return -1.0
+	var length: float = Music.current_length()
+	if _music_prev >= 0.0:
+		if length > 1.0 and raw < _music_prev - length * 0.5:
+			_music_loops += 1   # 곡이 한 바퀴 돌아 처음으로 넘어갔다 (32마디 = 41.7초라 박자는 이어진다)
+		elif raw < _music_prev - 1.0:
+			_music_lost = true
+			return -1.0
+	_music_prev = raw
+	return raw + _music_loops * length
+
+
+## 메트로놈을 한 프레임 진행한다: 보스곡이 흐르면 그 위치를 따르고(음악이 주인), 아니면 실제 시간(히트스톱의 느려짐을 뺀
+## 시간)으로 센다. 음악 위치가 잠깐 뒤로 출렁이면(소리 장치의 덩어리 단위 갱신) 시계는 멈춰 기다린다 — 뒤로 가지는 않는다.
+func _advance_clock(delta: float) -> void:
+	var real_dt := delta / maxf(Engine.time_scale, 0.0001)
+	var expected := _clock + real_dt
+	var next := expected
+	if not _music_lost:
+		var m := _music_clock()
+		if m >= 0.0:
+			if not _music_synced:
+				_music_synced = true
+				# 곡이 한참 늦게 시작됐다(시계가 이미 멀리 앞섬): 따라가려면 오래 멈춰야 하니 이번 싸움은 실제 시간으로
+				if m < _clock - SYNC_SNAP:
+					_music_lost = true
+			if not _music_lost:
+				next = maxf(m, _clock)
+	var jump := next - expected
+	if jump > SYNC_SNAP:
+		# 일시정지(메뉴·지도) 동안 음악만 흘렀다: 시계는 음악을 따라 건너뛰고, 남은 예정은 마디 단위로 미뤄
+		# 박자는 맞춘 채 멈춘 사이 공격이 지나가 버리거나 풀자마자 맞지 않게 한다
+		_shift_deadlines(ceilf(jump / BAR) * BAR)
+	_clock = maxf(next, _clock)
+
+
+func _shift_deadlines(by: float) -> void:
+	_next_at += by
+	_phase_end += by
+
+
+func _physics_process(delta: float) -> void:
+	if state == State.WAIT or state == State.PURIFIED:
+		return
+	_advance_clock(delta)
+	var b := beat_index()
+	if b != _last_beat:
+		_last_beat = b
+		beat.emit(b)
+	_flash = maxf(_flash - delta * 6.0, 0.0)
+	_poise_hold = maxf(_poise_hold - delta, 0.0)
+	if _poise_hold <= 0.0 and poise > 0.0 and state not in [State.BROKEN, State.FALLEN, State.CRACK]:
+		poise = maxf(poise - poise_decay * delta, 0.0)
+		poise_changed.emit(poise, max_poise)
+	_timer -= delta
+	_bob_t += delta
+	_face_hold = maxf(_face_hold - delta, 0.0)
+	if attack_phase != "startup":
+		telegraph_amount = maxf(telegraph_amount - delta * 4.0, 0.0)
+	if player and state in [State.HOVER, State.DUST, State.BUTTERFLIES, State.LANDED, State.INTRO, State.TAKEOFF]:
+		var dx := player.global_position.x - global_position.x
+		var want := 1 if dx > 0.0 else -1
+		if want != facing and absf(dx) > face_deadzone and _face_hold <= 0.0:
+			facing = want
+			_face_hold = face_hold
+
+	match state:
+		State.INTRO:
+			_fly_toward(_hover_target, delta, 2.5)
+			if _timer <= 0.0:
+				_set_state(State.HOVER)
+				_next_at = _next_bar_after(_clock)
+		State.HOVER:
+			_fly_toward(_hover_target, delta, hover_speed)
+			if _clock >= _next_at:
+				_next_pattern()
+		State.DUST:
+			_fly_toward(_hover_target, delta, hover_speed * 0.6)
+			_phase_step(delta, func() -> void: _scatter_dust())
+			if phase == 2 and attack_phase == "active" and _spawned == 1 and _left() <= active_len * 0.5:
+				_spawned = 2
+				_scatter_dust()   # 2페이즈: 반 박 뒤 한 번 더
+		State.WAVE:
+			# 하나·둘 동안 수면 가까이 내려온다, 셋에 물결, 되돌림에 다시 떠오른다
+			var dip := Vector2(global_position.x, surface_y - WAVE_DIP)
+			if attack_phase == "startup":
+				_fly_toward(dip, delta, 4.0)
+			elif attack_phase == "active":
+				_fly_toward(dip + Vector2(0, -20), delta, 6.0)
+			else:
+				_fly_toward(_hover_target, delta, 3.0)
+			_phase_step(delta, func() -> void: _launch_waves())
+		State.BUTTERFLIES:
+			_fly_toward(_hover_target + Vector2(0, 120), delta, hover_speed * 0.5)
+			_phase_step(delta, func() -> void: _release_butterflies())
+		State.LAND:
+			_land_step(delta)
+		State.LANDED:
+			_ground(delta)
+			velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
+			if _left() <= 0.0:
+				_begin_takeoff()
+		State.TAKEOFF:
+			set_collision_mask_value(1, false)
+			_fly_toward(_hover_target, delta, 3.0)
+			if _timer <= 0.0:
+				_set_state(State.HOVER)
+				_next_at = _next_bar_after(_clock)
+		State.CRACK:
+			velocity = velocity.move_toward(Vector2.ZERO, 2000.0 * delta)
+			velocity.y = sin(_bob_t * 30.0) * 60.0
+			crack_amount = clampf(1.0 - _left() / BAR, 0.0, 1.0)
+			if _left() <= 0.0:
+				crack_amount = 1.0
+				_set_state(State.HOVER)
+				_hover_target = _random_hover()
+				_next_at = _next_bar_after(_clock)
+		State.BROKEN:
+			_settle(delta)
+			if _timer <= 0.0:
+				poise = 0.0
+				poise_changed.emit(poise, max_poise)
+				_begin_takeoff()
+		State.FALLEN:
+			_settle(delta)
+			_update_interactable()
+	move_and_slide()
+
+
+# ---------- 움직임 ----------
+func _fly_toward(target: Vector2, delta: float, k: float) -> void:
+	var bob := Vector2(0, sin(_bob_t * 2.0) * 16.0)
+	var to := (target + bob) - global_position
+	velocity = to * k
+
+
+func _ground(delta: float) -> void:
+	if not is_on_floor():
+		velocity.y += gravity * delta
+	else:
+		velocity.y = 0.0
+		_landed_touch = true
+
+
+## 섬(글라이드 목표)으로 미끄러져 내려와 앉는다 (무너짐·쓰러짐).
+func _settle(delta: float) -> void:
+	if not _landed_touch:
+		var to := _glide_target - global_position
+		if absf(to.x) > 20.0 or to.y > 40.0:
+			velocity = Vector2(clampf(to.x * 3.0, -700.0, 700.0), clampf(to.y * 3.0, -200.0, 900.0))
+			set_collision_mask_value(1, to.y < 80.0 and absf(to.x) < 120.0)
+		else:
+			set_collision_mask_value(1, true)
+			_ground(delta)
+	else:
+		set_collision_mask_value(1, true)
+		_ground(delta)
+		velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
+
+
+# ---------- 패턴 고르기 ----------
+func _next_pattern() -> void:
+	var order: Array = [State.DUST, State.WAVE, State.BUTTERFLIES, State.LAND] if phase == 1 \
+		else [State.DUST, State.BUTTERFLIES, State.WAVE, State.DUST, State.BUTTERFLIES, State.LAND]
+	var next: State = order[_pattern_index % order.size()]
+	_pattern_index += 1
+	_hover_target = _random_hover()
+	var startup := BEAT * 2.0
+	if phase == 2:
+		# 춤이 무너진다: 예고 길이 ±20%, 가끔 반 박 빠르게
+		startup *= _rng.randf_range(0.8, 1.2)
+		if _rng.randf() < 0.25:
+			startup = BEAT * 1.5
+	_spawned = 0
+	# 예정된 마디 첫 박에서 센다 (한 프레임 늦게 알아채도 셋째 박은 음악과 맞게)
+	var t0 := _next_at if _clock - _next_at < BEAT * 0.5 else _clock
+	match next:
+		State.DUST:
+			_begin(State.DUST, t0, startup, BEAT, BEAT)
+		State.WAVE:
+			telegraph.emit("wave")
+			_begin(State.WAVE, t0, startup, BEAT, BEAT * 2.0)
+		State.BUTTERFLIES:
+			telegraph.emit("butterflies")
+			_begin(State.BUTTERFLIES, t0, startup, BEAT, BEAT)
+		State.LAND:
+			_land_stone = _pick_stone()
+			_diving = false
+			dive_amount = 0.0
+			telegraph.emit("land")
+			_begin(State.LAND, t0, startup, BEAT, 0.0)
+
+
+func _begin(st: State, t0: float, startup: float, active: float, recovery: float) -> void:
+	_set_state(st)
+	attack_phase = "startup"
+	windup_progress = 0.0
+	telegraph_amount = 0.0
+	_phase_end = t0 + startup
+	startup_len = startup
+	active_len = active
+	recovery_len = recovery
+
+
+func _phase_step(_delta: float, on_active: Callable) -> void:
+	match attack_phase:
+		"startup":
+			windup_progress = 1.0 - clampf(_left() / maxf(startup_len, 0.001), 0.0, 1.0)
+			telegraph_amount = windup_progress
+			if _left() <= 0.0:
+				attack_phase = "active"
+				_phase_end += active_len
+				_spawned = 1
+				on_active.call()
+		"active":
+			if _left() <= 0.0:
+				attack_phase = "recovery"
+				_phase_end += recovery_len
+		"recovery":
+			if _left() <= 0.0:
+				attack_phase = ""
+				_set_state(State.HOVER)
+				# 다음 패턴은 다음 마디 첫 박 (1페이즈는 한 마디 쉬고, 2페이즈는 바로 다음 마디)
+				_next_at = _next_bar_after(_clock + (BAR * 0.6 if phase == 1 else 0.0))
+
+
+## 디딤돌 고르기: 소녀와 가까운, 아직 가라앉지 않은 넓은 발판(Sink*, 폭 LAND_MIN_WIDTH 이상) 또는 섬(Island).
+## 2페이즈에 가라앉기 시작한 돌은 고르지 않는다 (내려앉는 사이 물에 잠기지 않게).
+func _pick_stone() -> Node2D:
+	var room := get_parent()
+	var candidates: Array = []
+	if not _sunk:
+		for s in _stones:
+			if is_instance_valid(s) and s.collision_layer != 0 and s.size.x >= LAND_MIN_WIDTH:
+				candidates.append(s)
+	var island := room.get_node_or_null("Terrain/Island") if room else null
+	if island:
+		candidates.append(island)
+	if candidates.is_empty():
+		return null
+	var best: Node2D = candidates[0]
+	var best_d := INF
+	for c in candidates:
+		var cx: float = c.global_position.x + c.size.x / 2.0
+		var d: float = absf((player.global_position.x if player else global_position.x) - cx)
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
+
+
+func _stone_top_center(s: Node2D) -> Vector2:
+	if s == null:
+		return Vector2(arena.get_center().x, ground_y)
+	return Vector2(s.global_position.x + s.size.x / 2.0, s.global_position.y)
+
+
+## 내려앉기: 하나·둘 동안 디딤돌 위 높이로 옮기고, 둘째 박 끝(셋째 박 LAND_DIVE 초 전)에 가속하며 내려꽂아
+## **셋째 박에 딱** 앉는다(왈츠의 마지막 박). 앉는 순간 착지 충격(가드 가능).
+func _land_step(delta: float) -> void:
+	if _land_stone != null and (not is_instance_valid(_land_stone) or _land_stone.collision_layer == 0):
+		# 디딤돌이 사라졌다(가라앉음 등): 다시 고른다 (섬은 늘 있다)
+		_land_stone = _pick_stone()
+		if _diving:
+			_dive_from = global_position
+	var top := _stone_top_center(_land_stone)
+	windup_progress = 1.0 - clampf(_left() / maxf(startup_len, 0.001), 0.0, 1.0)
+	telegraph_amount = windup_progress
+	var left := _left()
+	if left > LAND_DIVE:
+		_fly_toward(top + Vector2(0, -280.0), delta, 5.0)
+		return
+	if not _diving:
+		_diving = true
+		_dive_from = global_position
+		_landed_touch = false
+	var k := 1.0 - clampf(left / LAND_DIVE, 0.0, 1.0)
+	dive_amount = k
+	if left <= 0.0:
+		global_position = top
+		velocity = Vector2.ZERO
+		set_collision_mask_value(1, true)
+		_touch_down()
+		return
+	# 가속하며 내려꽂는다 (시계 기준이라 히트스톱이 끼어도 셋째 박에 닿는다)
+	var want := _dive_from.lerp(top, k * k)
+	velocity = (want - global_position) / maxf(delta, 0.00001)
+
+
+func _touch_down() -> void:
+	_landed_touch = true
+	_diving = false
+	dive_amount = 0.0
+	attack_phase = ""
+	_set_state(State.LANDED)
+	# 셋째 박(예정 시각)부터 LANDED_BEATS 박
+	_phase_end = maxf(_phase_end, _clock - BEAT * 0.5) + BEAT * LANDED_BEATS
+	var hit := HitData.make(land_damage, 0.0, self, Vector2(420, -260))
+	hit.hitstop = 0.05
+	hitbox.set_box(Rect2(-170, -70, 340, 90), 1)
+	hitbox.activate(hit, 0.2)
+	Juice.shake(7.0)
+	Sfx.play("land", -2.0, 0.05)
+
+
+func _begin_takeoff() -> void:
+	hitbox.deactivate()
+	_diving = false
+	dive_amount = 0.0
+	_hover_target = _random_hover()
+	set_collision_mask_value(1, false)
+	_set_state(State.TAKEOFF)
+	_timer = BAR
+	_landed_touch = false
+
+
+# ---------- 공격 ----------
+func _scatter_dust() -> void:
+	var count := dust_count if phase == 1 else dust_count + 4
+	var base_dir := Vector2(0, 1)
+	if player:
+		base_dir = (player.global_position - global_position).normalized()
+	for i in count:
+		var p: SapProjectile = SAP_PROJECTILE.instantiate()
+		p.sap_kind = "dust"
+		p.kind = Projectile.Kind.FEATHER
+		p.speed = _rng.randf_range(300.0, 440.0) if phase == 1 else _rng.randf_range(340.0, 500.0)
+		p.damage = dust_damage
+		p.poise = 0.0
+		p.lifetime = 4.0
+		p.fall_gravity = 520.0
+		p.size = Vector2(22, 22)
+		p.color = Color(0.7, 0.95, 1.0)
+		p.guardable = true
+		get_parent().add_child(p)
+		var spread := (float(i) / maxf(count - 1, 1) - 0.5) * 2.2
+		var dir := Vector2(sin(spread), cos(spread)).normalized()
+		# 절반은 소녀 쪽으로 모인다
+		if i % 2 == 0 and player:
+			dir = base_dir.rotated(spread * 0.35)
+		p.global_position = global_position + Vector2(spread * 90.0, -120.0)
+		p.launch(dir, self, false)
+	Sfx.play("gust", -10.0, 0.1)
+
+
+func _launch_waves() -> void:
+	var dirs: Array = []
+	if player:
+		dirs.append(1.0 if player.global_position.x > global_position.x else -1.0)
+	else:
+		dirs.append(float(facing))
+	if phase == 2:
+		dirs.append(-dirs[0])
+	for d in dirs:
+		var w: SapWave = SAP_WAVE.instantiate()
+		w.speed = wave_speed if phase == 1 else wave_speed * 1.15
+		w.damage = wave_damage
+		w.limit_left = arena.position.x - 100.0
+		w.limit_right = arena.end.x + 100.0
+		get_parent().add_child(w)
+		w.global_position = Vector2(global_position.x + d * 60.0, surface_y)
+		w.launch(Vector2(d, 0), self, false)
+	Juice.shake(4.0)
+
+
+func _release_butterflies() -> void:
+	var count := butterfly_count if phase == 1 else butterfly_count + 2
+	for i in count:
+		get_tree().create_timer(i * 0.12).timeout.connect(func() -> void:
+			if state in [State.FALLEN, State.PURIFIED, State.WAIT, State.BROKEN]:
+				return
+			_spawn_butterfly(i, count))
+
+
+func _spawn_butterfly(index: int, count: int) -> void:
+	var p: SapProjectile = SAP_PROJECTILE.instantiate()
+	p.sap_kind = "butterfly"
+	p.kind = Projectile.Kind.FEATHER
+	p.speed = butterfly_speed if phase == 1 else butterfly_speed * 1.15
+	p.damage = butterfly_damage
+	p.poise = 0.0
+	p.reflectable = true
+	p.homing = 1.3
+	p.lifetime = 5.0
+	p.size = Vector2(34, 26)
+	p.color = Color(0.55, 0.9, 1.0)
+	get_parent().add_child(p)
+	var origin := global_position + Vector2(facing * 90.0 + (index - (count - 1) / 2.0) * 40.0, -140.0)
+	p.global_position = origin
+	var target := player.global_position + Vector2(0, -40) if player else origin + Vector2(facing * 100.0, 200.0)
+	var dir := (target - origin).normalized().rotated((index - (count - 1) / 2.0) * 0.2)
+	p.launch(dir, self, false)
+	p.reflected.connect(func(_pr): Sfx.play("select", -4.0, 0.1))
+
+
+# ---------- 2페이즈: 디딤돌 가라앉기 ----------
+func _sink_stones() -> void:
+	if _sunk:
+		return
+	_sunk = true
+	for s in _stones:
+		if not is_instance_valid(s):
+			continue
+		var tw := create_tween()
+		tw.tween_property(s, "position:y", _stone_home[s].y + 220.0, 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tw.tween_callback(func() -> void:
+			if is_instance_valid(s):
+				s.collision_layer = 0)
+
+
+func _raise_stones() -> void:
+	_sunk = false
+	for s in _stones:
+		if not is_instance_valid(s):
+			continue
+		s.position = _stone_home[s]
+		s.collision_layer = 1
+
+
+# ---------- 맞기 ----------
+func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
+	if state in [State.WAIT, State.INTRO, State.FALLEN, State.PURIFIED, State.CRACK]:
+		return "ignored"
+	_flash = 1.0
+	var dmg := hit.damage
+	var gained := hit.poise
+	var reflected := hit.from_player and hit.source == self
+	if reflected:
+		# 되받은 나비: 피해 온전히 + 흐트러짐 크게
+		gained += REFLECT_POISE
+		reflected_count += 1
+	elif state == State.BROKEN:
+		dmg *= broken_damage_multiplier
+	elif not is_ground():
+		dmg *= AIR_DAMAGE_RATIO
+	hp = maxf(hp - dmg, 0.0)
+	hp_changed.emit(hp, max_hp)
+	_add_poise(gained)
+	if hp <= 0.0:
+		_fall()
+		return "hit"
+	if phase == 1 and hp <= max_hp * 0.5:
+		_enter_phase2()
+		return "hit"
+	if poise >= max_poise and state != State.BROKEN:
+		_break()
+	return "hit"
+
+
+func on_just_guarded(_by: Player, amount: float) -> void:
+	_flash = 1.0
+	_add_poise(amount)
+	if poise >= max_poise and state != State.BROKEN:
+		_break()
+
+
+func _add_poise(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	poise = minf(poise + amount, max_poise)
+	_poise_hold = 2.5
+	poise_changed.emit(poise, max_poise)
+
+
+func _break() -> void:
+	hitbox.deactivate()
+	attack_phase = ""
+	_diving = false
+	dive_amount = 0.0
+	_glide_target = _island_top()
+	_landed_touch = state == State.LANDED
+	_set_state(State.BROKEN)
+	_timer = broken_time
+	Juice.hitstop(0.1, 0.05)
+	Juice.shake(8.0)
+	Sfx.play("broke", -2.0)
+
+
+func _island_top() -> Vector2:
+	var room := get_parent()
+	var island := room.get_node_or_null("Terrain/Island") if room else null
+	if island:
+		return _stone_top_center(island)
+	return Vector2(arena.get_center().x, ground_y)
+
+
+func _enter_phase2() -> void:
+	phase = 2
+	hitbox.deactivate()
+	attack_phase = ""
+	_diving = false
+	dive_amount = 0.0
+	set_collision_mask_value(1, false)
+	velocity = Vector2(0, -200)
+	# 무너진(BROKEN) 채 넘어와도 흐트러짐은 비운다 (안 비우면 갈라짐 뒤 한 대에 또 무너진다 — 2026-10-19 검토)
+	poise = 0.0
+	_poise_hold = 0.0
+	poise_changed.emit(poise, max_poise)
+	_set_state(State.CRACK)
+	_phase_end = _clock + BAR
+	phase_changed.emit(2)
+	telegraph.emit("crack")
+	_sink_stones()
+	Juice.hitstop(0.15, 0.03)
+	Juice.shake(12.0)
+	Sfx.play("broke", 0.0, 0.0)
+
+
+func _fall() -> void:
+	hitbox.deactivate()
+	attack_phase = ""
+	_diving = false
+	dive_amount = 0.0
+	_glide_target = _island_top()
+	_landed_touch = false
+	velocity = Vector2(0, 300)
+	_unregister()
+	_set_state(State.FALLEN)
+	Juice.hitstop(0.15, 0.03)
+	Juice.shake(12.0)
+	fallen.emit()
+
+
+func _update_interactable() -> void:
+	if player == null or not is_on_floor():
+		return
+	var near := absf(player.global_position.x - global_position.x) < 260.0 and absf(player.global_position.y - global_position.y) < 220.0
+	if near and not _registered:
+		player.register_interactable(self)
+		_registered = true
+	elif not near and _registered:
+		_unregister()
+
+
+func _unregister() -> void:
+	if _registered and player:
+		player.unregister_interactable(self)
+	_registered = false
+
+
+func interact(by: Player) -> void:
+	if state == State.FALLEN:
+		by.start_purify(self)
+
+
+func purified_by(_by: Player) -> void:
+	_unregister()
+	_set_state(State.PURIFIED)
+	purified.emit()
+
+
+# ---------- 공개 보조 ----------
+func _set_state(new_state: State) -> void:
+	if new_state == state:
+		return
+	if debug_log:
+		print("[여왕] %s %.2f초 → %s (박 %d, 시계 %.2f)" % [State.keys()[state], (Time.get_ticks_msec() - _state_started_ms) / 1000.0, State.keys()[new_state], beat_index(), _clock])
+	_state_started_ms = Time.get_ticks_msec()
+	state = new_state
+	if new_state not in ATTACK_STATES:
+		attack_phase = ""
+	state_changed.emit(new_state)
+
+
+func flash_amount() -> float:
+	return _flash
+
+
+## 지금 공격 단계의 진행도 (0→1). 그림의 세 박자 곡선 기준.
+func phase_progress() -> float:
+	match attack_phase:
+		"startup": return clampf(windup_progress, 0.0, 1.0)
+		"active": return 1.0 - clampf(_left() / maxf(active_len, 0.001), 0.0, 1.0)
+		"recovery": return 1.0 - clampf(_left() / maxf(recovery_len, 0.001), 0.0, 1.0)
+	return 0.0
+
+
+## 붉은 예고는 없다 (전부 가드 가능).
+func is_red() -> bool:
+	return false
+
+
+## 땅에 있어서 제대로 때릴 수 있는가 (내려앉음·무너짐·쓰러짐이 땅에 닿은 뒤)
+func is_ground() -> bool:
+	if state == State.LANDED:
+		return true
+	return state in [State.BROKEN, State.FALLEN] and _landed_touch
+
+
+## BossRoom 이 예고 글자로 띄운다 (가드 불가는 없으니 공격 이름만).
+func telegraph_label(kind: String) -> String:
+	match kind:
+		"wave": return "수액 물결!"
+		"butterflies": return "나비 떼!"
+	return ""
+
+
+func state_name() -> String:
+	return State.keys()[state]

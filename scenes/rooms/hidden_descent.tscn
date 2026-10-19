@@ -1,0 +1,221 @@
+[gd_scene load_steps=20 format=3 uid="uid://c1seedhiddendescent"]
+
+[ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
+[ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://c1seedplatform" path="res://scenes/world/platform.tscn" id="3_platform"]
+[ext_resource type="PackedScene" uid="uid://c1seedtouchctl" path="res://scenes/ui/touch_controls.tscn" id="6_touch"]
+[ext_resource type="PackedScene" uid="uid://c1seeddebughud" path="res://scenes/ui/debug_hud.tscn" id="7_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedcombathud" path="res://scenes/ui/combat_hud.tscn" id="8_combat_hud"]
+[ext_resource type="Texture2D" path="res://art/backgrounds/bg_hidden_descent.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/art_backdrop.gd" id="12_art_backdrop"]
+[ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
+[ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
+[ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
+[ext_resource type="PackedScene" uid="uid://c1seedthorns" path="res://scenes/world/thorns.tscn" id="17_thorns"]
+[ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="PackedScene" uid="uid://c1seedsapfisher" path="res://scenes/enemies/sap_fisher.tscn" id="61_fisher"]
+
+[sub_resource type="Environment" id="Environment_glow"]
+background_mode = 3
+glow_enabled = true
+glow_levels/1 = 0.0
+glow_levels/2 = 0.5
+glow_levels/3 = 1.0
+glow_levels/4 = 0.7
+glow_levels/5 = 0.3
+glow_intensity = 0.6
+glow_strength = 1.0
+glow_bloom = 0.03
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 2.0
+
+[sub_resource type="Gradient" id="Gradient_mote"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(0.6, 0.9, 1, 1, 0.6, 0.9, 1, 0.5, 0.6, 0.9, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mote"]
+gradient = SubResource("Gradient_mote")
+width = 32
+height = 32
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="HiddenDescent" type="Node2D"]
+script = ExtResource("1_room")
+bounds = Rect2(0, 0, 1600, 3000)
+region = "sap_lake"
+room_id = "hidden_descent"
+display_name = "수액의 호수 · 숨은 내리막"
+map_offset = Vector2(24320, -923)
+dark = true
+dark_color = Color(0.26, 0.26, 0.32, 1)
+terrain_color = Color(0.09, 0.08, 0.07, 1)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_glow")
+
+[node name="Backdrop" type="Node2D" parent="."]
+
+[node name="Far" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.1, 0.1)
+
+[node name="Sky" type="Sprite2D" parent="Backdrop/Far"]
+texture = ExtResource("11_bg")
+script = ExtResource("12_art_backdrop")
+
+[node name="Shafts" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.3, 0.3)
+
+[node name="LightShafts" type="Node2D" parent="Backdrop/Shafts"]
+script = ExtResource("13_shafts")
+count = 2
+seed = 61
+
+[node name="FogFar" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.45, 0.45)
+
+[node name="Fog" type="Sprite2D" parent="Backdrop/FogFar"]
+script = ExtResource("14_fog")
+drift = Vector2(6, -10)
+fog_color = Color(0.6, 0.8, 1, 0.1)
+noise_scale = 1.3
+seed = 61
+
+[node name="Leaves" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.8, 0.8)
+
+[node name="FallingLeaves" type="CPUParticles2D" parent="Backdrop/Leaves"]
+script = ExtResource("15_leaves")
+count = 4
+
+[node name="Motes" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.9, 0.9)
+
+[node name="Particles" type="CPUParticles2D" parent="Backdrop/Motes"]
+modulate = Color(1.4, 1.7, 1.9, 1)
+position = Vector2(800, 1500)
+amount = 40
+lifetime = 9.0
+preprocess = 9.0
+texture = SubResource("GradientTexture2D_mote")
+emission_shape = 3
+emission_rect_extents = Vector2(900, 1700)
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, -6)
+initial_velocity_min = 8.0
+initial_velocity_max = 26.0
+scale_amount_min = 0.25
+scale_amount_max = 0.7
+color = Color(0.6, 0.9, 1, 0.5)
+
+[node name="Terrain" type="Node2D" parent="."]
+
+[node name="WallLeft" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(-100, -100)
+size = Vector2(100, 3200)
+decorate = false
+
+[node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1600, -100)
+size = Vector2(100, 3200)
+decorate = false
+
+[node name="Ceiling" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, -100)
+size = Vector2(1600, 100)
+decorate = false
+
+[node name="TopLedge" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 300)
+size = Vector2(600, 100)
+label_text = "마을에서 내려온 자리"
+
+[node name="B1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(900, 560)
+size = Vector2(400, 50)
+one_way = true
+
+[node name="B2" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(200, 860)
+size = Vector2(400, 50)
+one_way = true
+
+[node name="B3" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1000, 1160)
+size = Vector2(400, 50)
+one_way = true
+
+[node name="Ledge4" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 1500)
+size = Vector2(1100, 80)
+label_text = "넓은 선반 (위 가지들에서 내려선다)"
+
+[node name="B5" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1200, 1900)
+size = Vector2(400, 50)
+one_way = true
+
+[node name="B6" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(500, 2240)
+size = Vector2(400, 50)
+one_way = true
+
+[node name="Floor" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 2700)
+size = Vector2(1600, 300)
+label_text = "내리막 바닥 → 호수로 (왼쪽 구석 가시 160)"
+
+[node name="Hazards" type="Node2D" parent="."]
+
+[node name="Thorns1" parent="Hazards" instance=ExtResource("17_thorns")]
+position = Vector2(0, 2640)
+size = Vector2(160, 60)
+
+[node name="Markers" type="Node2D" parent="."]
+
+[node name="FromVillage" type="Marker2D" parent="Markers"]
+position = Vector2(200, 232)
+
+[node name="FromLake" type="Marker2D" parent="Markers"]
+position = Vector2(1250, 2632)
+
+[node name="Exits" type="Node2D" parent="."]
+
+[node name="ToVillage" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 300)
+target_scene = "res://scenes/rooms/village_02.tscn"
+spawn_name = "FromHiddenDescent"
+
+[node name="ToLake" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(1410, 2700)
+target_scene = "res://scenes/rooms/sap_lake_01.tscn"
+spawn_name = "FromDescent"
+
+[node name="Interactables" type="Node2D" parent="."]
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Fisher1" parent="Enemies" instance=ExtResource("61_fisher")]
+position = Vector2(850, 2632)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(200, 232)
+
+[node name="FogNear" type="Parallax2D" parent="."]
+scroll_scale = Vector2(1.15, 1.15)
+
+[node name="Fog" type="Sprite2D" parent="FogNear"]
+script = ExtResource("14_fog")
+drift = Vector2(10, -14)
+fog_color = Color(0.7, 0.85, 1, 0.05)
+noise_scale = 1.9
+seed = 62
+
+[node name="CombatHUD" parent="." instance=ExtResource("8_combat_hud")]
+
+[node name="TouchControls" parent="." instance=ExtResource("6_touch")]
+
+[node name="DebugHUD" parent="." instance=ExtResource("7_hud")]

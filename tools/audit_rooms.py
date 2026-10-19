@@ -979,7 +979,9 @@ def main():
     ap.add_argument("--double", choices=["on", "off"], help="기본 모드를 강제 (보고 판정용)")
     ap.add_argument("--model", choices=["exact", "robust"], default="exact", help="robust: 여유 모델을 기본 모델로 써서 어디가 빠듯한지 본다")
     args = ap.parse_args()
-    rooms = args.rooms or ORDER
+    # ORDER 에 없는 방(확장판 등 새로 더한 .tscn)도 이름순으로 뒤에 붙여 모두 본다
+    extra = sorted(fn[:-5] for fn in os.listdir(ROOM_DIR) if fn.endswith(".tscn") and fn[:-5] not in ORDER)
+    rooms = args.rooms or (ORDER + extra)
     robust = Model(run=580.0, jv_scale=0.985)
     model_exact = Model() if args.model == "exact" else robust
     model_robust = robust if (args.robust and args.model == "exact") else None

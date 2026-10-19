@@ -1,0 +1,259 @@
+[gd_scene load_steps=23 format=3 uid="uid://c1seedsaplake01"]
+
+[ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
+[ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://c1seedplatform" path="res://scenes/world/platform.tscn" id="3_platform"]
+[ext_resource type="PackedScene" uid="uid://c1seedtouchctl" path="res://scenes/ui/touch_controls.tscn" id="6_touch"]
+[ext_resource type="PackedScene" uid="uid://c1seeddebughud" path="res://scenes/ui/debug_hud.tscn" id="7_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedcombathud" path="res://scenes/ui/combat_hud.tscn" id="8_combat_hud"]
+[ext_resource type="PackedScene" uid="uid://c1seedmoongrass" path="res://scenes/world/moonlight_grass.tscn" id="9_grass"]
+[ext_resource type="Texture2D" path="res://art/backgrounds/bg_sap_lake_1.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/art_backdrop.gd" id="12_art_backdrop"]
+[ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
+[ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
+[ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
+[ext_resource type="PackedScene" uid="uid://c1seedrecord" path="res://scenes/world/record.tscn" id="30_record"]
+[ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="PackedScene" uid="uid://c1seedpickup" path="res://scenes/world/pickup.tscn" id="52_pickup"]
+[ext_resource type="PackedScene" uid="uid://c1seedsappool" path="res://scenes/world/sap_pool.tscn" id="60_sap_pool"]
+[ext_resource type="PackedScene" uid="uid://c1seedsapfisher" path="res://scenes/enemies/sap_fisher.tscn" id="61_fisher"]
+
+[sub_resource type="Environment" id="Environment_glow"]
+background_mode = 3
+glow_enabled = true
+glow_levels/1 = 0.0
+glow_levels/2 = 0.5
+glow_levels/3 = 1.0
+glow_levels/4 = 0.7
+glow_levels/5 = 0.3
+glow_intensity = 0.6
+glow_strength = 1.0
+glow_bloom = 0.03
+glow_blend_mode = 1
+glow_hdr_threshold = 1.0
+glow_hdr_scale = 2.0
+
+[sub_resource type="Gradient" id="Gradient_mote"]
+offsets = PackedFloat32Array(0, 0.35, 1)
+colors = PackedColorArray(0.6, 0.9, 1, 1, 0.6, 0.9, 1, 0.5, 0.6, 0.9, 1, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_mote"]
+gradient = SubResource("Gradient_mote")
+width = 32
+height = 32
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[node name="SapLake01" type="Node2D"]
+script = ExtResource("1_room")
+bounds = Rect2(0, 0, 4600, 1800)
+region = "sap_lake"
+room_id = "sap_lake_01"
+display_name = "수액의 호수 · 호숫가의 뿌리"
+map_offset = Vector2(25400, 2200)
+terrain_color = Color(0.08, 0.1, 0.1, 1)
+edge_color_alive = Color(0.75, 0.95, 1, 0.8)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_glow")
+
+[node name="Backdrop" type="Node2D" parent="."]
+
+[node name="Far" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.1, 0.1)
+
+[node name="Sky" type="Sprite2D" parent="Backdrop/Far"]
+texture = ExtResource("11_bg")
+script = ExtResource("12_art_backdrop")
+
+[node name="Shafts" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.3, 0.3)
+
+[node name="LightShafts" type="Node2D" parent="Backdrop/Shafts"]
+script = ExtResource("13_shafts")
+count = 4
+seed = 71
+
+[node name="FogFar" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.45, 0.45)
+
+[node name="Fog" type="Sprite2D" parent="Backdrop/FogFar"]
+script = ExtResource("14_fog")
+drift = Vector2(14, -2)
+fog_color = Color(0.6, 0.85, 1, 0.12)
+noise_scale = 1.3
+seed = 71
+
+[node name="Leaves" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.8, 0.8)
+
+[node name="FallingLeaves" type="CPUParticles2D" parent="Backdrop/Leaves"]
+script = ExtResource("15_leaves")
+count = 6
+
+[node name="Motes" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.9, 0.9)
+
+[node name="Particles" type="CPUParticles2D" parent="Backdrop/Motes"]
+modulate = Color(1.4, 1.7, 1.9, 1)
+position = Vector2(2300, 900)
+amount = 60
+lifetime = 9.0
+preprocess = 9.0
+texture = SubResource("GradientTexture2D_mote")
+emission_shape = 3
+emission_rect_extents = Vector2(2400, 1000)
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, -6)
+initial_velocity_min = 8.0
+initial_velocity_max = 26.0
+scale_amount_min = 0.25
+scale_amount_max = 0.7
+color = Color(0.6, 0.9, 1, 0.5)
+
+[node name="Terrain" type="Node2D" parent="."]
+
+[node name="WallLeft" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(-100, -100)
+size = Vector2(100, 2000)
+decorate = false
+
+[node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(4600, -100)
+size = Vector2(100, 2000)
+decorate = false
+
+[node name="Ceiling" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, -100)
+size = Vector2(4600, 100)
+decorate = false
+
+[node name="Bank" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 600)
+size = Vector2(700, 1200)
+label_text = "숨은 내리막에서 내려온 자리 (호숫가 둑)"
+
+[node name="LakeBed" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(700, 1660)
+size = Vector2(3900, 140)
+decorate = false
+
+[node name="Stone1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1000, 1540)
+size = Vector2(200, 120)
+label_text = "디딤 뿌리"
+
+[node name="Stone2" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1400, 1510)
+size = Vector2(220, 150)
+
+[node name="Island1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1900, 1560)
+size = Vector2(700, 100)
+label_text = "달빛풀 섬"
+
+[node name="Stone3" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(2800, 1530)
+size = Vector2(300, 130)
+
+[node name="Stone4" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3100, 1500)
+size = Vector2(300, 160)
+
+[node name="Island2" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3400, 1560)
+size = Vector2(1200, 100)
+label_text = "수면 자국 벽으로"
+
+[node name="Br1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1300, 1150)
+size = Vector2(300, 44)
+one_way = true
+
+[node name="Br2" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1700, 900)
+size = Vector2(300, 44)
+one_way = true
+
+[node name="Br3" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1150, 650)
+size = Vector2(300, 44)
+one_way = true
+label_text = "둑으로 되돌아가는 가지"
+
+[node name="Lake1" parent="." instance=ExtResource("60_sap_pool")]
+position = Vector2(700, 1600)
+size = Vector2(1200, 80)
+region = "sap_lake"
+
+[node name="Lake2" parent="." instance=ExtResource("60_sap_pool")]
+position = Vector2(2600, 1600)
+size = Vector2(800, 80)
+region = "sap_lake"
+
+[node name="Markers" type="Node2D" parent="."]
+
+[node name="FromDescent" type="Marker2D" parent="Markers"]
+position = Vector2(200, 532)
+
+[node name="FromLake02" type="Marker2D" parent="Markers"]
+position = Vector2(4330, 1492)
+
+[node name="Exits" type="Node2D" parent="."]
+
+[node name="ToDescent" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(190, 600)
+target_scene = "res://scenes/rooms/hidden_descent.tscn"
+spawn_name = "FromLake"
+
+[node name="ToLake02" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(4410, 1560)
+target_scene = "res://scenes/rooms/sap_lake_02.tscn"
+spawn_name = "FromLake01"
+
+[node name="Interactables" type="Node2D" parent="."]
+
+[node name="Grass1" parent="Interactables" instance=ExtResource("9_grass")]
+position = Vector2(2050, 1560)
+grass_id = "lake_shore"
+display_name = "수액의 호수 · 호숫가의 뿌리"
+
+[node name="Record_fisher_tally" parent="Interactables" instance=ExtResource("30_record")]
+position = Vector2(1510, 1510)
+record_id = "fisher_tally"
+kind = "stone"
+
+[node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
+position = Vector2(1850, 850)
+pickup_id = "pick_sap_lake_01_1"
+kind = "heal"
+amount = 10.0
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Fisher1" parent="Enemies" instance=ExtResource("61_fisher")]
+position = Vector2(3250, 1432)
+
+[node name="Fisher2" parent="Enemies" instance=ExtResource("61_fisher")]
+position = Vector2(3750, 1492)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector2(200, 532)
+
+[node name="FogNear" type="Parallax2D" parent="."]
+scroll_scale = Vector2(1.15, 1.15)
+
+[node name="Fog" type="Sprite2D" parent="FogNear"]
+script = ExtResource("14_fog")
+drift = Vector2(24, -4)
+fog_color = Color(0.7, 0.9, 1, 0.05)
+noise_scale = 1.9
+seed = 72
+
+[node name="CombatHUD" parent="." instance=ExtResource("8_combat_hud")]
+
+[node name="TouchControls" parent="." instance=ExtResource("6_touch")]
+
+[node name="DebugHUD" parent="." instance=ExtResource("7_hud")]

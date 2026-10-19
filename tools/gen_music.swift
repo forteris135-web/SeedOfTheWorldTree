@@ -26,9 +26,11 @@ func n(_ name: String) -> Int {
 final class Track {
     var notes: [Note] = []
     var bpm: Double
-    init(bpm: Double) { self.bpm = bpm }
+    /// 한 마디의 박 수 (4/4 = 4, 왈츠 3/4 = 3). 확장판 수액의 호수 곡들이 3 을 쓴다. 기본 4 라 기존 곡은 바이트 그대로다.
+    var beatsPerBar: Double
+    init(bpm: Double, beatsPerBar: Double = 4) { self.bpm = bpm; self.beatsPerBar = beatsPerBar }
     func add(_ name: String, _ bar: Double, _ beat: Double, _ len: Double, _ vel: Double = 0.8, _ inst: Inst = .piano) {
-        notes.append(Note(midi: n(name), start: (bar - 1) * 4 + (beat - 1), len: len, vel: vel, inst: inst))
+        notes.append(Note(midi: n(name), start: (bar - 1) * beatsPerBar + (beat - 1), len: len, vel: vel, inst: inst))
     }
     func chord(_ names: [String], _ bar: Double, _ beat: Double, _ len: Double, _ vel: Double = 0.5, _ inst: Inst = .pad) {
         for nm in names { add(nm, bar, beat, len, vel, inst) }
@@ -431,5 +433,104 @@ do {
     let mel: [(String, Double, Double, Double)] = [("Eb4",3,1,2),("D4",3,3,2),("C4",4,1,4),("Ab4",7,1,2),("G4",7,3,2),("F4",8,1,4),("Eb5",11,1,1),("D5",11,2,1),("C5",11,3,2),("Bb4",12,1,2),("G4",12,3,2),("Ab4",13,1,1),("Bb4",13,2,1),("C5",13,3,2),("Db5",14,1,2),("C5",14,3,2),("B4",15,1,3),("D5",15,4,1),("G4",16,1,4)]
     for (nm, bar, beat, len) in mel { t.add(nm, bar, beat, len, 0.8, .strings); t.add(nm, bar, beat, len, 0.4, .bell) }
     bounce(t, "boss_root", loopBeats: 64, tailSec: 2.5, mix: 0.35, size: 1.4)
+}
+// =====================================================================
+// 확장판 · 수액의 호수 (3/4 왈츠). EXPANSION.md 10장의 Suno 프롬프트를 흉내 낸 임시곡.
+// 기획자의 진짜 곡(field_sap_lake.mp3 / boss_sap_queen.mp3)이 오면 같은 이름의 wav 로 바꿔 끼운다.
+// =====================================================================
+// 수액의 호수 필드: 쓸쓸한 왈츠, 부드러운 피아노·하프(pluck), 흐르는 패드. Eb장조에 단조 그림자. 72bpm, 24마디 반복 (60초).
+do {
+    let t = Track(bpm: 72, beatsPerBar: 3)
+    // (베이스, 화음, 하프 분산화음 6개(8분음표))
+    let prog: [(String, [String], [String])] = [
+        ("Eb2", ["Eb3","G3","Bb3"], ["Eb3","Bb3","G4","Bb4","G4","Bb3"]),
+        ("C2",  ["C3","Eb3","G3"],  ["C3","G3","Eb4","G4","Eb4","G3"]),
+        ("Ab2", ["Ab2","C3","Eb3"], ["Ab2","Eb3","C4","Eb4","C4","Eb3"]),
+        ("Bb2", ["Bb2","D3","F3"],  ["Bb2","F3","D4","F4","D4","F3"]),
+        ("Eb2", ["Eb3","G3","Bb3"], ["Eb3","Bb3","G4","Bb4","G4","Bb3"]),
+        ("G2",  ["G2","Bb2","D3"],  ["G2","D3","Bb3","D4","Bb3","D3"]),     // 단조 그림자
+        ("Ab2", ["Ab2","C3","Eb3"], ["Ab2","Eb3","C4","Eb4","C4","Eb3"]),
+        ("Bb2", ["Bb2","D3","F3"],  ["Bb2","F3","D4","F4","D4","F3"]),
+        ("Eb2", ["Eb3","G3","Bb3"], ["Eb3","Bb3","G4","Bb4","G4","Bb3"]),
+        ("Eb2", ["Eb3","Gb3","Bb3"], ["Eb3","Bb3","Gb4","Bb4","Gb4","Bb3"]), // Eb단조로 잠깐 어두워진다
+        ("Ab2", ["Ab2","C3","Eb3"], ["Ab2","Eb3","C4","Eb4","C4","Eb3"]),
+        ("F2",  ["F2","Ab2","C3"],  ["F2","C3","Ab3","C4","Ab3","C3"]),
+        ("Bb2", ["Bb2","D3","F3"],  ["Bb2","F3","D4","F4","D4","F3"]),
+        ("Bb2", ["Bb2","Eb3","F3"], ["Bb2","F3","Eb4","F4","Eb4","F3"]),
+        ("Eb2", ["Eb3","G3","Bb3"], ["Eb3","Bb3","G4","Bb4","G4","Bb3"]),
+        ("C2",  ["C3","Eb3","G3"],  ["C3","G3","Eb4","G4","Eb4","G3"]),
+        ("Ab2", ["Ab2","C3","Eb3"], ["Ab2","Eb3","C4","Eb4","C4","Eb3"]),
+        ("Ab2", ["Ab2","Cb3","Eb3"], ["Ab2","Eb3","Cb4","Eb4","Cb4","Eb3"]), // Ab단조 그림자
+        ("Eb2", ["Eb3","G3","Bb3"], ["Eb3","Bb3","G4","Bb4","G4","Bb3"]),
+        ("G2",  ["G2","Bb2","D3"],  ["G2","D3","Bb3","D4","Bb3","D3"]),
+        ("C2",  ["C3","Eb3","G3"],  ["C3","G3","Eb4","G4","Eb4","G3"]),
+        ("Ab2", ["Ab2","C3","Eb3"], ["Ab2","Eb3","C4","Eb4","C4","Eb3"]),
+        ("Bb2", ["Bb2","D3","F3"],  ["Bb2","F3","D4","F4","D4","F3"]),
+        ("Bb2", ["Bb2","D3","Ab3"], ["Bb2","F3","D4","Ab4","D4","F3"]),     // Bb7 → 처음으로 되돌아간다
+    ]
+    for (k, c) in prog.enumerated() {
+        let bar = 1 + Double(k)
+        t.add(c.0, bar, 1, 3, 0.4, .bass)                     // 왈츠의 '하나'
+        t.chord(c.1, bar, 1, 3, 0.26, .pad)
+        for (i, nm) in c.2.enumerated() { t.add(nm, bar, 1 + Double(i) * 0.5, 0.7, 0.3 - 0.03 * Double(i % 2), .pluck) }   // 하프
+        t.chord(Array(c.1.dropFirst()), bar, 2, 0.8, 0.14, .piano)   // '둘'·'셋' 가벼운 피아노
+        t.chord(Array(c.1.dropFirst()), bar, 3, 0.8, 0.12, .piano)
+    }
+    // 선율 (피아노, 길게 흐르는 음)
+    let mel: [(String, Double, Double, Double)] = [
+        ("Bb4",1,1,3),("G4",2,1,2),("Ab4",2,3,1),("Eb5",3,1,3),("D5",4,1,2),("Bb4",4,3,1),
+        ("G4",5,1,3),("Bb4",6,1,1.5),("D5",6,2.5,1.5),("C5",7,1,3),("Bb4",8,1,2),("F4",8,3,1),
+        ("Eb5",9,1,3),("Gb5",10,1,2),("Eb5",10,3,1),("C5",11,1,3),("Ab4",12,1,2),("C5",12,3,1),
+        ("Bb4",13,1,3),("Eb5",14,1,2),("F5",14,3,1),("G5",15,1,3),("Eb5",16,1,2),("C5",16,3,1),
+        ("Ab4",17,1,3),("Cb5",18,1,2),("Ab4",18,3,1),("Bb4",19,1,3),("D5",20,1,2),("Bb4",20,3,1),
+        ("Eb5",21,1,2),("C5",21,3,1),("Ab4",22,1,3),("F4",23,1,2),("Ab4",23,3,1),("D5",24,1,3),
+    ]
+    for (nm, bar, beat, len) in mel { t.add(nm, bar, beat, len, 0.5, .piano) }
+    // 멀리서 반짝이는 종 (물 방울)
+    let bells: [(String, Double, Double)] = [("Bb5",3,3),("G5",7,2),("Eb6",11,3),("Bb5",15,2),("Gb5",18,3),("Eb6",23,2)]
+    for (nm, bar, beat) in bells { t.add(nm, bar, beat, 2, 0.22, .bell) }
+    t.add("Eb1", 1, 1, 72, 0.18, .drone)
+    bounce(t, "ambient_sap_lake", loopBeats: 72, mix: 0.42, size: 1.5)
+}
+// 수액의 여왕 보스: 비극적인 어두운 왈츠. 휘몰아치는 현악, 하프 분산화음, 다급한 피아노, 애절한 바이올린 선율. C단조, 138bpm, 32마디 반복 (41.7초).
+// 보스 코드는 이 곡의 박자(한 박 0.4348초, 한 마디 3박)에 맞춰 '하나·둘·셋'으로 공격한다 (scripts/bosses/sap_queen.gd BEAT).
+do {
+    let t = Track(bpm: 138, beatsPerBar: 3)
+    let prog: [(String, [String])] = [
+        ("C2", ["C3","Eb3","G3"]), ("C2", ["C3","Eb3","G3"]), ("Ab1", ["Ab2","C3","Eb3"]), ("Ab1", ["Ab2","C3","Eb3"]),
+        ("F2", ["F2","Ab2","C3"]), ("F2", ["F2","Ab2","C3"]), ("G1", ["G2","B2","D3"]), ("G1", ["G2","B2","D3"]),
+        ("C2", ["C3","Eb3","G3"]), ("Eb2", ["Eb3","G3","Bb3"]), ("Ab1", ["Ab2","C3","Eb3"]), ("Bb1", ["Bb2","D3","F3"]),
+        ("C2", ["C3","Eb3","G3"]), ("F2", ["F2","Ab2","C3"]), ("G1", ["G2","B2","D3"]), ("G1", ["G2","B2","D3","F3"]),
+    ]
+    for rep in 0..<2 {
+        for (k, c) in prog.enumerated() {
+            let bar = 1 + Double(rep * 16 + k)
+            let b0 = (bar - 1) * 3
+            t.add(c.0, bar, 1, 1.2, 0.75, .bass)                    // 하나
+            t.midiNote(36, b0, 0.4, 0.95, .kick)                     // 하나: 북
+            t.midiNote(38, b0 + 1, 0.3, 0.45, .snare)                // 둘
+            t.midiNote(38, b0 + 2, 0.3, 0.5, .snare)                 // 셋
+            t.chord(c.1, bar, 1, 3, 0.36 + 0.08 * Double(rep), .strings)   // 휘몰아치는 현악 화음
+            // 다급한 피아노: 둘·셋에 옥타브 화음을 찍는다
+            for beat in [2.0, 3.0] { for nm in c.1 { t.midiNote(n(nm) + 12, b0 + beat - 1, 0.45, 0.42, .piano) } }
+            // 하프 분산화음 (8분음표 여섯): 오르내림
+            let arp = [n(c.1[0]) + 12, n(c.1[1]) + 12, n(c.1[2]) + 12, n(c.1[0]) + 24, n(c.1[2]) + 12, n(c.1[1]) + 12]
+            for (i, m) in arp.enumerated() { t.midiNote(m, b0 + Double(i) * 0.5, 0.5, 0.33, .pluck) }
+            if rep == 1 { t.midiNote(n(c.0) + 12, b0 + 1.5, 0.4, 0.4, .bass); t.midiNote(n(c.0) + 19, b0 + 2.5, 0.4, 0.35, .bass) }
+        }
+    }
+    // 애절한 바이올린 선율 (16마디 × 2, 두 번째는 한 옥타브 위)
+    let mel: [(String, Double, Double, Double)] = [
+        ("G5",1,1,3),("Eb5",2,1,2),("D5",2,3,1),("C5",3,1,3),("Eb5",4,1,1),("D5",4,2,1),("C5",4,3,1),
+        ("Ab4",5,1,3),("C5",6,1,2),("Eb5",6,3,1),("D5",7,1,3),("B4",8,1,2),("D5",8,3,1),
+        ("G5",9,1,2),("F5",9,3,1),("Eb5",10,1,3),("C6",11,1,2),("Bb5",11,3,1),("Ab5",12,1,2),("F5",12,3,1),
+        ("G5",13,1,3),("Ab5",14,1,1),("G5",14,2,1),("F5",14,3,1),("D5",15,1,3),("B4",16,1,1.5),("D5",16,2.5,1.5),
+    ]
+    for (nm, bar, beat, len) in mel {
+        t.add(nm, bar, beat, len, 0.85, .strings)
+        t.midiNote(n(nm) + 12, (bar + 16 - 1) * 3 + beat - 1, len, 0.9, .strings)
+        t.midiNote(n(nm), (bar + 16 - 1) * 3 + beat - 1, len, 0.5, .piano)
+    }
+    bounce(t, "boss_sap_queen", loopBeats: 96, tailSec: 2.5, mix: 0.28, size: 1.1)
 }
 print("음악 생성 완료")

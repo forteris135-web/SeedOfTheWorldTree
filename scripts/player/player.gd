@@ -262,6 +262,8 @@ var _plunge_hits := 0          # 바닥에 닿기 전에 낙하 공격으로 맞
 var _light: PointLight2D
 ## 포자 구름 등으로 느려진 비율 (1 = 정상). 매 프레임 되돌아온다.
 var slow_factor := 1.0
+## 구르기 속도 배수 (1 = 정상). 수액 웅덩이가 정한다 (수액 위 걷기 능력이 있으면 길게, 없으면 짧게). 매 프레임 되돌아온다.
+var roll_factor := 1.0
 ## 지금 고른 영혼: "seed"(처음부터) / "wind" / "light"
 var soul := ""
 ## 마지막으로 안전하게 서 있던 자리 (가시에 떨어지면 여기로 돌아온다).
@@ -407,6 +409,7 @@ func _physics_process(delta: float) -> void:
 	_last_fall_speed = velocity.y
 	move_and_slide()
 	slow_factor = 1.0
+	roll_factor = 1.0
 	# 점프하다 천장에 머리를 박았다 (올라가던 중 위쪽에 부딪힘): 비밀 천장이 듣는다
 	if is_on_ceiling() and _last_fall_speed < -150.0:
 		for i in get_slide_collision_count():
@@ -1025,7 +1028,7 @@ func _end_drop_through() -> void:
 func _handle_horizontal(delta: float, on_floor: bool, move_input: float) -> void:
 	match state:
 		State.ROLL:
-			velocity.x = facing * roll_speed
+			velocity.x = facing * roll_speed * roll_factor
 		State.ATTACK, State.SOUL_SLASH:
 			# 땅에서는 멈춰 서서 벤다. 공중에서는 관성 그대로.
 			if on_floor:
