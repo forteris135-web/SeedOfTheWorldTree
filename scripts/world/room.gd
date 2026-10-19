@@ -31,7 +31,8 @@ var _spawn := Vector2.ZERO
 var _enemy_spawns: Array = []   # [{scene: String, position: Vector2, parent: Node, props: Dictionary}]
 ## 포탈·달빛풀로 들어선 뒤 적이 소녀를 알아채지 않는 시간(초). 화면이 밝아지는 1.2초 + 둘러볼 틈.
 const ARRIVAL_GRACE := 2.8
-## 지도용 탐사 요소의 id 목록 (방에 들어올 때 한 번 모은다): pickups / rescues / records / grasses
+## 지도용 탐사 요소의 id 목록 (방에 들어올 때 한 번 모은다): pickups / rescues / records / grasses / minibosses
+## minibosses = 이 방 중간 보스의 깃발(defeat_flag). 쓰러뜨려야 '모두 찾음'이 된다 (2026-10-19 기획자 결정).
 var _explore_ids := {}
 var _explore_timer := 0.0
 
@@ -199,7 +200,7 @@ func open_map() -> void:
 
 ## 지도에 이 방을 기록한다 (방문한 방만 지도에 그려진다).
 ## 지도용 계약: visited_rooms[room_id] 에 "explore_total"(이 방의 탐사 요소 수) 와 "explore_found"(그중 찾은 수) 를 넣는다.
-## 탐사 요소 = 아이템(Pickup, 비밀 안의 것 포함) + 구원 가능한 자 + 기록물 + 달빛풀(장식 아님).
+## 탐사 요소 = 아이템(Pickup, 비밀 안의 것 포함) + 구원 가능한 자 + 기록물 + 달빛풀(장식 아님) + 중간 보스(쓰러뜨림).
 func _register_on_map() -> void:
 	if room_id == "":
 		return
@@ -213,10 +214,16 @@ func _register_on_map() -> void:
 	var prev: Dictionary = Progress.visited_rooms.get(room_id, {})
 	# 이미 구원된 자는 노드가 사라져 있을 수 있으니, 전에 기록한 구원 id 가운데 실제로 구원된 것은 합쳐 둔다.
 	# (아이템·기록물·달빛풀은 노드가 늘 남아 있으므로 지금 센 것만 쓴다 → 배치를 바꿔도 옛 값이 남지 않는다)
-	var prev_ids: Dictionary = prev.get("explore_ids", {})
+	var prev_ids = prev.get("explore_ids", {})
+	if not (prev_ids is Dictionary):
+		prev_ids = {}   # 아주 옛 형식(배열)은 버리고 지금 센 것만 쓴다
 	for id in prev_ids.get("rescues", []):
 		if Progress.rescued.has(id) and not _explore_ids["rescues"].has(id):
 			_explore_ids["rescues"].append(id)
+	# 중간 보스도 쓰러뜨리면 노드가 사라진다 → 전에 기록한 깃발 가운데 쓰러뜨린 것은 남겨 둔다
+	for flag in prev_ids.get("minibosses", []):
+		if Progress.has(str(flag)) and not _explore_ids["minibosses"].has(flag):
+			_explore_ids["minibosses"].append(flag)
 	var entry := {"offset": map_offset, "size": bounds.size, "name": display_name if display_name != "" else room_id, "region": region, "grasses": grasses, "portals": portals, "boss": is_boss_room}
 	entry["explore_ids"] = _explore_ids
 	entry["explore_total"] = _explore_total()
@@ -225,8 +232,13 @@ func _register_on_map() -> void:
 
 
 ## 이 방의 탐사 요소 id 목록을 모은다 (Room._ready 는 자식들의 _ready 뒤에 돌므로 모두 자리에 있다).
+## 중간 보스: 방의 깃발(MiniBossRoom.defeat_flag, _miniboss_flags) + 깃발을 가진 적(EnemyBase.defeat_flag — 거대화 중간 보스·잿가지 거인).
+## 이미 쓰러뜨린 보스는 _ready 에서 queue_free 되지만 이 프레임 끝까지는 남아 있고, 방의 깃발로도 센다.
 func _collect_explore_ids() -> Dictionary:
-	var ids := {"pickups": [], "rescues": [], "records": [], "grasses": []}
+	var ids := {"pickups": [], "rescues": [], "records": [], "grasses": [], "minibosses": []}
+	for flag in _miniboss_flags():
+		if flag != "" and not ids["minibosses"].has(flag):
+			ids["minibosses"].append(flag)
 	var nodes: Array = []
 	_walk(self, nodes)
 	for n in nodes:
@@ -242,7 +254,15 @@ func _collect_explore_ids() -> Dictionary:
 		elif n is EnemyBase:
 			if n.savable and n.rescue_id != "" and not ids["rescues"].has(n.rescue_id):
 				ids["rescues"].append(n.rescue_id)
+			if n.defeat_flag != "" and not ids["minibosses"].has(n.defeat_flag):
+				ids["minibosses"].append(n.defeat_flag)
 	return ids
+
+
+## 이 방에 있는 중간 보스의 깃발들. 보통 방은 없음, MiniBossRoom 이 자기 defeat_flag 를 돌려준다.
+## (BossRoom 의 defeat_flag 는 지역 보스라서 탐사 요소가 아니다)
+func _miniboss_flags() -> Array:
+	return []
 
 
 func _walk(node: Node, out: Array) -> void:
@@ -271,6 +291,9 @@ func _explore_found() -> int:
 			n += 1
 	for id in _explore_ids.get("grasses", []):
 		if Progress.grasses.has(id):
+			n += 1
+	for flag in _explore_ids.get("minibosses", []):
+		if Progress.has(flag):
 			n += 1
 	return n
 
@@ -792,11 +815,17 @@ func _portaltest() -> void:
 		print("[포탈시험] 터치 '지도' 누름 → 지도 열림: %s (손가락 %s, 장치 %s)" % [_map != null and _map._open, touch._touches, InputDevice.current])
 		_fake_touch(Vector2(s.x - 76, 76), false)
 		await tree.create_timer(0.2).timeout
+		# 지도는 끌기·두 손가락으로 움직이므로 화면 가운데를 눌러도 닫히지 않는다 → 오른쪽 위 ✕ (지도 버튼과 같은 자리)
 		_fake_touch(Vector2(s.x / 2.0, s.y / 2.0), true)
-		await tree.create_timer(0.2).timeout
+		await tree.create_timer(0.1).timeout
 		_fake_touch(Vector2(s.x / 2.0, s.y / 2.0), false)
 		await tree.create_timer(0.2).timeout
-		print("[포탈시험] 화면 누름 → 지도 닫힘: %s, 멈춤 해제: %s" % [_map == null or not _map._open, not tree.paused])
+		print("[포탈시험] 화면 가운데 누름 → 지도 그대로: %s" % [_map != null and _map._open])
+		_fake_touch(Vector2(s.x - 76, 76), true)
+		await tree.create_timer(0.2).timeout
+		_fake_touch(Vector2(s.x - 76, 76), false)
+		await tree.create_timer(0.2).timeout
+		print("[포탈시험] ✕ 누름 → 지도 닫힘: %s, 멈춤 해제: %s" % [_map == null or not _map._open, not tree.paused])
 		# 터치 '메뉴' 버튼
 		_fake_touch(Vector2(76, 76), true)
 		await tree.create_timer(0.3).timeout

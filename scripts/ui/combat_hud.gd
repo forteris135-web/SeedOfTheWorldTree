@@ -13,8 +13,12 @@ extends CanvasLayer
 ## - 영혼 전환 알림 (2026-10-19 기획자 요청 "지금 어느 영혼인지 모른다"): 전환 순간 화면 가운데 위에 1.2초 동안 큰 글자("바람의 영혼", 영혼 색)와
 ##   작은 설명 한 줄("커다란 돌풍 — … / 쿨 5초", SOUL_NOTICE_SHOW_DESC 로 끌 수 있음)이 떠올랐다 사라진다.
 ##   보스 등장 이름이 떠 있는 3초 동안은 그 위(높이 0.105)로 올라간다.
-## - 빛 가루 (재화, Progress.dust): 이슬 줄 오른쪽(성장 아이콘 뒤)에 반짝이는 점 아이콘 + 개수. 늘어나면 "+N" 이 떠올라 사라진다
-##   (장면 전환 중 — 메뉴의 '불러오기' 등 — 에는 띄우지 않는다).
+## - 빛 가루 (재화, Progress.dust) — **네모 칸 (2026-10-19 기획자 요청 "재화를 네모 칸으로")**: 영혼 줄 아래, 왼쪽 끝을 맞춘 금테 칸.
+##   HUD 그림과 같은 결(짙은 바깥선 + 금빛 테 + 안쪽 옅은 빛 선 + 어두운 바탕)에 오른쪽 끝은 가드 막대 그림의 잎 장식을 그대로 붙였다.
+##   안에 빛 가루 그림(art/ui/touch/touch_dust.png)과 숫자(천 단위 쉼표). 늘어나면 숫자가 0.6초에 걸쳐 차오르고(count-up) 칸이 한 번 빛나며 그림이 커졌다 돌아온다,
+##   잎 장식 오른쪽에 "+N" 이 나타나 오른쪽으로 흘러가며 사라진다 (장면 전환 중 — 메뉴의 '불러오기' 등 — 에는 숫자만 바로 바뀐다). 줄어들면(성장에 씀) 바로 바뀐다.
+##   자리: 이슬이 두 줄이면 영혼 줄과 함께 내려간다. 체력·이슬·영혼·위 모서리 터치 버튼(메뉴·지도)·왼쪽 터치 버튼(회복)·보스 띠·대화 상자·전환 알림과 겹치지 않는다
+##   (시험: tools/probe_hud.tscn 이 1920×1080·2338×1080·4:3 아이패드 × 터치 버튼 크기 3단계에서 확인).
 ## - 성장이 생긴 순간 가운데에 "이슬 +1" 같은 짧은 글자(flash). 아이템·구원 보상이 같은 때 가운데 안내(show_message)를 띄우면 그것 하나만 보인다.
 ## 시험: tools/probe_hud.tscn (그리기와 같은 계산 함수 dew_slots / hp_bar_width / hp_frame_pieces / growth_labels / soul_dots 를 검사),
 ##       tools/probe_ui.tscn (dust_text / soul_notice_title / soul_cooldown 표시)
@@ -74,13 +78,26 @@ const SOUL_NOTICE_Y_BOSS := 0.105   # 보스 등장 이름(높이 0.22, 72pt)이
 const SOUL_NOTICE_SHOW_DESC := true
 const SOUL_NOTICE_TITLE_SIZE := 46
 const SOUL_NOTICE_DESC_SIZE := 20
-## 빛 가루 표시
-const DUST_GAP := 18.0              # 성장 표시(또는 이슬) 와의 간격 (화면 px)
-const DUST_ICON := 9.0              # 아이콘 반 크기 (화면 px)
-const DUST_FONT_SIZE := 17
-const DUST_POP_TIME := 1.1          # "+N" 이 떠올라 사라지는 시간
-const DUST_POP_RISE := 26.0         # 떠오르는 거리 (화면 px)
+## 빛 가루 칸 (화면 px)
+const DUST_ICON_TEX := preload("res://art/ui/touch/touch_dust.png")
+const DUST_BOX_GAP := 22.0          # 영혼 줄 글자 기준선 아래로 이만큼 띄워 칸 윗변 (영혼 원이 번쩍일 때 번짐이 닿지 않게)
+const DUST_BOX_X := 26.0            # 칸 왼쪽 (영혼 원 줄과 맞춤)
+const DUST_BOX_H := 42.0
+const DUST_BOX_MIN_W := 150.0
+const DUST_BOX_PAD := 14.0          # 숫자 오른쪽 여백
+const DUST_ICON_SIZE := 40.0        # 칸 안 빛 가루 그림 크기
+const DUST_FONT_SIZE := 26
+## 오른쪽 끝 잎 장식: 가드 막대 그림(hud_bar_guard.png) 끝의 잎 줄기 (그림 px)
+const DUST_ORNAMENT_SRC := Rect2(1158, 16, 112, 84)
+const DUST_ORNAMENT_SCALE := 0.5
+const DUST_COUNT_TIME := 0.6        # 숫자가 차오르는 시간
+const DUST_POP_TIME := 1.1          # "+N" 이 나타나 사라지는 시간 (칸이 빛나는 것도 같은 시간에 가라앉는다)
+const DUST_POP_RISE := 26.0         # "+N" 이 오른쪽으로 흘러가는 거리 (화면 px; 위로 뜨면 영혼 줄 글자에 닿아서 옆으로)
 const DUST_COLOR := Color(1.0, 0.95, 0.72)
+## 칸 색 (가드 막대 그림에서 뽑은 색: 짙은 바깥선 / 금테 / 어두운 바탕)
+const DUST_INK := Color(0.16, 0.1, 0.03, 0.9)
+const DUST_GOLD := Color(0.88, 0.71, 0.46)
+const DUST_BG := Color(0.12, 0.115, 0.09, 0.8)
 
 var _player: Player
 var _canvas: Control
@@ -108,7 +125,12 @@ var _soul_notice_timer := 0.0
 var _soul_notice_soul := ""
 ## 빛 가루: 늘어난 양이 떠오르는 글자들 [{"amount": int, "t": 남은 시간}]
 var _dust_pops: Array = []
-var _dust_glow := 0.0       # 늘어난 순간 아이콘이 밝아졌다 가라앉음
+var _dust_glow := 0.0       # 늘어난 순간 칸이 빛나고 그림이 커졌다 가라앉음
+var _dust_shown := 0.0      # 칸에 보이는 숫자 (차오르는 중엔 Progress.dust 보다 작다)
+var _dust_rate := 0.0       # 차오르는 빠르기 (개 / 초)
+var _box_outer: StyleBoxFlat
+var _box_gold: StyleBoxFlat
+var _box_inner: StyleBoxFlat
 
 
 func _ready() -> void:
@@ -121,6 +143,9 @@ func _ready() -> void:
 	Progress.upgraded.connect(_on_upgraded)
 	Progress.dust_changed.connect(_on_dust_changed)
 	_last_dust = Progress.dust
+	_dust_shown = float(Progress.dust)
+	_canvas.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS   # 빛 가루 그림(192px)을 작게 그려도 매끈하게
+	_make_box_styles()
 
 
 func _process(delta: float) -> void:
@@ -149,10 +174,16 @@ func _process(delta: float) -> void:
 	_hp_grow_flash = maxf(_hp_grow_flash - delta / HP_GROW_TIME, 0.0)
 	_soul_notice_timer = maxf(_soul_notice_timer - delta, 0.0)
 	_dust_glow = maxf(_dust_glow - delta / DUST_POP_TIME, 0.0)
+	# 빛 가루 숫자 차오르기 (줄어드는 것은 _on_dust_changed 에서 바로)
+	if _dust_shown < float(Progress.dust):
+		_dust_shown = minf(_dust_shown + maxf(_dust_rate, 20.0) * delta, float(Progress.dust))
+	elif _dust_shown > float(Progress.dust):
+		_dust_shown = float(Progress.dust)
 	if _scene_changing() and not _dust_pops.is_empty():
 		# 메뉴의 '불러오기'는 빛 가루를 넣고(dust_changed) 같은 호출에서 장면 전환을 시작한다 → 번 것이 아니니 떠오르는 글자를 지운다
 		_dust_pops.clear()
 		_dust_glow = 0.0
+		_dust_shown = float(Progress.dust)
 	for i in range(_dust_pops.size() - 1, -1, -1):
 		_dust_pops[i]["t"] -= delta
 		if _dust_pops[i]["t"] <= 0.0:
@@ -223,9 +254,13 @@ func _scene_changing() -> bool:
 func _on_dust_changed(amount: int) -> void:
 	var diff := amount - _last_dust
 	_last_dust = amount
-	if diff > 0:
+	if diff > 0 and not _scene_changing():
 		_dust_pops.append({"amount": diff, "t": DUST_POP_TIME})
 		_dust_glow = 1.0
+		# 지금 보이는 숫자에서 새 값까지 DUST_COUNT_TIME 에 차오르게
+		_dust_rate = (float(amount) - _dust_shown) / DUST_COUNT_TIME
+	else:
+		_dust_shown = float(amount)   # 썼거나(줄어듦) 불러오기 중: 바로
 
 
 func show_message(text: String, seconds := 2.0) -> void:
@@ -402,9 +437,7 @@ func hud_right_x(y0 := -INF, y1 := INF) -> float:
 	var slots := dew_slots()
 	for i in slots.size():
 		rects.append(Rect2(slots[i], dew_size(i)))
-	var d := dust_origin()
-	var dust_w := DUST_ICON * 2.0 + 5.0 + font.get_string_size(dust_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, DUST_FONT_SIZE).x
-	rects.append(Rect2(d.x - DUST_ICON * 1.4, d.y - DUST_ICON * 1.6, dust_w + DUST_ICON * 1.4, DUST_ICON * 3.2))
+	rects.append(dust_box_full_rect())
 	if _player:
 		var o := soul_origin()
 		var label := soul_label()
@@ -418,9 +451,9 @@ func hud_right_x(y0 := -INF, y1 := INF) -> float:
 	return right
 
 
-## HUD 덩어리의 아래 끝 y (화면 px): 영혼 줄 글자 기준선 아래.
+## HUD 덩어리의 아래 끝 y (화면 px): 빛 가루 칸 아래 (영혼 줄보다 아래에 있다).
 func hud_bottom_y() -> float:
-	return soul_origin().y + 12.0
+	return maxf(soul_origin().y + 12.0, dust_box_full_rect().end.y + 4.0)
 
 
 ## 영혼 전환 알림의 띠 (화면 좌표). 글자 폭에 맞춘 띠를 HUD 오른쪽 끝보다 오른쪽에 둔다 (화면이 넓으면 가운데).
@@ -446,15 +479,56 @@ func soul_notice_alpha() -> float:
 	return clampf(minf(elapsed / SOUL_NOTICE_FADE_IN, _soul_notice_timer / SOUL_NOTICE_FADE_OUT), 0.0, 1.0)
 
 
-## 빛 가루 개수 글자
+## 빛 가루 개수 글자 (Progress.dust 그대로 — 칸이 차오르는 중이어도 목표 값)
 func dust_text() -> String:
 	return str(Progress.dust)
 
 
-## 빛 가루 아이콘의 가운데 (화면 좌표): 성장 표시 줄 끝 (성장이 없으면 이슬 줄 바로 오른쪽)
+## 칸에 지금 보이는 숫자 (차오르는 중의 값, 천 단위 쉼표: "1,234")
+func dust_shown_text() -> String:
+	return _thousands(int(round(_dust_shown)))
+
+
+static func _thousands(n: int) -> String:
+	var t := str(absi(n))
+	var out := ""
+	while t.length() > 3:
+		out = "," + t.substr(t.length() - 3) + out
+		t = t.substr(0, t.length() - 3)
+	return ("-" if n < 0 else "") + t + out
+
+
+## 빛 가루 칸 (화면 좌표, 부풀기 전). 영혼 줄 아래, 너비는 목표 숫자의 폭에 맞춘다 (차오르는 동안 칸이 들썩이지 않게).
+func dust_box_rect() -> Rect2:
+	var font := ThemeDB.fallback_font
+	var tw := font.get_string_size(_thousands(Progress.dust), HORIZONTAL_ALIGNMENT_LEFT, -1, DUST_FONT_SIZE).x
+	var w := maxf(DUST_BOX_MIN_W, 8.0 + DUST_ICON_SIZE + 6.0 + tw + DUST_BOX_PAD)
+	var top := soul_origin().y + DUST_BOX_GAP
+	return Rect2(DUST_BOX_X, top, w, DUST_BOX_H)
+
+
+## 칸 오른쪽 끝의 잎 장식 자리 (화면 좌표)
+func dust_ornament_rect() -> Rect2:
+	var box := dust_box_rect()
+	var sz := DUST_ORNAMENT_SRC.size * DUST_ORNAMENT_SCALE
+	return Rect2(Vector2(box.end.x - 10.0, box.get_center().y - sz.y * 0.52), sz)
+
+
+## 칸 + 짙은 바깥선 + 잎 장식을 합친 자리 (겹침 검사용)
+func dust_box_full_rect() -> Rect2:
+	return dust_box_rect().grow(2.0).merge(dust_ornament_rect())
+
+
+## "+N" 이 나타나 흘러가는 자리 (겹침 검사용)
+func dust_pop_rect() -> Rect2:
+	var orn := dust_ornament_rect()
+	return Rect2(orn.end.x + 2.0, dust_box_rect().get_center().y - 20.0, 150.0 + DUST_POP_RISE, 34.0)
+
+
+## 빛 가루 그림의 가운데 (화면 좌표): 칸 왼쪽 안
 func dust_origin() -> Vector2:
-	var o := growth_origin()
-	return Vector2(growth_end_x() + DUST_GAP + DUST_ICON, o.y)
+	var box := dust_box_rect()
+	return Vector2(box.position.x + 8.0 + DUST_ICON_SIZE * 0.5, box.get_center().y)
 
 
 ## 성장 표시 줄이 끝나는 x (화면 좌표). 성장이 없으면 시작점 그대로.
@@ -592,34 +666,53 @@ func _draw_dews() -> void:
 		_canvas.draw_texture_rect(tex, Rect2(pos, size), false, tint)
 
 
-## 빛 가루: 네 갈래 반짝이 + 가운데 점, 그 오른쪽에 개수. 늘어난 순간 "+N" 이 위로 떠오르며 사라진다.
+## 칸 테두리 모양 (한 번만 만든다): 짙은 바깥선 / 금테 / 안쪽 옅은 빛 선
+func _make_box_styles() -> void:
+	_box_outer = StyleBoxFlat.new()
+	_box_outer.bg_color = DUST_INK
+	_box_outer.set_corner_radius_all(9)
+	_box_outer.anti_aliasing = true
+	_box_gold = StyleBoxFlat.new()
+	_box_gold.bg_color = DUST_BG
+	_box_gold.border_color = DUST_GOLD
+	_box_gold.set_border_width_all(3)
+	_box_gold.set_corner_radius_all(7)
+	_box_gold.anti_aliasing = true
+	_box_inner = StyleBoxFlat.new()
+	_box_inner.draw_center = false
+	_box_inner.border_color = Color(1.0, 0.93, 0.72, 0.38)
+	_box_inner.set_border_width_all(1)
+	_box_inner.set_corner_radius_all(4)
+	_box_inner.anti_aliasing = true
+
+
+## 빛 가루 칸: 금테 칸 + 오른쪽 잎 장식 + 빛 가루 그림 + 숫자. 늘어난 순간 칸 안이 빛나고 그림이 커졌다 돌아오며, 잎 장식 오른쪽에 "+N".
+## (칸 자체는 커지지 않는다 — 바로 아래 왼쪽 터치 버튼(회복)과 몇 px 떨어져 있어서)
 func _draw_dust(font: Font) -> void:
+	var box := dust_box_rect()
+	var s := sin(PI * clampf(1.0 - _dust_glow, 0.0, 1.0)) * minf(_dust_glow * 4.0, 1.0)   # 0 → 1 → 0 (처음 빠르게)
+	# 잎 장식 (칸 뒤에 깔아 칸 테두리가 줄기 밑동을 덮는다)
+	var orn := dust_ornament_rect()
+	_canvas.draw_texture_rect_region(BAR_GUARD, orn, DUST_ORNAMENT_SRC)
+	_canvas.draw_style_box(_box_outer, box.grow(2.0))
+	_canvas.draw_style_box(_box_gold, box)
+	if s > 0.01:
+		_canvas.draw_rect(box.grow(-3.0), Color(1.0, 0.88, 0.55, 0.22 * s))
+	_canvas.draw_style_box(_box_inner, box.grow(-4.5))
+	# 빛 가루 그림 (천천히 숨쉬듯 밝기, 늘어난 순간 커짐)
 	var c := dust_origin()
 	var pulse := 0.5 + 0.5 * sin(_time * 3.0)
-	var glow := 0.25 + 0.2 * pulse + 0.6 * _dust_glow
-	_canvas.draw_circle(c, DUST_ICON * (1.3 + 0.6 * _dust_glow), Color(DUST_COLOR.r, DUST_COLOR.g, DUST_COLOR.b, 0.18 * glow))
-	var long := DUST_ICON * (1.0 + 0.15 * pulse + 0.4 * _dust_glow)
-	var short := DUST_ICON * 0.45
-	var outline := Color(0.08, 0.06, 0.03, 0.7)
-	for k in 4:
-		var a := k * PI * 0.5
-		var tip := c + Vector2(cos(a), sin(a)) * long
-		var l := c + Vector2(cos(a + PI * 0.5), sin(a + PI * 0.5)) * short * 0.55
-		var r := c + Vector2(cos(a - PI * 0.5), sin(a - PI * 0.5)) * short * 0.55
-		var tri := PackedVector2Array([tip, l, r])
-		_canvas.draw_colored_polygon(tri, Color(1.0, 0.98, 0.85, 0.95))
-		_canvas.draw_polyline(tri + PackedVector2Array([tip]), outline, 1.0)
-	for k in 4:
-		var a := k * PI * 0.5 + PI * 0.25
-		_canvas.draw_line(c, c + Vector2(cos(a), sin(a)) * short * (1.0 + 0.6 * _dust_glow), Color(1.0, 0.95, 0.75, 0.6), 1.2)
-	_canvas.draw_circle(c, DUST_ICON * 0.32, Color(1, 1, 1, 0.95))
-	var tx := c.x + DUST_ICON + 5.0
-	_draw_outlined(font, Vector2(tx, c.y + DUST_FONT_SIZE * 0.36), dust_text(), DUST_FONT_SIZE, Color(DUST_COLOR.r, DUST_COLOR.g, DUST_COLOR.b, 0.95))
+	var isz := DUST_ICON_SIZE * (1.0 + 0.18 * s)
+	_canvas.draw_texture_rect(DUST_ICON_TEX, Rect2(c - Vector2(isz, isz) * 0.5, Vector2(isz, isz)), false, Color(1, 1, 1, 0.88 + 0.12 * pulse))
+	var tx := box.position.x + 8.0 + DUST_ICON_SIZE + 6.0
+	var ty := box.get_center().y + DUST_FONT_SIZE * 0.36
+	var num_col := DUST_COLOR.lerp(Color(1, 1, 1), 0.6 * s)
+	_draw_outlined(font, Vector2(tx, ty), dust_shown_text(), DUST_FONT_SIZE, num_col)
 	for pop in _dust_pops:
 		var t: float = 1.0 - pop["t"] / DUST_POP_TIME   # 0 → 1
 		var a := clampf(minf(t / 0.12, (1.0 - t) / 0.4), 0.0, 1.0)
-		var y := c.y - DUST_POP_RISE * (1.0 - (1.0 - t) * (1.0 - t))
-		_draw_outlined(font, Vector2(tx, y + DUST_FONT_SIZE * 0.36 - 4.0), "+%d" % int(pop["amount"]), DUST_FONT_SIZE + 2, Color(1.0, 1.0, 0.85, a))
+		var x := orn.end.x + 4.0 + DUST_POP_RISE * (1.0 - (1.0 - t) * (1.0 - t))
+		_draw_outlined(font, Vector2(x, box.get_center().y + 8.0), "+%s" % _thousands(int(pop["amount"])), 22, Color(1.0, 1.0, 0.85, a))
 
 
 ## 영혼 전환 알림: 화면 가운데 위, 큰 영혼 이름 + 작은 설명. 떠올랐다 사라진다.
