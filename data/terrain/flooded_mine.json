@@ -1,7 +1,7 @@
 {
   "region": "flooded_mine",
   "name": "잠긴 채굴장",
-  "note": "잠긴 채굴장 지형 그림 조각 (구리 수로·관 기둥·바위). 기계 벽·문·표시등·물레방아 조각도 이 atlas 에 함께 넣는다 (역할 prop/wheel/lamp — 지형 코드는 안 쓰고 TerrainProp·Waterwheel·MachineLamp 가 쓴다). 자르기: tools/terrain_cut.gd flooded_mine → art/terrain/flooded_mine/. 설명은 TERRAIN.md.",
+  "note": "잠긴 채굴장 지형 그림 조각 (구리 수로·관 기둥·바위). 기계 벽·문·표시등·물레방아 조각도 이 atlas 에 함께 넣는다 (역할 decor — 지형 코드는 안 쓰고 TerrainProp·Waterwheel·MachineLamp 가 쓴다). 자르기: tools/terrain_cut.gd flooded_mine → art/terrain/flooded_mine/. 설명은 TERRAIN.md.",
   "scale": 1.0,
   "tint": [0.86, 0.82, 0.8],
   "fill": {"top": 0.92, "deep": 0.72, "deep_px": 340, "rim": 0.76, "rim_px": 30, "wall": 0.88},

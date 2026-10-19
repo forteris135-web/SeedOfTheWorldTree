@@ -2,7 +2,7 @@ class_name Waterwheel
 extends Node2D
 ## 물레방아 (잠긴 채굴장 장식 — 판정 없음). 기획자가 따로 그린 물레방아 조각을 조립해 천천히 돌린다.
 ##   익스펜션/그림/물레방아/11A4E5F6… : 바퀴 테두리 1/4 조각·바퀴살과 축·물 뿜는 관 탑·이끼 낀 바위
-## 조각은 잠긴 채굴장 그림 옷 atlas 에 들어 있다 (data/terrain/flooded_mine.json 의 역할 wheel / prop).
+## 조각은 잠긴 채굴장 그림 옷 atlas 에 들어 있다 (data/terrain/flooded_mine.json 의 역할 decor — 지형 코드는 쓰지 않는 단독 장식). 재질은 배경 그림과 같은 ash_purify_far.
 ##
 ## 조립 (노드 자리 = 바퀴 축):
 ##  - 바퀴: 축(wheel_hub, 바퀴살 6개) + 테두리 조각(wheel_ring)을 90°씩 돌려 네 번 → 동그란 바퀴. 이 묶음만 돈다.
