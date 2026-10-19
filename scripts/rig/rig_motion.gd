@@ -14,8 +14,12 @@ extends RefCounted
 ##     무릎 꿇기(kneel_*)는 무릎을 땅에 대고 정강이를 뒤로 눕힌 해와 섞는다.
 ##  5) 무기 땅 막기: ground_guard 부위의 껍질이 땅 아래로 들어가면 손목→팔꿈치→어깨 순으로 들어 올린다 (칼끝이 땅에 닿아 멈춘 것처럼).
 ##  6) 늘어진 천·잎(chain): 세상 각도로 스프링 → 몸이 돌면 한 박자 늦게 따라오고, 달리면 뒤로 날린다.
-##  7) 땅 닿기(ground_lock): 무기 사슬을 뺀 몸의 가장 낮은 껍질 점이 땅 아래면 그만큼 몸 전체를 들어 올린다 (쓰러져 엎어질 때
-##     머리가 땅에 박히지 않게). fall_angle/fall_pivot 은 몸을 통째로 돌리는 쓰러짐(기계·통나무 같은 몸)용으로 남겨 둔다.
+##  7) 땅 닿기(ground_lock): 무기 사슬·부드러운 부위를 뺀 몸의 가장 낮은 껍질 점이 땅 아래면 그만큼 몸 전체를 들어 올린다 (쓰러져
+##     엎어질 때 머리가 땅에 박히지 않게). fall_angle/fall_pivot 은 몸을 통째로 돌리는 쓰러짐(기계·통나무 같은 몸)용으로 남겨 둔다.
+##  8) 내려놓기(ground_settle): 몸통·머리·팔(다리·무기 사슬·부드러운 부위 뺌)의 가장 낮은 점이 **정확히** 땅에 오도록 뿌리를 내리거나
+##     올리고, 다리는 그다음 IK 로 딛은 발에 맞춘다 → 엉덩방아를 찧고 등으로 굴러 눕는 동안 닿는 점이 엉덩이 → 등 → 머리로 옮겨 간다.
+##  9) 부드러운 부위(설계도 "soft" 의 치마 등 + 늘어진 천 chain): 땅 닿기·내려놓기에서 빼고(몸을 받쳐 띄우지 않게),
+##     땅 아래로 들어가는 만큼 그림을 땅 쪽으로 눌러 접는다 (PartRig.squash_y).
 
 ## 보간 채널: 값 + 속도. 스프링·감쇠 모두 속도를 이어 가므로 어떤 전환에서도 끊기지 않는다.
 class Chan:
@@ -96,6 +100,8 @@ const EARLY_KEYS := ["torso", "lean", "hip_x"]
 ## 타격 중에도 스프링으로 따라가는 무거운 채널 (몸통·허리·무게중심)
 const HEAVY_KEYS := ["torso", "lean", "hip_x", "hip_y"]
 const EARLY_UNWIND := 0.4
+## 부드러운 부위가 땅에 눌려 접히는 한계 (세로 배율)
+const SOFT_MIN := 0.35
 
 var rig: PartRig
 var poses := {}
@@ -126,6 +132,8 @@ var tilt_scale := 1.0
 var fall_angle := 0.0
 var fall_pivot := Vector2.ZERO
 var ground_lock := 0.0
+## 내려놓기 세기 (0~1, 위 8번). 누워 쉬는 자세(뒤로 쓰러짐)에서 쓰는 쪽이 올린다.
+var ground_settle := 0.0
 
 var _raw := {}            # 이번 프레임의 섞인 목표 (매 프레임 새 사전을 만들지 않게 돌려 쓴다)
 var _fade_from := {}
@@ -140,7 +148,9 @@ var _chains: Array = []   # [뼈 번호, 강성, 감쇠, 끌림, 중력, 최대(
 var _guard_bones: PackedInt32Array = []
 var _guard_chain: PackedInt32Array = []   # [어깨, 팔꿈치, 손목] 뼈 번호 (없으면 -1)
 var _bone_keys: Array = []   # [채널 이름, 뼈 번호]
-var _lock_bones: PackedInt32Array = []   # 땅 닿기에 쓰는 뼈 (무기 사슬 빼고)
+var _lock_bones: PackedInt32Array = []   # 땅 닿기에 쓰는 뼈 (무기 사슬·부드러운 부위 빼고)
+var _settle_bones: PackedInt32Array = [] # 내려놓기에 쓰는 뼈 (땅 닿기 뼈에서 다리 빼고)
+var _soft_bones: PackedInt32Array = []   # 부드러운 부위 (땅에 눌려 접힌다)
 var _swing_bob := 0.0
 
 
@@ -167,13 +177,30 @@ func _init(part_rig: PartRig) -> void:
 		sp[s] = Chan.new(0.0)
 	_setup_legs()
 	_setup_guard()
+	# 부드러운 부위: 설계도 "soft" (치마처럼 몸에 붙어 늘어진 그림) + 늘어진 천(chain). 그 자식은 아니다 (치마인 골반의 다리 등).
+	var soft_names: Array = d.get("soft", [])
 	for i in rig.names.size():
+		if soft_names.has(rig.names[i]) or (d["bones"][i] as Dictionary).has("chain"):
+			_soft_bones.append(i)
+	var leg_roots := PackedInt32Array()
+	for leg in legs:
+		leg_roots.append(leg.up)
+	for i in rig.names.size():
+		if _soft_bones.has(i):
+			continue
 		var in_weapon := false
 		for c in _guard_chain:
 			if c >= 0 and (i == c or rig._is_descendant(i, c)):
 				in_weapon = true
-		if not in_weapon:
-			_lock_bones.append(i)
+		if in_weapon:
+			continue
+		_lock_bones.append(i)
+		var in_leg := false
+		for u in leg_roots:
+			if i == u or rig._is_descendant(i, u):
+				in_leg = true
+		if not in_leg:
+			_settle_bones.append(i)
 	for i in rig.names.size():
 		var b: Dictionary = d["bones"][i]
 		if b.has("chain"):
@@ -499,6 +526,8 @@ func update(delta: float, ctx: Dictionary) -> void:
 	_ground_guard()
 	# 8) 늘어진 천·잎
 	_update_chains(delta, speed, vy)
+	# 9) 부드러운 부위가 땅에 눌려 접힘
+	_soft_ground()
 	rig.apply()
 
 
@@ -575,6 +604,12 @@ func _apply_body() -> void:
 			v *= lerpf(1.0, tilt_scale, 0.5)
 		rig.rot[i] = v if rig.has_axis[i] == 1 else rig.rest[i] + v
 	rig.compute()
+	# 내려놓기: 몸(다리 뺌)의 가장 낮은 점을 땅에 — 내리기도 한다 (다리는 다음 단계 IK 가 딛은 발에 맞춘다)
+	if ground_settle > 0.0 and _settle_bones.size() > 0:
+		var low := rig.lowest_y(_settle_bones, false)
+		if absf(low) > 0.01:
+			rig.root_pos.y -= low * clampf(ground_settle, 0.0, 1.0)
+			rig.compute()
 
 
 func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void:
@@ -882,6 +917,45 @@ func _update_chains(delta: float, speed: float, vy: float) -> void:
 		var lw: float = c[5]
 		rig.rot[i] = clampf(chn.v - pw, local_want - lw, local_want + lw)
 		rig.compute_from(i)
+
+
+## 부드러운 부위(치마·천)가 땅(0) 아래로 들어가면: 늘어진 천(축이 있는 chain)은 먼저 관절을 돌려 땅 위에 눕히고(SOFT_TURN 까지),
+## 그래도 남으면 그 관절을 축으로 그림을 땅 쪽으로 눌러 접는다 (보이는 자리 = body_xf 포함). 관절 자체가 땅 아래면 가장 많이 누른다.
+## 매 프레임 기하로 정하므로 몸이 움직이면 이어서 바뀐다 (천의 스프링 상태는 건드리지 않는다).
+const SOFT_TURN := 1.4
+
+func _soft_ground() -> void:
+	var bx := rig.body_xf
+	for i in _soft_bones:
+		var t := bx * rig.xf[i]
+		var py := t.origin.y
+		var low := -INF
+		var q_low := Vector2.ZERO
+		for q in rig.hulls[i]:
+			var w := t * q
+			if w.y > low:
+				low = w.y
+				q_low = w
+		if low > 0.0 and py < 0.0 and rig.has_axis[i] == 1:
+			# 천을 땅 위로 돌린다: 가장 깊은 점이 땅에 오는 두 각도 중 덜 도는 쪽
+			var rr := (q_low - t.origin).length()
+			if rr > 1.0:
+				var want := clampf(-py / rr, -1.0, 1.0)
+				var cur := (q_low - t.origin).angle()
+				var s1 := asin(want)
+				var d1 := wrapf(s1 - cur, -PI, PI)
+				var d2 := wrapf(PI - s1 - cur, -PI, PI)
+				var dd := clampf(d1 if absf(d1) <= absf(d2) else d2, -SOFT_TURN, SOFT_TURN)
+				rig.rot[i] += dd
+				rig.compute_from(i)
+				t = bx * rig.xf[i]
+				low = -INF
+				for q in rig.hulls[i]:
+					low = maxf(low, (t * q).y)
+		var k := 1.0
+		if low > 0.0:
+			k = clampf(-py / maxf(low - py, 1.0), SOFT_MIN, 1.0) if py < 0.0 else SOFT_MIN
+		rig.squash_y[i] = k
 
 
 func _apply_fall() -> void:

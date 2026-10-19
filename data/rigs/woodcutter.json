@@ -17,6 +17,7 @@
   "legs": ["leg_f", "leg_b"],
   "weapon_chain": "arm_f",
   "ground_guard": ["weapon", "arm_f_lo"],
+  "soft": ["hips"],
   "ghost": ["torso", "shoulder_f", "arm_f_up", "arm_f_lo", "weapon"],
   "poses": {
     "_설명": "긴 잎칼 팔(어깨→칼끝 약 990px)이라 칼끝이 땅에 닿도록 팔을 앞으로 더 든다. 팔 각도 = 원하는 세상 각도 − 몸통 각도.",
@@ -29,7 +30,7 @@
     "rescued": {"arm_f_up": -50, "arm_f_lo": -4, "weapon": -14},
     "dead_knees": {"arm_f_up": -70, "arm_f_lo": -2, "weapon": -10},
     "dead_lie": {"arm_f_up": -175, "arm_f_lo": -6, "weapon": -8},
-    "dead_back_lie": {"arm_f_up": 14, "arm_f_lo": -2, "weapon": -2},
+    "dead_back_lie": {"arm_f_up": 55, "arm_f_lo": -45, "weapon": -5},
     "hit": {"arm_f_up": -34, "arm_f_lo": -4, "weapon": -14},
     "alert": {"arm_f_up": -70, "arm_f_lo": -10, "weapon": -10},
     "lunge": {"arm_f_up": 62, "arm_f_lo": -10, "weapon": -6},

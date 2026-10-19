@@ -896,7 +896,7 @@ func _cut() -> bool:
 		"height": snappedf(ground - min_y, 0.01),
 		"bones": bones, "legs": legs, "chains": chains,
 	}
-	for k in ["weapon_chain", "ground_guard", "ghost", "sockets", "poses"]:
+	for k in ["weapon_chain", "ground_guard", "ghost", "soft", "sockets", "poses"]:
 		if _spec.has(k):
 			var v = _spec[k]
 			if k == "sockets":

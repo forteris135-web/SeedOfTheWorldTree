@@ -6,13 +6,19 @@ extends Node
 ##     - 발바닥이 땅 ±4px (게임 px): 서 있는 동안은 모든 발, 걷는 동안은 가장 낮은 발(한 발은 들려 있다)
 ##     - 땅 아래로 4px 넘게 들어간 부위 없음 (발·다리·몸·머리·무기 — 무기는 '땅 막기'가 지킨다)
 ##     - NaN 없음, 덮는 상자가 상식적 (키의 0.5~2.5배, 너비 < 키의 5배)
-##  3) 쓰러짐(실제 몹 씬): 넘어진 뒤 가장 낮은 몸 점이 땅 ±6px (가라앉거나 뜨지 않음)
-##  4) 뼈대 8개를 매 프레임 움직이는 비용
+##  3) 쓰러짐(실제 몹 씬, 앞·뒤): 넘어진 뒤 가장 낮은 몸 점이 땅 ±6px (가라앉거나 뜨지 않음),
+##     그리고 정말 누웠는가 — 몸통·머리 가운데가 낮고 무기가 하늘로 들리지 않음 (천·치마가 몸을 받쳐 떠 있지 않게)
+##  4) 대롱 겨눔 (arm_kind = "gun"): 뼈대 몹을 대롱 몹처럼 바꿔 소녀를 위·앞·아래에 두면 대롱 뼈(aim_bone)의 축이 소녀를 향하는가
+##  5) 뼈대 8개를 매 프레임 움직이는 비용
 ## 를 찍는다. 실패가 하나라도 있으면 종료 코드 1.
 
 const STEP := 1.0 / 60.0
 const FEET_TOL := 4.0
 const SINK_TOL := 4.0
+## 쓰러져 누운 끝: 몸통 가운데·머리 가운데·무기 꼭대기의 땅 위 높이 상한 (서 있는 키의 몫)
+const LIE_TORSO := 0.3
+const LIE_HEAD := 0.35
+const LIE_WEAPON := 0.45
 
 var _fail := 0
 
@@ -24,9 +30,12 @@ func _ready() -> void:
 	_check(ids.size() > 0, "art/rigs 에 뼈대가 하나 이상 있다")
 	for id in ids:
 		_probe_rig(id)
-	for path in _rig_enemy_scenes():
+	var scenes := _rig_enemy_scenes()
+	for path in scenes:
 		_probe_enemy_fall(path, false)
 		_probe_enemy_fall(path, true)
+	if scenes.size() > 0:
+		await _probe_gun_aim(scenes[0])
 	_probe_cost(ids)
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
@@ -289,13 +298,105 @@ func _probe_enemy_fall(path: String, from_front: bool) -> void:
 		if nm.begins_with("leg_") or nm.begins_with("foot_") or nm in ["torso", "head"]:
 			body.append(i)
 	var gs: float = rig.game_scale * float(vis.art_scale)
+	var stand_h := float(rig.data.get("height", 1000.0)) * gs
+	var torso_h := 0.0
+	var head_h := 0.0
+	var weapon_hi := 0.0
 	for i in 40:   # 0.67초 (쓰러짐 0.75초 안)
 		e._physics_process(STEP)
 		vis._process(STEP)
 		if i == 36:
 			low_end = rig.lowest_y(vis.motion._lock_bones) * gs
-	_check(absf(low_end) <= 6.0, "%s: %s 쓰러져 누운 몸의 가장 낮은 점이 땅 ±6px (%+.1fpx)" % [path.get_file(), "뒤로" if from_front else "앞으로", low_end])
+			torso_h = -_center_y(rig, "torso") * gs
+			head_h = -_center_y(rig, "head") * gs
+			weapon_hi = -_top_y(rig, "weapon") * gs
+	var side := "뒤로" if from_front else "앞으로"
+	print("[probe]   %s %s 쓰러짐 끝: 몸통 가운데 %+.0fpx, 머리 가운데 %+.0fpx, 무기 꼭대기 %+.0fpx (서 있는 키 %.0fpx, 땅 위 +)" % [path.get_file(), side, torso_h, head_h, weapon_hi, stand_h])
+	_check(absf(low_end) <= 6.0, "%s: %s 쓰러져 누운 몸의 가장 낮은 점이 땅 ±6px (%+.1fpx)" % [path.get_file(), side, low_end])
+	# 누웠는가: 가장 낮은 점만 보면 천·치마가 몸을 받쳐 떠 있어도 통과한다 → 몸통·머리 가운데가 낮아야 한다 (기울기 줄인 거대화 몹 포함)
+	_check(torso_h <= stand_h * LIE_TORSO and head_h <= stand_h * LIE_HEAD,
+		"%s: %s 쓰러져 누웠다 — 몸통 가운데 ≤ 키의 %d%%, 머리 가운데 ≤ 키의 %d%% (몸통 %.0f%%, 머리 %.0f%%)" % [path.get_file(), side,
+		int(LIE_TORSO * 100.0), int(LIE_HEAD * 100.0), torso_h / stand_h * 100.0, head_h / stand_h * 100.0])
+	if rig.has_bone("weapon"):
+		_check(weapon_hi <= stand_h * LIE_WEAPON, "%s: %s 쓰러진 무기가 하늘로 들리지 않는다 — 무기 꼭대기 ≤ 키의 %d%% (%.0f%%)" % [path.get_file(), side,
+			int(LIE_WEAPON * 100.0), weapon_hi / stand_h * 100.0])
 	e.free()
+
+
+## 부위 껍질 점들의 가운데 y (뼈대 단위, body_xf 포함, 땅 0·위 −). 그 뼈가 없으면 0.
+func _center_y(rig: PartRig, bone: String) -> float:
+	var i := rig.bone_index(bone)
+	if i < 0 or rig.hulls[i].is_empty():
+		return 0.0
+	var t := rig.body_xf * rig.xf[i]
+	var sum := 0.0
+	for q in rig.hulls[i]:
+		sum += (t * q).y
+	return sum / rig.hulls[i].size()
+
+
+## 부위 껍질의 가장 높은 y (뼈대 단위, 위 −)
+func _top_y(rig: PartRig, bone: String) -> float:
+	var i := rig.bone_index(bone)
+	if i < 0:
+		return 0.0
+	var t := rig.body_xf * rig.xf[i]
+	var m := INF
+	for q in rig.hulls[i]:
+		m = minf(m, (t * q).y)
+	return m if m < INF else 0.0
+
+
+## 대롱 겨눔: 첫 뼈대 몹 씬을 arm_kind = "gun" 으로 바꿔 (aim_bone 의 축 = 대롱) 쫓는 상태에서 소녀를 세 자리에 둔다.
+## 대롱 축과 '손 → 소녀 가슴' 방향의 각도 차이가 작아야 한다 (겨눔 한계 안의 자리만). 예고 때는 조금 치켜든다.
+func _probe_gun_aim(path: String) -> void:
+	var e: EnemyBase = (load(path) as PackedScene).instantiate()
+	e.gravity = 0.0
+	var vis = e.get_node("Visual")
+	vis.arm_kind = "gun"
+	add_child(e)
+	if e.is_queued_for_deletion():
+		e.free()
+		return
+	e.set_physics_process(false)
+	vis.set_process(false)
+	var pl: Player = (load("res://scenes/player/player.tscn") as PackedScene).instantiate()
+	add_child(pl)
+	pl.set_physics_process(false)
+	pl.set_process(false)
+	await get_tree().process_frame
+	e.facing = 1
+	e.player = pl
+	e._set_state(EnemyBase.State.CHASE)
+	var rig: PartRig = vis.rig
+	var ai := rig.bone_index(str(vis.aim_bone))
+	var worst := 0.0
+	var res := ""
+	# 소녀 자리 (몹 기준): 앞 수평, 앞 위(한계 안), 앞 아래(한계 안)
+	for off in [Vector2(520, 0), Vector2(600, -260), Vector2(600, 260)]:
+		for i in 60:
+			var hand0 := rig.to_global(rig.bone_point(str(vis.aim_bone)))
+			pl.global_position = hand0 + off + Vector2(0, 40)
+			vis._process(STEP)
+		var hand := rig.to_global(rig.bone_point(str(vis.aim_bone)))
+		var tip := rig.to_global(rig.to_rig_local(rig.xf[ai] * Vector2(0, 100)))
+		var want: Vector2 = pl.global_position + Vector2(0, -40) - hand
+		var err := absf(rad_to_deg(wrapf((tip - hand).angle() - want.angle(), -PI, PI)))
+		worst = maxf(worst, err)
+		res += "(%+.0f,%+.0f) %.1f도  " % [off.x, off.y, err]
+	print("[probe]   대롱 겨눔 %s: %s" % [path.get_file(), res])
+	_check(worst <= 6.0, "대롱 겨눔: 대롱 축이 소녀 가슴을 향한다 (가장 큰 차이 %.1f도, 기준 6도)" % worst)
+	# 예고: 조금 치켜든다
+	e._set_state(EnemyBase.State.WINDUP)
+	for i in 40:
+		vis._process(STEP)
+	var hand2 := rig.to_global(rig.bone_point(str(vis.aim_bone)))
+	var tip2 := rig.to_global(rig.to_rig_local(rig.xf[ai] * Vector2(0, 100)))
+	var want2: Vector2 = pl.global_position + Vector2(0, -40) - hand2
+	var raise := rad_to_deg(wrapf(want2.angle() - (tip2 - hand2).angle(), -PI, PI))
+	_check(raise > 5.0 and raise < 25.0, "대롱 겨눔: 예고 때 대롱을 조금 치켜든다 (%.1f도)" % raise)
+	e.free()
+	pl.free()
 
 
 func _probe_cost(ids: Array) -> void:

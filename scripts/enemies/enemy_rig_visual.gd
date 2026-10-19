@@ -7,7 +7,8 @@ class_name EnemyRigVisual
 ## RigMotion 이 관절을 움직인다 (예비 → 타격 → 되돌림 세 박자, 발 디딤, 다리 IK, 무기 땅 막기, 천 흔들림, 쓰러짐).
 ## 판정·시간은 전혀 건드리지 않는다 (그림이 논리를 따라간다). EnemySpriteVisual 과 같은 공개 함수·값을 그대로 둔다:
 ##   kick / impact / parried / block / recoil / fall, visible_facing / is_facing_settled, art_faces_right, show_overhead_bar,
-##   warm_eye, stride_scale, arm_front / arm_front_limit / tilt_scale, arm_kind, art_scale(배율), _label, texture(구원 NPC 그림).
+##   warm_eye, stride_scale, arm_front / arm_front_limit / tilt_scale, arm_kind(대롱이면 소녀를 겨눔 — aim_bone), art_scale(배율),
+##   _label, texture(구원 NPC 그림).
 ## 원형(archetype)별 자세는 RigPoses, 뼈대마다 고칠 값은 설계도의 "poses".
 
 ## art/rigs/<rig_id>/rig.json
@@ -23,8 +24,10 @@ class_name EnemyRigVisual
 @export var texture: Texture2D
 @export var npc_art_scale := 0.17
 @export var npc_faces_right := false
-## 무기 팔의 종류 (EliteTraits 가 읽는다): 검(들었다 내려침) / 대롱(겨눔)
+## 무기 팔의 종류 (EliteTraits 가 읽는다): 검(들었다 내려침) / 대롱(겨눔 — 쫓기·예고·쏘기·회복·물러남 동안 aim_bone 이 소녀를 겨눈다)
 @export_enum("sword", "gun") var arm_kind := "sword"
+## 대롱: 소녀를 겨누는 부위 (그 뼈의 축 = 대롱 방향). 위팔(arm_f_up)을 돌려 겨눈다.
+@export var aim_bone := "weapon"
 
 ## 예전 그림(EnemySpriteVisual)과 같은 이름의 값들 — EliteTraits·시험이 읽고 쓴다. 뼈대는 늘 오른쪽을 보는 그림으로 잘린다.
 var art_faces_right := true
@@ -43,6 +46,12 @@ const LOCO_STATES := [EnemyBase.State.IDLE, EnemyBase.State.PATROL, EnemyBase.St
 ## 잔상 간격(초)·장 수
 const GHOST_INTERVAL := 0.025
 const GHOST_COUNT := 6
+## 대롱이 겨누는 상태와 위아래 한계 (앞쪽 수평 기준, 라디안: − 위 / + 아래) — 예전 그림(EnemySpriteVisual)과 같은 값
+const AIM_STATES := [EnemyBase.State.CHASE, EnemyBase.State.WINDUP, EnemyBase.State.STRIKE, EnemyBase.State.RECOVER, EnemyBase.State.BACKSTEP]
+const AIM_UP := -0.7
+const AIM_DOWN := 0.6
+## 예고 동안 대롱을 조금 치켜든다 (쏘기 직전 겨눔이 읽히게)
+const AIM_WINDUP_RAISE := 0.25
 
 var rig: PartRig
 var motion: RigMotion
@@ -78,11 +87,12 @@ var _hit_dir := 1
 var _fall_dir := 1
 var _fall_gentle := false
 var _fall_sign := 1.0
-var _fall_pivot_set := false
 var _scatter_popped := false
 var _thud_done := false
 var _ready_ok := false
 var _underlay_on := false
+var _aim_i := -1      # 대롱 뼈 번호
+var _aim_arm := -1    # 겨눌 때 돌리는 위팔 뼈 번호
 
 
 func _ready() -> void:
@@ -157,6 +167,12 @@ func _ready() -> void:
 			_enemy.state_changed.connect(_on_state_changed)
 		_from_state = _enemy.state
 	_state_from = motion.pose("idle")
+	if arm_kind == "gun":
+		_aim_i = rig.bone_index(aim_bone)
+		_aim_arm = rig.bone_index("arm_f_up")
+		if _aim_i < 0 or _aim_arm < 0 or not motion.ch.has("arm_f_up"):
+			push_warning("대롱 겨눔: 뼈대 %s 에 %s 또는 arm_f_up 이 없어 겨누지 않는다" % [rig_id, aim_bone])
+			_aim_i = -1
 	_ready_ok = true
 
 
@@ -311,6 +327,7 @@ func _process(delta: float) -> void:
 	var tint_strength := 0.0
 	var breath := 1.0
 	var lock := 0.0
+	var settle := 0.0
 	motion.tilt_scale = tilt_scale
 	if airborne and st in LOCO_STATES:
 		p = motion.pose("air")
@@ -422,22 +439,24 @@ func _process(delta: float) -> void:
 					drive = RigMotion.Drive.SOFT
 				else:
 					# 쓰러짐. 앞으로(등 뒤에서 맞음·정화): 무릎이 꺾여 꿇고 → 꿇은 무릎을 축으로 허벅지째 엎어져 땅에 눕는다 (관절 자세만으로).
-					# 뒤로(앞에서 맞아 밀림 — 흔한 경우): 무릎이 꺾여 엉덩방아를 찧고(발은 땅에 딛은 채) → 엉덩이를 축으로 등이 땅에 닿게
-					# 몸 전체가 뒤로 넘어간다 (다리는 굽힌 채 따라 들린다). 두 경우 모두 무게에 끌리듯 점점 빨리 떨어지고,
-					# 몸이 땅 아래로 들어가면 들어 올린다(ground_lock — 올리기만). 쓰러짐 길이(0.75초)의 뒤 38% 동안 흩어져 사라진다.
+					# 뒤로(앞에서 맞아 밀림 — 흔한 경우): 무릎이 꺾여 엉덩방아를 찧고(발은 땅에 딛은 채) → 골반째 뒤로 굴러 등이 땅에 눕는다.
+					# 뒤로는 내려놓기(ground_settle)가 몸의 가장 낮은 점을 땅에 붙이고 다리는 IK 로 딛은 발에 맞춘다 (무릎이 서고 발이 앞으로 차 나감).
+					# 두 경우 모두 무게에 끌리듯 점점 빨리 떨어지고, 몸이 땅 아래로 들어가면 들어 올린다(ground_lock — 올리기만).
+					# 쓰러짐 길이(0.75초)의 뒤 38% 동안 흩어져 사라진다.
 					var u := e / total
-					var knees := Motion.ease_out(clampf(u / 0.32, 0.0, 1.0), 2.0)
-					var slump := Motion.ease_in(clampf((u - 0.22) / 0.38, 0.0, 1.0), 2.0)
+					# 뒤로는 조금 일찍 눕는다 (엉덩방아는 무릎 꿇기보다 짧고, 흩어지기 전에 누운 모습이 보이게)
+					var back := _fall_sign < 0.0
+					var knees := Motion.ease_out(clampf(u / (0.26 if back else 0.32), 0.0, 1.0), 2.0)
+					var slump := Motion.ease_in(clampf((u - (0.16 if back else 0.22)) / (0.32 if back else 0.38), 0.0, 1.0), 2.0)
 					lock = 1.0
+					# 거대화 몹의 '몸 기울기 줄이기'(tilt_scale)는 서 있는 동안만: 쓰러질 땐 끝까지 눕는다
+					# (줄인 채면 엎어지는 기울기 78도가 35도가 되어 몸이 반쯤 선 채 칼끝이 하늘을 가리켰다 — 2026-10-20 검수)
+					motion.tilt_scale = lerpf(tilt_scale, 1.0, knees)
 					if _fall_sign > 0.0:
 						p = motion.mix(motion.mix(_state_from, motion.pose("dead_knees"), knees), motion.pose("dead_lie"), slump)
-						motion.fall_angle = 0.0
 					else:
 						p = motion.mix(motion.mix(_state_from, motion.pose("dead_back"), knees), motion.pose("dead_back_lie"), slump)
-						if slump > 0.0 and not _fall_pivot_set:
-							_fall_pivot_set = true
-							motion.fall_pivot = Vector2(rig.root_pos.x - motion.L * 0.08, 0.0)
-						motion.fall_angle = -deg_to_rad(72.0) * slump
+						settle = knees
 					if slump >= 1.0 and not _thud_done:
 						_thud_done = true
 						motion.kick("thud", 8.0)
@@ -449,12 +468,13 @@ func _process(delta: float) -> void:
 				else:
 					tint = Color(0.35, 0.33, 0.36)
 				tint_strength = 1.0
-	if st != EnemyBase.State.DEAD:
-		motion.fall_angle = 0.0
-		_fall_pivot_set = false
+	motion.fall_angle = 0.0
 	motion.ground_lock = lock
+	motion.ground_settle = settle
 	motion.breath = breath
 	motion.set_target(p, drive, feet)
+	if _aim_i >= 0 and st in AIM_STATES and not airborne:
+		_aim_gun(st)
 	motion.update(delta, {"speed": speed_rig, "dx": dx_rig, "vy": _enemy.velocity.y / maxf(gscale, 0.0001), "grounded": on_floor or not airborne})
 
 	# 떨림·반동·번쩍임 (덧붙임)
@@ -528,6 +548,26 @@ func _process(delta: float) -> void:
 	if st == EnemyBase.State.BROKEN or _underlay_on:
 		_underlay.queue_redraw()
 	_underlay_on = st == EnemyBase.State.BROKEN
+
+
+## 대롱(gun): 소녀를 겨눈다 (EnemySpriteVisual 의 겨눔과 같은 상태·한계). 상태 자세 대신 위팔 목표를 고쳐
+## 대롱 뼈의 축이 소녀 가슴 쪽을 향하게 한다. 팔꿈치·손목은 자세 그대로라 '위팔을 이만큼 더 돌리면 대롱이 그만큼 돈다'로 바로 푼다
+## (지난 프레임의 실제 각도로 풀어도 위팔 값이 서로 지워져 되먹임 떨림이 없다). 피격·반동 같은 덧붙임은 빼고 풀어 반동은 그대로 보인다.
+func _aim_gun(st: int) -> void:
+	var pl := _enemy.player
+	if pl == null or not is_instance_valid(pl):
+		return
+	var hand := rig.to_global(rig.bone_point(aim_bone))
+	var to: Vector2 = pl.global_position + Vector2(0, -40) - hand
+	# 뼈대 틀(늘 오른쪽을 봄)의 겨눌 각도: 0 = 앞 수평, + = 아래. 뒤쪽이면 앞쪽으로 접어 생각한다 (곧 돌아선다).
+	var want := clampf(atan2(to.y, maxf(absf(to.x), 1.0)), AIM_UP, AIM_DOWN)
+	if st == EnemyBase.State.WINDUP:
+		want -= AIM_WINDUP_RAISE
+	var axis := (rig.body_xf * rig.xf[_aim_i]).basis_xform(Vector2.DOWN).angle()
+	var chan := deg_to_rad((motion.ch["arm_f_up"] as RigMotion.Chan).v)
+	var extra := rig.rot[_aim_arm] - chan    # 덧붙임(숨쉬기·피격·반동)
+	var err := wrapf(want - (axis - extra), -PI, PI)
+	motion.target["arm_f_up"] = rad_to_deg(chan + err)
 
 
 ## 상태 진입 1회: 그 순간 보이던 자세를 기억(예비·되돌림·무너짐이 여기서 출발)하고, 먼지·번쩍임·섞기 길이를 정한다.

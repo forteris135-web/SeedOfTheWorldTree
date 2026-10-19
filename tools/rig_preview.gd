@@ -8,7 +8,7 @@ extends Node2D
 ##       부위마다 그림 + 관절(빨강 pivot, 파랑 축 끝, 노랑 자식 관절, 초록 발바닥): screenshots/rig_<id>_parts.png
 ##   Godot --path . res://tools/rig_preview.tscn -- --enemy res://scenes/enemies/woodcutter.tscn [--seq idle,walk,attack,hit,broken,dead,kneel] [--joints]
 ##       동작: idle / walk / backstep / alert / attack / hit / broken / dead(뒤에서 맞아 앞으로) / dead_back(앞에서 맞아 뒤로) / kneel(구원형)
-##             / slam (잿가지 거인 내려찍기)
+##             / slam (잿가지 거인 내려찍기) / aim (대롱 겨눔: arm_kind 를 gun 으로 바꾸고 소녀가 몹 앞을 위→아래로 돈다 — 정원사처럼 대롱 몹을 만들 때)
 ##       실제 몹 씬을 바닥 위에 세우고 동작을 차례로 돌려 0.05초(--every) 간격 필름 띠: screenshots/rig_<씬 이름>_<동작>.png
 ##       (상태는 EnemyBase 를 직접 바꿔 돌린다 — 판정·시간은 실제 게임과 같다)
 ##   공통: --zoom 2.5 (카메라 배율), --every 0.05 (필름 칸 간격, 초), --cols 5, --crop 0.5 (필름 칸에 남길 화면 몫)
@@ -16,8 +16,12 @@ extends Node2D
 ##             --variant head@human (변형 그림 끼워 보기), --flash 0.7 (번쩍임 세기 보기), --nomat (셰이더 없이)
 
 const FLOOR_Y := 600.0
+## 동작마다 몹을 옮기는 간격 (게임 px) — 바닥은 동작 수에 맞춰 넓힌다
+const SEQ_GAP := 1500.0
 
 var _args := {}
+## 바닥 너비의 절반 (게임 px). --enemy 는 동작 수 × SEQ_GAP 만큼 늘린다.
+var _floor_half := 4000.0
 var _cam: Camera2D
 var _shots: Array = []
 var _joints := false
@@ -84,8 +88,8 @@ func _grab(crop := 1.0) -> Image:
 
 ## 바닥 선 (게임 px)
 func _draw() -> void:
-	draw_line(Vector2(-4000, FLOOR_Y), Vector2(4000, FLOOR_Y), Color(0.2, 0.25, 0.2), 3.0)
-	draw_rect(Rect2(-4000, FLOOR_Y, 8000, 400), Color(0.3, 0.33, 0.3))
+	draw_line(Vector2(-_floor_half, FLOOR_Y), Vector2(_floor_half, FLOOR_Y), Color(0.2, 0.25, 0.2), 3.0)
+	draw_rect(Rect2(-_floor_half, FLOOR_Y, _floor_half * 2.0, 400), Color(0.3, 0.33, 0.3))
 
 
 # ---------- 자세 ----------
@@ -252,15 +256,19 @@ func _run_parts(id: String) -> void:
 # ---------- 실제 몹 ----------
 
 func _run_enemy(scene_path: String) -> void:
+	var seqs: Array = str(_args.get("seq", "idle,walk,attack,hit,broken,dead")).split(",")
+	# 바닥: 동작마다 몹을 SEQ_GAP 씩 오른쪽으로 옮기므로 마지막 동작(걷기·밀림 포함)까지 덮게 넓힌다
+	# (예전엔 ±4000 고정이라 넷째 동작부터 몹이 바닥 밖으로 떨어져 빈 필름이 찍혔다)
+	_floor_half = seqs.size() * SEQ_GAP + 4000.0
+	queue_redraw()
 	var floor_body := StaticBody2D.new()
 	var cs := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(8000, 200)
+	rect.size = Vector2(_floor_half * 2.0, 200)
 	cs.shape = rect
 	cs.position = Vector2(0, FLOOR_Y + 100)
 	floor_body.add_child(cs)
 	add_child(floor_body)
-	var seqs: Array = str(_args.get("seq", "idle,walk,attack,hit,broken,dead")).split(",")
 	var every := float(_args.get("every", "0.05"))
 	var name := scene_path.get_file().get_basename()
 	var seq_i := -1
@@ -270,8 +278,10 @@ func _run_enemy(scene_path: String) -> void:
 		if seq == "kneel" and not scene_path.contains("savable"):
 			path = scene_path.replace(".tscn", "_savable.tscn")
 		var e: EnemyBase = (load(path) as PackedScene).instantiate()
+		if seq == "aim":
+			e.get_node("Visual").set("arm_kind", "gun")   # _ready 전에 정해야 겨눌 뼈를 찾는다
 		add_child(e)
-		e.global_position = Vector2(seq_i * 1500.0, FLOOR_Y - 80.0)   # 동작마다 자리를 옮긴다 (앞 동작의 묘목·사람이 안 겹치게)
+		e.global_position = Vector2(seq_i * SEQ_GAP, FLOOR_Y - 80.0)   # 동작마다 자리를 옮긴다 (앞 동작의 묘목·사람이 안 겹치게)
 		e.set_physics_process(false)
 		e.facing = 1
 		e.player = null
@@ -291,6 +301,7 @@ func _run_enemy(scene_path: String) -> void:
 		var dur := 1.4
 		var vx := 0.0
 		var real_physics := false   # 몹 스크립트의 _physics_process 를 그대로 돌린다 (AI 를 쓰지 않는 동작만)
+		var aim_target: Player = null
 		match seq:
 			"idle":
 				dur = 1.2
@@ -332,6 +343,20 @@ func _run_enemy(scene_path: String) -> void:
 			"alert":
 				e._alert()
 				dur = 0.9
+			"aim":
+				# 소녀(처리 끔, 카메라 뺌)를 몹 앞 반원 위에서 위 → 아래로 옮긴다. 대롱 축이 따라오는지 본다.
+				aim_target = (load("res://scenes/player/player.tscn") as PackedScene).instantiate()
+				var pcam := aim_target.get_node_or_null("Camera2D")
+				if pcam:
+					aim_target.remove_child(pcam)
+					pcam.free()
+				add_child(aim_target)
+				aim_target.set_physics_process(false)
+				aim_target.set_process(false)
+				_cam.make_current()
+				e.player = aim_target
+				e._set_state(EnemyBase.State.CHASE)
+				dur = 1.6
 			"slam":
 				# 잿가지 거인의 뛰어올라 내려찍기 (그 몹 스크립트의 물리를 그대로 돌린다)
 				if "_slamming" in e:
@@ -366,6 +391,9 @@ func _run_enemy(scene_path: String) -> void:
 			elif e.state == EnemyBase.State.HIT and e._timer <= 0.0:
 				e._set_state(EnemyBase.State.IDLE)
 				e._timer = 999.0
+			if aim_target:
+				var ang := lerpf(-0.75, 0.55, clampf(t / (dur - 0.2), 0.0, 1.0))
+				aim_target.global_position = e.global_position + Vector2(cos(ang), sin(ang)) * 420.0 + Vector2(0, -40)
 			if seq in ["walk", "backstep", "slam"]:
 				_cam.position.x = e.global_position.x + 60.0
 			if seq == "slam":
@@ -383,6 +411,8 @@ func _run_enemy(scene_path: String) -> void:
 			(frames[frames.size() / 2][1] as Image).save_png(out.replace(".png", "_mid.png"))
 		if is_instance_valid(e):
 			e.queue_free()
+		if aim_target:
+			aim_target.queue_free()
 		await get_tree().physics_frame
 	get_tree().quit()
 

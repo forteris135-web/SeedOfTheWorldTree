@@ -16,6 +16,7 @@
   "legs": ["leg_f", "leg_b"],
   "weapon_chain": "arm_f",
   "ground_guard": ["weapon", "arm_f_lo"],
+  "soft": ["hips"],
   "ghost": ["torso", "arm_f_up", "arm_f_lo", "weapon"],
   "sockets": {"eye": {"bone": "head", "at": [452, 128]}},
   "poses": {
@@ -29,7 +30,7 @@
     "rescued": {"arm_f_up": -50, "arm_f_lo": -4, "weapon": -14},
     "dead_knees": {"arm_f_up": -70, "arm_f_lo": -2, "weapon": -10},
     "dead_lie": {"arm_f_up": -175, "arm_f_lo": -6, "weapon": -8},
-    "dead_back_lie": {"arm_f_up": 14, "arm_f_lo": -2, "weapon": -2},
+    "dead_back_lie": {"arm_f_up": 55, "arm_f_lo": -45, "weapon": -5},
     "hit": {"arm_f_up": -34, "arm_f_lo": -4, "weapon": -14},
     "alert": {"arm_f_up": -70, "arm_f_lo": -10, "weapon": -10},
     "lunge": {"arm_f_up": 62, "arm_f_lo": -10, "weapon": -6},

@@ -44,6 +44,11 @@ var xf: Array[Transform2D] = []
 var hulls: Array[PackedVector2Array] = []
 var sole := {}            # 뼈 번호 → 발바닥 점 (뼈 틀)
 var bone_len: PackedFloat32Array = []
+## 부드러운 부위(치마·망토)가 땅에 눌려 접히는 정도: 그 뼈의 관절을 축으로 그림만 세로로 누른다 (1 = 그대로, 0.3 = 많이 눌림).
+## 화면(땅) 기준 세로라 누운 몸에서도 땅 쪽으로 눌린다. 자식 뼈·껍질 점에는 영향 없다 (RigMotion 이 매 프레임 적는다).
+var squash_y: PackedFloat32Array = []
+## 눌린 만큼 옆으로 퍼지는 비율 (0.3 = 많이 눌리면 30%까지 넓어진다)
+const SQUASH_SPREAD := 0.3
 
 var _skel: Node2D
 var _sprites: Array[Sprite2D] = []
@@ -111,7 +116,7 @@ func build(id: String) -> bool:
 	var n := bones.size()
 	parent.resize(n); base_pos.resize(n); rest.resize(n); has_axis.resize(n)
 	rot.resize(n); off.resize(n); scl.resize(n); bone_len.resize(n); _bone_sprite.resize(n)
-	xf.resize(n); hulls.resize(n)
+	xf.resize(n); hulls.resize(n); squash_y.resize(n)
 	for i in n:
 		var b: Dictionary = bones[i]
 		index[b["name"]] = i
@@ -126,6 +131,7 @@ func build(id: String) -> bool:
 		rot[i] = rest[i]
 		off[i] = Vector2.ZERO
 		scl[i] = Vector2.ONE
+		squash_y[i] = 1.0
 		xf[i] = Transform2D.IDENTITY
 		_bone_sprite[i] = -1
 		var hp := PackedVector2Array()
@@ -198,6 +204,7 @@ func reset_pose() -> void:
 		rot[i] = rest[i]
 		off[i] = Vector2.ZERO
 		scl[i] = Vector2.ONE
+		squash_y[i] = 1.0
 	body_xf = Transform2D.IDENTITY
 
 
@@ -206,11 +213,24 @@ func apply() -> void:
 	compute()
 	_skel.transform = Transform2D(0.0, Vector2(game_scale, game_scale), 0.0, Vector2.ZERO) * body_xf
 	for s in _sprites.size():
-		_sprites[s].transform = xf[_sprite_bone[s]] * _sprite_local[s]
+		var bi := _sprite_bone[s]
+		if squash_y[bi] < 0.999:
+			_sprites[s].transform = _squashed(bi) * _sprite_local[s]
+		else:
+			_sprites[s].transform = xf[bi] * _sprite_local[s]
 	for a in _attached:
 		var node: Node2D = a[0]
 		if is_instance_valid(node):
 			node.position = to_rig_local(xf[a[1]] * (a[2] as Vector2))
+
+
+## 눌린 부드러운 부위의 그림 변환: 관절(땅 기준 화면 자리)을 축으로 세로 squash_y, 가로는 조금 퍼진다.
+## 땅 기준 = body_xf 를 지난 자리 → 그 틀에서 누르고 다시 뼈대 틀로 되돌린다.
+func _squashed(i: int) -> Transform2D:
+	var q := squash_y[i]
+	var p := body_xf * xf[i].origin
+	var press := Transform2D(0.0, Vector2(1.0 + (1.0 - q) * SQUASH_SPREAD, q), 0.0, p) * Transform2D(0.0, Vector2.ONE, 0.0, -p)
+	return body_xf.affine_inverse() * press * body_xf * xf[i]
 
 
 ## 뼈 변환만 계산한다 (그림은 안 옮김). 움직임이 IK·땅 닿기를 고치려고 중간에 부른다.
