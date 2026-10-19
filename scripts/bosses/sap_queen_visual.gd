@@ -310,8 +310,7 @@ func _draw_cracks(node: Node2D, lines: Array) -> void:
 		for step in line[1]:
 			p += step * k
 			pts.append(p)
-		# 그림 px 라 화면에선 약 0.45배 — 넉넉히 굵게
-		# 화면에선 약 0.45배로 줄어 보인다 — 매끈하게 하면(antialiased) 줄어든 선이 점선처럼 끊겨 보여서 끈다
+		# 그림 px 라 화면에선 약 0.45배로 줄어 보인다 — 매끈하게 하면(antialiased) 줄어든 선이 점선처럼 끊겨 보여서 끈다
 		node.draw_polyline(pts, Color(0.06, 0.04, 0.03, 0.8 * k), 6.0)
 		node.draw_polyline(pts, Color(0.5, 0.9, 1.0, 0.5 * k), 2.2)
 
