@@ -1002,14 +1002,18 @@ func _hang_run(a: Vector2, b: Vector2, density: float) -> void:
 	if len < 60.0:
 		return
 	var x := a.x + _rng.randf_range(10.0, 120.0)
+	# 간격 배수 (data params.hang.gap, 기본 1 — 등불처럼 폭이 좁은 장식이 너무 촘촘해 보이지 않게)
+	var gap := float(skin.param("hang", "gap", 1.0))
 	while x < b.x - 30.0:
 		var y := lerpf(a.y, b.y, clampf((x - a.x) / maxf(len, 1.0), 0.0, 1.0))
 		var w := _hang_at(Vector2(x, y), 0.0, _rng.randf_range(0.65, 0.95), b.x - x)
-		x += maxf(w, 60.0) * _rng.randf_range(0.35, 0.7) + _rng.randf_range(0.0, 160.0) / density
+		x += (maxf(w, 60.0) * _rng.randf_range(0.35, 0.7) + _rng.randf_range(0.0, 160.0) / density) * gap
 
 
 ## 매단 장식 하나를 p(장식 맨 위가 닿을 자리)에 단다. side: 옆면이면 바깥쪽(±1)으로 붙인다. 돌려주는 값 = 놓인 폭.
 func _hang_at(p: Vector2, side: float, size_k: float, max_w := INF) -> float:
+	if side != 0.0 and skin.has_role("hang_side"):
+		return _side_hang_at(p, side, size_k)
 	var names := skin.list("hang")
 	var name: String = names[_rng.randi_range(0, names.size() - 1)]
 	var size := skin.size_of(name)
@@ -1029,6 +1033,20 @@ func _hang_at(p: Vector2, side: float, size_k: float, max_w := INF) -> float:
 	# 덩굴 뿌리(잎 달린 윗부분)가 가장자리를 덮어 곧은 아랫선이 안 보이게 조금 위에서 시작
 	var y := p.y - (14.0 if side != 0.0 else 34.0) * k
 	piece(name, 0.0, size.x, x0, x0 + w, func(_x): return y, k, _rng.randf() < 0.5, {"y_off": 0.0})
+	return w
+
+
+## 옆면 전용 매단 장식 (역할 hang_side — 벽에 박힌 등불 걸이 등). 그림은 벽이 오른쪽에 있게 그린 것으로 본다:
+## 왼쪽을 향한 면(side −1)에는 그대로, 오른쪽을 향한 면(+1)에는 뒤집어 벽에 붙인다. 돌려주는 값 = 놓인 폭.
+func _side_hang_at(p: Vector2, side: float, size_k: float) -> float:
+	var names := skin.list("hang_side")
+	var name: String = names[_rng.randi_range(0, names.size() - 1)]
+	var size := skin.size_of(name)
+	var k := skin.scale * size_k
+	var w := size.x * k
+	var x0 := p.x - w + 4.0 if side < 0.0 else p.x - 4.0
+	var y := p.y
+	piece(name, 0.0, size.x, x0, x0 + w, func(_x): return y, k, side > 0.0, {"y_off": 0.0})
 	return w
 
 

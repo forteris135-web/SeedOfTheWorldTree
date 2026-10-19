@@ -35,7 +35,7 @@ const NEED_KEYS := ["moss", "moss_light", "vine", "leaf", "leaf_light", "flower_
 const ROOMS := ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_hidden", "canopy_boss", "village_01", "village_02", "village_shrine", "mine_01", "mine_02", "mine_deep", "mine_boss", "abyss_01", "abyss_02", "moon_garden", "abyss_boss"]
 const COST_ROOMS := ["canopy_01", "mine_02", "village_02", "abyss_02", "canopy_boss"]
 ## 그림 조각 지형 방 (수관)
-const ART_ROOMS := ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canopy_06", "canopy_07", "canopy_boss", "canopy_hidden", "canopy_hidden_1", "canopy_hidden_2", "canopy_mini_1", "canopy_mini_2"]
+const ART_ROOMS := ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canopy_06", "canopy_07", "canopy_boss", "canopy_hidden", "canopy_hidden_1", "canopy_hidden_2", "canopy_mini_1", "canopy_mini_2", "mine_01", "mine_02", "mine_boss", "mine_deep", "mine_hidden_1", "mine_hidden_2", "mine_mini_1", "flooded_mine_01", "flooded_mine_02", "flooded_mine_boss", "flooded_mine_hidden_1"]
 const REPEAT := 5
 ## 드러난 충돌 끝 밖 발 높이에 그림이 남아도 되는 거리 (px) — TerrainArt.CLIP_START 남짓
 const OVERHANG_MAX := 34.0
@@ -672,7 +672,7 @@ func _probe_art() -> void:
 		if w.y - w.x < 60.0:
 			bad_walk.append(n)
 	_check(bad_walk.is_empty(), "걷는 조각마다 걷는 구간이 60px 넘게 있다 %s" % [bad_walk])
-	_check(TerrainSkin.for_region("mine") == null and TerrainSkin.for_region("nowhere") == null, "그림 옷이 없는 지역은 null (옛 방식으로 그린다)")
+	_check(TerrainSkin.for_region("nowhere") == null, "그림 옷이 없는 지역은 null (옛 방식으로 그린다)")
 	_atlas_img = Image.load_from_file(ProjectSettings.globalize_path("res://art/terrain/canopy/atlas.png"))
 	_atlas_img.convert(Image.FORMAT_RGBA8)
 	await _probe_art_rooms(skin)
@@ -751,7 +751,9 @@ func _probe_art_rooms(skin: TerrainSkin) -> void:
 				if float(r["cov"]) < 0.9:
 					feet_bad.append("%s/%s 덮임 %.0f%%" % [id, t.name, float(r["cov"]) * 100.0])
 				tops_all.append(float(r["top"]))
-				if absf(float(r["top"])) > 10.0:
+				# 위쪽 허용: 기본 10px. 뒤 난간이 발 선 위로 솟은 조각을 쓰는 지역(채굴장 다리·수로)은 data 의 params.probe.rail 까지
+				var rail := float((t.get("_art") as TerrainArt).skin.param("probe", "rail", 10.0))
+				if float(r["top"]) < -maxf(rail, 10.0) or float(r["top"]) > 10.0:
 					top_bad.append("%s/%s 윗선 %+.0fpx" % [id, t.name, float(r["top"])])
 		var hz := room.get_node_or_null("Hazards")
 		if hz:
@@ -778,7 +780,7 @@ func _probe_art_rooms(skin: TerrainSkin) -> void:
 	_check(feet_bad.is_empty(), "드러난 윗면 %d곳: 발밑(충돌 윗면 8px 아래)이 그림으로 90%% 넘게 덮임 (가장 낮은 %s %.0f%%) %s" % [tops_checked, worst_name, worst_cov * 100.0, feet_bad.slice(0, 6)])
 	tops_all.sort()
 	var med_all: float = tops_all[tops_all.size() / 2] if not tops_all.is_empty() else 0.0
-	_check(top_bad.is_empty(), "드러난 윗면 %d곳: 그림 윗선(빽빽한 윗면)이 충돌 윗면 ±10px 안 (전체 중앙값 %+.0fpx, 범위 %+.0f~%+.0f) %s" % [tops_checked, med_all, tops_all[0] if not tops_all.is_empty() else 0.0, tops_all[-1] if not tops_all.is_empty() else 0.0, top_bad.slice(0, 6)])
+	_check(top_bad.is_empty(), "드러난 윗면 %d곳: 그림 윗선(빽빽한 윗면)이 충돌 윗면 ±10px 안 — 뒤 난간 조각은 지역 params.probe.rail 까지 (전체 중앙값 %+.0fpx, 범위 %+.0f~%+.0f) %s" % [tops_checked, med_all, tops_all[0] if not tops_all.is_empty() else 0.0, tops_all[-1] if not tops_all.is_empty() else 0.0, top_bad.slice(0, 6)])
 	over_all.sort_custom(func(x, y): return x[0] > y[0])
 	if "--verbose" in OS.get_cmdline_user_args():
 		for r in over_all.slice(0, 12):
@@ -921,6 +923,7 @@ func _feet_check(t: Node2D, a: Vector2, b: Vector2, solids: Array, bounds: Rect2
 
 ## 조각(atlas) 삼각형 목록: [[p0,p1,p2],[uv0,uv1,uv2],[a0,a1,a2], 상자] (노드 기준)
 func _atlas_tris(art: TerrainArt) -> Array:
+	_use_atlas(art.skin.region)   # 알파는 그 지형의 지역 atlas 에서 읽는다
 	var b: Dictionary = art._bufs[TerrainArt.BUF_ATLAS]
 	var pts: PackedVector2Array = b["pts"]
 	var uvs: PackedVector2Array = b["uvs"]
@@ -938,6 +941,16 @@ func _atlas_tris(art: TerrainArt) -> Array:
 		out.append([q, PackedVector2Array([uvs[ia], uvs[ib], uvs[ic]]), [cols[ia].a, cols[ib].a, cols[ic].a], bb])
 		i += 3
 	return out
+
+
+## 지역 atlas 그림 (알파 읽기용, 지역마다 한 번 읽어 둔다)
+var _atlas_imgs := {}
+func _use_atlas(region: String) -> void:
+	if not _atlas_imgs.has(region):
+		var img := Image.load_from_file(ProjectSettings.globalize_path("res://art/terrain/%s/atlas.png" % region))
+		img.convert(Image.FORMAT_RGBA8)
+		_atlas_imgs[region] = img
+	_atlas_img = _atlas_imgs[region]
 
 
 ## 그 자리에 그려지는 조각 그림의 알파 (겹친 삼각형 중 가장 진한 것)

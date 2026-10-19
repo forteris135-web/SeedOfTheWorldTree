@@ -13,9 +13,11 @@ extends SceneTree
 ##            src 는 시트 위의 대략적인 상자. 그 상자에 가장 많이 들어 있는 덩어리(+ 상자 안에 절반 넘게 든 덩어리)를 조각으로 쓴다.
 ##            scale 을 주면 그만큼 줄여서 넣는다 (아주 큰 그림 — 금 간 벽·가시).
 ##            walk 를 주면 자동으로 잰 '걷는 구간' 대신 그 값(조각 안 x, 원래 크기 px)을 쓴다.
+##            top_drop 을 주면 잰 발 딛는 선을 그만큼 아래로 내린다 (속이 찬 난간·흉벽 뒤에 바닥이 있는 조각).
 ##            clip 을 주면 고른 덩어리의 상자를 그 사각형(시트 px) 안으로 줄인다 (붙은 옆 그림을 곧게 잘라 낼 때 — 다각형 자르기는 없다).
 ##            atlas: false 면 atlas 에 넣지 않는다 (몸통 결 재료로만 쓰는 큰 그림).
-##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright}
+##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright, grey_sat?}
+##            grey_sat 를 주면 채도가 그보다 낮은 회색 픽셀은 hue 와 상관없이 받는다 (회색 돌).
 ##            from 조각들에서 나무껍질 색(hue·sat·val 범위)만 있는 작은 네모(patch)를 찾아 이어 붙여 size×size 무늬를 만든다.
 ##   exports: [{name, src, sheet?, out:"res://...png", max:긴 변 px}] — 지형 밖에서 쓰는 단독 그림 (기록물 양피지 등)
 ##   extras : 금 간 벽처럼 조각을 가공한 그림 (cracked: 틈 빛을 끈 그림 / 틈 빛만 / 원래 그림)
@@ -372,6 +374,12 @@ func _measure(img: Image, p: Dictionary) -> Dictionary:
 				s += raw[k]
 				c += 1
 		top.append(roundi(s / c))
+	# top_drop: 발 딛는 선을 이만큼 아래로 (속이 찬 난간·흉벽 뒤에 바닥이 있는 조각 — 불투명도로는 바닥 윗면을 못 찾는다)
+	var drop := int(p.get("top_drop", 0))
+	if drop != 0:
+		for i in n:
+			if top[i] >= 0:
+				top[i] = mini(top[i] + drop, h - 1)
 	var meta := {"role": p.get("role", ""), "size": [w, h], "top": top}
 	if not (str(p.get("role", "")) in WALK_ROLES) and not p.has("walk"):
 		return meta
@@ -560,6 +568,8 @@ func _make_fill(f: Dictionary) -> Image:
 	var hue: Array = f.get("hue", [16, 50])
 	var sat: Array = f.get("sat", [0.06, 0.6])
 	var val: Array = f.get("val", [0.25, 0.97])
+	# grey_sat: 채도가 이보다 낮은 회색 픽셀은 색상(hue)과 상관없이 받는다 (푸르스름한 회색 돌 등 — 기본 0 = 안 씀)
+	var grey_sat := float(f.get("grey_sat", 0.0))
 	var cands: Array = []   # [Image(patch)]
 	for name in f.get("from", []):
 		if not _pieces.has(name):
@@ -575,7 +585,8 @@ func _make_fill(f: Dictionary) -> Image:
 				continue
 			var c := Color8(d[q * 4], d[q * 4 + 1], d[q * 4 + 2])
 			var hd := c.h * 360.0
-			if hd >= float(hue[0]) and hd <= float(hue[1]) and c.s >= float(sat[0]) and c.s <= float(sat[1]) and c.v >= float(val[0]) and c.v <= float(val[1]):
+			var hue_ok := (hd >= float(hue[0]) and hd <= float(hue[1])) or c.s < grey_sat
+			if hue_ok and c.s >= float(sat[0]) and c.s <= float(sat[1]) and c.v >= float(val[0]) and c.v <= float(val[1]):
 				ok[q] = 1
 		# 적분 영상으로 네모 안의 '껍질' 비율을 빠르게 센다
 		var integ := PackedInt32Array(); integ.resize((w + 1) * (h + 1))

@@ -1,4 +1,4 @@
-[gd_scene load_steps=34 format=3 uid="uid://c1seedminedeep"]
+[gd_scene load_steps=35 format=3 uid="uid://c1seedminedeep"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -36,6 +36,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedsappool" path="res://scenes/world/sap_pool.tscn" id="54_sap_pool"]
 [ext_resource type="Script" path="res://scripts/world/map_offset_fix.gd" id="56_map_fix"]
 [ext_resource type="PackedScene" uid="uid://c1seedcrackedwall" path="res://scenes/world/cracked_wall.tscn" id="50_cracked_wall"]
+[ext_resource type="Script" path="res://scripts/world/pool_art.gd" id="60_poolart"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -205,13 +206,22 @@ secret_id = "cracked_mine_deep_1"
 position = Vector2(3060, 1020)
 size = Vector2(460, 100)
 
+[node name="Art" type="Node2D" parent="Hazards/SapPool1"]
+script = ExtResource("60_poolart")
+
 [node name="SapPool2" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(3600, 1020)
 size = Vector2(420, 100)
 
+[node name="Art" type="Node2D" parent="Hazards/SapPool2"]
+script = ExtResource("60_poolart")
+
 [node name="SapPool3" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(4080, 1020)
 size = Vector2(420, 100)
+
+[node name="Art" type="Node2D" parent="Hazards/SapPool3"]
+script = ExtResource("60_poolart")
 
 [node name="MapFix" type="Node" parent="."]
 script = ExtResource("56_map_fix")
