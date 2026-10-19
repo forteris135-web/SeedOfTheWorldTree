@@ -73,7 +73,6 @@ var _k := 0.6              # 뼈대 단위 → 게임 px
 
 var _t := 0.0
 var _state_t := 0.0
-var _phase_t := 0.0
 var _prev_state := -1
 var _prev_phase := ""
 var _prev_hint := ""
@@ -264,7 +263,6 @@ func _process(delta: float) -> void:
 	delta = minf(delta, 0.05)
 	_t += delta
 	_state_t += delta
-	_phase_t += delta
 	var st := boss.state
 	_events(st)
 	# 몸 틀기: 1 → 0 → −1 (뒤집는 순간 딛은 발·등불을 세상에 남긴다)
@@ -345,7 +343,6 @@ func _events(st: LanternKnight.State) -> void:
 	if ph != _prev_phase:
 		_on_phase(st, ph)
 		_prev_phase = ph
-		_phase_t = 0.0
 	if st == LanternKnight.State.COMBO3 and boss.combo_step != _prev_combo:
 		if _prev_combo >= 0:
 			_from = motion.capture()   # 다음 타의 예비는 지금 자세에서 이어진다
