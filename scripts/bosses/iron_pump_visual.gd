@@ -21,8 +21,9 @@ extends Node2D
 
 const RIG_ID := "iron_pump"
 const BEAT := 60.0 / 128.0
-## 몸 틀기 빠르기 (1/s)
+## 몸 틀기 빠르기 (1/s)와 도는 도중 가장 좁아지는 폭 (1 = 그대로)
 const TURN_SPEED := 7.0
+const TURN_MIN_WIDTH := 0.5
 ## 피스톤 예고 중 '치켜들고 멈칫' 이 끝나고 내리치기 시작하는 진행도 (예고 끝 몫에서 팔이 떨어져 실행 순간에 땅에 닿는다)
 const SLAM_DROP := 0.82
 ## 쓰러짐 순서 (FALLEN 이 된 뒤 초): 경련 → 다리가 꺾임 → 몸이 땅에 부딪힘 → 다 누움
@@ -424,16 +425,19 @@ func _process(delta: float) -> void:
 		if _prev_phase == "active" and ph == "recovery" and boss.phase == 2:
 			_leak_fx()
 		_prev_phase = ph
-	# 몸 틀기: 1 → 0 → −1 (뒤집는 순간 딛은 발을 세상에 남긴다)
+	# 몸 틀기: 1 → 0 → −1 을 지나며 돌아선다. 다만 종이처럼 납작해지지 않게 폭은 절반까지만 줄고(TURN_MIN_WIDTH),
+	# 가운데서 '쿵' 하고 뒤집힌다 (웅크림·발밑 먼지 — 무거운 기계가 제자리에서 몸을 돌린다). 뒤집는 순간 딛은 발은 세상에 남긴다.
 	_face = Motion.damp(_face, float(boss.facing), TURN_SPEED, delta)
 	var fx := _face
-	if absf(fx) < 0.04:
-		fx = 0.04 * (1.0 if fx >= 0.0 else -1.0)
+	if absf(fx) < 0.001:
+		fx = 0.001 * (1.0 if fx >= 0.0 else -1.0)
 	var s := signf(fx)
 	if s != _sign:
 		_sign = s
 		motion.flip_feet()
-	scale = Vector2(fx, 1.0)
+		motion.kick("crouch", 1.0)
+		_puff(10, global_position)
+	scale = Vector2(s * lerpf(TURN_MIN_WIDTH, 1.0, smoothstep(0.0, 1.0, absf(fx))), 1.0)
 	# 목표 자세
 	var info := _info
 	info["drive"] = RigMotion.Drive.NORMAL
@@ -514,11 +518,12 @@ func _pose_now(st: IronPump.State, info: Dictionary) -> Dictionary:
 		IronPump.State.SUCK:
 			return _suck_pose(info)
 		IronPump.State.STAGGER:
+			# 휘청: 앞 30% 동안 홱 젖혀진 채(팔이 튀어 오름) → 출렁이며 제자리
 			var k := boss.state_progress(boss.stagger_len)
-			info["drive"] = RigMotion.Drive.SETTLE
+			info["drive"] = RigMotion.Drive.QUICK if k < 0.3 else RigMotion.Drive.SETTLE
 			info["tremble"] = 1.0 - k
 			info["beat"] = 0.3
-			return motion.mix(motion.pose("stagger"), motion.pose("ready"), Motion.settle(k, 1.5, 3.0))
+			return motion.mix(motion.pose("stagger"), motion.pose("ready"), Motion.settle(clampf((k - 0.3) / 0.7, 0.0, 1.0), 1.5, 3.0))
 		IronPump.State.BROKEN:
 			# 무릎이 꺾여 주저앉은 채 떨고, 핵이 터질 듯 맥동한다. 끝 0.5초에 몸을 일으킨다.
 			var left: float = boss._timer
@@ -648,9 +653,9 @@ func _suck_pose(info: Dictionary) -> Dictionary:
 	info["beat"] = 0.2
 	info["core"] = 0.95
 	if boss.anim_hint == "stagger" and ph == "recovery":
-		info["drive"] = RigMotion.Drive.SETTLE
+		info["drive"] = RigMotion.Drive.QUICK if p < 0.25 else RigMotion.Drive.SETTLE
 		info["tremble"] = 0.6 * (1.0 - p)
-		return motion.mix(motion.pose("stagger"), motion.pose("ready"), Motion.settle(p, 1.5, 3.0))
+		return motion.mix(motion.pose("stagger"), motion.pose("ready"), Motion.settle(clampf((p - 0.25) / 0.75, 0.0, 1.0), 1.5, 3.0))
 	var aim := motion.pose("suck").duplicate()
 	aim["arm_lo"] = _arm_aim(float(aim["arm_lo"]))
 	match ph:
