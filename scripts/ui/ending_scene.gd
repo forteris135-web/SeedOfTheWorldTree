@@ -78,6 +78,7 @@ var _spin := {}
 var _ash := {}
 var _pump := {}
 var _scripture := {}
+var _spin_drawn := false
 var _time := 0.0
 # 같은 대상을 건드리는 앞선 트윈은 새 트윈을 걸 때 멈춘다 (건너뛰기를 연타해도 옛 트윈이 새 화면을 덮어쓰지 않게)
 var _line_tw: Tween
@@ -815,12 +816,9 @@ func _start_sweep(f: Dictionary) -> void:
 	_overlay_tw.tween_property(_overlay, "position:x", vp.x * 0.15, t).set_trans(Tween.TRANS_SINE)
 	# 등불이 하나씩 꺼지는 소리 (조금씩 불규칙하게)
 	var clicks := int(f.get("clicks", 6))
-	var tok := _token
 	for i in clicks:
 		var at := t * (0.08 + 0.84 * float(i) / maxf(clicks - 1, 1)) + randf_range(-0.12, 0.12) / time_scale
-		get_tree().create_timer(maxf(at, 0.0)).timeout.connect(func() -> void:
-			if tok == _token:
-				Sfx.play("lamp_out", -9.0 - randf() * 5.0, 0.08))
+		get_tree().create_timer(maxf(at, 0.0)).timeout.connect(_sfx_later.bind(_token, "lamp_out", -9.0 - randf() * 5.0))
 
 
 func _start_seed(f: Dictionary) -> void:
@@ -984,7 +982,9 @@ func _update_fx(delta: float) -> void:
 				Sfx.play("pump_clunk", float(_pump["db"]) - 0.8 * (8 - int(_pump["count"])), 0.0)
 				_pump["count"] = int(_pump["count"]) - 1
 				_pump["next"] = float(_pump["next"]) + step
-	_fx_canvas.queue_redraw()
+	if not _spin.is_empty() or _spin_drawn:
+		_fx_canvas.queue_redraw()
+		_spin_drawn = not _spin.is_empty()
 
 
 func _draw_fx(c: Control) -> void:
@@ -1071,9 +1071,13 @@ func _play_sfx(list: Array) -> void:
 		if delay <= 0.0:
 			Sfx.play(name, db, 0.03)
 		else:
-			get_tree().create_timer(delay / time_scale).timeout.connect(func() -> void:
-				if tok == _token and phase == "scenes":
-					Sfx.play(name, db, 0.03))
+			get_tree().create_timer(delay / time_scale).timeout.connect(_sfx_later.bind(tok, name, db))
+
+
+## 예약한 효과음: 그사이 장면이 바뀌지 않았을 때만 (_token)
+func _sfx_later(tok: int, name: String, db: float) -> void:
+	if tok == _token and phase == "scenes":
+		Sfx.play(name, db, 0.03)
 
 
 # ---------- 크레딧 · 끝 ----------
