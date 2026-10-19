@@ -5,6 +5,9 @@ class_name GrayLeafBird
 ## 지침: 땅으로 내려와 잿빛 잎을 삼키려 한다(끊으면 크게 흐트러짐). 날개 휘두르기·부리 찍기.
 ## 2페이즈(체력 절반): 잎 회오리, 더 많은 깃털, 짧아진 내려오기, 거세진 반격.
 ## 체력이 다하면 쓰러져 정화의 손길을 기다린다.
+## 2026-10-19 기획자 요청: 체력 2배(1800), 탄막 가시성 — 잎·깃털 그림 1.8배(판정은 그대로)+테두리+발광+꼬리,
+## 깃털은 쏘기 feather_warn_time 전부터 부리 앞 붉은 점(feather_warn), 잎 흩날리기는 떨어질 구간 위 흰 띠(rain_warn).
+## 체력만 2배: 잎 삼키기 회복은 비율을 절반(0.03)으로 내려 회복량(54)은 예전 그대로.
 
 enum State { WAIT, INTRO, HOVER, LEAF_RAIN, FEATHERS, WIND, DESCEND, GROUND_IDLE, WALK_TO_PILE, EAT, SWEEP, PECK, TAKEOFF, BROKEN, FALLEN, PURIFIED }
 const AIR_STATES := [State.HOVER, State.LEAF_RAIN, State.FEATHERS, State.WIND]
@@ -19,7 +22,8 @@ signal purified
 signal telegraph(kind: String)   # "wind" 등 붉은 예고
 
 @export_group("능력치")
-@export var max_hp := 900.0
+## 2026-10-19 기획자 요청: 900 → 1800 (2배). 지침 조건(깃털 되받기·점프 공격 횟수, 24초)은 그대로.
+@export var max_hp := 1800.0
 @export var max_poise := 150.0
 ## 맞지 않을 때 초당 줄어드는 흐트러짐.
 @export var poise_decay := 8.0
@@ -32,12 +36,20 @@ signal telegraph(kind: String)   # "wind" 등 붉은 예고
 @export var hover_rest := 1.2             # 패턴 사이 쉬는 시간 (2페이즈 0.8)
 @export var air_time_max := 24.0          # 이 시간이 지나면 지쳐서 내려온다
 @export var descend_fatigue := 4          # 깃털 반사·점프 공격이 이만큼 쌓이면 내려온다 (2페이즈 3)
-@export var leaf_rain_time := 3.2
+@export var leaf_rain_time := 3.5         # 앞 rain_warn_time 동안은 띠 예고만, 그 뒤 잎이 떨어진다
+## 잎이 떨어지기 전 흰 띠 예고 시간 (떨어질 구간 위쪽)
+@export var rain_warn_time := 0.35
 @export var leaf_interval := 0.2          # 2페이즈 0.13
 @export var leaf_damage := 10.0
 @export var feather_count := 3            # 2페이즈 5
 @export var feather_damage := 14.0
 @export var feather_speed := 1000.0
+## 첫 깃털을 쏘기 전 부리 앞 붉은 점 예고 시간 (예고 0.6초의 끝부분)
+@export var feather_warn_time := 0.3
+## 탄막 그림 배율 (판정은 그대로). 기획자 요청 1.6~2배.
+@export var shot_draw_scale := 1.8
+## 잎이 생길 때 서서히 나타나는 시간 (화면 안에서 툭 생겨나 보이지 않게)
+@export var leaf_fade_in := 0.12
 @export var wind_telegraph := 0.8
 @export var wind_time := 1.5
 @export var wind_force := 2600.0          # 소녀를 밀어내는 가속 (픽셀/초²)
@@ -46,7 +58,8 @@ signal telegraph(kind: String)   # "wind" 등 붉은 예고
 @export var ground_time := 9.0            # 2페이즈 7
 @export var walk_speed := 240.0
 @export var eat_time := 2.6
-@export var eat_heal_ratio := 0.06
+## 잎 삼키기 회복 비율. 체력 2배(1800)에 맞춰 0.06 → 0.03 — 회복량 54 는 예전(900×0.06)과 같다 ("체력만 2배").
+@export var eat_heal_ratio := 0.03
 @export var eat_interrupt_poise := 50.0
 @export var sweep_windup := 0.55          # 2페이즈 0.4
 @export var sweep_damage := 20.0
@@ -63,7 +76,7 @@ signal telegraph(kind: String)   # "wind" 등 붉은 예고
 @export var takeoff_crouch := 0.2
 
 var state: State = State.WAIT
-var hp := 900.0
+var hp := 1800.0
 var poise := 0.0
 var phase := 1
 var facing := -1
@@ -104,6 +117,12 @@ var telegraph_amount := 0.0
 var stagger := 0.0
 ## 이륙 전 웅크리는 중
 var crouching := false
+## 잎 흩날리기 예고 띠 세기 (0→1 로 차오르고, 잎이 떨어지는 동안 0.45 로 남았다가, 끝나면 사라진다)
+var rain_warn := 0.0
+## 깃털 발사 예고: 부리 앞 붉은 점 (첫 발 feather_warn_time 전부터 0→1, 쏘는 동안 0.55 유지)
+var feather_warn := 0.0
+## 한 발 쏠 때마다 1 로 튀고 빠르게 사라지는 번쩍임 (붉은 점 위)
+var muzzle_flash := 0.0
 
 @onready var sprite: Sprite2D = $Sprite
 @onready var hitbox: Hitbox = $Hitbox
@@ -111,6 +130,10 @@ var crouching := false
 @onready var body_shape: CollisionShape2D = $CollisionShape2D
 
 const PROJECTILE := preload("res://scenes/combat/projectile.tscn")
+## 부리 끝 바로 앞 (오른쪽을 볼 때; 그림 boss_bird_now.png 의 부리 ≈ 몸 가운데에서 (+210, −70), 깃털 자세로 살짝 젖힘)
+const MUZZLE_OFFSET := Vector2(230.0, -235.0)
+## 그림 가운데 (Sprite position)
+const BODY_OFFSET := Vector2(0.0, -150.0)
 
 
 func _ready() -> void:
@@ -126,6 +149,7 @@ func _ready() -> void:
 func start_fight(p: Player) -> void:
 	player = p
 	visible = true
+	_clear_telegraphs()
 	global_position = Vector2(arena.get_center().x, arena.position.y - 300)
 	_set_state(State.INTRO)
 	_timer = 2.2
@@ -146,9 +170,21 @@ func reset_fight() -> void:
 	set_collision_mask_value(1, false)
 	hitbox.deactivate()
 	global_position = _home
+	_clear_telegraphs()
 	_set_state(State.WAIT)
 	hp_changed.emit(hp, max_hp)
 	poise_changed.emit(poise, max_poise)
+
+
+## 예고·연출 값을 모두 비운다. WAIT 에선 _physics_process 가 바로 돌아가 값이 줄지 않으므로,
+## 소녀가 잎 흩날리기·깃털 도중에 쓰러졌다 다시 싸울 때 옛 띠·붉은 점이 번쩍이지 않게 여기서 0 으로.
+func _clear_telegraphs() -> void:
+	rain_warn = 0.0
+	feather_warn = 0.0
+	muzzle_flash = 0.0
+	telegraph_amount = 0.0
+	stagger = 0.0
+	crouching = false
 
 
 func _physics_process(delta: float) -> void:
@@ -165,9 +201,14 @@ func _physics_process(delta: float) -> void:
 	stagger = maxf(stagger - delta / 0.6, 0.0)
 	if state != State.FEATHERS:
 		telegraph_amount = maxf(telegraph_amount - delta * 4.0, 0.0)
+		feather_warn = maxf(feather_warn - delta * 6.0, 0.0)
+	if state != State.LEAF_RAIN:
+		rain_warn = maxf(rain_warn - delta * 3.0, 0.0)
+	muzzle_flash = maxf(muzzle_flash - delta * 9.0, 0.0)
 	crouching = state == State.TAKEOFF and _timer > 1.1 - takeoff_crouch
-	if player and state in AIR_STATES + [State.INTRO, State.GROUND_IDLE, State.EAT]:
-		# 데드존 + 최소 유지 시간: 소녀가 바로 밑을 지나도 매 프레임 뒤집히지 않는다. 공격 중엔 고정.
+	if player and state != State.FEATHERS and state in AIR_STATES + [State.INTRO, State.GROUND_IDLE, State.EAT]:
+		# 데드존 + 최소 유지 시간: 소녀가 바로 밑을 지나도 매 프레임 뒤집히지 않는다.
+		# 깃털 화살 동안은 고정 (시작할 때 한 번 소녀 쪽을 본다) — 붉은 점·깃털 출발점이 반대편으로 건너뛰지 않게.
 		var dx := player.global_position.x - global_position.x
 		var want := 1 if dx > 0.0 else -1
 		if want != facing and absf(dx) > face_deadzone and _face_hold <= 0.0:
@@ -190,11 +231,17 @@ func _physics_process(delta: float) -> void:
 		State.LEAF_RAIN:
 			_air_timer += delta
 			_fly_toward(_hover_target, delta, hover_speed * 0.6)
-			_spawn_accum += delta
-			var interval := leaf_interval if phase == 1 else leaf_interval * 0.65
-			while _spawn_accum >= interval:
-				_spawn_accum -= interval
-				_spawn_leaf()
+			var elapsed := leaf_rain_time - _timer
+			if elapsed < rain_warn_time:
+				# 예고: 떨어질 구간 위쪽에 흰 띠가 빠르게 차오른다 (아직 잎은 없다)
+				rain_warn = clampf(elapsed / 0.12, 0.0, 1.0)
+			else:
+				rain_warn = Motion.damp(rain_warn, 0.45, 6.0, delta)
+				_spawn_accum += delta
+				var interval := leaf_interval if phase == 1 else leaf_interval * 0.65
+				while _spawn_accum >= interval:
+					_spawn_accum -= interval
+					_spawn_leaf()
 			if _timer <= 0.0:
 				_set_state(State.HOVER)
 				_timer = _rest()
@@ -206,10 +253,16 @@ func _physics_process(delta: float) -> void:
 			var t_since := (0.6 + count * 0.15) - _timer
 			# 예고: 0.6초 동안 차오르고 쏘기 시작하면 0.3초에 걸쳐 사라진다
 			telegraph_amount = clampf(t_since / 0.6, 0.0, 1.0) if t_since < 0.6 else maxf(1.0 - (t_since - 0.6) / 0.3, 0.0)
+			# 부리 앞 붉은 점: 첫 발 feather_warn_time 전부터 차오르고, 쏘는 동안은 0.55 로 남는다
+			if t_since < 0.6:
+				feather_warn = clampf((t_since - (0.6 - feather_warn_time)) / maxf(feather_warn_time, 0.01), 0.0, 1.0)
+			else:
+				feather_warn = Motion.damp(feather_warn, 0.55, 10.0, delta)
 			var should_have := clampi(int(floor((t_since - 0.6) / 0.15)) + 1, 0, count)
 			while _spawned < should_have:
 				_spawn_feather(_spawned, count)
 				_spawned += 1
+				muzzle_flash = 1.0
 			if _timer <= 0.0:
 				_set_state(State.HOVER)
 				_timer = _rest()
@@ -342,10 +395,14 @@ func _next_pattern() -> void:
 			_spawn_accum = 0.0
 		State.FEATHERS:
 			_set_state(State.FEATHERS)
+			if player and absf(player.global_position.x - global_position.x) > 1.0:
+				facing = 1 if player.global_position.x > global_position.x else -1
+				_face_hold = face_hold
 			var count := feather_count if phase == 1 else feather_count + 2
 			_timer = 0.6 + count * 0.15
 			_spawned = 0
 			telegraph_amount = 0.0   # 예고는 telegraph_amount 로 (피격 번쩍임과 구분)
+			feather_warn = 0.0
 		State.WIND:
 			_set_state(State.WIND)
 			_timer = wind_telegraph + wind_time
@@ -361,17 +418,24 @@ func _spawn_leaf() -> void:
 	p.poise = 0.0
 	p.lifetime = 7.0
 	p.fall_gravity = 40.0
-	p.size = Vector2(46, 20)
-	p.color = Color(0.62, 0.64, 0.6)
+	p.size = Vector2(46, 20)               # 판정 기준 (반지름 12) — 그대로
+	p.draw_scale = shot_draw_scale         # 그림만 1.8배
+	p.color = Color(0.5, 0.52, 0.49)       # 잿빛 잎
+	p.outline_color = Color(0.98, 0.99, 0.95, 1.0)   # 흰 테두리
+	p.core_color = Color(0.3, 0.31, 0.28, 1.0)       # 잎맥
+	p.glow = 0.7                           # 0.9 는 잿빛 몸이 희게 바랬다(스크린샷 확인) → 흰 테두리가 주역, 발광은 보조
+	p.trail_count = 4
+	p.fade_in = leaf_fade_in               # 화면 안에서 생겨도 툭 나타나지 않게
 	var dir := Vector2(randf_range(-0.25, 0.25), 1.0)
 	var pos: Vector2
 	if phase == 1:
-		pos = Vector2(randf_range(arena.position.x + 80, arena.end.x - 80), arena.position.y + 40)
+		# 싸움터 위 +20 (16:9 화면에선 화면 위 바깥)에서 생겨 미끄러져 들어오고, 흰 띠(+160)를 지나 내려온다
+		pos = Vector2(randf_range(arena.position.x + 80, arena.end.x - 80), arena.position.y + 20)
 	else:
-		# 회오리: 새 주위에서 바깥으로 돌며 흩어진다
+		# 회오리: 새 몸 주위(흰 고리 자리)에서 바깥으로 돌며 흩어진다
 		var a := _spawned * 0.9
 		_spawned += 1
-		pos = global_position + Vector2(cos(a), sin(a)) * 160.0
+		pos = body_center() + Vector2(cos(a), sin(a)) * 160.0
 		dir = (Vector2(cos(a + 1.2), sin(a + 1.2)) + Vector2(0, 1.2)).normalized()
 		p.speed = 300.0
 	get_parent().add_child(p)
@@ -388,15 +452,37 @@ func _spawn_feather(index: int, count: int) -> void:
 	p.damage = feather_damage
 	p.poise = 0.0
 	p.reflectable = true
-	p.size = Vector2(76, 16)
-	p.color = Color(0.78, 0.8, 0.78)
+	p.size = Vector2(76, 16)               # 판정 기준 (반지름 10) — 그대로
+	p.draw_scale = shot_draw_scale         # 그림만 1.8배
+	p.color = Color(0.86, 0.9, 0.94)       # 은빛
+	p.outline_color = Color(1.0, 1.0, 1.0, 1.0)
+	p.core_color = Color(1.0, 0.25, 0.2, 1.0)        # 붉은 심
+	p.glow = 1.0
+	p.trail_count = 5
 	get_parent().add_child(p)
-	var origin := global_position + Vector2(facing * 120.0, 20.0)
+	var origin := muzzle_point()
 	p.global_position = origin
 	var spread := (index - (count - 1) / 2.0) * 0.12
 	var dir := (player.global_position + Vector2(0, -40) - origin).normalized().rotated(spread)
 	p.launch(dir, self, false)
 	p.reflected.connect(func(_pr): _fatigue += 2)
+
+
+## 깃털이 나가는 자리 (부리 끝 바로 앞; global_position 은 발밑이고 그림은 150px 위). 붉은 점 예고도 여기에 그린다.
+func muzzle_point() -> Vector2:
+	return global_position + MUZZLE_OFFSET * Vector2(facing, 1.0)
+
+
+## 새 몸 가운데 (그림 Sprite 자리). 2페이즈 잎 회오리와 그 예고 고리의 중심.
+func body_center() -> Vector2:
+	return global_position + BODY_OFFSET
+
+
+## BossRoom 이 예고 글자를 띄울 때 묻는다 (가드 불가는 붉은 빛이 원칙, 글자는 공격 이름만).
+func telegraph_label(kind: String) -> String:
+	match kind:
+		"wind": return "날갯바람!"
+	return ""
 
 
 func _begin_descend() -> void:

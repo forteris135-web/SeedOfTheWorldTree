@@ -34,6 +34,113 @@ var _was_on_floor := false
 var _dust: CPUParticles2D
 var _ghosts: Array[Sprite2D] = []
 var _ghost_timer := 0.0
+var _muzzle: MuzzleDot
+var _band: RainBand
+var _band_front: RainBand
+
+
+## 깃털 발사 예고: 부리 앞 붉은 점 + 조여드는 고리, 한 발마다 번쩍 (보스의 feather_warn / muzzle_flash 를 읽는다).
+## 날갯바람의 '몸 전체 붉은 빛'(가드 불가)과는 다르게 작은 점이다 — 깃털은 가드·저스트 가드가 된다.
+class MuzzleDot extends Node2D:
+	var amount := 0.0
+	var flash := 0.0
+	var t := 0.0
+	const RED := Color(2.2, 0.45, 0.35)
+	func _draw() -> void:
+		if amount <= 0.01 and flash <= 0.01:
+			return
+		var a := clampf(amount, 0.0, 1.0)
+		var pulse := 0.5 + 0.5 * sin(t * 22.0)
+		# 조여드는 고리 (멀리서 점으로 모인다 = '지금 온다')
+		var ring_r := lerpf(56.0, 18.0, a)
+		draw_arc(Vector2.ZERO, ring_r, 0.0, TAU, 32, Color(RED, a * (0.55 + 0.35 * pulse)), 3.0, true)
+		# 붉은 점
+		var dot_r := (9.0 + 3.0 * pulse) * (0.6 + 0.4 * a)
+		draw_circle(Vector2.ZERO, dot_r * 1.9, Color(RED, a * 0.22))
+		draw_circle(Vector2.ZERO, dot_r, Color(RED, a * 0.95))
+		draw_circle(Vector2.ZERO, dot_r * 0.45, Color(2.6, 1.6, 1.4, a))
+		# 발사 번쩍임: 터지는 원 + 짧은 빛살 6개
+		if flash > 0.01:
+			var f := clampf(flash, 0.0, 1.0)
+			var burst := lerpf(44.0, 14.0, f)
+			draw_circle(Vector2.ZERO, burst, Color(2.4, 1.2, 0.9, f * 0.5))
+			for i in 6:
+				var ang := i * TAU / 6.0 + t * 3.0
+				var d := Vector2(cos(ang), sin(ang))
+				draw_line(d * burst * 0.6, d * burst * 1.5, Color(2.4, 1.3, 1.0, f * 0.8), 2.0, true)
+
+
+## 잎 흩날리기 예고: 떨어질 구간 위쪽의 옅은 흰 띠 (1페이즈 = 싸움터 가로 전체, 2페이즈 = 새 몸 주위 고리).
+## amount 는 보스의 rain_warn (예고 때 1, 떨어지는 동안 0.45).
+## 새 그림의 **뒤**에 그린다: top_level 이 아닌 자식 + show_behind_parent (top_level 은 맨 위로 올라가 새·잎·소녀를 덮었다).
+## 방 나무에서 보스 자리에 그려지므로 지형 위, 새·소녀·잎(나중에 붙는 투사체) 아래. 색은 HDR 이 아닌 흰색(글로우로 번지지 않음).
+## 2페이즈 고리는 새를 감싸 도는 모양: 윗반은 뒤 노드(새 뒤), 아랫반은 앞 노드(front, 새 앞)가 그린다 —
+## 고리 전부를 뒤에 두면 큰 날개에 가려 거의 안 보였다(스크린샷 확인). 앞 노드는 1페이즈 띠를 그리지 않는다.
+class RainBand extends Node2D:
+	var front := false
+	var amount := 0.0
+	var arena := Rect2()
+	var phase := 1
+	var center := Vector2.ZERO   # 2페이즈 고리 중심 (새 몸 가운데)
+	var t := 0.0
+	## 싸움터 위 경계에서 이만큼 아래. 소녀가 바닥에 서면 화면 위 끝이 싸움터 위 경계보다 ~35px 아래라(레터박스 띠 때문에
+	## 카메라가 올라감) 110 으로는 HUD 뒤 화면 맨 위에 걸렸다(스크린샷 확인) → 160 으로 내려 HUD 아래 가운데가 보이게.
+	const BAND_TOP := 160.0
+	const BAND_H := 80.0
+	## 띠 맨 위 채움의 불투명도 (예고 때). 아래로 갈수록 0 (그라디언트 한 장 — 단 사이 이음선 없음).
+	const FILL_ALPHA := 0.22
+	const LINE_ALPHA := 0.6
+	const ARROW_ALPHA := 0.5
+	const WHITE := Color(1.0, 1.0, 1.0)
+	static var _grad_tex: GradientTexture2D
+	func _ready() -> void:
+		if _grad_tex == null:
+			var g := Gradient.new()
+			g.offsets = PackedFloat32Array([0.0, 1.0])
+			g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+			_grad_tex = GradientTexture2D.new()
+			_grad_tex.gradient = g
+			_grad_tex.width = 4
+			_grad_tex.height = 64
+			_grad_tex.fill_from = Vector2(0, 0)
+			_grad_tex.fill_to = Vector2(0, 1)
+	func _draw() -> void:
+		if amount <= 0.01:
+			return
+		var a := clampf(amount, 0.0, 1.0)
+		if phase == 1:
+			if front:
+				return
+			var x0 := arena.position.x + 40.0
+			var x1 := arena.end.x - 40.0
+			var y0 := arena.position.y + BAND_TOP
+			# 위가 밝고 아래로 옅어지는 띠 (그라디언트 한 장)
+			if _grad_tex:
+				draw_texture_rect(_grad_tex, Rect2(x0, y0, x1 - x0, BAND_H), false, Color(WHITE, a * FILL_ALPHA))
+			draw_line(Vector2(x0, y0), Vector2(x1, y0), Color(WHITE, a * LINE_ALPHA), 2.0, true)
+			# 아래로 흐르는 화살표(v) — 떨어진다는 뜻
+			var slide := fmod(t * 1.3, 1.0) * BAND_H
+			var x := x0 + 60.0
+			while x < x1 - 40.0:
+				var y := y0 + slide
+				var c := Color(WHITE, a * ARROW_ALPHA * (1.0 - slide / BAND_H))
+				draw_polyline(PackedVector2Array([Vector2(x - 12, y - 8), Vector2(x, y + 4), Vector2(x + 12, y - 8)]), c, 2.0, true)
+				x += 180.0
+		else:
+			# 회오리: 새 몸 주위 고리 (잎이 이 고리에서 바깥으로 흩어진다). 뒤 = 윗반(PI~TAU), 앞 = 아랫반(0~PI).
+			var a0 := 0.0 if front else PI
+			var fill := 0.06 if front else 0.1   # 새 앞에 오는 아랫반은 채움을 더 옅게 (몸을 가리지 않게)
+			draw_arc(center, 185.0, a0, a0 + PI, 28, Color(WHITE, a * fill), 44.0, true)
+			draw_arc(center, 162.0, a0, a0 + PI, 28, Color(WHITE, a * 0.55), 2.0, true)
+			draw_arc(center, 208.0, a0, a0 + PI, 28, Color(WHITE, a * 0.35), 2.0, true)
+			for i in 8:
+				var ang := i * TAU / 8.0 + t * 2.2
+				var d := Vector2(cos(ang), sin(ang))
+				if (d.y >= 0.0) != front:
+					continue
+				var p := center + d * 185.0
+				var tang := Vector2(-d.y, d.x)
+				draw_polyline(PackedVector2Array([p - d * 10.0 - tang * 10.0, p + d * 6.0, p - d * 10.0 + tang * 10.0]), Color(WHITE, a * ARROW_ALPHA), 2.0, true)
 
 
 func _ready() -> void:
@@ -69,6 +176,19 @@ func _ready() -> void:
 		g.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		add_child(g)
 		_ghosts.append(g)
+	_muzzle = MuzzleDot.new()
+	_muzzle.top_level = true
+	_muzzle.visible = false
+	add_child(_muzzle)
+	_band = RainBand.new()
+	_band.visible = false
+	_band.show_behind_parent = true   # 새 그림 뒤 (top_level 이 아니어야 듣는다)
+	_band.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR   # 부모의 밉맵 필터를 물려받지 않게 (그라디언트엔 밉맵이 없다)
+	add_child(_band)
+	_band_front = RainBand.new()   # 2페이즈 고리의 아랫반 (새 앞)
+	_band_front.front = true
+	_band_front.visible = false
+	add_child(_band_front)
 
 
 func _on_state_changed(st: GrayLeafBird.State) -> void:
@@ -241,13 +361,15 @@ func _process(delta: float) -> void:
 	scale = Vector2(_base_scale.x * sq.x * fx, _base_scale.y * maxf(sq.y, 0.05))
 	position = _base_pos + Vector2(0, dy)
 	_update_ghosts(delta, ghost)
+	_update_telegraphs()
 
 	# ---- 색: 잿빛 바탕, 깃털 예고(차가운 밝아짐), 붉은 예고(서서히), 피격 번쩍임 ----
 	_red = Motion.damp(_red, 1.0 if _boss.is_red() else 0.0, 14.0, delta)
 	var ash := Color(0.78, 0.8, 0.82) if _boss.phase == 1 else Color(0.7, 0.68, 0.7)
 	ash = ash.lerp(Color(1.25, 1.35, 1.45), _boss.telegraph_amount * (0.7 + 0.3 * sin(_t * 24.0)))
 	ash = ash.lerp(Color(2.2, 0.6, 0.5), _red * (0.5 + 0.5 * sin(_t * 30.0)))
-	modulate = ash.lerp(Color(2.0, 2.0, 2.0), fl * 0.8)
+	# self_modulate: 새 그림에만 색을 입힌다 (뒤에 그리는 예고 띠 자식은 물들지 않게)
+	self_modulate = ash.lerp(Color(2.0, 2.0, 2.0), fl * 0.8)
 
 
 ## 세 박자 자세 (경계에서 값이 이어진다: 예비 끝 = back, 타격 시작 = back, 되돌림 시작 = fwd).
@@ -269,6 +391,33 @@ func _beat_follow() -> float:
 		"active": return 40.0
 		"recovery": return 12.0
 	return 9.0
+
+
+## 깃털 붉은 점·잎 띠 예고를 보스 값에 맞춘다 (자리는 보스 기준이라 그림의 기울기·뒤집기와 무관).
+func _update_telegraphs() -> void:
+	if _muzzle:
+		_muzzle.amount = _boss.feather_warn
+		_muzzle.flash = _boss.muzzle_flash
+		_muzzle.t = _t
+		_muzzle.global_position = _boss.muzzle_point()
+		_muzzle.global_rotation = 0.0
+		_muzzle.global_scale = Vector2.ONE
+		_muzzle.visible = _muzzle.amount > 0.01 or _muzzle.flash > 0.01
+		if _muzzle.visible:
+			_muzzle.queue_redraw()
+	for b: RainBand in [_band, _band_front]:
+		if b == null:
+			continue
+		b.amount = _boss.rain_warn
+		b.arena = _boss.arena
+		b.phase = _boss.phase
+		b.center = _boss.body_center()
+		b.t = _t
+		# 부모(새 그림)는 기울고 뒤집히므로 세계 좌표 그대로가 되게 매 프레임 되돌린다 (top_level 이 아니라서)
+		b.global_transform = Transform2D.IDENTITY
+		b.visible = b.amount > 0.01 and (not b.front or b.phase != 1)
+		if b.visible:
+			b.queue_redraw()
 
 
 func _puff(n: int, ox: float) -> void:

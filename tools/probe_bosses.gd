@@ -333,4 +333,239 @@ func _bird() -> void:
 	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.HOVER, 4.0)
 	_report("새 HOVER→WIND→HOVER", r, 0.1, 0.06, 14.0)
 	# 날갯바람 끝에서 붉은색이 한 프레임에 돌아오지 않는다
+	_bird_shots(boss, vis)
 	boss.queue_free()
+
+
+func _ok(cond: bool, label: String) -> void:
+	print("[probe]    %s → %s" % [label, "OK" if cond else "실패!"])
+	if not cond:
+		_fail += 1
+
+
+## 2026-10-19 탄막 가시성 + 체력 2배: 깃털·잎의 그림 크기(판정 대비), 테두리·심·발광·꼬리, 붉은 점·흰 띠 예고의 때, 체력 1800.
+func _bird_shots(boss: Node, vis: Sprite2D) -> void:
+	print("[probe] 새 탄막 가시성·체력")
+	_ok(boss.max_hp == 1800.0 and boss.hp == 1800.0, "체력 최대 %.0f / 지금 %.0f (1800 기준)" % [boss.max_hp, boss.hp])
+	var player: Player = PLAYER.instantiate()
+	get_tree().root.add_child(player)
+	player.set_physics_process(false)
+	player.set_process(false)
+	boss.player = player
+	boss.arena = Rect2(0, 0, 2400, 1200)
+	boss.global_position = Vector2(1200, 520)
+	boss._hover_target = boss.global_position
+	boss.hover_points = [boss.global_position]
+	boss.facing = -1
+	player.global_position = Vector2(500, 1000)
+	for p in get_tree().get_nodes_in_group("projectile"):
+		p.free()
+	# ---- 깃털: 쏘기 0.3초 전부터 붉은 점이 차오르고, 첫 발 직전엔 거의 1, 3발이 나간다 ----
+	boss._set_state(boss.State.HOVER)
+	boss._timer = 99.0
+	_run(boss, vis, func() -> bool: return false, 0.3)
+	boss._set_state(boss.State.FEATHERS)
+	boss._timer = 0.6 + 3 * 0.15
+	boss._spawned = 0
+	boss.telegraph_amount = 0.0
+	boss.feather_warn = 0.0
+	var fw := {"early": -1.0, "before_first": -1.0, "first_t": -1.0, "flash": 0.0, "muzzle_ok": true}
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.HOVER, 3.0, func(t: float) -> void:
+		var n := get_tree().get_nodes_in_group("projectile").size()
+		if t < 0.25:
+			fw.early = maxf(fw.early, boss.feather_warn)
+		if n == 0:
+			fw.before_first = boss.feather_warn
+		elif fw.first_t < 0.0:
+			fw.first_t = t
+			fw.flash = boss.muzzle_flash
+			var p: Projectile = get_tree().get_nodes_in_group("projectile")[0]
+			# 붉은 점(muzzle_point)과 깃털이 같은 자리에서 시작한다
+			fw.muzzle_ok = p.global_position.distance_to(boss.muzzle_point()) < 2.0 and vis._muzzle.global_position.distance_to(boss.muzzle_point()) < 2.0)
+	var feathers: Array = get_tree().get_nodes_in_group("projectile")
+	print("[probe]    붉은 점: 0.25초 전 최대 %.2f, 첫 발 직전 %.2f, 첫 발 %.2f초(번쩍 %.2f), 깃털 %d발" % [fw.early, fw.before_first, fw.first_t, fw.flash, feathers.size()])
+	_ok(fw.early < 0.05, "쏘기 0.3초 전에는 붉은 점이 없다")
+	_ok(fw.before_first >= 0.9, "첫 발 직전 붉은 점이 거의 다 찼다 (≥0.9)")
+	_ok(fw.first_t > 0.55 and fw.first_t < 0.7, "첫 발은 예고 0.6초 뒤")
+	_ok(fw.flash >= 0.9, "발사 순간 번쩍임")
+	_ok(fw.muzzle_ok, "깃털·붉은 점이 부리 앞(muzzle_point)에서 시작")
+	_ok(feathers.size() == 3, "1페이즈 깃털 3발")
+	boss._timer = 99.0
+	_run(boss, vis, func() -> bool: return false, 0.3)   # 상태가 끝난 뒤 0.3초: 붉은 점은 초당 6 으로 사라진다
+	_ok(boss.feather_warn < 0.05 and not vis._muzzle.visible, "상태가 끝나고 0.3초면 붉은 점이 사라진다 (%.2f)" % boss.feather_warn)
+	if feathers.size() > 0:
+		var p: Projectile = feathers[0]
+		# 예전 깃털 그림: 가로 size.x, 세로 size.y×0.9 (위 반 + 아래 반×0.8)
+		_check_shot(p, "깃털", Vector2(76, 16), 10.0, Vector2(76.0, 16.0 * 0.9))
+		_ok(p.core_color.r > 0.9 and p.core_color.g < 0.4, "깃털 심이 붉다 %s" % p.core_color)
+		_ok(p.reflectable, "깃털은 되받을 수 있다")
+		# 꼬리: 몇 프레임 날아가면 잔상이 쌓인다
+		for i in 14:
+			p._physics_process(DT)
+		print("[probe]    깃털 14프레임 뒤 꼬리 %d개 (trail_count %d)" % [p.trail_size(), p.trail_count])
+		_ok(p.trail_size() >= 3 and p.trail_size() <= p.trail_count, "깃털 꼬리 잔상 3개 이상")
+	for p in feathers:
+		p.free()
+	# ---- 잎 흩날리기: 앞 0.35초는 흰 띠만(잎 없음), 그 뒤 잎이 떨어지고 띠는 0.45 로 남는다 ----
+	boss._set_state(boss.State.LEAF_RAIN)
+	boss._timer = boss.leaf_rain_time
+	boss._spawn_accum = 0.0
+	var lr := {"warn_early": 0.0, "leaves_early": 0, "warn_mid": 0.0, "band_visible": false}
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.HOVER, 6.0, func(t: float) -> void:
+		if t > 0.15 and t < 0.3:
+			lr.warn_early = maxf(lr.warn_early, boss.rain_warn)
+			lr.leaves_early = maxi(lr.leaves_early, get_tree().get_nodes_in_group("projectile").size())
+			lr.band_visible = lr.band_visible or vis._band.visible
+		if t > 2.0 and t < 3.0:
+			lr.warn_mid = boss.rain_warn)
+	var leaves: Array = get_tree().get_nodes_in_group("projectile")
+	print("[probe]    흰 띠: 예고 중 %.2f(잎 %d개, 띠 보임 %s), 떨어지는 중 %.2f, 잎 %d개 (%.1f초 동안)" % [lr.warn_early, lr.leaves_early, lr.band_visible, lr.warn_mid, leaves.size(), boss.leaf_rain_time])
+	_ok(lr.warn_early >= 0.95 and lr.leaves_early == 0 and lr.band_visible, "예고 0.35초 동안 띠만 있고 잎은 없다")
+	_ok(lr.warn_mid > 0.35 and lr.warn_mid < 0.55, "잎이 떨어지는 동안 띠는 옅게(0.45) 남는다")
+	_ok(leaves.size() >= 12, "잎이 12장 이상 떨어진다")
+	if leaves.size() > 0:
+		var p: Projectile = leaves[0]
+		# 예전 잎 그림: 마름모 가로 size.x, 세로 size.x×0.55 (size.y 는 안 썼다)
+		_check_shot(p, "잎", Vector2(46, 20), 12.0, Vector2(46.0, 46.0 * 0.55))
+		_ok(p.fade_in > 0.05, "잎은 생길 때 서서히 나타난다 (fade_in %.2f)" % p.fade_in)
+		_ok(p.outline_color.a > 0.0 and p.outline_color.r > 0.9 and p.outline_color.g > 0.9, "잎 테두리가 희다 %s" % p.outline_color)
+	_run(boss, vis, func() -> bool: return boss.rain_warn < 0.05, 2.0)
+	_ok(boss.rain_warn < 0.05 and not vis._band.visible, "끝나면 띠가 사라진다 (%.2f)" % boss.rain_warn)
+	for p in leaves:
+		p.free()
+	# ---- 소녀의 바람(GUST): 테두리·발광을 더해도 그림·발광이 판정 사각형(0.9×size) 안 ----
+	var g: Projectile = load("res://scenes/combat/projectile.tscn").instantiate()
+	g.kind = Projectile.Kind.GUST
+	g.size = Vector2(110, 60)
+	g.color = Color(0.8, 1.0, 0.85)
+	get_tree().root.add_child(g)
+	g.launch(Vector2.RIGHT, player, true)
+	var gb := g.draw_bounds()
+	var gr := g.glow_radii()
+	var gc := g.glow_center()
+	# 그림 식과 따로, 호 세 겹을 직접 계산해 맞춰 본다 (선 굵기 + 테두리 덧굵기 포함)
+	var hand := Rect2()
+	for i in 3:
+		var rr: float = g._gust_radius(i)
+		var cx: float = g.size.x * (0.28 - i * 0.3)
+		var hw: float = (2.5 + 1.5 * (2 - i) + 2.0) * 0.5
+		var b := Rect2(cx + (rr - hw) * cos(1.15), -(rr + hw) * sin(1.15), 0, 0)
+		b.end = Vector2(cx + rr + hw, (rr + hw) * sin(1.15))
+		hand = b if i == 0 else hand.merge(b)
+	print("[probe]    바람 그림 범위(테두리 포함) %s (직접 계산 %s, 호 비율 %.3f), 발광 중심 %s 반지름 %s / 판정 ±%s" % [gb, hand, g._gust_k, gc, gr, g.size * 0.45])
+	_ok(gb.position.distance_to(hand.position) < 0.01 and gb.end.distance_to(hand.end) < 0.01, "바람 그림 범위 = 직접 계산한 호")
+	_ok(gb.end.x <= g.size.x * 0.45 + 0.01 and gb.position.x >= -g.size.x * 0.45 and absf(gb.position.y) <= g.size.y * 0.45 + 0.01 and gb.end.y <= g.size.y * 0.45 + 0.01, "바람 그림(테두리까지)이 판정 안")
+	_ok(gc.x + gr.x <= g.size.x * 0.45 + 0.01 and gr.y <= g.size.y * 0.45 + 0.01, "바람 발광이 판정 안")
+	_ok(g._glow != null and g._glow.material is CanvasItemMaterial and (g._glow.material as CanvasItemMaterial).blend_mode == CanvasItemMaterial.BLEND_MODE_ADD, "발광은 더하기 혼합 Sprite2D")
+	g.free()
+	# ---- 구슬(ORB) 종류: 둥근 그림, 판정 size 기준 ----
+	var o: Projectile = load("res://scenes/combat/projectile.tscn").instantiate()
+	o.kind = Projectile.Kind.ORB
+	o.size = Vector2(40, 40)
+	get_tree().root.add_child(o)
+	_ok(absf(o.hit_radius() - 24.0) < 0.01 and o.draw_half_extent().x >= 20.0, "구슬: 판정 %.0f, 그림 반 %.1f" % [o.hit_radius(), o.draw_half_extent().x])
+	o.free()
+	# ---- 정사각형 size 로 쓰는 잎(기사 등불 44×44 등)은 예전처럼 납작한 잎 (세로 = 가로×0.55) ----
+	var sq: Projectile = load("res://scenes/combat/projectile.tscn").instantiate()
+	sq.kind = Projectile.Kind.LEAF
+	sq.size = Vector2(44, 44)
+	get_tree().root.add_child(sq)
+	var sqb := sq.body_bounds()
+	print("[probe]    정사각형 잎 44×44: 몸 %.1f × %.1f (예전 44 × 24.2)" % [sqb.size.x, sqb.size.y])
+	_ok(sqb.size.y < 26.0 and sqb.size.x > 36.0, "정사각형 잎은 뚱뚱해지지 않는다")
+	sq.free()
+	# ---- 자기 _draw 를 그리는 하위 클래스(확장판 SapProjectile 같은)는 바탕 발광·꼬리를 안 붙인다 ----
+	var sub_script := GDScript.new()
+	sub_script.source_code = "extends Projectile\nfunc _draw() -> void:\n\tdraw_circle(Vector2.ZERO, 5.0, color)\n"
+	sub_script.reload()
+	var sub := Area2D.new()
+	sub.set_script(sub_script)
+	get_tree().root.add_child(sub)
+	_ok(sub._glow == null and sub.trail_count == 0, "하위 클래스엔 바탕 발광·꼬리 없음 (발광 %s, 꼬리 %d)" % [sub._glow, sub.trail_count])
+	sub.free()
+	# ---- 꼬리는 삼각형 배열 하나 (잔상 수와 무관하게 그리기 호출 1번): 잔상 점 수 = 잔상 × 윤곽 점 ----
+	var tp: Projectile = load("res://scenes/combat/projectile.tscn").instantiate()
+	tp.kind = Projectile.Kind.FEATHER
+	tp.size = Vector2(76, 16)
+	tp.draw_scale = 1.8
+	tp.trail_count = 5
+	get_tree().root.add_child(tp)
+	tp.global_position = Vector2(100, 100)
+	tp.launch(Vector2.RIGHT, null, false)
+	for i in 12:
+		tp._physics_process(DT)
+	var built: bool = tp._build_trail(Color.WHITE)
+	_ok(built and tp.trail_size() == 5 and tp._tr_pts.size() == 5 * tp._sil_pts.size() and tp._tr_idx.size() == 5 * tp._sil_tris.size() and not tp._sil_tris.is_empty(),
+		"꼬리 5개 = 삼각형 배열 하나 (점 %d, 삼각형 꼭짓점 %d)" % [tp._tr_pts.size(), tp._tr_idx.size()])
+	tp.free()
+	# ---- 깃털 동안 몸 방향 고정: 시작할 때 한 번 소녀 쪽(데드존 안이어도)을 보고, 쏘는 동안 소녀가 건너가도 그대로 ----
+	boss.global_position = Vector2(1200, 520)
+	boss.facing = -1
+	boss._face_hold = 0.0
+	player.global_position = Vector2(1250, 1000)   # 오른쪽, 데드존(80) 안
+	boss._set_state(boss.State.HOVER)
+	boss._pattern_index = 1                          # 1페이즈 순서의 두 번째 = 깃털
+	boss._next_pattern()
+	var face_start: int = boss.facing
+	player.global_position = Vector2(400, 1000)     # 쏘는 동안 왼쪽으로 멀리 건너감
+	var face_flip := {"n": 0}
+	_run(boss, vis, func() -> bool: return boss.state != boss.State.FEATHERS, 3.0, func(_t: float) -> void:
+		if boss.state == boss.State.FEATHERS and boss.facing != face_start:
+			face_flip.n += 1)
+	print("[probe]    깃털 시작 방향 %d (소녀 오른쪽 50px), 쏘는 동안 뒤집힌 프레임 %d, 붉은 점 자리 %s (발밑 %s)" % [face_start, face_flip.n, boss.muzzle_point(), boss.global_position])
+	_ok(face_start == 1 and face_flip.n == 0, "깃털: 시작 때 소녀 쪽을 보고, 쏘는 동안은 방향 고정")
+	_ok(boss.muzzle_point().y < boss.global_position.y - 150.0, "붉은 점·깃털 출발점은 부리 높이 (발밑보다 150px 넘게 위)")
+	for p in get_tree().get_nodes_in_group("projectile"):
+		p.free()
+	# ---- 띠는 새 그림 뒤 (top_level 아님 + show_behind_parent), 새 색에 물들지 않음, 2페이즈 고리 중심 = 새 몸 가운데 ----
+	boss.phase = 2
+	boss._set_state(boss.State.HOVER)
+	boss.rain_warn = 0.9
+	vis._process(DT)
+	var band: Node2D = vis._band
+	print("[probe]    띠: top_level %s, 뒤에 그림 %s, 부모 = 새 그림 %s, 세계 변환 %s, 고리 중심 %s / 몸 가운데 %s, 새 modulate %s" % [
+		band.top_level, band.show_behind_parent, band.get_parent() == vis, band.global_transform, band.center, boss.body_center(), vis.modulate])
+	_ok(not band.top_level and band.show_behind_parent and band.get_parent() == vis and band.visible, "띠는 새 그림 뒤에 그린다 (top_level 아님)")
+	_ok(band.global_transform.origin.length() < 0.01 and absf(band.global_transform.get_rotation()) < 0.001 and band.global_transform.get_scale().distance_to(Vector2.ONE) < 0.001, "띠는 세계 좌표 그대로 (새의 기울기·뒤집기 영향 없음)")
+	_ok(vis.modulate == Color(1, 1, 1, 1), "새 색은 self_modulate 로만 (띠가 물들지 않는다)")
+	_ok(band.center.distance_to(boss.global_position + Vector2(0, -150)) < 0.01, "2페이즈 고리 중심 = 새 몸 가운데")
+	var front: Node2D = vis._band_front
+	_ok(front.front and not front.top_level and not front.show_behind_parent and front.visible, "2페이즈 고리 아랫반은 새 앞에 (윗반은 뒤 — 큰 날개에 가려지지 않게)")
+	boss.phase = 1
+	vis._process(DT)
+	_ok(band.visible and not front.visible, "1페이즈 띠는 뒤 노드만 그린다")
+	boss.phase = 1
+	# ---- 소녀가 잎 흩날리기·깃털 도중 쓰러짐 → reset_fight 가 예고 값을 비운다 (다시 싸울 때 옛 띠·점 번쩍임 없음) ----
+	boss._set_state(boss.State.LEAF_RAIN)
+	boss.rain_warn = 0.45
+	boss.feather_warn = 0.62
+	boss.muzzle_flash = 0.5
+	boss.telegraph_amount = 0.4
+	boss.reset_fight()
+	vis._process(DT)
+	print("[probe]    reset_fight 뒤: rain_warn %.2f, feather_warn %.2f, muzzle_flash %.2f, telegraph %.2f, 띠 보임 %s, 점 보임 %s" % [
+		boss.rain_warn, boss.feather_warn, boss.muzzle_flash, boss.telegraph_amount, band.visible, vis._muzzle.visible])
+	_ok(boss.rain_warn == 0.0 and boss.feather_warn == 0.0 and boss.muzzle_flash == 0.0 and boss.telegraph_amount == 0.0 and not band.visible and not vis._muzzle.visible, "reset_fight 가 예고 값을 비운다")
+	# ---- 체력만 2배: 잎 삼키기 회복량은 예전(900×0.06 = 54) 그대로 ----
+	_ok(absf(boss.max_hp * boss.eat_heal_ratio - 54.0) < 0.01, "잎 삼키기 회복 %.0f (예전 54 그대로)" % (boss.max_hp * boss.eat_heal_ratio))
+	boss.player = null
+	player.free()
+
+
+## 탄막 하나의 그림 크기·테두리·발광·꼬리 설정을 검사한다.
+## 그림 크기는 **예전 그림**(old_draw: 3e7e6aa 의 몸통 다각형 가로·세로)과 비교한다 — 몸통만(테두리 제외)으로 1.6~2.1배.
+func _check_shot(p: Projectile, label: String, base_size: Vector2, base_radius: float, old_draw: Vector2) -> void:
+	var body := p.body_bounds()
+	var full := p.draw_bounds()
+	var shape_r := -1.0
+	for c in p.get_children():
+		if c is CollisionShape2D and c.shape is CircleShape2D:
+			shape_r = (c.shape as CircleShape2D).radius
+	var ratio_x := body.size.x / old_draw.x
+	var ratio_y := body.size.y / old_draw.y
+	print("[probe]    %s: size %s, 그림 배율 %.2f → 몸 %.1f × %.1f (예전 그림 %.1f × %.1f 대비 %.2f×, %.2f×; 테두리까지 %.1f × %.1f), 판정 반지름 %.1f (모양 %.1f), 테두리 %s, 발광 %.1f, 꼬리 %d" % [
+		label, p.size, p.draw_scale, body.size.x, body.size.y, old_draw.x, old_draw.y, ratio_x, ratio_y, full.size.x, full.size.y, p.hit_radius(), shape_r, p.outline_color, p.glow, p.trail_count])
+	_ok(p.size == base_size and absf(p.hit_radius() - base_radius) < 0.01 and absf(shape_r - base_radius) < 0.01, "%s 판정은 그대로 (반지름 %.0f)" % [label, base_radius])
+	_ok(ratio_x >= 1.6 and ratio_x <= 2.1 and ratio_y >= 1.6 and ratio_y <= 2.1, "%s 몸 그림은 예전 그림의 1.6~2.1배" % label)
+	_ok(p.outline_color.a > 0.0 and p.glow > 0.0 and p.trail_count >= 3 and p.trail_count <= 5, "%s 테두리·발광·꼬리(3~5) 있음" % label)
+	_ok(p._glow != null and p._glow.get_parent() == p, "%s 발광 자식 있음" % label)
