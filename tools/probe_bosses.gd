@@ -18,7 +18,19 @@ var _fail := 0
 
 
 func _ready() -> void:
+	# 바닥: 보스가 서 있어야 내려찍기 도약(is_on_floor)·돌진 박힘이 돈다 (정적 몸은 물리 한 틱 뒤에 공간에 들어간다)
+	var floor_body := StaticBody2D.new()
+	floor_body.collision_layer = 1
+	var fs := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(6000, 200)
+	fs.shape = rect
+	floor_body.add_child(fs)
+	floor_body.position = Vector2(1200, 1100)
+	add_child(floor_body)   # (루트에 더하면 루트가 아직 자식을 세우는 중이라 실패한다)
 	await get_tree().process_frame
+	await get_tree().physics_frame
+	await get_tree().physics_frame
 	print("[probe] 시작")
 	KNIGHT = load("res://scenes/bosses/lantern_knight.tscn")
 	ROOT = load("res://scenes/bosses/root_keeper.tscn")
@@ -52,11 +64,14 @@ func _run(boss: Node, vis: Sprite2D, done: Callable, max_time := 6.0, each: Call
 	var prev_rot := vis.rotation
 	var prev_scale := vis.scale
 	var prev_y := vis.position.y
-	var r := {"max_rot": 0.0, "max_sx": 0.0, "max_sy": 0.0, "max_dy": 0.0, "peak_t": -1.0, "active_t": -1.0, "frames": 0, "states": [], "at": {}}
+	var r := {"max_rot": 0.0, "max_sx": 0.0, "max_sy": 0.0, "max_dy": 0.0, "peak_t": -1.0, "active_t": -1.0, "frames": 0, "states": [], "at": {},
+		"max_wrot": 0.0, "wrot_min": INF, "wrot_max": -INF, "actives": 0}
 	var t := 0.0
 	var peak := -INF
 	var last_state := -1
 	var last_phase := ""
+	var bone: Node2D = vis.get("_weapon_bone") if "_weapon_bone" in vis else null
+	var prev_wrot: float = bone.rotation if bone else 0.0
 	while t < max_time:
 		boss._physics_process(DT)
 		vis._process(DT)
@@ -64,13 +79,20 @@ func _run(boss: Node, vis: Sprite2D, done: Callable, max_time := 6.0, each: Call
 			each.call(t)
 		t += DT
 		r.frames += 1
+		if bone:
+			r.max_wrot = maxf(r.max_wrot, absf(bone.rotation - prev_wrot))
+			r.wrot_min = minf(r.wrot_min, bone.rotation)
+			r.wrot_max = maxf(r.wrot_max, bone.rotation)
+			prev_wrot = bone.rotation
 		if boss.state != last_state:
 			last_state = boss.state
 			r.states.append("%.2f %s" % [t, boss.state_name()])
 		if "attack_phase" in boss and boss.attack_phase != last_phase:
 			last_phase = boss.attack_phase
-			if last_phase == "active" and r.active_t < 0.0:
-				r.active_t = t
+			if last_phase == "active":
+				r.actives += 1
+				if r.active_t < 0.0:
+					r.active_t = t
 		var d_rot := absf(vis.rotation - prev_rot)
 		var d_sx := absf(absf(vis.scale.x) - absf(prev_scale.x))
 		var d_sy := absf(vis.scale.y - prev_scale.y)
@@ -111,13 +133,22 @@ func _knight() -> void:
 	boss.facing = -1
 	boss._set_state(boss.State.MARCH)
 	boss._timer = 99.0
-	# 정지 자세로 안정시키기
+	# 체력 1.5배 (2026-10-19 기획자 요청: 1100 → 1650)
+	var hp_ok: bool = is_equal_approx(boss.max_hp, 1650.0) and is_equal_approx(boss.hp, 1650.0)
+	print("[probe] 기사 체력: max_hp %.0f, hp %.0f → %s" % [boss.max_hp, boss.hp, "1650 OK" if hp_ok else "1650 아님!"])
+	if not hp_ok:
+		_fail += 1
+	# 정지 자세로 안정시키기 (바닥에 선다)
 	_run(boss, vis, func() -> bool: return false, 1.0)
+	print("[probe] 기사 바닥: is_on_floor %s, y %.1f" % [boss.is_on_floor(), boss.global_position.y])
+	if not boss.is_on_floor():
+		_fail += 1
 	# THRUST 한 사이클 (startup 0.55 → active 0.18 → recovery 0.7 → MARCH)
 	boss._begin(boss.State.THRUST, 0.55)
 	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss._timer < 99.0 and boss.attack_phase == "" and _settled(vis), 6.0)
 	_check_active_window(r, 0.18)
 	_report("기사 THRUST", r)
+	_weapon_report("기사 THRUST 창", r, 0.8)
 	# SLAM (큰 세로 움직임이 있는 공격)
 	boss._timer = 99.0
 	boss._red = true
@@ -132,13 +163,28 @@ func _knight() -> void:
 	boss.receive_hit(HitData.make(1.0, 0.0, null), null)
 	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss._timer < 0.1, 4.0)
 	_report("기사 2페이즈 전환(SLAM→STAGGER→MARCH)", r)
-	# 저스트 가드: THRUST 타격 중 창이 튕김
+	# 저스트 가드: THRUST 타격 중 창이 튕김 (1페이즈로 되돌려 둔다 — 2페이즈면 되돌림 끝에 검기로 이어질 수 있다)
+	boss.phase = 1
+	boss.hp = boss.max_hp
 	boss._timer = 99.0
 	boss._begin(boss.State.THRUST, 0.55 * 0.75)
 	_run(boss, vis, func() -> bool: return boss.attack_phase == "active", 2.0)
+	# 창(내 Hitbox)이 저스트 가드에 막힘 = 흐트러짐(on_just_guarded) + Hitbox.landed("just_guard") → 창 튕김
 	boss.on_just_guarded(null, 10.0)
+	boss.hitbox.landed.emit("just_guard", null)
 	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 4.0)
 	_report("기사 저스트 가드 휘청", r)
+	# 투사체(출처가 기사인 불꽃 파도 등)를 저스트 가드한 것만으로는 창이 튕기지 않는다 (흐트러짐만)
+	boss._timer = 99.0
+	boss._begin(boss.State.THRUST, 0.55)
+	_run(boss, vis, func() -> bool: return boss.attack_phase == "active", 2.0)
+	boss.on_just_guarded(null, 10.0)
+	var no_bounce: bool = boss.anim_hint != "stagger" and boss.attack_phase == "active"
+	print("[probe] 기사 투사체 저스트 가드: 찌르기 중 창 튕김 없음 %s (힌트 '%s', 단계 %s) → %s" % [no_bounce, boss.anim_hint, boss.attack_phase, "OK" if no_bounce else "틀림!"])
+	if not no_bounce:
+		_fail += 1
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 4.0)
+	boss.poise = 0.0
 	# 방향 전환: 몸 틀기 (scale.x 가 한 프레임에 뒤집히지 않는다)
 	boss._timer = 99.0
 	boss.facing = 1
@@ -155,27 +201,267 @@ func _knight() -> void:
 	print("[probe] 기사 방향 전환: 60프레임 동안 |scale.x| 최소 %.3f (0.4 기준), 한 프레임에 0.2 넘게 뛴 횟수 %d → %s" % [min_abs, flipped_frames, "몸 틀기 OK" if flipped_frames == 0 and min_abs < 0.2 else "끊김!"])
 	if flipped_frames > 0 or min_abs >= 0.2:
 		_fail += 1
-	# SLAM 웅크림: 예비 앞 30% 동안 먼저 내려앉았다가(아래로) 그 뒤 솟구친다(위로)
+	# 다시 1페이즈로 (아래 시험은 1페이즈 길이 기준)
+	boss.phase = 1
+	boss.hp = boss.max_hp
+	# SLAM 웅크림→도약: 예비 앞 30% 동안 그림이 내려앉았다가(아래로), 그 뒤 몸이 진짜 뛰어오르고(위로 60px 넘게), 타격 순간엔 바닥에 돌아와 있다
 	boss._timer = 99.0
 	boss.facing = -1
 	_run(boss, vis, func() -> bool: return false, 1.0)
-	# (람다는 지역 실수를 값으로 잡으므로 사전(참조)에 기록한다)
-	var y0 := vis.position.y
-	var c := {"low": -INF, "high": INF, "t_low": 0.0, "t_high": 0.0}
+	# (람다는 지역 실수를 값으로 잡으므로 사전(참조)에 기록한다) — 세로 자리는 몸 + 그림 (몸이 뛰므로 월드 기준)
+	var y0: float = boss.global_position.y + vis.position.y
+	var c := {"low": -INF, "high": INF, "t_low": 0.0, "t_high": 0.0, "land_dy": INF}
 	boss._begin(boss.State.SLAM, 1.0)
 	_run(boss, vis, func() -> bool: return boss.attack_phase != "startup", 3.0, func(t: float) -> void:
-		var dy: float = vis.position.y - y0
+		var dy: float = boss.global_position.y + vis.position.y - y0
 		if dy > c.low:
 			c.low = dy; c.t_low = t
 		if dy < c.high:
 			c.high = dy; c.t_high = t)
-	var crouch_ok: bool = c.low > 5.0 and c.t_low < 0.5 and c.high < -40.0 and c.t_high > c.t_low
-	print("[probe] 기사 SLAM 웅크림: 예비 중 가장 내려앉음 %+.1fpx(%.2f초) → 가장 솟음 %+.1fpx(%.2f초) → %s" % [c.low, c.t_low, c.high, c.t_high, "웅크림→도약 OK" if crouch_ok else "웅크림 없음!"])
+	c.land_dy = boss.global_position.y - 1000.0
+	var crouch_ok: bool = c.low > 5.0 and c.t_low < 0.5 and c.high < -60.0 and c.t_high > c.t_low and absf(c.land_dy) < 40.0
+	print("[probe] 기사 SLAM 웅크림→도약: 예비 중 가장 내려앉음 %+.1fpx(%.2f초) → 가장 솟음 %+.1fpx(%.2f초), 타격 순간 바닥에서 %+.1fpx → %s" % [c.low, c.t_low, c.high, c.t_high, c.land_dy, "웅크림→도약→착지 OK" if crouch_ok else "틀림!"])
 	if not crouch_ok:
 		_fail += 1
 	_run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 6.0)
+	_knight_wave(boss, vis)
+	_knight_combo(boss, vis)
+	_knight_charge(boss, vis)
+	_knight_spin(boss, vis)
 	_facing_hold(boss, vis, "기사", boss.State.MARCH)
 	boss.queue_free()
+
+
+## 창 움직임: 한 사이클 동안 창(손아귀 축)이 크게 돌고(휘두른 폭 = 최대−최소 각도 ≥ need), 프레임 간 변화는 0.7rad(40°) 아래.
+## (큰 휘두르기는 일부러 빠르다 — 3rad 를 8~9프레임에 지난다. 그보다 빠르면 잔상이 있어도 끊겨 보인다.)
+func _weapon_report(label: String, r: Dictionary, need: float) -> void:
+	var span: float = r.wrot_max - r.wrot_min
+	var ok: bool = span >= need and r.max_wrot < 0.7
+	print("[probe] %s: 휘두른 폭 %.2frad(%.2f 이상; %.2f~%.2f), 프레임 간 최대 변화 %.3frad(0.7 아래) → %s" % [label, span, need, r.wrot_min, r.wrot_max, r.max_wrot, "휘둘러짐 OK" if ok else "안 움직임/끊김!"])
+	if not ok:
+		_fail += 1
+
+
+func _clear_projectiles() -> void:
+	for p in get_tree().get_nodes_in_group("projectile"):
+		p.get_parent().remove_child(p)
+		p.free()
+
+
+## 검기: 타격 순간 SwordWave 가 생기고(1페이즈 1갈래, 2페이즈 3갈래), 앞으로 날아가며, 저스트 가드로 되받으면 기사에게 돌아가 흐트러짐 +40.
+func _knight_wave(boss: Node, vis: Sprite2D) -> void:
+	_clear_projectiles()
+	boss._timer = 99.0
+	boss.facing = -1
+	boss.poise = 0.0
+	var seen := {"n": 0, "x0": 0.0, "x1": 0.0, "wave": null}
+	boss._begin(boss.State.WAVE, 0.65)
+	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 6.0, func(_t: float) -> void:
+		var waves := get_tree().get_nodes_in_group("projectile")
+		if seen.n == 0 and waves.size() > 0:
+			seen.n = waves.size()
+			seen.wave = waves[0]
+			seen.x0 = waves[0].global_position.x
+		if seen.wave != null and is_instance_valid(seen.wave):
+			seen.wave._physics_process(DT)
+			seen.x1 = seen.wave.global_position.x)
+	_report("기사 WAVE", r)
+	_weapon_report("기사 WAVE 창", r, 2.0)
+	var wave = seen.wave
+	var flew: float = seen.x0 - seen.x1
+	var ok: bool = seen.n == 1 and wave is SwordWave and flew > 300.0 and r.active_t > 0.6 and r.active_t < 0.7
+	print("[probe] 기사 검기(1페이즈): 타격 %.2f초에 검기 %d개(1 기준), 앞으로 %.0fpx 날아감(300 이상) → %s" % [r.active_t, seen.n, flew, "OK" if ok else "틀림!"])
+	if not ok:
+		_fail += 1
+	# 되받기: 진짜 소녀가 검기 앞에서 저스트 가드(가드 상태 + 방금 누름) → player.receive_hit 이 "just_guard" →
+	# 기사 쪽으로 방향이 뒤집히고 소녀 공격이 된다. 막는 순간 기사 흐트러짐은 그대로(검기 출처는 검기 자신),
+	# 되받은 검기가 기사 맞는 영역에 닿을 때 +40 — 합쳐서 +40.
+	if wave is SwordWave:
+		var pl: Player = PLAYER.instantiate()
+		get_tree().root.add_child(pl)
+		pl.set_physics_process(false)
+		pl.set_process(false)
+		pl.global_position = wave.global_position + Vector2(60.0 * float(boss.facing), 0)   # 검기가 날아가는 쪽 앞
+		pl.facing = -boss.facing
+		pl._set_state(pl.State.GUARD)
+		pl._guard_pressed_at = pl._now()
+		var before: float = boss.poise
+		wave._hit(pl.hurtbox)
+		var guard_gain: float = boss.poise - before
+		var to_boss: Vector2 = (boss.global_position + Vector2(0, -150) - wave.global_position).normalized()
+		var toward: float = wave.direction.dot(to_boss)
+		wave._hit(boss.hurtbox)
+		var gained: float = boss.poise - before
+		var rok: bool = wave.from_player and (wave.collision_mask & 16) != 0 and toward > 0.9 and is_equal_approx(guard_gain, 0.0) and is_equal_approx(gained, 40.0)
+		print("[probe] 기사 검기 되받기(진짜 소녀 저스트 가드): 소녀 공격 %s, 기사 쪽 향함 %.2f(0.9 이상), 막는 순간 흐트러짐 +%.0f(0 기준), 맞혀서 합계 +%.0f(40 기준) → %s" % [wave.from_player, toward, guard_gain, gained, "OK" if rok else "틀림!"])
+		if not rok:
+			_fail += 1
+		pl.queue_free()
+	# 2페이즈: 3갈래
+	_clear_projectiles()
+	boss.phase = 2
+	boss._timer = 99.0
+	boss._begin(boss.State.WAVE, 0.65 * 0.75)
+	_run(boss, vis, func() -> bool: return boss.attack_phase == "recovery", 3.0)
+	var n2 := get_tree().get_nodes_in_group("projectile").size()
+	print("[probe] 기사 검기(2페이즈): 검기 %d갈래(3 기준) → %s" % [n2, "OK" if n2 == 3 else "틀림!"])
+	if n2 != 3:
+		_fail += 1
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 4.0)
+	boss.phase = 1
+	_clear_projectiles()
+
+
+## 3연격: 타격 창이 세 번 켜지고, 마지막 타만 붉은 예고 + 가드 불가. 타 사이 창 자세가 끊기지 않는다.
+func _knight_combo(boss: Node, vis: Sprite2D) -> void:
+	boss._timer = 99.0
+	boss.facing = -1
+	var seen := {"red_steps": [], "unguardable_step": -1, "guardable_steps": []}
+	boss.force_attack(boss.State.COMBO3)
+	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 8.0, func(_t: float) -> void:
+		if boss.is_red() and not seen.red_steps.has(boss.combo_step):
+			seen.red_steps.append(boss.combo_step)
+		if boss.attack_phase == "active" and boss.hitbox.hit != null:
+			if not boss.hitbox.hit.guardable:
+				seen.unguardable_step = boss.combo_step
+			elif not seen.guardable_steps.has(boss.combo_step):
+				seen.guardable_steps.append(boss.combo_step))
+	_report("기사 COMBO3", r)
+	_weapon_report("기사 COMBO3 창", r, 2.0)
+	var ok: bool = r.actives == 3 and seen.red_steps == [2] and seen.unguardable_step == 2 and seen.guardable_steps == [0, 1]
+	print("[probe] 기사 3연격: 타격 %d번(3 기준), 붉은 예고 타 %s([2] 기준), 가드 불가 타 %d(2 기준), 가드 가능 타 %s([0, 1] 기준) → %s" % [
+		r.actives, seen.red_steps, seen.unguardable_step, seen.guardable_steps, "OK" if ok else "틀림!"])
+	if not ok:
+		_fail += 1
+	# 저스트 가드로 첫 타가 튕기면 연격이 끊긴다 (타격 한 번뿐)
+	boss._timer = 99.0
+	boss.force_attack(boss.State.COMBO3)
+	_run(boss, vis, func() -> bool: return boss.attack_phase == "active", 2.0)
+	boss.on_just_guarded(null, 10.0)
+	boss.hitbox.landed.emit("just_guard", null)
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 6.0)
+	var cut_ok: bool = r.actives == 0 and boss.state == boss.State.MARCH
+	print("[probe] 기사 3연격 저스트 가드: 첫 타 튕긴 뒤 추가 타격 %d번(0 기준) → %s" % [r.actives, "끊김 OK" if cut_ok else "안 끊김!"])
+	if not cut_ok:
+		_fail += 1
+	_report("기사 3연격 튕김 휘청", r)
+	# 가드 불가 올려치기의 붉은 예고 길이: 1·2페이즈 모두 0.45초 이상 (공통 기준)
+	for ph in [1, 2]:
+		boss.phase = ph
+		boss._timer = 99.0
+		boss.poise = 0.0
+		var red := {"t": 0.0}
+		boss.force_attack(boss.State.COMBO3)
+		_run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 8.0, func(_t: float) -> void:
+			if boss.is_red():
+				red.t += DT)
+		var rok: bool = red.t >= 0.45 - 0.001
+		print("[probe] 기사 올려치기 붉은 예고(%d페이즈): %.2f초 (0.45 이상) → %s" % [ph, red.t, "OK" if rok else "짧음!"])
+		if not rok:
+			_fail += 1
+	boss.phase = 1
+
+
+## 돌진 찌르기: 뒤로 물러났다(예비) 아레나를 가로질러 끝에서 창이 박힌다(STUCK 2.0초, 피해 1.3배) → 행진.
+## 박힌 동안 무너지면 무너짐은 남은 박힘 시간만큼만 (돌진 한 번에 공짜 시간이 박힘 2초 + 무너짐 4.5초로 이어지지 않게).
+func _knight_charge(boss: Node, vis: Sprite2D) -> void:
+	boss._timer = 99.0
+	boss.facing = -1
+	boss.global_position = Vector2(1800, 1000)
+	boss.velocity = Vector2.ZERO
+	_run(boss, vis, func() -> bool: return false, 0.5)
+	var seen := {"back": 0.0, "x_start": boss.global_position.x, "stuck_t": -1.0, "free_t": -1.0, "hb": false}
+	boss.force_attack(boss.State.CHARGE)
+	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 8.0, func(t: float) -> void:
+		if boss.state == boss.State.CHARGE and boss.attack_phase == "startup":
+			seen.back = maxf(seen.back, boss.global_position.x - seen.x_start)
+		if boss.state == boss.State.CHARGE and boss.attack_phase == "active" and boss.hitbox._active:
+			seen.hb = true
+		if boss.state == boss.State.STUCK and seen.stuck_t < 0.0:
+			seen.stuck_t = t
+		if boss.state == boss.State.MARCH and seen.stuck_t >= 0.0 and seen.free_t < 0.0:
+			seen.free_t = t)
+	_report("기사 CHARGE→STUCK→MARCH", r)
+	var stuck_len: float = seen.free_t - seen.stuck_t
+	var x_end: float = boss.global_position.x
+	var ok: bool = seen.back > 20.0 and seen.hb and seen.stuck_t > 0.0 and x_end <= 130.0 + 25.0 and absf(stuck_len - 2.0) < 0.05
+	print("[probe] 기사 돌진: 예비에 뒤로 %.0fpx 물러남(20 이상), 돌진 중 판정 켜짐 %s, 아레나 끝 x=%.0f(155 이하)에서 박힘 %.2f초 → 풀림 %.2f초 (박힘 %.2f초, 2.0 기준) → %s" % [
+		seen.back, seen.hb, x_end, seen.stuck_t, seen.free_t, stuck_len, "OK" if ok else "틀림!"])
+	if not ok:
+		_fail += 1
+	# 박힌 동안 맞으면 피해 1.3배, 흐트러짐은 그대로(1배)
+	boss._timer = 99.0
+	boss.facing = 1
+	boss.global_position = Vector2(600, 1000)
+	boss.velocity = Vector2.ZERO
+	_run(boss, vis, func() -> bool: return false, 0.5)
+	boss.force_attack(boss.State.CHARGE)
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.STUCK, 6.0)
+	boss.poise = 0.0
+	boss.hp = boss.max_hp
+	boss.receive_hit(HitData.make(10.0, 10.0, null), null)
+	var pm: bool = boss.state == boss.State.STUCK and is_equal_approx(boss.poise, 10.0) and is_equal_approx(boss.max_hp - boss.hp, 13.0)
+	print("[probe] 기사 박힘 무방비: 10/10 으로 쳐서 흐트러짐 %.0f(10 기준), 피해 %.0f(13 기준), 상태 %s(STUCK 유지) → %s" % [boss.poise, boss.max_hp - boss.hp, boss.state_name(), "OK" if pm else "틀림!"])
+	if not pm:
+		_fail += 1
+	# 박힌 지 0.5초 뒤 흐트러짐이 가득 차면: 무너짐은 남은 박힘(1.5초)만큼 → 박힘부터 행진까지 2.0초 남짓
+	_run(boss, vis, func() -> bool: return false, 0.5)
+	var stuck_left: float = boss._timer
+	boss.receive_hit(HitData.make(1.0, boss.max_poise, null), null)
+	var broke: bool = boss.state == boss.State.BROKEN
+	var w := {"t": 0.0}
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH, 8.0, func(_t: float) -> void: w.t += DT)
+	var total: float = 0.5 + w.t
+	var bok: bool = broke and absf(w.t - stuck_left) < 0.1 and total < 2.7
+	print("[probe] 기사 박힘→무너짐: 무너짐 %s, 무너짐 길이 %.2f초(남은 박힘 %.2f초), 박힘부터 무방비 끝까지 %.2f초(2.7 아래) → %s" % [broke, w.t, stuck_left, total, "OK" if bok else "너무 김!"])
+	if not bok:
+		_fail += 1
+	boss.poise = 0.0
+	_run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 6.0)
+	boss.global_position = Vector2(1200, 1000)
+	boss.facing = -1
+	boss.poise = 0.0
+
+
+## 등불 회전 (2페이즈): 창이 세 바퀴 돌고, 타격 중 불꽃 고리 3겹(양쪽 6개)이 낮게 퍼진다. 끝나면 창 각도가 제자리(±π 안)로 접힌다.
+func _knight_spin(boss: Node, vis: Sprite2D) -> void:
+	_clear_projectiles()
+	boss.phase = 2
+	boss._timer = 99.0
+	_run(boss, vis, func() -> bool: return false, 0.5)
+	var bone: Node2D = vis._weapon_bone
+	var turns := {"max": 0.0, "n_mid": 0, "times": [], "seen": 0}
+	boss.force_attack(boss.State.SPIN)
+	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss.attack_phase == "", 6.0, func(t: float) -> void:
+		turns.max = maxf(turns.max, absf(bone.rotation))
+		var n_now := get_tree().get_nodes_in_group("projectile").size()
+		if n_now > turns.seen:
+			turns.times.append(t)
+			turns.seen = n_now)
+	var n := get_tree().get_nodes_in_group("projectile").size()
+	var low := true
+	for p in get_tree().get_nodes_in_group("projectile"):
+		if p.global_position.y < 1000.0 - 60.0:
+			low = false
+	_report("기사 SPIN", r)
+	# 고리끼리 간격: 같은 속도라 내보낸 간격(0.38초)이 그대로 거리로 남는다 (뒤 고리가 앞 고리를 따라잡지 않는다)
+	var speeds := {}
+	for p in get_tree().get_nodes_in_group("projectile"):
+		speeds[p.speed] = true
+	var gaps: Array = []
+	for i in range(1, turns.times.size()):
+		gaps.append(snappedf(turns.times[i] - turns.times[i - 1], 0.01))
+	var gap_ok: bool = turns.times.size() == 3 and speeds.size() == 1
+	for g in gaps:
+		if g < 0.3:
+			gap_ok = false
+	var ok: bool = n == 6 and low and turns.max > 2.5 * TAU and absf(bone.rotation) < PI and boss.rings_sent == 3 and gap_ok
+	print("[probe] 기사 등불 회전: 고리 %d개(6 기준), 모두 낮게(바닥 60px 안) %s, 창 누적 회전 %.1f바퀴(2.5 이상), 끝난 뒤 각도 %.2f(π 안), 고리 간격 %s초(0.3 이상)·속도 %d가지(1 기준) → %s" % [
+		n, low, turns.max / TAU, bone.rotation, gaps, speeds.size(), "OK" if ok else "틀림!"])
+	if not ok:
+		_fail += 1
+	_clear_projectiles()
+	boss.phase = 1
 
 
 ## 소녀가 보스 바로 옆(데드존 안)을 왔다 갔다 해도 몸이 매 프레임 뒤집히지 않는지,
