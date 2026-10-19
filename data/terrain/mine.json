@@ -42,7 +42,7 @@
       {"name": "slab_a", "role": "slab", "src": [580, 399, 166, 110]},
       {"name": "slab_b", "role": "slab", "src": [331, 485, 121, 81]},
       {"name": "slab_c", "role": "slab", "src": [630, 268, 226, 175], "clip": [628, 266, 230, 176]},
-      {"name": "ground_a", "role": "ground", "src": [554, 918, 370, 156], "clip": [554, 931, 370, 150]},
+      {"name": "ground_a", "role": "ground", "src": [554, 918, 370, 156], "clip": [554, 931, 370, 150], "mask": {"hue": [350, 16], "sat": 0.6, "val": 0.62, "grow": 3, "soft": 3, "min_area": 60, "invert": true}},
       {"name": "ground_b", "role": "ground", "src": [935, 881, 494, 191]},
       {"name": "ground_c", "role": "ground", "src": [15, 882, 491, 191]},
       {"name": "pillar_a", "role": "pillar", "src": [938, 614, 175, 262]},
