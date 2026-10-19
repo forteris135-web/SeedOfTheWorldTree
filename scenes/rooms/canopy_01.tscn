@@ -313,6 +313,9 @@ position = Vector2(1650, 60)
 target_scene = "res://scenes/rooms/canopy_hidden.tscn"
 spawn_name = "FromCanopy01"
 
+[node name="Woodcutter3" parent="Enemies" instance=ExtResource("10_woodcutter")]
+position = Vector2(3950, 343)
+
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(300, 2132)
 

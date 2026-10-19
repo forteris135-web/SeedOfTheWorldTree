@@ -279,6 +279,9 @@ position = Vector2(4700, 1043)
 [node name="Gardener6" parent="Enemies" instance=ExtResource("21_gardener")]
 position = Vector2(4550, 763)
 
+[node name="Gardener7" parent="Enemies" instance=ExtResource("21_gardener")]
+position = Vector2(2200, 1043)
+
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(120, 1032)
 

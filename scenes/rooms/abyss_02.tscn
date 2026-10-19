@@ -209,6 +209,9 @@ position = Vector2(120, 2132)
 [node name="FromGarden" type="Marker2D" parent="Markers"]
 position = Vector2(3480, 632)
 
+[node name="FromAbyssMini" type="Marker2D" parent="Markers"]
+position = Vector2(1480, 832)
+
 [node name="Exits" type="Node2D" parent="."]
 
 [node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
@@ -219,6 +222,11 @@ spawn_name = "FromAbyss02"
 [node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(3410, 700)
 target_scene = "res://scenes/rooms/moon_garden.tscn"
+spawn_name = "FromAbyss02"
+
+[node name="Exit3" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(1350, 900)
+target_scene = "res://scenes/rooms/abyss_mini_1.tscn"
 spawn_name = "FromAbyss02"
 
 [node name="Interactables" type="Node2D" parent="."]
@@ -248,7 +256,10 @@ position = Vector2(800, 2132)
 position = Vector2(2800, 2132)
 
 [node name="Herbalist4" parent="Enemies" instance=ExtResource("36_herbalist")]
-position = Vector2(1600, 832)
+position = Vector2(2050, 832)
+
+[node name="Machine5" parent="Enemies" instance=ExtResource("34_machine")]
+position = Vector2(2400, 832)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(120, 2132)

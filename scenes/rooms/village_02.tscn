@@ -197,6 +197,9 @@ position = Vector2(3550, 503)
 [node name="FromMine" type="Marker2D" parent="Markers"]
 position = Vector2(3600, 1332)
 
+[node name="FromVillageMini" type="Marker2D" parent="Markers"]
+position = Vector2(2980, 492)
+
 [node name="Exits" type="Node2D" parent="."]
 
 [node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
@@ -213,6 +216,11 @@ spawn_name = "FromVillage02"
 position = Vector2(3610, 1400)
 target_scene = "res://scenes/rooms/mine_01.tscn"
 spawn_name = "FromVillage"
+
+[node name="Exit4" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(2850, 560)
+target_scene = "res://scenes/rooms/village_mini_1.tscn"
+spawn_name = "FromVillage02"
 
 [node name="Interactables" type="Node2D" parent="."]
 
@@ -238,6 +246,12 @@ require_flag = "owen_rescued"
 
 [node name="Guard1" parent="Enemies" instance=ExtResource("27_guard")]
 position = Vector2(1200, 1343)
+
+[node name="Guard2" parent="Enemies" instance=ExtResource("27_guard")]
+position = Vector2(1650, 1343)
+
+[node name="Guard3" parent="Enemies" instance=ExtResource("27_guard")]
+position = Vector2(2300, 703)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(120, 1332)

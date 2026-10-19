@@ -19,6 +19,10 @@ extends Node2D
 @export var foot_offset := 20.0
 ## 구원 가능한 자: 눈빛의 따뜻한 빛
 @export var warm_eye := false
+## 머리 위 작은 체력·흐트러짐 막대를 그리는가 (중간 보스는 화면 아래 보스 막대가 있어 끈다)
+@export var show_overhead_bar := true
+## 걸음 보폭 배율 (큰 몸은 보폭도 크다: 중간 보스 1.8)
+@export var stride_scale := 1.0
 
 @export_group("무기 팔 (따로 움직이는 겹)")
 ## 팔 조각 그림 (없으면 한 장짜리로 그린다)
@@ -368,12 +372,12 @@ func _process(delta: float) -> void:
 			EnemyBase.State.PATROL, EnemyBase.State.CHASE, EnemyBase.State.BACKSTEP:
 				# 걷기: 이동 거리 기준 들썩임. 속도가 0이면 멈춘다. 기울기는 실제 이동 방향.
 				var amp := clampf(speed / 140.0, 0.0, 1.0)
-				var bob := Motion.step_bob(_travel, STRIDE)
+				var bob := Motion.step_bob(_travel, STRIDE * stride_scale)
 				dy = -bob * amp * (4.0 + speed / 60.0)
 				rot = move_dir * (0.04 + speed / 4000.0) + (bob - 0.5) * 0.05 * amp
 				sx = 1.0 - bob * 0.03 * amp
 				sy = 1.0 + bob * 0.04 * amp
-				arm = sin(_travel / STRIDE * PI) * 0.08 * amp
+				arm = sin(_travel / (STRIDE * stride_scale) * PI) * 0.08 * amp
 				arm_set = true
 				# 디딤 순간(들썩임이 바닥을 치고 다시 오르기 시작하는 순간) 작은 먼지
 				var rising := bob > _last_bob
@@ -711,7 +715,7 @@ func _draw() -> void:
 		var font := ThemeDB.fallback_font
 		var a := 1.0 - _alert_t / 0.6
 		draw_string(font, Vector2(-8, -_enemy.hurt_height - 60.0 - _alert_t * 30.0), "!", HORIZONTAL_ALIGNMENT_CENTER, 16, 44, Color(1.0, 0.85, 0.5, a))
-	if _enemy.hp < _enemy.max_hp or _enemy.poise > 0.0 or st == EnemyBase.State.BROKEN:
+	if show_overhead_bar and (_enemy.hp < _enemy.max_hp or _enemy.poise > 0.0 or st == EnemyBase.State.BROKEN):
 		var w := 90.0
 		var top := Vector2(-w / 2.0, -_enemy.hurt_height - 40.0)
 		draw_rect(Rect2(top, Vector2(w, 7)), Color(0, 0, 0, 0.6))

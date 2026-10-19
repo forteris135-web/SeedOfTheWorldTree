@@ -215,6 +215,9 @@ position = Vector2(120, 1932)
 [node name="FromBoss" type="Marker2D" parent="Markers"]
 position = Vector2(3080, 1932)
 
+[node name="FromCanopy05" type="Marker2D" parent="Markers"]
+position = Vector2(3080, 1932)
+
 [node name="Exits" type="Node2D" parent="."]
 
 [node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
@@ -224,7 +227,7 @@ spawn_name = "FromCanopy04"
 
 [node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(3010, 2000)
-target_scene = "res://scenes/rooms/canopy_boss.tscn"
+target_scene = "res://scenes/rooms/canopy_05.tscn"
 spawn_name = "FromCanopy04"
 
 [node name="Interactables" type="Node2D" parent="."]
@@ -251,6 +254,12 @@ position = Vector2(2200, 1943)
 
 [node name="Gardener3" parent="Enemies" instance=ExtResource("21_gardener")]
 position = Vector2(1650, 743)
+
+[node name="Woodcutter4" parent="Enemies" instance=ExtResource("20_woodcutter")]
+position = Vector2(2500, 1943)
+
+[node name="Gardener5" parent="Enemies" instance=ExtResource("21_gardener")]
+position = Vector2(1750, 1943)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(120, 1932)

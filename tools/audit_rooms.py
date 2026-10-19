@@ -9,7 +9,7 @@
 를 찾는다.
 
 사용:
-  python3 tools/audit_rooms.py                 # 17개 방 전부
+  python3 tools/audit_rooms.py                 # 25개 방 전부 (ORDER)
   python3 tools/audit_rooms.py mine_01 canopy_03   # 고른 방만
   python3 tools/audit_rooms.py --verbose mine_01   # 면·간선(창 폭까지) 자세히
   python3 tools/audit_rooms.py --oneway            # one_way 후보 발판 목록(규칙 + 내려가기 안전 확인, 파일의 켜짐 상태 그대로 표시)
@@ -62,13 +62,15 @@ APPROACH = 460.0                         # 가시 양옆에서 뛰는 자리·�
 # 설계상 나중에(이단 점프를 얻은 뒤) 오는 목표: 기본 모드에서 못 닿아도 '참고'로만 적는다
 LATER_TARGETS = {"canopy_01": {"ToHidden"}}
 # 이단 점프 없이 도는 방 (수관: 첫 보스 전)
-NO_DOUBLE_ROOMS = {"canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_boss", "canopy_hidden"}
+NO_DOUBLE_ROOMS = {"canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canopy_06", "canopy_07",
+                   "canopy_mini_1", "canopy_mini_2", "canopy_boss", "canopy_hidden"}
 BOSS_ROOMS = {"canopy_boss", "mine_boss", "abyss_boss"}
 
-ORDER = ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_hidden", "canopy_boss",
-         "village_01", "village_02", "village_shrine",
-         "mine_01", "mine_02", "mine_deep", "mine_boss",
-         "abyss_01", "abyss_02", "moon_garden", "abyss_boss"]
+ORDER = ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canopy_06", "canopy_07",
+         "canopy_mini_1", "canopy_mini_2", "canopy_hidden", "canopy_boss",
+         "village_01", "village_02", "village_shrine", "village_mini_1",
+         "mine_01", "mine_02", "mine_mini_1", "mine_deep", "mine_boss",
+         "abyss_01", "abyss_02", "abyss_mini_1", "moon_garden", "abyss_boss"]
 
 
 # ---------------- .tscn 파싱 ----------------

@@ -1,0 +1,61 @@
+[gd_scene load_steps=7 format=3 uid="uid://c1seedelitemachine"]
+
+[ext_resource type="Script" path="res://scripts/enemies/elite_machine.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_sprite_visual.gd" id="2_visual"]
+[ext_resource type="Texture2D" path="res://art/enemies/enemy_machine.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
+[ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_body"]
+radius = 44.0
+height = 150.0
+
+[node name="EliteMachine" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+floor_snap_length = 8.0
+script = ExtResource("1_enemy")
+defeat_flag = "miniboss_mine_beast_defeated"
+max_hp = 170.0
+max_poise = 90.0
+poise_decay = 14.0
+walk_speed = 150.0
+chase_multiplier = 1.1
+lunge_extra = 0.0
+notice_range = 800.0
+attack_range = 200.0
+windup_time = 0.6
+strike_time = 0.16
+recover_time = 0.9
+cooldown = 0.5
+damage = 20.0
+knockback = Vector2(480, -200)
+hit_stun = 0.08
+backstep_chance = 0.0
+strike_box = Rect2(0, -130, 210, 160)
+hurt_radius = 48.0
+hurt_height = 150.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -5)
+rotation = 1.5708
+shape = SubResource("CapsuleShape2D_body")
+
+[node name="Visual" type="Node2D" parent="."]
+modulate = Color(0.8, 0.78, 0.82, 1)
+script = ExtResource("2_visual")
+texture = ExtResource("3_tex")
+art_faces_right = false
+art_scale = 0.2
+foot_offset = 30.0
+
+[node name="Hurtbox" type="Area2D" parent="."]
+position = Vector2(0, -5)
+collision_layer = 16
+collision_mask = 0
+script = ExtResource("5_hurtbox")
+
+[node name="Hitbox" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 8
+script = ExtResource("4_hitbox")

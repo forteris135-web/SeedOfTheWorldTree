@@ -219,6 +219,9 @@ position = Vector2(4880, 1132)
 [node name="FromMineDeep" type="Marker2D" parent="Markers"]
 position = Vector2(4760, 652)
 
+[node name="FromMineMini" type="Marker2D" parent="Markers"]
+position = Vector2(1830, 1132)
+
 [node name="Exits" type="Node2D" parent="."]
 
 [node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
@@ -236,6 +239,11 @@ position = Vector2(4830, 720)
 target_scene = "res://scenes/rooms/mine_deep.tscn"
 spawn_name = "FromMine02"
 requires_ability = "lantern"
+
+[node name="Exit4" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(1700, 1200)
+target_scene = "res://scenes/rooms/mine_mini_1.tscn"
+spawn_name = "FromMine02"
 
 [node name="Interactables" type="Node2D" parent="."]
 
@@ -262,6 +270,9 @@ position = Vector2(4300, 1132)
 
 [node name="Machine4" parent="Enemies" instance=ExtResource("34_machine")]
 position = Vector2(4500, 872)
+
+[node name="Gardener5" parent="Enemies" instance=ExtResource("21_gardener")]
+position = Vector2(950, 893)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector2(120, 1132)
