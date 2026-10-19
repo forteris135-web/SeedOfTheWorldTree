@@ -63,6 +63,8 @@
      자동으로 잰 걷는 구간이 이상하면 `"walk": [x0, x1]`(조각 안 px)로 바로잡는다.
    - `cut.fill`: 몸통 결 재료(`from`: 조각 이름들)와 고를 색 범위(`hue` 도, `sat`, `val`), 네모 크기(`patch`), 결 방향(`vertical`), 밝기(`bright`)
    - `cut.extras`: 금 간 벽 (`{"name": "cracked", "kind": "cracked", "sheet", "src", "out_scale", "bright"}`)
+   - `roles`: 역할별 조각 목록을 덮어쓴다 (같은 이름을 여러 번 쓰면 더 자주 나온다 — 예: 바닥 띠 `["ground_a", "ground_a", "ledge_a"]`)
+   - `params.ground.caps`: 절벽 끝에 쓸 바닥 조각 (끝이 자연스럽게 끝나는 것만)
    - `tint`(정화 후 색 곱하기, 1 이하), `lift`(발 선을 충돌 윗면보다 몇 px 위에), `fill`(몸통 밝기), `params`(역할별 세기), `ash`(잿빛 팔레트, 4장)
 3. **자르기**: `/Users/wj/Projects/SeedWT/godot --headless --path . -s res://tools/terrain_cut.gd -- <지역>`
    → `art/terrain/<지역>/` 와 `screenshots/terrain_<지역>_pieces.png` (빨간 선 = 발 딛는 선, 초록 = 걷는 구간 끝, 옅은 빨강 = 걷는 구간 밖).

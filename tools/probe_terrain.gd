@@ -674,6 +674,7 @@ func _probe_art() -> void:
 	_atlas_img = Image.load_from_file(ProjectSettings.globalize_path("res://art/terrain/canopy/atlas.png"))
 	_atlas_img.convert(Image.FORMAT_RGBA8)
 	await _probe_art_rooms(skin)
+	await _probe_thorn_facing()
 	await _probe_art_cost()
 	_probe_palette()
 	await _probe_cracked(skin)
@@ -878,6 +879,36 @@ static func _bary(p: Vector2, a: Vector2, b: Vector2, c: Vector2) -> Vector3:
 	var v := (v2.x * v1.y - v1.x * v2.y) / den
 	var w := (v0.x * v2.y - v2.x * v0.y) / den
 	return Vector3(1.0 - v - w, v, w)
+
+
+## 가시 방향 (위·아래·왼쪽·오른쪽): 그림이 돌아가 밑동이 반대쪽 면에 붙는다. 판정은 그대로.
+func _probe_thorn_facing() -> void:
+	var fake := FakeRoom.new()
+	fake.region = "canopy"
+	add_child(fake)
+	var made := []
+	for f in 4:
+		var t := Thorns.new()
+		t.size = Vector2(240, 60)
+		t.facing_dir = f
+		t.position = Vector2(0, 300 * f)
+		fake.add_child(t)
+		made.append(t)
+	await _frames(1)
+	var rots := []
+	var ok := true
+	for t in made:
+		var art: TerrainArt = t.get("_art")
+		if art == null or art.triangle_count() == 0:
+			ok = false
+			continue
+		rots.append(int(round(rad_to_deg(art.rotation))))
+		var cs := _first_shape(t)
+		if cs == null or (cs.shape as RectangleShape2D).size != Vector2(232, 42):
+			ok = false
+	_check(ok and rots == [0, 180, -90, 90], "가시 네 방향 모두 그림 조각, 회전 %s, 판정 그대로" % [rots])
+	fake.queue_free()
+	await _frames(1)
 
 
 ## d) 비용: 만들기 시간·삼각형·그리기 호출, 정화 프레임에 다시 안 만들기

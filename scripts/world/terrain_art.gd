@@ -14,15 +14,12 @@ extends Node2D
 ##    안 맞으면 같은 가지에서 왼끝 + 가운데 여러 토막 + 오른끝을 이어 붙인다(이음매는 40px 동안 서서히 겹침).
 ##  - 큰 덩어리: 몸통 결(이음매 없는 무늬, 전역 좌표 UV → 이웃 덩어리와 결이 이어짐)을 깔고 깊을수록 어둡게,
 ##    드러난 윗면에 ground 띠, 드러난 아랫면에 매단 장식, 드러난 옆면은 가장자리를 어둡게.
-##  - '드러남'은 옆 지형(TerrainStyle.neighbor_shapes)과 방 경계로 판단한다 (덮인 곳·방 밖에는 장식 없음).
+##  - '드러남'은 옆 지형(neighbors — 부서지는 벽은 뺀다)과 방 경계로 판단한다 (덮인 곳·방 밖에는 장식 없음).
 
 ## 시험용 누적: 만드는 데 든 시간(µs)·만든 수·삼각형 수
 static var build_usec := 0
 static var build_count := 0
 static var tri_count := 0
-## 시험용: 놓은 걷는 조각의 [노드 기준 x0, x1, 놓인 발 선 y] 기록 (trace 가 켜져 있을 때만)
-static var trace := false
-static var trace_walk: Array = []
 
 const BUF_FILL := 0
 const BUF_FILL_V := 1
@@ -183,47 +180,62 @@ func _exposed_runs(a: Vector2, b: Vector2) -> Array:
 
 
 # ---------------------------------------------------------------- 메쉬 쌓기
-func _quad_strip(buf: int, top: PackedVector2Array, bottom: PackedVector2Array, uv_top: PackedVector2Array, uv_bot: PackedVector2Array, ct: PackedColorArray, cb: PackedColorArray) -> void:
+## 버퍼 꺼내기: 사전에서 빼 두고(참조가 하나뿐이어야 append 가 통째 복사하지 않는다) 다 쓰면 _put 으로 돌려놓는다.
+func _take(buf: int) -> Array:
 	var b: Dictionary = _bufs[buf]
-	var pts: PackedVector2Array = b["pts"]
+	var out := [b["pts"], b["uvs"], b["cols"], b["idx"]]
+	b["pts"] = PackedVector2Array()
+	b["uvs"] = PackedVector2Array()
+	b["cols"] = PackedColorArray()
+	b["idx"] = PackedInt32Array()
+	return out
+
+
+func _put(buf: int, arrs: Array) -> void:
+	var b: Dictionary = _bufs[buf]
+	b["pts"] = arrs[0]
+	b["uvs"] = arrs[1]
+	b["cols"] = arrs[2]
+	b["idx"] = arrs[3]
+
+
+func _quad_strip(buf: int, top: PackedVector2Array, bottom: PackedVector2Array, uv_top: PackedVector2Array, uv_bot: PackedVector2Array, ct: PackedColorArray, cb: PackedColorArray) -> void:
+	var arrs := _take(buf)
+	var pts: PackedVector2Array = arrs[0]
+	var uvs: PackedVector2Array = arrs[1]
+	var cols: PackedColorArray = arrs[2]
+	var idx: PackedInt32Array = arrs[3]
+	arrs.clear()
 	var base := pts.size()
 	var n := top.size()
 	for i in n:
 		pts.append(top[i])
 		pts.append(bottom[i])
-	b["pts"] = pts
-	var uvs: PackedVector2Array = b["uvs"]
-	var cols: PackedColorArray = b["cols"]
-	for i in n:
 		uvs.append(uv_top[i])
 		uvs.append(uv_bot[i])
 		cols.append(ct[i])
 		cols.append(cb[i])
-	b["uvs"] = uvs
-	b["cols"] = cols
-	var idx: PackedInt32Array = b["idx"]
 	for i in n - 1:
 		var p := base + i * 2
-		idx.append_array([p, p + 1, p + 2, p + 1, p + 3, p + 2])
-	b["idx"] = idx
+		idx.append(p); idx.append(p + 1); idx.append(p + 2)
+		idx.append(p + 1); idx.append(p + 3); idx.append(p + 2)
+	_put(buf, [pts, uvs, cols, idx])
 
 
 func _tris(buf: int, pts_in: PackedVector2Array, uvs_in: PackedVector2Array, cols_in: PackedColorArray, idx_in: PackedInt32Array) -> void:
-	var b: Dictionary = _bufs[buf]
-	var pts: PackedVector2Array = b["pts"]
+	var arrs := _take(buf)
+	var pts: PackedVector2Array = arrs[0]
+	var uvs: PackedVector2Array = arrs[1]
+	var cols: PackedColorArray = arrs[2]
+	var idx: PackedInt32Array = arrs[3]
+	arrs.clear()
 	var base := pts.size()
 	pts.append_array(pts_in)
-	b["pts"] = pts
-	var uvs: PackedVector2Array = b["uvs"]
 	uvs.append_array(uvs_in)
-	b["uvs"] = uvs
-	var cols: PackedColorArray = b["cols"]
 	cols.append_array(cols_in)
-	b["cols"] = cols
-	var idx: PackedInt32Array = b["idx"]
 	for i in idx_in:
 		idx.append(base + i)
-	b["idx"] = idx
+	_put(buf, [pts, uvs, cols, idx])
 
 
 ## 조각 하나를 휘어서 놓는다.
@@ -310,8 +322,6 @@ func piece(name: String, u0: float, u1: float, x0: float, x1: float, y_at: Calla
 	_quad_strip(BUF_ATLAS, p0, p1, uv0, uv1, c0, c1)
 	if nrow > 2:
 		_quad_strip(BUF_ATLAS, p1, p2, uv1, uv2, c1, c2)
-	if trace and not hang and band < 0.0 and warp:
-		trace_walk.append([host, x0, x1, name, u0, u1, flip, y_at.call((x0 + x1) * 0.5) - lift])
 
 
 ## 몸통 결로 다각형을 채운다 (격자 칸으로 잘라 삼각형). shade(p) → 밝기(0~1). vertical: 세로 결.
@@ -601,7 +611,22 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 			if dist2 < rim_px:
 				s *= lerpf(rim_b, 1.0, dist2 / rim_px)
 		return s
-	fill_polygon(_jag(poly), vertical, shade)
+	# 몸통 결은 바닥 띠가 덮는 윗면에서 top_inset px 아래부터 깐다 (띠의 풀잎 사이로 몸통의 곧은 윗선이 비치지 않게)
+	var polys: Array = [_jag(poly)]
+	var inset := skin.fill_param("top_inset", 16.0)
+	if decorate and skin.has_role("ground") and inset > 0.0:
+		for t in tops:
+			var ta: Vector2 = t[0]
+			var tb: Vector2 = t[1]
+			var strip := PackedVector2Array([ta + Vector2(-1, -60), tb + Vector2(1, -60), tb + Vector2(1, inset), ta + Vector2(-1, inset)])
+			var next: Array = []
+			for pp in polys:
+				for q in Geometry2D.clip_polygons(pp, strip):
+					if (q as PackedVector2Array).size() >= 3:
+						next.append(q)
+			polys = next
+	for pp in polys:
+		fill_polygon(pp, vertical, shade)
 	# 2) 윗면 띠
 	if decorate and skin.has_role("ground"):
 		for t in tops:
@@ -687,7 +712,7 @@ func _side_exposed_at(poly: PackedVector2Array, i: int, start: bool) -> bool:
 		return false
 	var dir := e / len
 	var nrm := Vector2(e.y, -e.x) / len
-	var d := minf(30.0, len * 0.5)
+	var d := minf(10.0, len * 0.5)   # 모서리 바로 아래 (구덩이 바닥이 20px 아래 붙어 있어도 절벽 끝으로 본다)
 	# 모서리에서 옆변을 따라 조금 들어간 자리의 바깥쪽
 	var probe := (b - dir * d) if start else (a + dir * d)
 	return not _covered(probe + nrm * OUT)
@@ -700,7 +725,14 @@ static func _seg_dist(p: Vector2, a: Vector2, b: Vector2) -> float:
 ## 드러난 윗면 한 구간에 ground 띠를 깐다. cap_*: 절벽 끝(끝 조각), cont_*: 옆 윗변으로 이어짐(겹치게 늘림).
 func _ground_run(a: Vector2, b: Vector2, cap_l: bool, cap_r: bool, cont_l: bool, cont_r: bool) -> void:
 	var names := skin.list("ground")
-	var name: String = names[_rng.randi_range(0, names.size() - 1)]
+	# 끝 조각(절벽 끝)은 끝이 자연스럽게 끝나는 조각만 (params.ground.caps). 목록에 같은 이름을 여러 번 쓰면 더 자주 나온다.
+	var caps: Array = []
+	for c in skin.param("ground", "caps", []):
+		if skin.pieces.has(c):
+			caps.append(c)
+	if caps.is_empty():
+		caps = names
+	var name: String = caps[_rng.randi_range(0, caps.size() - 1)]
 	var walk := skin.walk_of(name)
 	var size := skin.size_of(name)
 	var k := skin.scale
@@ -728,7 +760,21 @@ func _ground_run(a: Vector2, b: Vector2, cap_l: bool, cap_r: bool, cont_l: bool,
 		var is_cap := (i == 0 and cap_l) or (i == segs.size() - 1 and cap_r)
 		if is_cap:
 			opts["band"] = band * 1.8   # 절벽 끝은 뿌리가 더 보이게
-		piece(name, sg[0], sg[1], x0, x1, y_at, k, (not is_cap) and _rng.randf() < 0.5, opts)
+			if i == 0 and segs.size() > 1:
+				opts["fade_r"] = ov   # 깊은 뿌리가 다음 토막 아래에서 딱 잘려 보이지 않게
+			piece(name, sg[0], sg[1], x0, x1, y_at, k, false, opts)
+			continue
+		# 가운데 토막은 바닥 조각 여럿을 섞는다 (한 조각만 되풀이하면 무늬가 줄지어 보인다)
+		var pn := name
+		var u0: float = sg[0]
+		var len_u: float = sg[1] - sg[0]
+		if names.size() > 1:
+			var cand: String = names[_rng.randi_range(0, names.size() - 1)]
+			var cw := skin.walk_of(cand)
+			if cw.y - cw.x - 20.0 >= len_u:
+				pn = cand
+				u0 = _rng.randf_range(cw.x + 10.0, cw.y - 10.0 - len_u)
+		piece(pn, u0, u0 + len_u, x0, x1, y_at, k, _rng.randf() < 0.5, opts)
 	# 가끔 작은 덤불
 	if skin.has_role("bush"):
 		var bushes := skin.list("bush")
