@@ -1,12 +1,13 @@
 {
-  "_설명": "구원된 사람이 마지막 한 마디를 남기고 돌아가 서 있는 '집' 자리. rescue_id → scene(방 room_id) / position(발이 닿는 자리, 바닥 윗면 y) / facing(1 오른쪽, -1 왼쪽) / texture(사람 모습 그림 — 지금은 구원형 적 그림을 임시로 씀, 그림이 오면 경로만 바꾼다) / art_scale / art_faces_right(그림이 오른쪽을 보면 true) / npc_id(그 방에 이미 같은 npc_id 의 NPC 가 있으면 새로 세우지 않는다 — 오웬). relocations_*.json 도 함께 읽히므로 확장판 구원자는 파일만 더하면 된다. 자리 고르는 규칙: 그 방의 적(순찰 범위 + 발견 거리 안)에게서 떨어진 곳 — 집 NPC 와 대화하는 동안 소녀는 움직일 수 없다 (tools/probe_npcs 가 검사). 또 왼쪽에서 다가가 말 걸 때 화면 가운데보다 왼쪽에 오도록(카메라가 방 오른쪽 끝에 붙는 자리는 오른쪽 아래 터치 버튼 무리에 가린다). 그래서 거리에 경비병이 도는 입구의 거리 대신 적이 없는 사당에 모인다. 여기 항목이 없는 구원자는 들판에서 떠나지 않는다.",
+  "_설명": "구원된 사람이 마지막 한 마디를 남기고 돌아가 서 있는 '집' 자리. rescue_id → scene(방 room_id) / position(발이 닿는 자리, 바닥 윗면 y) / facing(1 오른쪽, -1 왼쪽) / texture(사람 모습 그림 — 지금은 구원형 적 그림을 임시로 씀, 그림이 오면 경로만 바꾼다) / art_scale / art_faces_right(그림이 오른쪽을 보면 true) / rig(부위 뼈대 id — 있으면 그림 한 장 대신 그 뼈대로 선다, rig_scale 배율) / npc_id(그 방에 이미 같은 npc_id 의 NPC 가 있으면 새로 세우지 않는다 — 오웬). relocations_*.json 도 함께 읽히므로 확장판 구원자는 파일만 더하면 된다. 자리 고르는 규칙: 그 방의 적(순찰 범위 + 발견 거리 안)에게서 떨어진 곳 — 집 NPC 와 대화하는 동안 소녀는 움직일 수 없다 (tools/probe_npcs 가 검사). 또 왼쪽에서 다가가 말 걸 때 화면 가운데보다 왼쪽에 오도록(카메라가 방 오른쪽 끝에 붙는 자리는 오른쪽 아래 터치 버튼 무리에 가린다). 그래서 거리에 경비병이 도는 입구의 거리 대신 적이 없는 사당에 모인다. 여기 항목이 없는 구원자는 들판에서 떠나지 않는다.",
   "woodcutter_canopy": {
     "scene": "village_shrine",
     "position": [1450, 1000],
     "facing": -1,
     "texture": "res://art/enemies/enemy_woodcutter_savable.png",
     "art_scale": 0.17,
-    "art_faces_right": false
+    "art_faces_right": false,
+    "rig": "woodcutter_savable"
   },
   "gardener_canopy": {
     "scene": "village_02",

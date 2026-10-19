@@ -153,6 +153,10 @@ static func spawn_one(room: Node, id: String, entry: Dictionary, appear := false
 static func apply_look(npc: RescuedPerson, entry: Dictionary) -> void:
 	if entry.is_empty():
 		return
+	# 부위 뼈대가 있으면 그것으로 선다 (그림 한 장은 뼈대가 없을 때의 대신)
+	if str(entry.get("rig", "")) != "":
+		npc.rig_id = str(entry["rig"])
+		npc.rig_scale = float(entry.get("rig_scale", 1.0))
 	var path := str(entry.get("texture", ""))
 	if path != "" and ResourceLoader.exists(path):
 		npc.texture = load(path)

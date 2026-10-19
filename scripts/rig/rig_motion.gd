@@ -5,7 +5,8 @@ extends RefCounted
 ## 나머지는 여기서 한다:
 ##  1) 자세 값은 절대 '툭' 바뀌지 않는다. 상태가 바뀌면 이전 목표가 관성을 갖고 흘러가며 새 목표로 섞이고(transition),
 ##     모든 채널은 값+속도를 가진 스프링/감쇠로 목표를 쫓는다 (delta 기반 → FPS 에 상관없이 같은 모양).
-##  2) 휘두르기 세 박자 three_beat(): 예비(당기며 끝에서 멈칫) → 타격(어깨가 먼저, 팔꿈치·무기가 한 박자씩 늦게 따라와 채찍처럼 지나침)
+##  2) 휘두르기 세 박자 three_beat(): 예비(당기며 끝에서 멈칫, 허리·몸통은 끝자락에 먼저 풀리기 시작)
+##     → 타격(어깨가 먼저, 팔꿈치·무기가 한 박자씩 늦게 따라와 채찍처럼 지나침)
 ##     → 되돌림(출렁이며 준비 자세).
 ##  3) 발: 땅을 딛은 발은 세상에 고정(미끄러지지 않음). 걸을 때는 '걸은 거리'로 도는 걸음 위상이 두 발을 번갈아 옮기고,
 ##     서 있을 때·공격 중에는 자세의 발 자리에서 많이 어긋난 발만 한 걸음 옮긴다 (내딛기). 공중이면 다리를 접는다.
@@ -13,7 +14,8 @@ extends RefCounted
 ##     무릎 꿇기(kneel_*)는 무릎을 땅에 대고 정강이를 뒤로 눕힌 해와 섞는다.
 ##  5) 무기 땅 막기: ground_guard 부위의 껍질이 땅 아래로 들어가면 손목→팔꿈치→어깨 순으로 들어 올린다 (칼끝이 땅에 닿아 멈춘 것처럼).
 ##  6) 늘어진 천·잎(chain): 세상 각도로 스프링 → 몸이 돌면 한 박자 늦게 따라오고, 달리면 뒤로 날린다.
-##  7) 쓰러짐: 몸 전체가 발(무릎)을 축으로 넘어가고, 가장 낮은 껍질 점이 땅에 오도록 맞춘다 (가라앉거나 뜨지 않음).
+##  7) 땅 닿기(ground_lock): 무기 사슬을 뺀 몸의 가장 낮은 껍질 점이 땅 아래면 그만큼 몸 전체를 들어 올린다 (쓰러져 엎어질 때
+##     머리가 땅에 박히지 않게). fall_angle/fall_pivot 은 몸을 통째로 돌리는 쓰러짐(기계·통나무 같은 몸)용으로 남겨 둔다.
 
 ## 보간 채널: 값 + 속도. 스프링·감쇠 모두 속도를 이어 가므로 어떤 전환에서도 끊기지 않는다.
 class Chan:
@@ -63,6 +65,10 @@ class Leg:
 	var dur := 0.2
 	var lift := 0.0
 	var planted_now := false   # 이번 프레임에 땅을 디뎠다 (먼지용)
+	var knee_x := 0.0          # 무릎 꿇은 무릎의 땅 자리 (뼈대 단위, 세상에 고정 — 몸이 움직이면 발처럼 반대로)
+	var knee_set := false
+	var kneel_phi := 0.0       # 무릎 꿇은 발의 각도 (부드럽게 따라간다 — 고른 각도가 프레임마다 튀지 않게)
+	var kneel_phi_set := false
 
 
 ## 보간 방식 (상태마다 고른다)
@@ -71,7 +77,7 @@ enum Drive { NORMAL, SOFT, FAST, SETTLE, HEAVY, QUICK, SLOW }
 enum Feet { POSE, GAIT, AIR }
 
 ## 몸·발 채널 (뼈 이름이 아닌 것)
-const BODY_KEYS := ["hip_x", "hip_y", "lean", "step_thr", "step_dur", "step_lift"]
+const BODY_KEYS := ["hip_x", "hip_y", "lean", "pitch", "step_thr", "step_dur", "step_lift"]
 const FOOT_PREFIX := ["foot_", "lift_", "toe_", "kneel_"]
 ## 걸음: 이 속도(L/초)보다 느리면 걸음 위상을 멈추고 한 걸음씩 맞춘다
 const GAIT_MIN_SPEED := 0.25
@@ -81,6 +87,9 @@ const GUARD_MARGIN := 3.0
 const GUARD_LIMITS := [1.3, 0.45, 0.45]   # 어깨, 팔꿈치, 손목(무기) (라디안)
 ## 휘두르기: 관절마다 늦게 따라오는 정도 (타격 진행도의 몫). 어깨가 끌고 팔꿈치·무기가 채찍처럼 따라온다.
 const STRIKE_LAG := {"arm_f_lo": 0.1, "weapon": 0.2, "head": 0.15, "arm_b_up": 0.05, "arm_b_lo": 0.12}
+## 허리·몸통·무게중심은 예비동작 끝에서 먼저 풀리기 시작한다: 타격에 들어설 때 이미 EARLY_UNWIND 몫만큼 앞으로 와 있다.
+const EARLY_KEYS := ["torso", "lean", "hip_x"]
+const EARLY_UNWIND := 0.4
 
 var rig: PartRig
 var poses := {}
@@ -321,6 +330,7 @@ func flip_feet() -> void:
 		leg.x = -leg.x
 		leg.from_x = -leg.from_x
 		leg.to_x = -leg.to_x
+		leg.knee_x = -leg.knee_x
 
 
 ## 발을 지금 자세의 자리로 바로 옮긴다 (순간 이동·처음 놓일 때).
@@ -334,17 +344,29 @@ func snap_feet() -> void:
 ## 휘두르기 세 박자. phase: "windup"/"strike"/"recover", p: 그 국면의 진행도(0→1).
 ## from: 예비가 시작될 때(또는 되돌림이 시작될 때) 보이던 자세. over: 타격 끝의 지나침 크기.
 func three_beat(from: Dictionary, windup: Dictionary, strike: Dictionary, ready: Dictionary, phase: String, p: float, over := 0.16) -> Dictionary:
+	var base: Dictionary = poses["base"]
 	match phase:
 		"windup":
-			return mix(from, windup, Motion.anticipation(p))
+			var out := mix(from, windup, Motion.anticipation(p))
+			# 허리·몸통은 팔이 아직 뒤로 가는 동안(예비 끝 25%) 먼저 앞으로 풀리기 시작한다 (힘이 아래에서 위로 전해지는 휘두르기)
+			var early := smoothstep(0.75, 1.0, p) * EARLY_UNWIND
+			if early > 0.0:
+				for k in EARLY_KEYS:
+					if out.has(k):
+						var w0 := float(windup.get(k, base.get(k, 0.0)))
+						out[k] = float(out[k]) + (float(strike.get(k, base.get(k, 0.0))) - w0) * early
+			return out
 		"strike":
 			var out := {}
-			var base: Dictionary = poses["base"]
 			for k in keys:
 				var lag: float = STRIKE_LAG.get(k, 0.0)
 				var u := clampf((p - lag) / (1.0 - lag), 0.0, 1.0)
 				var s := strike_curve(u, over * (1.0 + lag * 2.0))
-				out[k] = lerpf(float(windup.get(k, base.get(k, 0.0))), float(strike.get(k, base.get(k, 0.0))), s)
+				var a := float(windup.get(k, base.get(k, 0.0)))
+				var b := float(strike.get(k, base.get(k, 0.0)))
+				if EARLY_KEYS.has(k):
+					a += (b - a) * EARLY_UNWIND   # 예비 끝에서 이미 이만큼 풀려 있다
+				out[k] = lerpf(a, b, s)
 			return out
 		_:
 			return mix(from, ready, Motion.settle(Motion.ease_in(p, 2.0), 1.5, 2.5))
@@ -449,7 +471,11 @@ func _drive_chan(c: Chan, tgt: float, k: String, delta: float) -> void:
 		Drive.SOFT:
 			c.spring(tgt, 90.0 * slow, 17.0, delta)
 		Drive.FAST:
-			c.damp(tgt, 90.0 if k != "head" else 40.0, delta)
+			# 타격: 곡선이 시간 기반이라 팔은 바짝 따라간다. 몸통·허리는 무거워 조금 늦게 (팔보다 먼저 출발하므로 늦어도 같이 끝난다)
+			if k in ["torso", "lean", "hip_x", "hip_y"]:
+				c.spring(tgt, 520.0, 44.0, delta)   # 스프링: 예비에서 쌓인 속도를 이어 받아 '툭' 하지 않는다
+			else:
+				c.damp(tgt, 40.0 if k == "head" else 90.0, delta)
 		Drive.SETTLE:
 			c.spring(tgt, 150.0 * slow, 12.0, delta)
 		Drive.HEAVY:
@@ -466,20 +492,36 @@ func _apply_body() -> void:
 	var lean := deg_to_rad(float(fin["lean"]) * tilt_scale)
 	rig.rot[root] = rig.rest[root] + lean
 	var ry := stand_root_y + float(fin["hip_y"]) * L - _swing_bob
-	# 무릎 꿇기: 꿇는 다리의 허벅지가 무릎을 땅에 닿게 하는 뿌리 높이로 섞는다
+	var rx := float(fin["hip_x"]) * L
+	# 무릎 꿇기: 가장 깊이 꿇는 다리의 무릎을 땅의 한 자리에 고정하고(knee_x), 허벅지가 그 무릎에서 서 있는 각도(pitch)로
+	# 뿌리 자리를 정한다. pitch 0 = 허벅지가 똑바로 서서 엉덩이가 무릎 위, 1 = 허벅지가 앞으로 80도 눕혀져 엉덩이가 무릎 높이 (엎어짐).
 	var kw := 0.0
-	var ry_k := 0.0
+	var kleg: Leg = null
 	for leg in legs:
 		var k := clampf(float(fin.get("kneel_" + leg.sfx, 0.0)), 0.0, 1.0)
+		if k <= 0.01:
+			leg.knee_set = false
 		if k > kw and leg.lo >= 0:
 			kw = k
-			var j0 := rig.base_pos[leg.up].rotated(rig.rot[root])
-			var knee_r := L * 0.06
-			var dxk := leg.a * 0.25
-			ry_k = -knee_r - sqrt(maxf(leg.a * leg.a - dxk * dxk, 1.0)) - j0.y
-	if kw > 0.0:
-		ry = lerpf(ry, maxf(ry, ry_k), kw)
-	rig.root_pos = Vector2(float(fin["hip_x"]) * L, ry)
+			kleg = leg
+	for leg in legs:
+		var k := clampf(float(fin.get("kneel_" + leg.sfx, 0.0)), 0.0, 1.0)
+		if k > 0.01 and not leg.knee_set and leg.lo >= 0:
+			# 꿇기 시작: 딛은 발은 그 자리에 두고, 정강이가 발에서 앞으로 눕도록 무릎 자리를 발보다 정강이 길이만큼 앞에 잡는다
+			# (서 있다 꿇으면 발끝은 남고 무릎이 앞으로 내려간다)
+			leg.knee_x = leg.x + leg.b * 0.9
+			leg.knee_set = true
+			leg.kneel_phi_set = false
+	if kleg:
+		var j0 := rig.base_pos[kleg.up].rotated(rig.rot[root])
+		var phi := deg_to_rad(clampf(float(fin.get("pitch", 0.0)), 0.0, 1.0) * 80.0)
+		var jd := Vector2(kleg.knee_x, -L * 0.06) + Vector2(sin(phi), -cos(phi)) * kleg.a
+		var rk := jd - j0
+		ry = lerpf(ry, maxf(ry, rk.y), kw)
+		rx = lerpf(rx, rk.x, kw)
+	rig.root_pos = Vector2(rx, ry)
+	for c in _chains:
+		rig.rot[c[0]] = rig.rest[c[0]]   # 늘어진 천은 쉬는 각도에서 출발 (자세 채널이 있으면 아래에서 덮어쓴다)
 	for bk in _bone_keys:
 		var i: int = bk[1]
 		if i == root:
@@ -516,8 +558,10 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 		for leg in legs:
 			leg.swing = false
 			leg.planted_now = true
-	# 딛은 발은 세상에 고정: 몸이 간 만큼 반대로
+	# 딛은 발(과 꿇은 무릎)은 세상에 고정: 몸이 간 만큼 반대로
 	for leg in legs:
+		if leg.knee_set:
+			leg.knee_x -= dx
 		if leg.swing:
 			leg.from_x -= dx
 		else:
@@ -662,12 +706,18 @@ func _solve_leg(leg: Leg) -> void:
 	var r_lo := th2 - leg.ankle_vec.angle()
 	if kw > 0.0:
 		# 무릎 꿇기 해: 무릎을 땅에 (엉덩이 관절보다 조금 앞), 정강이는 뒤로 눕고, 발끝이 땅을 짚는다
-		var knee_k := Vector2(j.x + leg.a * 0.25, -L * 0.06)
+		var knee_k := Vector2(leg.knee_x if leg.knee_set else j.x + leg.a * 0.12, -L * 0.06)
 		var th1k := (knee_k - j).angle()
 		var th2k := PI + 0.3       # 정강이는 뒤로, 발목 쪽이 조금 들린다 (발끝을 세워 땅을 짚는다)
 		var r_up_k := th1k - leg.knee_vec.angle()
 		var r_lo_k := th2k - leg.ankle_vec.angle()
-		var phi_k := _kneel_foot_angle(leg, j + Vector2.from_angle(th1k) * leg.a + Vector2.from_angle(th2k) * leg.b)
+		var phi_best := _kneel_foot_angle(leg, j + Vector2.from_angle(th1k) * leg.a + Vector2.from_angle(th2k) * leg.b)
+		if not leg.kneel_phi_set:
+			leg.kneel_phi = phi_best
+			leg.kneel_phi_set = true
+		else:
+			leg.kneel_phi = lerp_angle(leg.kneel_phi, phi_best, 0.25)
+		var phi_k := leg.kneel_phi
 		r_up = lerp_angle(r_up, r_up_k, kw)
 		r_lo = lerp_angle(r_lo, r_lo_k, kw)
 		phi = lerp_angle(phi, phi_k, kw)
@@ -680,8 +730,8 @@ func _solve_leg(leg: Leg) -> void:
 func _kneel_foot_angle(leg: Leg, ankle: Vector2) -> float:
 	var best := leg.foot_rest_world + 1.0
 	var best_err := INF
-	for k in 13:
-		var phi := leg.foot_rest_world + 0.2 + k * 0.12
+	for k in 31:
+		var phi := leg.foot_rest_world + 0.2 + k * 0.05
 		var low := -INF
 		for q in rig.hulls[leg.foot]:
 			low = maxf(low, (ankle + q.rotated(phi)).y)
@@ -789,8 +839,10 @@ func _apply_fall() -> void:
 	var t := Transform2D(0.0, fall_pivot) * Transform2D(fall_angle, Vector2.ZERO) * Transform2D(0.0, -fall_pivot)
 	rig.body_xf = t
 	if ground_lock > 0.0:
+		# 몸이 땅 아래로 들어간 만큼만 들어 올린다 (발은 IK 로 이미 땅에 있다 — 끌어내리지 않는다)
 		var low := rig.lowest_y(_lock_bones)
-		t.origin.y -= low * ground_lock
+		if low > 0.0:
+			t.origin.y -= low * ground_lock
 		rig.body_xf = t
 
 

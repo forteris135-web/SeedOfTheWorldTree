@@ -18,9 +18,11 @@ class_name EnemyRigVisual
 @export var warm_eye := false
 ## 머리 위 작은 체력·흐트러짐 막대 (중간 보스는 화면 아래 보스 막대가 있어 끈다)
 @export var show_overhead_bar := true
-## 구원되어 사람으로 돌아온 모습 (RescuedPerson). npc_rig 이 있으면 그 뼈대로, 없으면 texture 한 장으로.
+## 구원되어 사람으로 돌아온 모습 (RescuedPerson). npc_rig 이 있으면 그 뼈대로, 없으면 texture 한 장(npc_art_scale 배율)으로.
 @export var npc_rig := ""
 @export var texture: Texture2D
+@export var npc_art_scale := 0.17
+@export var npc_faces_right := false
 ## 무기 팔의 종류 (EliteTraits 가 읽는다): 검(들었다 내려침) / 대롱(겨눔)
 @export_enum("sword", "gun") var arm_kind := "sword"
 
@@ -74,7 +76,7 @@ var _hit_dir := 1
 var _fall_dir := 1
 var _fall_gentle := false
 var _fall_sign := 1.0
-var _fall_started := false
+var _fall_pivot_set := false
 var _scatter_popped := false
 var _thud_done := false
 var _ready_ok := false
@@ -177,7 +179,7 @@ func is_facing_settled() -> bool:
 
 ## 구원되어 사람으로 돌아올 때의 모습 (EnemyBase._finish_fall 이 읽는다).
 func npc_look() -> Dictionary:
-	return {"rig": npc_rig, "texture": texture, "art_faces_right": art_faces_right, "art_scale": art_scale, "facing": visible_facing()}
+	return {"rig": npc_rig, "rig_scale": art_scale, "texture": texture, "art_faces_right": npc_faces_right, "art_scale": npc_art_scale}
 
 
 # ---------- 1회 연출 (EnemyBase 가 부른다) ----------
@@ -237,7 +239,6 @@ func fall(dir: int, gentle: bool) -> void:
 	# 넘어가는 쪽 (뼈대 기준 + = 앞으로): 뒤로 밀렸으면 뒤로, 정화(빛)는 앞으로 고개 숙이며 엎드린다
 	var rel := float(_fall_dir) * signf(_mir.v)
 	_fall_sign = 1.0 if (gentle or rel > 0.0) else -1.0
-	_fall_started = false
 	_thud_done = false
 	if motion:
 		motion.kick("impact", -rel * 90.0)
@@ -417,22 +418,29 @@ func _process(delta: float) -> void:
 					p = motion.pose("rescued")
 					drive = RigMotion.Drive.SOFT
 				else:
-					# 쓰러짐: 무릎이 꺾이고(앞 35%) → 몸 전체가 무릎·발을 축으로 넘어가 땅에 눕는다 (가장 낮은 점이 땅에)
-					var knees := clampf(e / (total * 0.35), 0.0, 1.0)
-					var first := motion.pose("dead_knees") if _fall_sign > 0.0 else motion.pose("dead_back")
-					var lie := motion.pose("dead_lie") if _fall_sign > 0.0 else motion.pose("dead_back_lie")
-					p = motion.mix(first, lie, smoothstep(0.35, 0.85, e / total))
-					var topple := clampf((e - total * 0.22) / (total * 0.5), 0.0, 1.0)
-					if topple > 0.0 and not _fall_started:
-						_fall_started = true
-						motion.fall_pivot = _pivot_for_fall()
-					motion.fall_angle = _fall_sign * deg_to_rad(84.0) * Motion.ease_in(topple, 2.2)
-					lock = smoothstep(0.0, 0.35, topple)
-					if topple >= 1.0 and not _thud_done:
+					# 쓰러짐. 앞으로(등 뒤에서 맞음·정화): 무릎이 꺾여 꿇고 → 꿇은 무릎을 축으로 허벅지째 엎어져 땅에 눕는다 (관절 자세만으로).
+					# 뒤로(앞에서 맞아 밀림 — 흔한 경우): 무릎이 꺾여 엉덩방아를 찧고(발은 땅에 딛은 채) → 엉덩이를 축으로 등이 땅에 닿게
+					# 몸 전체가 뒤로 넘어간다 (다리는 굽힌 채 따라 들린다). 두 경우 모두 무게에 끌리듯 점점 빨리 떨어지고,
+					# 몸이 땅 아래로 들어가면 들어 올린다(ground_lock — 올리기만). 쓰러짐 길이(0.75초)의 뒤 38% 동안 흩어져 사라진다.
+					var u := e / total
+					var knees := Motion.ease_out(clampf(u / 0.32, 0.0, 1.0), 2.0)
+					var slump := Motion.ease_in(clampf((u - 0.22) / 0.38, 0.0, 1.0), 2.0)
+					lock = 1.0
+					if _fall_sign > 0.0:
+						p = motion.mix(motion.mix(_state_from, motion.pose("dead_knees"), knees), motion.pose("dead_lie"), slump)
+						motion.fall_angle = 0.0
+					else:
+						p = motion.mix(motion.mix(_state_from, motion.pose("dead_back"), knees), motion.pose("dead_back_lie"), slump)
+						if slump > 0.0 and not _fall_pivot_set:
+							_fall_pivot_set = true
+							motion.fall_pivot = Vector2(rig.root_pos.x - motion.L * 0.08, 0.0)
+						motion.fall_angle = -deg_to_rad(72.0) * slump
+					if slump >= 1.0 and not _thud_done:
 						_thud_done = true
 						motion.kick("thud", 8.0)
+						motion.kick("impact", -_fall_sign * 40.0)
 						_puff(10)
-					drive = RigMotion.Drive.HEAVY if knees < 1.0 else RigMotion.Drive.SOFT
+					drive = RigMotion.Drive.QUICK
 				if _fall_gentle:
 					tint = Color(1.9, 1.75, 1.35)
 				else:
@@ -440,6 +448,7 @@ func _process(delta: float) -> void:
 				tint_strength = 1.0
 	if st != EnemyBase.State.DEAD:
 		motion.fall_angle = 0.0
+		_fall_pivot_set = false
 	motion.ground_lock = lock
 	motion.breath = breath
 	# 땅 막기 여유: 거대화(arm_front_limit 이 정해짐)는 조금 더
@@ -484,8 +493,8 @@ func _process(delta: float) -> void:
 	_col = _col.lerp(target_col, 1.0 - exp(-24.0 * delta))
 	var alpha := 1.0
 	if st == EnemyBase.State.DEAD:
-		# 땅에 누운 뒤(뒤 45%) 흩어져 사라진다: 쓰러짐은 잿빛 재, 정화·구원은 빛 (투명도로 흐리면 겹친 부위가 비친다)
-		var dz := Motion.ease_in(clampf((_enemy.phase_progress - 0.55) / 0.45, 0.0, 1.0), 1.3)
+		# 땅에 누운 뒤(뒤 38%) 흩어져 사라진다: 쓰러짐은 잿빛 재, 정화·구원은 빛 (투명도로 흐리면 겹친 부위가 비친다)
+		var dz := Motion.ease_in(clampf((_enemy.phase_progress - 0.62) / 0.38, 0.0, 1.0), 1.3)
 		if _enemy.savable and _fall_gentle:
 			dz = Motion.ease_in(clampf((_enemy.phase_progress - 0.3) / 0.7, 0.0, 1.0), 1.2)
 		rig.set_dissolve(dz, Color(2.2, 1.9, 1.2) if _fall_gentle else Color(0.9, 0.55, 0.3))
@@ -496,13 +505,13 @@ func _process(delta: float) -> void:
 	rig.modulate = shown
 	var fl := _enemy.flash_amount()
 	# 피격은 하얗게, 타격 첫 순간은 옅은 금빛, 방패로 막음은 푸른빛 (가장 센 것 하나)
-	var flash := fl * 0.6
-	var fcol := Color(1.5, 1.45, 1.35)
-	if _strike_flash * 0.3 > flash:
-		flash = _strike_flash * 0.3
-		fcol = Color(1.7, 1.5, 1.1)
-	if _block_flash * 0.6 > flash:
-		flash = _block_flash * 0.6
+	var flash := fl * 0.75
+	var fcol := Color(1.3, 1.27, 1.2)
+	if _strike_flash * 0.45 > flash:
+		flash = _strike_flash * 0.45
+		fcol = Color(1.4, 1.25, 0.95)
+	if _block_flash * 0.7 > flash:
+		flash = _block_flash * 0.7
 		fcol = Color(1.5, 1.9, 2.3)
 	rig.set_flash(flash, fcol)
 	_label.visible = st == EnemyBase.State.BROKEN
@@ -510,8 +519,9 @@ func _process(delta: float) -> void:
 		_label.text = "%s  %s" % [InputDevice.prompt("interact"), "구원의 손길" if _enemy.savable else "정화의 손길"]
 	if _glow:
 		var gp := 0.7 + 0.3 * sin(_t * 2.5)
-		_glow.modulate = Color(1.6, 1.4, 1.0, alpha) * gp
-		_glow.scale = Vector2(1.2, 1.2) * gp / maxf(absf(rig.scale.y), 0.01)
+		# 얼굴 그림이 있으니 예전(한 장 그림)보다 작고 옅게 — 얼굴을 가리지 않는 눈가의 온기
+		_glow.modulate = Color(1.5, 1.3, 0.95, 0.55 * alpha) * gp
+		_glow.scale = Vector2(0.5, 0.5) * gp
 	_overlay.queue_redraw()
 	if st == EnemyBase.State.BROKEN or _underlay_on:
 		_underlay.queue_redraw()
@@ -543,17 +553,6 @@ func _on_entered(st: int, hint: String) -> void:
 			_scatter_popped = false
 		EnemyBase.State.LUNGE:
 			_puff(4)
-
-
-## 넘어지는 축: 앞으로면 앞발(또는 앞무릎), 뒤로면 뒷발 바닥 (뼈대 단위)
-func _pivot_for_fall() -> Vector2:
-	if motion.legs.is_empty():
-		return Vector2.ZERO
-	var best := motion.legs[0]
-	for leg in motion.legs:
-		if (leg.x - best.x) * _fall_sign > 0.0:
-			best = leg
-	return Vector2(best.x, 0.0)
 
 
 ## 몸 충돌(캡슐)의 바닥 = 발이 닿는 땅 (적 원점 기준). 없으면 hurt_height 의 절반.

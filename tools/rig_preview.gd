@@ -7,6 +7,7 @@ extends Node2D
 ##   Godot --path . res://tools/rig_preview.tscn -- <id> --parts
 ##       부위마다 그림 + 관절(빨강 pivot, 파랑 축 끝, 노랑 자식 관절, 초록 발바닥): screenshots/rig_<id>_parts.png
 ##   Godot --path . res://tools/rig_preview.tscn -- --enemy res://scenes/enemies/woodcutter.tscn [--seq idle,walk,attack,hit,broken,dead,kneel] [--joints]
+##       동작: idle / walk / backstep / alert / attack / hit / broken / dead(뒤에서 맞아 앞으로) / dead_back(앞에서 맞아 뒤로) / kneel(구원형)
 ##       실제 몹 씬을 바닥 위에 세우고 동작을 차례로 돌려 0.05초(--every) 간격 필름 띠: screenshots/rig_<씬 이름>_<동작>.png
 ##       (상태는 EnemyBase 를 직접 바꿔 돌린다 — 판정·시간은 실제 게임과 같다)
 ##   공통: --zoom 2.5 (카메라 배율), --every 0.05 (필름 칸 간격, 초), --cols 5, --crop 0.5 (필름 칸에 남길 화면 몫)
@@ -115,6 +116,8 @@ func _run_poses(id: String) -> void:
 		for f in 150:
 			motion.update(1.0 / 60.0, {"grounded": pname != "air"})
 		marks.queue_redraw()
+		if _args.has("flash"):
+			rig.set_flash(float(_args["flash"]))
 		var img: Image = await _grab()
 		var path := "%s/rig_%s_%s.png" % [_out_dir(), id, pname]
 		img.save_png(path)
@@ -255,13 +258,15 @@ func _run_enemy(scene_path: String) -> void:
 	var seqs: Array = str(_args.get("seq", "idle,walk,attack,hit,broken,dead")).split(",")
 	var every := float(_args.get("every", "0.05"))
 	var name := scene_path.get_file().get_basename()
+	var seq_i := -1
 	for seq in seqs:
+		seq_i += 1
 		var path := scene_path
 		if seq == "kneel" and not scene_path.contains("savable"):
 			path = scene_path.replace(".tscn", "_savable.tscn")
 		var e: EnemyBase = (load(path) as PackedScene).instantiate()
 		add_child(e)
-		e.global_position = Vector2(0, FLOOR_Y - 80.0)
+		e.global_position = Vector2(seq_i * 1500.0, FLOOR_Y - 80.0)   # 동작마다 자리를 옮긴다 (앞 동작의 묘목·사람이 안 겹치게)
 		e.set_physics_process(false)
 		e.facing = 1
 		e.player = null
@@ -303,6 +308,15 @@ func _run_enemy(scene_path: String) -> void:
 			"dead":
 				e.hp = 1.0
 				e.receive_hit(HitData.make(5.0, 10.0, null), null)
+				dur = 0.8
+			"dead_back":
+				# 앞에서 맞아 뒤로 밀려 쓰러짐
+				var src := Node2D.new()
+				add_child(src)
+				src.global_position = e.global_position + Vector2(120, 0)
+				e.hp = 1.0
+				e.receive_hit(HitData.make(5.0, 10.0, src), null)
+				src.queue_free()
 				dur = 0.8
 			"kneel":
 				e.hp = 1.0

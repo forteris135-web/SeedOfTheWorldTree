@@ -594,9 +594,18 @@ func _finish_fall() -> void:
 		if scene:
 			var npc := scene.instantiate()
 			npc.rescue_id = rescue_id
-			npc.texture = vis.get("texture") if vis else null
-			npc.art_faces_right = vis.get("art_faces_right") if vis else true
-			npc.art_scale = vis.get("art_scale") if vis else 0.17
+			if vis and vis.has_method("npc_look"):
+				# 부위 뼈대 그림(EnemyRigVisual): 사람으로 돌아온 모습도 같은 뼈대로 (없으면 그림 한 장)
+				var look: Dictionary = vis.npc_look()
+				npc.texture = look.get("texture")
+				npc.art_faces_right = bool(look.get("art_faces_right", true))
+				npc.art_scale = float(look.get("art_scale", 0.17))
+				npc.rig_id = str(look.get("rig", ""))
+				npc.rig_scale = float(look.get("rig_scale", 1.0))
+			else:
+				npc.texture = vis.get("texture") if vis else null
+				npc.art_faces_right = vis.get("art_faces_right") if vis else true
+				npc.art_scale = vis.get("art_scale") if vis else 0.17
 			npc.facing = -_fall_facing
 			npc.global_position = _fall_at
 			get_parent().add_child(npc)

@@ -5,7 +5,8 @@ class_name RigPoses
 ## 자세 = 채널 이름 → 값. 빠진 채널은 "base" 값.
 ##  - 몸 채널: hip_x / hip_y (다리 길이 L 의 몇 배. hip_x + = 앞, hip_y + = 아래로 웅크림), lean (엉덩이 전체 기울기, 도, + = 앞으로)
 ##  - 발 채널 (다리 사슬 이름 leg_f → 접미사 f): foot_f (발 자리, L 배, 몸 가운데 기준 + = 앞), lift_f (발 들기, L 배),
-##    toe_f (발 각도, 도), kneel_f (0~1: 1 이면 그 무릎을 땅에 꿇는다)
+##    toe_f (발 각도, 도), kneel_f (0~1: 1 이면 그 무릎을 땅에 꿇는다 — 무릎은 꿇는 순간의 땅 자리에 고정)
+##  - pitch (0~1): 꿇은 무릎에서 허벅지가 앞으로 눕는 정도. 0 = 엉덩이가 무릎 위, 1 = 앞으로 엎어져 엉덩이가 무릎 높이
 ##  - 걸음 채널: step_thr (발을 옮기는 어긋남, L 배), step_dur (한 걸음 시간, 초), step_lift (걸음 높이, L 배)
 ##  - 그 밖의 이름 = 뼈 이름. 값은 도(degree), 시계 방향 + (오른쪽을 보는 기준).
 ##      · 축(tip)이 있는 뼈(팔다리·무기·늘어진 천): **절대** 지역 각도. 0 = 부모 틀에서 똑바로 아래로 늘어짐.
@@ -22,7 +23,7 @@ const BASE := {
 	"arm_f_up": -20.0, "arm_f_lo": -10.0, "weapon": 0.0,
 	"arm_b_up": 8.0, "arm_b_lo": -12.0, "hand_b": 0.0,
 	"foot_f": 0.2, "foot_b": -0.2, "lift_f": 0.0, "lift_b": 0.0, "toe_f": 0.0, "toe_b": 0.0,
-	"kneel_f": 0.0, "kneel_b": 0.0,
+	"kneel_f": 0.0, "kneel_b": 0.0, "pitch": 0.0,
 	"step_thr": 0.2, "step_dur": 0.2, "step_lift": 0.08,
 }
 
@@ -50,9 +51,10 @@ const HUMANOID := {
 		"foot_f": 0.4, "foot_b": -0.28, "step_thr": 0.3},
 	## 피격: 윗몸이 뒤로 젖혀지고 팔이 흔들린다 (충격 스프링이 더 크게 더한다)
 	"hit": {"hip_x": -0.06, "hip_y": 0.1, "torso": -14.0, "head": -16.0, "arm_f_up": -16.0, "arm_f_lo": -4.0, "arm_b_up": 30.0, "arm_b_lo": -6.0},
-	## 무너짐(흐트러짐): 무릎이 꺾이고 몸이 앞으로 처진다. 무기 끝은 땅에 닿아 기댄다.
-	"broken": {"hip_y": 0.36, "torso": 36.0, "head": 26.0, "arm_f_up": -58.0, "arm_f_lo": -4.0, "weapon": 0.0, "arm_b_up": -4.0, "arm_b_lo": -6.0,
-		"foot_f": 0.3, "foot_b": -0.32, "kneel_b": 0.55, "step_thr": 0.4},
+	## 무너짐(흐트러짐): 두 무릎이 깊이 꺾이고 몸이 앞으로 처진다 (발은 딛은 채). 무기 끝은 땅에 닿아 기댄다.
+	## (무릎 꿇기 kneel 은 0 아니면 1 로만 쓴다 — 0.5 같은 반쯤 꿇기는 무릎이 땅 위에 떠서 어색하다)
+	"broken": {"hip_y": 0.3, "torso": 36.0, "head": 26.0, "arm_f_up": -58.0, "arm_f_lo": -4.0, "weapon": 0.0, "arm_b_up": -4.0, "arm_b_lo": -6.0,
+		"foot_f": 0.3, "foot_b": -0.28, "step_thr": 0.4},
 	## 구원 가능한 자의 무릎 꿇음 (정화를 기다린다): 뒷무릎을 땅에, 고개를 숙인다
 	"kneel": {"hip_y": 0.4, "torso": 22.0, "head": 32.0, "arm_f_up": -36.0, "arm_f_lo": -4.0, "weapon": 0.0, "arm_b_up": -26.0, "arm_b_lo": -30.0,
 		"foot_f": 0.32, "foot_b": -0.42, "kneel_b": 1.0, "step_thr": 0.5},
@@ -61,16 +63,17 @@ const HUMANOID := {
 		"foot_f": 0.32, "foot_b": -0.42, "kneel_b": 1.0, "step_thr": 0.5},
 	## 쓰러짐 1단계: 두 무릎이 꺾이며 주저앉는다 (그다음 몸 전체가 넘어간다)
 	"dead_knees": {"hip_y": 0.45, "torso": 30.0, "head": 34.0, "arm_f_up": -42.0, "arm_f_lo": -4.0, "arm_b_up": -6.0, "arm_b_lo": -8.0,
-		"foot_f": 0.26, "foot_b": -0.3, "kneel_f": 0.7, "kneel_b": 0.9, "step_thr": 0.6},
-	## 뒤로 쓰러짐 1단계 (뒤로 밀려 쓰러질 때): 무릎은 조금만 꺾이고 윗몸이 뒤로 젖혀진다
-	"dead_back": {"hip_y": 0.22, "hip_x": -0.06, "torso": -22.0, "head": -26.0, "arm_f_up": -70.0, "arm_f_lo": -10.0, "arm_b_up": -40.0, "arm_b_lo": -20.0,
-		"foot_f": 0.3, "foot_b": -0.18, "step_thr": 0.6},
-	## 뒤로 쓰러짐 2단계: 등으로 눕는다. 무기 팔은 땅을 따라 앞으로 떨어진다 (몸이 −84도 돈 것을 되돌린 각도)
-	"dead_back_lie": {"hip_y": 0.2, "torso": -8.0, "head": -16.0, "arm_f_up": 14.0, "arm_f_lo": -10.0, "weapon": -6.0, "arm_b_up": -60.0, "arm_b_lo": -30.0,
-		"foot_f": 0.3, "foot_b": -0.2, "step_thr": 0.6},
-	## 쓰러짐 2단계 (앞으로 넘어가는 동안): 팔다리가 힘없이 늘어지고, 무기 팔은 앞으로 뻗어 땅에 떨어진다 (몸이 +84도 도는 만큼 팔은 머리 위쪽으로)
-	"dead_lie": {"hip_y": 0.4, "torso": 18.0, "head": 20.0, "arm_f_up": -140.0, "arm_f_lo": -10.0, "arm_b_up": -20.0, "arm_b_lo": -16.0,
-		"foot_f": 0.2, "foot_b": -0.25, "kneel_f": 0.4, "kneel_b": 0.5, "step_thr": 0.6},
+		"foot_f": 0.26, "foot_b": -0.3, "kneel_f": 0.0, "kneel_b": 1.0, "pitch": 0.1, "step_thr": 0.6},
+	## 뒤로 쓰러짐 1단계 (앞에서 맞아 밀려 쓰러질 때): 무릎이 꺾여 엉덩방아 — 엉덩이가 땅 가까이, 두 발은 앞에 딛고 무릎이 선다.
+	"dead_back": {"hip_y": 0.72, "hip_x": -0.12, "torso": -6.0, "head": -18.0, "arm_f_up": -50.0, "arm_f_lo": -10.0, "arm_b_up": 30.0, "arm_b_lo": -20.0,
+		"foot_f": 0.42, "foot_b": 0.18, "step_thr": 0.7},
+	## 쓰러짐 2단계 (앞으로): 꿇은 무릎을 축으로 허벅지째 앞으로 엎어져 땅에 눕는다 (pitch 1 + lean ≈ 90도). 팔은 땅을 짚듯 앞으로 뻗는다.
+	"dead_lie": {"hip_y": 0.45, "lean": 78.0, "torso": 14.0, "head": 10.0, "arm_f_up": -150.0, "arm_f_lo": -12.0, "weapon": -6.0, "arm_b_up": -120.0, "arm_b_lo": -20.0,
+		"foot_f": 0.26, "foot_b": -0.3, "kneel_f": 1.0, "kneel_b": 1.0, "pitch": 1.0, "step_thr": 0.6},
+	## 뒤로 쓰러짐 2단계: 엉덩이를 축으로 몸 전체가 뒤로 넘어가 등이 땅에 닿는다 (넘어가는 각도는 그림 쪽 fall_angle).
+	## 이 자세는 넘어가는 동안의 팔다리: 머리가 젖혀지고, 팔은 몸이 72도 넘어가는 만큼 앞으로 떨어져 땅에 눕는다 (몸통 틀 기준 +10 ≈ 세상에서 앞 수평보다 조금 아래 — 땅 막기가 땅 위에 얹는다).
+	"dead_back_lie": {"hip_y": 0.72, "hip_x": -0.12, "torso": -4.0, "head": -10.0, "arm_f_up": 10.0, "arm_f_lo": -10.0, "weapon": -6.0, "arm_b_up": 40.0, "arm_b_lo": -20.0,
+		"foot_f": 0.42, "foot_b": 0.18, "step_thr": 0.7},
 	## 그 밖의 공격 힌트 (종류별 몹이 쓴다 — 자기 설계도 poses 에서 고치면 된다)
 	"shoot": {"torso": 6.0, "head": 0.0, "arm_f_up": -88.0, "arm_f_lo": -4.0, "weapon": 0.0, "arm_b_up": -40.0, "arm_b_lo": -50.0, "foot_f": 0.3, "foot_b": -0.26},
 	"scatter_a": {"hip_y": 0.18, "torso": 24.0, "head": 10.0, "arm_f_up": 20.0, "arm_f_lo": -40.0, "arm_b_up": 20.0, "arm_b_lo": -40.0},

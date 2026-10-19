@@ -39,7 +39,7 @@ position = Vector2(0, -5)
 shape = SubResource("CapsuleShape2D_body")
 
 [node name="Visual" type="Node2D" parent="."]
-modulate = Color(0.8, 0.8, 0.85, 1)
+modulate = Color(0.62, 0.6, 0.66, 1)
 script = ExtResource("2_visual")
 rig_id = "woodcutter"
 art_scale = 1.72

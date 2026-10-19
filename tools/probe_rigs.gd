@@ -1,0 +1,261 @@
+extends Node
+## 부위 뼈대(파트 리그) 검사 — 화면 없이 돈다: godot --headless --path . res://tools/probe_rigs.tscn
+## art/rigs/ 의 모든 뼈대에 대해
+##  1) rig.json 을 읽고 부위 그림이 모두 있는가, 뼈 계층이 맞는가(부모가 먼저, 이름 겹침 없음), 다리·무기 사슬 이름이 실제 뼈인가
+##  2) 대기 / 걷기 / 공격(예비→타격→되돌림) / 무너짐 / 피격 / 무릎 꿇기 에서 N 프레임 동안
+##     - 발바닥이 땅 ±4px (게임 px): 서 있는 동안은 모든 발, 걷는 동안은 가장 낮은 발(한 발은 들려 있다)
+##     - 땅 아래로 4px 넘게 들어간 부위 없음 (발·다리·몸·머리·무기 — 무기는 '땅 막기'가 지킨다)
+##     - NaN 없음, 덮는 상자가 상식적 (키의 0.5~2.5배, 너비 < 키의 5배)
+##  3) 쓰러짐(실제 몹 씬): 넘어진 뒤 가장 낮은 몸 점이 땅 ±6px (가라앉거나 뜨지 않음)
+##  4) 뼈대 8개를 매 프레임 움직이는 비용
+## 를 찍는다. 실패가 하나라도 있으면 종료 코드 1.
+
+const STEP := 1.0 / 60.0
+const FEET_TOL := 4.0
+const SINK_TOL := 4.0
+
+var _fail := 0
+
+
+func _ready() -> void:
+	print("[probe] 시작: 부위 뼈대 검사")
+	var ids := _rig_ids()
+	print("[probe] 뼈대 %d개: %s" % [ids.size(), ", ".join(ids)])
+	_check(ids.size() > 0, "art/rigs 에 뼈대가 하나 이상 있다")
+	for id in ids:
+		_probe_rig(id)
+	_probe_enemy_fall("res://scenes/enemies/woodcutter.tscn")
+	_probe_enemy_fall("res://scenes/enemies/ash_giant.tscn")
+	_probe_cost(ids)
+	print("[probe] 끝: 실패 %d" % _fail)
+	get_tree().quit(1 if _fail > 0 else 0)
+
+
+func _check(ok: bool, text: String) -> void:
+	print("[probe] %s %s" % ["OK " if ok else "FAIL", text])
+	if not ok:
+		_fail += 1
+
+
+func _rig_ids() -> Array:
+	var out: Array = []
+	var d := DirAccess.open("res://art/rigs")
+	if d == null:
+		return out
+	for sub in d.get_directories():
+		if FileAccess.file_exists("res://art/rigs/%s/rig.json" % sub):
+			out.append(sub)
+	out.sort()
+	return out
+
+
+func _probe_rig(id: String) -> void:
+	var data := PartRig.load_data(id)
+	_check(not data.is_empty(), "%s: rig.json 을 읽었다" % id)
+	if data.is_empty():
+		return
+	# 1) 구조
+	var bones: Array = data["bones"]
+	var seen := {}
+	var order_ok := true
+	var tex_ok := true
+	for b in bones:
+		var nm := str(b["name"])
+		if seen.has(nm):
+			order_ok = false
+		var par := str(b["parent"])
+		if par != "" and not seen.has(par):
+			order_ok = false
+		seen[nm] = true
+		if b.has("tex") and not ResourceLoader.exists(str(b["tex"])):
+			tex_ok = false
+			print("[probe]   그림 없음: ", b["tex"])
+		for vn in b.get("variants", {}):
+			if not ResourceLoader.exists(str(b["variants"][vn]["tex"])):
+				tex_ok = false
+	_check(order_ok, "%s: 뼈 계층 (부모가 먼저, 이름 겹침 없음, 뿌리 1개)" % id)
+	_check(tex_ok, "%s: 부위 그림이 모두 있다 (%d개)" % [id, bones.size()])
+	var names_ok := true
+	for leg in data.get("legs", []):
+		for k in ["up", "lo", "foot"]:
+			if leg.has(k) and not seen.has(str(leg[k])):
+				names_ok = false
+	for g in data.get("ground_guard", []):
+		if not seen.has(str(g)):
+			names_ok = false
+	_check(names_ok, "%s: 다리·땅 막기 이름이 실제 뼈다" % id)
+	var root_count := 0
+	for b in bones:
+		if str(b["parent"]) == "":
+			root_count += 1
+	_check(root_count == 1, "%s: 뿌리 뼈 하나 (%d)" % [id, root_count])
+
+	# 2) 자세들
+	var rig := PartRig.new()
+	add_child(rig)
+	rig.build(id)
+	var m := RigMotion.new(rig)
+	var gs := rig.game_scale
+	var h := float(data.get("height", 1000.0))
+	var bad_feet := {}
+	var worst_sink := {}
+	var nan := false
+	var bounds_bad := ""
+	var weapon_low := -INF
+	var guard_set := PackedInt32Array()
+	for g in data.get("ground_guard", []):
+		guard_set.append(rig.bone_index(str(g)))
+	# 몸(천·장식을 뺀) 부위: 다리·몸통·머리·팔 — 치마 잎처럼 늘어진 천은 땅에 닿아 접혀도 된다 (hips 는 치마를 품고 있어 뺀다)
+	var body := PackedInt32Array()
+	for i in rig.names.size():
+		var nm := rig.names[i]
+		if nm.begins_with("leg_") or nm.begins_with("foot_") or nm in ["torso", "head"] or nm.begins_with("arm_"):
+			body.append(i)
+	var scen := [
+		["idle", 90, false], ["walk", 150, true], ["attack", 0, false], ["broken", 120, false], ["hit", 40, false], ["kneel", 120, false],
+	]
+	for sc in scen:
+		var name: String = sc[0]
+		var frames: int = sc[1]
+		var walking: bool = sc[2]
+		var worst_feet := 0.0
+		var sink := -INF
+		m.snap_feet()
+		if name == "attack":
+			# 예비 0.5초 → 타격 0.12초 → 되돌림 0.55초 (나무꾼 값)
+			m.set_target(m.pose("idle"))
+			for i in 60:
+				m.update(STEP, {})
+			var from := m.capture()
+			var seq := [["windup", 0.5, RigMotion.Drive.SOFT], ["strike", 0.12, RigMotion.Drive.FAST], ["recover", 0.55, RigMotion.Drive.SETTLE]]
+			for ph in seq:
+				var n := int(round(float(ph[1]) / STEP))
+				if ph[0] == "recover":
+					from = m.capture()
+				for i in n:
+					var p := float(i + 1) / n
+					var pose := m.three_beat(from, m.pose("windup"), m.pose("strike"), m.pose("ready"), ph[0], p)
+					m.set_target(pose, ph[2], RigMotion.Feet.POSE)
+					m.update(STEP, {})
+					var r := _measure(m, rig, body, guard_set, gs, false)
+					worst_feet = maxf(worst_feet, r[0])
+					sink = maxf(sink, r[1])
+					weapon_low = maxf(weapon_low, r[2])
+					nan = nan or r[3]
+		else:
+			var pose_name := "walk" if walking else name
+			m.set_target(m.pose(pose_name), RigMotion.Drive.NORMAL, RigMotion.Feet.GAIT if walking else RigMotion.Feet.POSE)
+			var speed := 300.0 / gs   # 게임 300px/초
+			for i in frames:
+				m.update(STEP, {"speed": speed if walking else 0.0, "dx": speed * STEP if walking else 0.0})
+				if i < 30:
+					continue   # 자세가 자리 잡는 동안은 빼고 잰다
+				var r := _measure(m, rig, body, guard_set, gs, walking or name == "kneel" or name == "broken")
+				worst_feet = maxf(worst_feet, r[0])
+				sink = maxf(sink, r[1])
+				weapon_low = maxf(weapon_low, r[2])
+				nan = nan or r[3]
+		var bb := rig.bounds()
+		if bb.size.y < h * 0.4 or bb.size.y > h * 2.5 or bb.size.x > h * 5.0:
+			bounds_bad += "%s(%.0fx%.0f) " % [name, bb.size.x, bb.size.y]
+		bad_feet[name] = worst_feet
+		worst_sink[name] = sink
+		print("[probe]   %s %-7s 발바닥 최대 어긋남 %.1fpx, 몸이 땅 아래로 최대 %.1fpx" % [id, name, worst_feet, sink])
+	var feet_ok := true
+	var sink_ok := true
+	for k in bad_feet:
+		if bad_feet[k] > FEET_TOL:
+			feet_ok = false
+		if worst_sink[k] > SINK_TOL:
+			sink_ok = false
+	_check(feet_ok, "%s: 발바닥이 땅 ±%.0fpx (대기·걷기·공격·무너짐·피격·무릎)" % [id, FEET_TOL])
+	_check(sink_ok, "%s: 몸(다리·몸통·머리·팔)이 땅 아래로 %.0fpx 넘게 들어가지 않는다" % [id, SINK_TOL])
+	_check(weapon_low <= SINK_TOL or guard_set.is_empty(), "%s: 무기가 땅에 파고들지 않는다 (가장 낮은 무기 점 %+.1fpx)" % [id, weapon_low])
+	_check(not nan, "%s: NaN 없음" % id)
+	_check(bounds_bad == "", "%s: 덮는 상자가 상식적 %s" % [id, bounds_bad])
+	rig.queue_free()
+
+
+## [발바닥 어긋남(px), 몸이 땅 아래로 들어간 깊이(px), 무기 가장 낮은 점(px, + = 땅 아래), NaN?]
+## lenient: 걷기·무릎처럼 한 발이 들려 있는 자세 — 가장 낮은 발만 땅 ±.
+func _measure(m: RigMotion, rig: PartRig, body: PackedInt32Array, guard: PackedInt32Array, gs: float, lenient: bool) -> Array:
+	var ys := m.sole_ys()
+	var feet := 0.0
+	var nan := false
+	if ys.size() > 0:
+		if lenient:
+			var lo := INF
+			for k in ys.size():
+				var leg: RigMotion.Leg = m.legs[k]
+				if float(m.fin.get("kneel_" + leg.sfx, 0.0)) > 0.3:
+					continue
+				lo = minf(lo, absf(ys[k]))
+			feet = (0.0 if lo == INF else lo) * gs
+		else:
+			for y in ys:
+				feet = maxf(feet, absf(y) * gs)
+	for x in rig.xf:
+		if is_nan(x.origin.x) or is_nan(x.origin.y) or is_nan(x.x.x):
+			nan = true
+	var sink := rig.lowest_y(body) * gs
+	var wlow := rig.lowest_y(guard) * gs if guard.size() > 0 else -INF
+	return [feet, sink, wlow, nan]
+
+
+## 실제 몹 씬으로 쓰러짐: 넘어진 끝에 몸이 땅 위에 눕는가 (가라앉거나 뜨지 않음)
+func _probe_enemy_fall(path: String) -> void:
+	var e: EnemyBase = (load(path) as PackedScene).instantiate()
+	e.gravity = 0.0
+	add_child(e)
+	e.set_physics_process(false)
+	var vis = e.get_node("Visual")
+	vis.set_process(false)
+	e.player = null
+	e.facing = 1
+	e._timer = 999.0
+	for i in 30:
+		e._physics_process(STEP)
+		vis._process(STEP)
+	e.hp = 1.0
+	e.receive_hit(HitData.make(5.0, 10.0, null), null)
+	var low_end := 0.0
+	var feet_dev := 0.0
+	var rig: PartRig = vis.rig
+	var body := PackedInt32Array()
+	for i in rig.names.size():
+		var nm := rig.names[i]
+		if nm.begins_with("leg_") or nm.begins_with("foot_") or nm in ["torso", "head"]:
+			body.append(i)
+	var gs: float = rig.game_scale * float(vis.art_scale)
+	for i in 40:   # 0.67초 (쓰러짐 0.75초 안)
+		e._physics_process(STEP)
+		vis._process(STEP)
+		if i == 36:
+			low_end = rig.lowest_y(vis.motion._lock_bones) * gs
+	_check(absf(low_end) <= 6.0, "%s: 쓰러져 누운 몸의 가장 낮은 점이 땅 ±6px (%+.1fpx)" % [path.get_file(), low_end])
+	e.free()
+
+
+func _probe_cost(ids: Array) -> void:
+	if ids.is_empty():
+		return
+	var rigs: Array = []
+	var motions: Array = []
+	for k in 8:
+		var r := PartRig.new()
+		add_child(r)
+		r.build(ids[k % ids.size()])
+		var mm := RigMotion.new(r)
+		mm.set_target(mm.pose("walk"), RigMotion.Drive.NORMAL, RigMotion.Feet.GAIT)
+		rigs.append(r)
+		motions.append(mm)
+	var t0 := Time.get_ticks_usec()
+	var n := 240
+	for f in n:
+		for mm in motions:
+			mm.update(STEP, {"speed": 1500.0, "dx": 25.0})
+	var us := float(Time.get_ticks_usec() - t0) / n
+	print("[probe] 뼈대 8개 한 프레임 비용: %.2f ms (뼈대 하나 %.0f µs, 이 맥 기준 — 아이폰 11 Pro 는 약 2~3배)" % [us / 1000.0, us / 8.0])
+	_check(us < 4000.0, "뼈대 8개를 움직이는 비용이 한 프레임 4ms 미만 (%.2f ms)" % (us / 1000.0))
+	for r in rigs:
+		r.queue_free()
