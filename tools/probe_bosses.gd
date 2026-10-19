@@ -912,6 +912,7 @@ func _bird_run(boss: Node, vis: Sprite2D, done: Callable, max_time := 6.0) -> Di
 	var last_state := -1
 	var last_phase := ""
 	var prev_torso := Vector2.INF
+	var prev_wf := INF
 	while t < max_time:
 		boss._physics_process(DT)
 		vis._process(DT)
@@ -957,11 +958,14 @@ func _bird_run(boss: Node, vis: Sprite2D, done: Callable, max_time := 6.0) -> Di
 					continue
 				var sw: Vector2 = rig.to_global(rig.to_rig_local(rig.xf[leg.foot] * leg.sole))
 				r.feet = maxf(r.feet, absf(sw.y - gy))
-		# 날개 정점: 가까운 날개가 가장 앞·아래로 휘둘린 순간 (보이는 쪽 기준 각도가 가장 큰 순간)
+		# 날개 정점: 가까운 날개가 앞·아래로 가장 빠르게 휘둘리는 순간 (펼친 날개 그림이 보일 때만 — 접혀 있는 동안의 숨은 날개는 세지 않는다)
 		var wf := rad_to_deg((rig.body_xf * rig.xf[rig.bone_index("wing_f_in")]).get_rotation())
-		if boss.state_name() == "SWEEP" and wf > wing_best:
-			wing_best = wf
-			r.wing_peak_t = t
+		if boss.state_name() == "SWEEP" and rig.sprite_of("wing_f_in").visible and prev_wf != INF:
+			var wv := wrapf(wf - prev_wf, -180.0, 180.0)
+			if wv > wing_best:
+				wing_best = wv
+				r.wing_peak_t = t
+		prev_wf = wf if rig.sprite_of("wing_f_in").visible else INF
 		# 부리 정점: 부리 끝이 가장 낮은(앞으로 내리찍은) 순간
 		if boss.state_name() == "PECK":
 			var bk: Vector2 = vis.socket_global("beak")
@@ -996,7 +1000,7 @@ func _bird_report(label: String, r: Dictionary, ground: bool, walking := false) 
 		_fail += 1
 
 
-## 세 박자 타격 정점(날개가 가장 휘둘린·부리가 가장 내리찍은 순간)이 히트박스 켜진 구간(+채널이 따라오는 0.1초) 안인가
+## 세 박자 타격 정점(날개가 가장 빠르게 휘둘린·부리가 가장 내리찍은 순간)이 히트박스 켜진 구간(+채널이 따라오는 0.1초) 안인가
 func _bird_peak(label: String, r: Dictionary, kind: String, active_len: float) -> void:
 	var pt: float = r.wing_peak_t if kind == "wing" else r.beak_peak_t
 	var inside: bool = r.active_t >= 0.0 and pt >= r.active_t - 0.001 and pt <= r.active_t + active_len + 0.1

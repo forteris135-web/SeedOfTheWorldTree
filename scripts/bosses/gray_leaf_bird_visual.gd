@@ -64,7 +64,8 @@ var _alive := 0.0        # 정화되어 색이 돌아오는 몫 (0 잿빛 → 1 
 var _ghost_timer := 0.0
 var _head_variant := ""
 var _look := 0.0         # 머리가 소녀 쪽을 보는 각도 (도)
-var _fold := {"f": 0.0, "b": 0.0}   # 접은 날개 몫 (자세의 fold_* 를 빠르게 따라간다 — 반투명한 순간을 짧게)
+var _fold := PackedFloat32Array([0.0, 0.0])   # 접은 날개 몫 [가까운, 먼] (자세의 fold_f/fold_b 를 빠르게 따라간다 — 반투명한 순간을 짧게)
+var _fold_sides: Array = []   # [{key, spread: [그림…], fold: 그림, bone: 어깨 뼈 번호, k: 배율}] (_ready 에서 한 번 — 매 프레임 글자를 만들지 않게)
 var _idx := {}           # 뼈 이름 → 번호
 var _spr := {}           # 뼈 이름 → 부위 그림 (투명도 바꾸기)
 var _dust: CPUParticles2D
@@ -207,16 +208,17 @@ func _ready() -> void:
 		if _idx.has(bn):
 			var k: float = BONE_SCALE[bn]
 			rig.scl[_idx[bn]] = Vector2(k, k)
+	for side in ["f", "b"]:
+		var spread: Array = []
+		for part in ["wing_%s_in" % side, "wing_%s_out" % side]:
+			if _spr.has(part):
+				spread.append(_spr[part])
+		_fold_sides.append({"key": "fold_" + side, "spread": spread, "fold": _spr.get("wing_%s_fold" % side),
+			"bone": _idx.get("wing_%s_in" % side, -1), "k": float(BONE_SCALE.get("wing_%s_in" % side, 1.0))})
 	rig.setup_ghosts(rig.data.get("ghost", ["wing_f_in", "wing_f_out", "head"]), 6)
 	_base_root_y = motion.stand_root_y
-	# 몸·발 채널의 단위 L: 새 발은 발톱까지 높아(발목이 땅에서 높다) RigMotion 이 잰 L(다리 + 발 높이)로는 보폭이 다리가 닿는 거리보다 길어
-	# 뒷발이 닿지 못하는 순간 엉덩이가 툭 튀었다 → 두 마디(허벅지·정강이) 길이의 0.95 배로 줄인다. 자세 파일(bird.json)의 몸·발 값은 이 단위.
-	var reach := 0.0
-	for leg in motion.legs:
-		reach += (leg.a + leg.b) / maxf(motion.legs.size(), 1)
-	if reach > 1.0:
-		motion.L = reach * 0.95
-	motion.snap_feet()
+	# (몸·발 채널의 단위 L 은 원형 bird.json 의 _motion.leg_unit_reach 로 '두 마디 길이 × 0.95' — 새 발은 발톱까지 높아
+	#  다리 + 발 높이로 재면 보폭이 다리가 닿는 거리보다 길어 뒷발이 닿지 못하는 순간 엉덩이가 툭 튀었다)
 	for entry in [[["wing_f_in", "wing_f_out"], -1.0], [["wing_b_in", "wing_b_out"], 1.0], [["wing_f_fold"], 1.0], [["wing_b_fold"], 1.0]]:
 		var ids := PackedInt32Array()
 		for bn in entry[0]:
@@ -310,6 +312,13 @@ func _process(delta: float) -> void:
 	_t += delta
 	if _boss == null or rig == null:
 		return
+	if not _boss.visible:
+		# 싸움 전·소녀가 쓰러져 처음으로 돌아간 뒤(보이지 않음)에는 뼈대를 움직이지 않는다 (모바일 비용). 예고 표시는 끈다.
+		_update_telegraphs()
+		if _leaves.emitting:
+			_leaves.emitting = false
+		_glow.visible = false
+		return
 	var st := _boss.state
 	if st != _prev_state:
 		_on_enter(st)
@@ -318,7 +327,7 @@ func _process(delta: float) -> void:
 
 	# ---- 방향: 폭이 +1 → 0 → −1 을 지나며 몸을 튼다 (0 을 지나는 순간 딛은 발을 세상에 남긴다) ----
 	var want_face := float(_boss.facing)
-	if st == GrayLeafBird.State.EAT and _boss._target_pile and is_instance_valid(_boss._target_pile):
+	if st == GrayLeafBird.State.EAT and is_instance_valid(_boss._target_pile):
 		# 잎을 삼키는 동안은 잎 더미 쪽으로 고개를 숙인다 (논리는 소녀 쪽을 보고 있어도 — 이때는 공격이 없다)
 		var dxp: float = _boss._target_pile.global_position.x - _boss.global_position.x
 		if absf(dxp) > 10.0:
@@ -328,6 +337,8 @@ func _process(delta: float) -> void:
 	if fs != _last_face_sign:
 		motion.flip_feet()
 		_last_face_sign = fs
+		if st in GrayLeafBird.GROUND_STATES:
+			motion.kick("crouch", -0.6)   # 땅에서 돌 때는 폴짝 (몸을 털며 돌아선다)
 	var vis_f := _last_face_sign
 
 	# ---- 땅인가: 땅 상태는 늘 바닥선 위, 무너짐·쓰러짐은 바닥에 닿았을 때, 이륙 전 웅크림도 땅 ----
@@ -410,9 +421,11 @@ func _process(delta: float) -> void:
 		p["head"] = float(p["head"]) - 4.0 * bob * cos(_flap_phase)
 	var ghost: bool = p.get("_ghost", false)
 	var shed: bool = p.get("_shed", false)
-	for side in ["f", "b"]:
-		var tf := clampf(float(p.get("fold_" + side, 0.0)), 0.0, 1.0)
-		_fold[side] = move_toward(float(_fold[side]), tf, FOLD_SPEED * delta) if delta > 0.0 else tf
+	for si in _fold_sides.size():
+		# 접기는 '접음/펼침' 둘 중 하나로만 (자세를 섞는 동안 반쯤 접힌 값이 오래 머물면 펼친 날개가 반투명하게 남는다)
+		var tf := 1.0 if float(p.get(_fold_sides[si]["key"], 0.0)) >= 0.5 else 0.0
+		_fold[si] = move_toward(_fold[si], tf, FOLD_SPEED * delta) if delta > 0.0 else tf
+	_apply_folds()   # 움직이기 전에 (접히며 줄어드는 날개 배율이 이번 프레임에 들어가게)
 	_clean(p)
 	motion.set_target(p, drive, feet)
 	# 떠 있는 높이: 뿌리를 그만큼 올리고, 매달린 발도 같이 올린다 (발이 높이 변화에 끌려 늦지 않게 — 늦음은 자세 바뀜에만)
@@ -427,7 +440,6 @@ func _process(delta: float) -> void:
 	var speed_rig := vx / maxf(k, 0.0001) * vis_f
 	motion.update(delta, {"speed": speed_rig if grounded else 0.0, "dx": speed_rig * delta if grounded else 0.0,
 		"vy": _boss.velocity.y / maxf(k, 0.0001), "grounded": grounded})
-	_apply_folds()
 	_clamp_wings(delta)
 	var sq := clampf(motion.spring_value("squash"), -0.25, 0.3) * 0.08
 	# 누운 몸은 바닥에 조금 묻힌다 (잎 끝이 바닥 풀에 묻혀 무게가 실려 보이게 — 껍질 점은 삐죽한 잎 끝까지라 그대로면 떠 보인다)
@@ -476,7 +488,7 @@ func _on_enter(st: int) -> void:
 		GrayLeafBird.State.PURIFIED:
 			fade = 0.3
 			_leaf_pop(16)   # 잎이 흩날리며 (곧 초록으로 물든다)
-		GrayLeafBird.State.WAIT:
+		GrayLeafBird.State.WAIT, GrayLeafBird.State.INTRO:
 			_alive = 0.0
 			_crash_t = -1.0
 	if _prev_state == GrayLeafBird.State.BROKEN:
@@ -739,23 +751,21 @@ func _clean(p: Dictionary) -> void:
 ## 펼친 날개 ↔ 접은 날개 그림: fold_* 채널(0~1)로 겹쳐 바꾼다. 접은 그림이 먼저 다 나타난 뒤 펼친 그림이 사라진다
 ## (둘이 함께 반투명해지는 순간이 없어 몸이 비치지 않는다). 접히는 동안 펼친 날개는 조금 줄어든다 (몸 쪽으로 접혀 들어가는 것처럼).
 func _apply_folds() -> void:
-	for side in ["f", "b"]:
-		var f: float = _fold[side]
+	for si in _fold_sides.size():
+		var side: Dictionary = _fold_sides[si]
+		var f := _fold[si]
 		var spread_a := clampf(2.0 - f * 2.0, 0.0, 1.0)
 		var fold_a := clampf(f * 2.0, 0.0, 1.0)
-		for part in ["wing_%s_in" % side, "wing_%s_out" % side]:
-			var s: Sprite2D = _spr.get(part)
-			if s:
-				s.self_modulate.a = spread_a
-				s.visible = spread_a > 0.01
-		var fsp: Sprite2D = _spr.get("wing_%s_fold" % side)
+		for spr: Sprite2D in side["spread"]:
+			spr.self_modulate.a = spread_a
+			spr.visible = spread_a > 0.01
+		var fsp: Sprite2D = side["fold"]
 		if fsp:
 			fsp.self_modulate.a = fold_a
 			fsp.visible = fold_a > 0.01
-		var wi: int = _idx.get("wing_%s_in" % side, -1)
+		var wi: int = side["bone"]
 		if wi >= 0:
-			var k0: float = BONE_SCALE.get("wing_%s_in" % side, 1.0)
-			var kk := k0 * lerpf(1.0, 0.72, f)
+			var kk: float = float(side["k"]) * lerpf(1.0, 0.72, f)
 			rig.scl[wi] = Vector2(kk, kk)
 
 

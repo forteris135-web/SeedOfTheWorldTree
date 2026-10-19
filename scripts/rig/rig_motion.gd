@@ -160,6 +160,9 @@ var _m_breath: Array = []   # [채널, 세기, 위상]
 var _m_swing: Array = []
 var _m_swing_abs: Array = []
 var _swing_bob := 0.0
+## 다리 길이 단위 L 을 '두 마디(허벅지+정강이) 길이 × 이 값'으로 (원형 _motion 의 "leg_unit_reach", 0 = 쓰지 않음 — 다리+발 높이 평균).
+## 발이 높이 그려진 새처럼 발 높이까지 넣으면 보폭이 다리가 닿는 거리보다 길어지는 원형이 쓴다.
+var leg_unit_reach := 0.0
 
 
 func _init(part_rig: PartRig) -> void:
@@ -223,6 +226,7 @@ func _init(part_rig: PartRig) -> void:
 
 
 func _read_motion_map(mm: Dictionary) -> void:
+	leg_unit_reach = float(mm.get("leg_unit_reach", 0.0))
 	strike_lag = mm.get("strike_lag", {})
 	early_keys = mm.get("early", [])
 	heavy_keys = mm.get("heavy", [])
@@ -293,6 +297,11 @@ func _setup_legs() -> void:
 		stand_root_y = float(d.get("root_offset", [0, -L])[1])
 		return
 	L = total / legs.size()
+	if leg_unit_reach > 0.0:
+		var reach := 0.0
+		for leg in legs:
+			reach += (leg.a + leg.b) if leg.lo >= 0 else leg.sole.length()
+		L = reach / legs.size() * leg_unit_reach
 	# 서 있는 뿌리 높이: 기본 발 자리에서 두 다리가 모두 (무릎을 조금 굽혀) 닿는 가장 높은 자리
 	var base: Dictionary = poses["base"]
 	var ry := -INF
