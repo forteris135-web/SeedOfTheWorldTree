@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c1seedsappool"]
+
+[ext_resource type="Script" path="res://scripts/world/sap_pool.gd" id="1_sap"]
+
+[node name="SapPool" type="Area2D"]
+script = ExtResource("1_sap")

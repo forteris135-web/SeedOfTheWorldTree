@@ -16,6 +16,16 @@ static func load_dialogue(base_path: String) -> Dictionary:
 			continue
 		var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
 		if parsed is Dictionary:
-			for k in parsed:
-				out[k] = parsed[k]
+			_merge_into(out, parsed)
 	return out
+
+
+## 깊은 합치기: 같은 키의 사전은 안쪽까지 합치고, 같은 키의 배열(talks 등)은 뒤에 이어 붙인다. 그 밖은 덮어쓴다.
+static func _merge_into(dst: Dictionary, src: Dictionary) -> void:
+	for k in src:
+		if dst.has(k) and dst[k] is Dictionary and src[k] is Dictionary:
+			_merge_into(dst[k], src[k])
+		elif dst.has(k) and dst[k] is Array and src[k] is Array:
+			dst[k] = dst[k] + src[k]
+		else:
+			dst[k] = src[k]
