@@ -245,7 +245,8 @@ var _heal_timer := 0.0
 var _guard_regen_delay := 0.0
 ## 영혼마다 남은 쿨다운 (초): {"seed": …, "wind": …, "light": …}. 2026-10-19 검토: 바람·빛 쿨이 5~7초가 되면서
 ## 하나를 같이 쓰면 빛을 쏜 뒤 씨앗 베기(1.4초)까지 7초 막혔다 → 영혼마다 따로 센다. 고른 영혼을 바꿔도 각자 줄어든다.
-var _soul_cooldowns := {}
+## 영혼별 남은 쿨다운. 방마다 소녀가 새로 만들어지므로 Progress 의 사전을 함께 쓴다 (포탈을 지나도 7초가 초기화되지 않게).
+var _soul_cooldowns: Dictionary = Progress.soul_cooldowns
 ## 지금 고른 영혼의 남은 쿨다운 (옛 이름 그대로 둔 통로 — 시험 도구들이 읽고 쓴다).
 var _soul_cooldown: float:
 	get:

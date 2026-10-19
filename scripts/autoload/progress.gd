@@ -32,6 +32,8 @@ var ending := ""
 var collected := {}
 ## 재화 '빛 가루': 적을 쓰러뜨리거나 정화하면 떨어지고, 달빛풀에서 성장에 쓴다 (2026-10-19 기획자 요청).
 var dust := 0
+## 영혼별 남은 쿨다운(초). 소녀가 방마다 새로 만들어져도 이어진다 (저장하지 않음).
+var soul_cooldowns := {}
 signal dust_changed(amount: int)
 
 
@@ -103,4 +105,5 @@ func reset() -> void:
 	visited_rooms.clear()
 	collected.clear()
 	dust = 0
+	soul_cooldowns.clear()
 	next_spawn = ""

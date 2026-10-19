@@ -287,10 +287,11 @@ require_flag = "owen_rescued"
 [node name="Enemies" type="Node2D" parent="."]
 
 [node name="Guard1" parent="Enemies" instance=ExtResource("27_guard")]
-position = Vector2(1200, 1343)
+position = Vector2(1100, 1093)
 
 [node name="Guard2" parent="Enemies" instance=ExtResource("27_guard")]
-position = Vector2(1650, 1343)
+position = Vector2(1330, 1343)
+patrol_range = 250.0
 
 [node name="Guard3" parent="Enemies" instance=ExtResource("27_guard")]
 position = Vector2(2300, 703)

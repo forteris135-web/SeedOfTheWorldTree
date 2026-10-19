@@ -67,6 +67,11 @@ const DUST_PURIFY_BONUS := 20
 @export var defeat_flag := ""
 ## 공격 판정 영역 (바라보는 방향 기준).
 @export var strike_box := Rect2(30, -90, 150, 110)
+## 몸통 부딪힘 피해 (2026-10-19 기획자 요청 6번: 길목의 적을 그냥 뚫고 달려 지나가지 못하게).
+## 소녀의 몸이 적의 몸통 가운데에 겹치면 이만큼 맞는다 (가드로 막을 수 있고, 구르기 무적이면 피한다). 0 이면 없음.
+@export var contact_damage := 8.0
+## 같은 적에게 다시 부딪혀 맞기까지의 간격(초)
+@export var contact_interval := 1.0
 @export var hurt_radius := 30.0
 @export var hurt_height := 120.0
 
@@ -134,6 +139,48 @@ func _ready() -> void:
 	shape.shape = capsule
 	hurtbox.add_child(shape)
 	_timer = randf_range(0.3, 1.2)
+	_make_contact_area()
+
+
+## 몸통 부딪힘 판정: 맞는 영역보다 조금 작은 캡슐(가운데만). 소녀의 맞는 영역(층 4 = 8)과 겹치면 contact_damage.
+var _contact: Area2D
+var _contact_cd := 0.0
+
+
+func _make_contact_area() -> void:
+	if contact_damage <= 0.0:
+		return
+	_contact = Area2D.new()
+	_contact.name = "ContactBox"
+	_contact.collision_layer = 0
+	_contact.collision_mask = 8
+	_contact.monitorable = false
+	var cs := CollisionShape2D.new()
+	var cap := CapsuleShape2D.new()
+	cap.radius = hurt_radius * 0.7
+	cap.height = maxf(hurt_height * 0.75, cap.radius * 2.0)
+	cs.shape = cap
+	_contact.position = hurtbox.position
+	_contact.add_child(cs)
+	add_child(_contact)
+
+
+## 매 틱: 겹친 소녀에게 부딪힘 피해 (쓰러짐·무너짐·피격 경직·구원 중에는 없음)
+func _tick_contact(delta: float) -> void:
+	_contact_cd = maxf(_contact_cd - delta, 0.0)
+	if _contact == null or _contact_cd > 0.0:
+		return
+	if state in [State.DEAD, State.BROKEN, State.HIT]:
+		return
+	for area in _contact.get_overlapping_areas():
+		if area is Hurtbox and area.owner_node is Player:
+			var dmg := contact_damage * float(get("elite_damage_mult") if get("elite_damage_mult") != null else 1.0)
+			var hit := HitData.make(dmg, 0.0, self, Vector2(340, -180))
+			hit.hitstop = 0.03
+			var result: String = area.receive(hit)
+			if result != "ignored":
+				_contact_cd = contact_interval
+			return
 
 
 ## 모든 상태가 공통으로 매 틱 하는 일: 번쩍임 감쇠, 흐트러짐 회복, 남은 시간 줄이기, 진행도 계산.
@@ -141,6 +188,7 @@ func _ready() -> void:
 func _tick_common(delta: float) -> void:
 	if player == null or not is_instance_valid(player):
 		player = get_tree().get_first_node_in_group("player") as Player
+	_tick_contact(delta)
 	_flash = maxf(_flash - delta * 8.0, 0.0)
 	_poise_hold_timer = maxf(_poise_hold_timer - delta, 0.0)
 	if state != State.BROKEN and state != State.DEAD and _poise_hold_timer <= 0.0 and poise > 0.0:
