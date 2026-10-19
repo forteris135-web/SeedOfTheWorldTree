@@ -1,142 +1,296 @@
-extends Sprite2D
-## 무쇠 펌프의 그림(boss_iron_pump_now.png)을 상태에 맞춰 움직인다. 등불 기사 visual 과 같은 원칙:
-## 자세 값(기울기·찌그러짐·세로 오프셋)은 '툭' 바뀌지 않고 목표를 Motion.damp 로 쫓으며, 충격은 스프링 한 겹.
-## 그림 한 장(임시)에는 몸통만 있고, **피스톤 팔·관(노즐)·장갑 덮개·핵**은 이 스크립트가 _draw 로 그려 움직인다
-## (draw_parts). 진짜 그림에 피스톤·관이 그려져 오면 draw_parts 를 끄고 몸의 기울기·찌그러짐만 쓴다.
-## 리듬: 기계라 매 박(128bpm)마다 '쿵' 하고 작게 들썩인다. 피스톤은 예고에 치켜들었다(멈칫) → 아주 빠르게 내려찍고 → 출렁이며 돌아온다.
-## 그림 원본은 왼쪽을 본다 → 오른쪽을 볼 때 뒤집는다(scale.x 음수). 방향 전환은 몸을 틀며 1→0→−1 을 지난다.
-## 좌표: 그림 픽셀(1536×1024, 가운데 원점). 몸통 x −248~332, y −212~408. 발 y 468. 핵 (47, 83).
+extends Node2D
+## 무쇠 펌프의 그림 (2026-10-20 리뉴얼). 기획자의 부위 시트(익스펜션/그림/보스/02E4EA0A…)를 잘라 만든 부위 뼈대
+## (PartRig — art/rigs/iron_pump, 설계도 data/rigs/iron_pump.json, 자세 data/rigs/_archetypes/iron_pump.json)를
+## 움직임 층(RigMotion)으로 움직인다. 예전에는 임시 그림 한 장을 통째로 기울이고 눌러서 '판때기'처럼 보였다 — 이제 관절로 선다:
+##  - 몸통(핵 창·탱크) 아래 **무릎이 뒤로 꺾이는 기계 다리 둘**: 디딘 발은 땅에 고정, 두 마디 IK. 걸음마다 쿵 — 몸이 내려앉고
+##    앞뒤로 흔들리며 발밑에 먼지. 서 있어도 매 박(보스곡 128bpm)마다 '쿵' 하고 들썩이고, 등 위 관 팔이 펌프처럼 끄덕인다.
+##  - 흡입 팔(위팔 → 아래팔, 끝에 쇠창살 입): **피스톤 내려찍기** = 팔을 하늘로 치켜들고 멈칫(붉게 떨림) → 앞 땅에 내리꽂고
+##    몸이 앞으로 쏠림(먼지·불꽃) → 출렁이며 제자리. **빨아들이기** = 입을 소녀에게 겨누고 떨며 들이마심(수액빛 띠) → 끝에 덥석 문다.
+##  - 수액 대포(몸 앞 아래): **수액 분사** = 흡입 팔을 땅에 짚어 버팀(받침대) → 대포가 소녀를 겨누고 한 발마다 크게 튀어 오르는 반동,
+##    몸이 뒤로 밀리고 관 팔이 출렁임.
+##  - 2페이즈: 규칙이 무너진다 — 박이 엇나가고(짧았다 길었다·두 번 쿵), 동작이 멈칫멈칫 끊겼다가 확 따라잡고, 경련하듯 튄다.
+##    이음새마다 수액이 샌다.
+##  - 장갑 깨짐(BROKEN): 무릎이 꺾여 주저앉고 팔·대포·관이 늘어지며, 핵 창이 터질 듯 밝게 맥동(빛살)하고 김이 샌다.
+##  - 쓰러짐: 경련 → 다리가 꺾이며 발이 밖으로 미끄러지고 → 몸이 땅에 '쿵' 떨어져 살짝 튀었다가 → 엎드려 눕는다.
+##    핵이 꺼져 가며 마지막 박동 몇 번. 정화를 기다리는 동안 그 자세 그대로(몸이 땅에 박히거나 뜨지 않는다).
+##  - 정화: 핵이 맑은 초록빛으로 바뀌고 몸이 빛으로 흩어진다 (그 자리에 멈춘 펌프 PumpRemains 가 같은 자세로 남는다 — iron_pump_room).
+## 보스 논리(iron_pump.gd)는 그대로다 — 그림이 상태·단계·진행도(phase_progress)를 읽어 따라간다 (판정·시간은 건드리지 않는다).
+## 좌우: 뼈대는 늘 오른쪽을 본다. 이 노드의 scale.x 가 1 → 0 → −1 을 지나며 몸을 튼다 (뒤집는 순간 딛은 발을 세상에 남긴다).
+## 이 노드의 원점 = 보스 발밑 땅 (CharacterBody2D 원점 = 몸 충돌 캡슐의 바닥).
+## 세기 조절: 아래 상수들과 자세 파일.
 
-const NEUTRAL := Vector4(0.0, 1.0, 1.0, 0.0)
-const STRIDE := 220.0
+const RIG_ID := "iron_pump"
 const BEAT := 60.0 / 128.0
-## 그림에 없는 부품을 코드로 그릴지 (임시 그림: 켬)
-@export var draw_parts := true
+## 몸 틀기 빠르기 (1/s)와 도는 도중 가장 좁아지는 폭 (1 = 그대로)
+const TURN_SPEED := 7.0
+const TURN_MIN_WIDTH := 0.5
+## 걷기 시작 위상 (아래 _process 설명)
+const GAIT_START_PHASE := 0.19
+## 피스톤 예고 중 '치켜들고 멈칫' 이 끝나고 내리치기 시작하는 진행도 (예고 끝 몫에서 팔이 떨어져 실행 순간에 땅에 닿는다)
+const SLAM_DROP := 0.82
+## 쓰러짐 순서 (FALLEN 이 된 뒤 초): 경련 → 다리가 꺾임 → 몸이 땅에 부딪힘 → 다 누움
+const FALL_JOLT := 0.3
+const FALL_BUCKLE := 0.95
+const FALL_CRASH := 1.22
+const FALL_REST := 2.2
+## 등장: 잠든 자세 → 깨어남 → 포효(팔을 치켜듦) → 내려찍듯 자리 잡기 (INTRO 2.2초 안)
+const INTRO_WAKE := 0.45
+const INTRO_RISE := 1.05
+const INTRO_ROAR := 1.5
+const INTRO_LAND := 1.85
+## 대포 겨눔 한계 (축 각도, 도: −90 = 앞 수평, 더 작으면 위로)
+const CANNON_UP := -128.0
+const CANNON_DOWN := -46.0
+## 빨아들이기: 아래팔 겨눔 한계 (위팔 틀 기준, 도)
+const SUCK_LO_MIN := -72.0
+const SUCK_LO_MAX := 30.0
+## 색
+const CORE_AMBER := Color(1.0, 0.68, 0.34)
+const CORE_GREEN := Color(0.62, 1.0, 0.72)
+const SAP := Color(0.35, 0.82, 0.88)
+const RED_HOT := Color(1.9, 0.62, 0.5)
+## 일회성 효과 표시 (상태가 바뀌면 지운다)
+const ONCE_ROAR := 1
+const ONCE_LAND := 2
 
-const RUST := Color(0.42, 0.17, 0.1)
-const RUST_DARK := Color(0.2, 0.09, 0.07)
-const STEEL := Color(0.36, 0.33, 0.3)
-const TEAL := Color(0.35, 0.85, 0.9)
-const CORE_POS := Vector2(47, 83)
-const NOZ_PIVOT := Vector2(-248, 250)
-const NOZ_LEN := 300.0
-const HEAD_REST := 60.0
-const HEAD_SLAM := 368.0
+var boss: IronPump
+var rig: PartRig
+var motion: RigMotion
+## 그림 배율 (1 = 설계도 game_scale)
+@export var art_scale := 1.0
 
-var _boss: IronPump
+var _i_body := -1
+var _i_arm_up := -1
+var _i_arm_lo := -1
+var _i_cannon := -1
+var _cannon_only := PackedInt32Array()
+var _k := 0.49             # 뼈대 단위 → 게임 px
+var _sock := {}            # 소켓 이름 → [뼈 번호, 뼈 틀 자리]
+
 var _t := 0.0
-var _base_scale := Vector2.ONE
-var _base_pos := Vector2.ZERO
-var _pose := NEUTRAL
-var _imp := 0.0
-var _imp_v := 0.0
-var _kick := 0.0
-var _kick_v := 0.0
-var _face := -1.0
-var _red := 0.0
-var _dist := 0.0
-var _last_step := 0
+var _state_t := 0.0
+var _prev_state := -1
 var _prev_phase := ""
-var _prev_hint := ""
 var _prev_flash := 0.0
-var _prev_bit := false
-# 부품 채널
-var _ext := 0.1          # 피스톤 (−0.4 치켜듦 … 0 쉼 … 1 내려찍음)
-var _ext_v := 0.0
-var _noz := 0.0          # 관 각도 (0 = 정면, + = 아래)
-var _open := 0.15        # 관 입 벌림 (0~1)
-var _plates := 0.0       # 장갑 덮개 벌어짐 (0 닫힘 … 1 열림)
-var _core := 0.3         # 핵 빛 세기
-var _recoil := 0.0       # 관 반동 (스프링)
-var _recoil_v := 0.0
+var _from := {}            # 지금 동작이 시작될 때 보이던 자세 (예고·쓰러짐의 출발)
+var _out := {}             # 이번 프레임 목표 (돌려 쓴다)
+var _info := {}            # 이번 프레임 상태 정보 (돌려 쓴다)
+var _ctx := {"speed": 0.0, "dx": 0.0, "vy": 0.0, "grounded": true}
+var _stream_on := false
+var _was_gait := false
+var _face := -1.0
+var _sign := -1.0
+var _prev_x := 0.0
+var _visible_prev := false
+var _once := 0
+## 박: 다음 '쿵' 까지 흐른 시간과 그 길이. 2페이즈엔 길이가 들쭉날쭉하다.
+var _beat_t := 0.0
+var _beat_len := BEAT
+var _beat_n := 0
+var _beat_amp := 1.0
+var _pump_ph := 0.0        # 관 팔 끄덕임 위상 (박마다 반 바퀴)
+var _death_beats := 0      # 쓰러진 뒤 남은 마지막 박동 수
+## 2페이즈 멈칫거림: 남은 멈춤 시간, 다음 멈춤까지, 멈춘 자세, 따라잡기(빠른 스프링) 남은 시간
+var _stut_hold := 0.0
+var _stut_next := 0.6
+var _stut_pose := {}
+var _snap_t := 0.0
+## 땅을 디딘 발의 흔들림 (앞발 = 앞으로 쏠림, 뒷발 = 뒤로) — 값·속도 (lean 에 더한다, 도)
+var _rock := 0.0
+var _rock_v := 0.0
+## 몸이 땅에 부딪혀 튀는 높이 (게임 px) — 값·속도
+var _bounce := 0.0
+var _bounce_v := 0.0
 var _tremble := 0.0
-var _dust: CPUParticles2D
-var _sparks: CPUParticles2D
-var _steam: CPUParticles2D
-var _inhale: CPUParticles2D
-var _drips: CPUParticles2D
-var _ghosts: Array[Sprite2D] = []
+var _core := 0.4
+var _core_kick := 0.0
+var _red := 0.0
+var _purify := 0.0
 var _ghost_timer := 0.0
+var _crashed := false
+var _bite_pose := false
+var _steam_t := 0.0
+## 관 팔이 홱 튀는 값 (2페이즈 수액이 샐 때) — 값·속도 (도)
+var _pipe_jerk := 0.0
+var _pipe_jerk_v := 0.0
+
+var _dust: Array[CPUParticles2D] = []
+var _dust_next := 0
+var _sparks: CPUParticles2D
+var _steam: CPUParticles2D      # 관 팔 끝 (박마다 한 줌)
+var _vent: CPUParticles2D       # 몸통 위 김 (장갑 깨짐·쓰러짐)
+var _drips: CPUParticles2D      # 2페이즈: 이음새마다 새는 수액
+var _inhale: CPUParticles2D     # 빨아들이기
+var _muzzle_smoke: CPUParticles2D
+var _motes: CPUParticles2D      # 정화: 솟아오르는 빛 가루
+var _spray: CPUParticles2D      # 2페이즈: 관 팔 끝에서 뿜는 수액
+var _core_glow: Sprite2D
+var _mouth_glow: Sprite2D
+var _muzzle_glow: Sprite2D
+var _muzzle_a := 0.0
+var _rays: Node2D               # 장갑 깨짐: 핵 창에서 새어 나오는 빛살
+var _stream: Node2D             # 빨아들이기 띠 (세상 좌표)
 var _light: PointLight2D
-var _light_base := Vector2.ZERO
+var _red_sprites: Array[Sprite2D] = []
+
+var _glow_tex: Texture2D
 
 
 func _ready() -> void:
-	_boss = get_parent() as IronPump
-	_base_scale = scale
-	_base_pos = position
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	if _boss:
-		_face = float(_boss.facing)
-		_boss.state_changed.connect(_on_state_changed)
-		_boss.shot.connect(func() -> void: _recoil_v += 9.0)
-		_boss.slammed.connect(func() -> void:
-			_jolt(2.6, 0.0)
-			_puff(26, float(_boss.facing) * 300.0)
-			_spark_burst(12))
-		_light = _boss.get_node_or_null("Light") as PointLight2D
-		if _light:
-			_light_base = _light.position
-	_dust = _make_particles(12, 0.6, Vector2(0, -1), 75.0, Vector2(0, 220), 70.0, 220.0, 4.0, 10.0, Color(0.6, 0.5, 0.42, 0.55), false)
-	_dust.top_level = true
-	_sparks = _make_particles(14, 0.7, Vector2(0, -1), 80.0, Vector2(0, 500), 160.0, 420.0, 2.0, 4.0, Color(1.0, 0.75, 0.3, 0.95), true)
-	_sparks.top_level = true
-	_steam = _make_particles(10, 1.4, Vector2(0, -1), 30.0, Vector2(0, -60), 40.0, 110.0, 8.0, 18.0, Color(0.8, 0.85, 0.85, 0.35), false)
-	_steam.one_shot = false
-	_steam.explosiveness = 0.0
-	_steam.emitting = false
-	_steam.top_level = true
-	# 빨아들이기: 입 앞 넓은 자리에서 입 쪽(+x, 그림 기준 뒤쪽)으로 흘러드는 빛 가루 (그림 좌표라 뒤집힘을 따른다)
-	_inhale = CPUParticles2D.new()
-	_inhale.emitting = false
-	_inhale.amount = 60
-	_inhale.lifetime = 0.6
-	_inhale.local_coords = true
-	_inhale.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	_inhale.emission_rect_extents = Vector2(60, 220)
-	_inhale.position = NOZ_PIVOT + Vector2(-NOZ_LEN - 520.0, 0)
-	_inhale.direction = Vector2(1, 0)
-	_inhale.spread = 10.0
-	_inhale.gravity = Vector2(600, 0)
-	_inhale.initial_velocity_min = 500.0
-	_inhale.initial_velocity_max = 900.0
-	_inhale.scale_amount_min = 10.0
-	_inhale.scale_amount_max = 18.0
-	_inhale.color = Color(TEAL, 0.8)
+	boss = get_parent() as IronPump
+	rig = PartRig.new()
+	rig.name = "Rig"
+	add_child(rig)
+	if not rig.build(RIG_ID):
+		push_error("무쇠 펌프 뼈대를 만들지 못했다")
+		set_process(false)
+		return
+	rig.scale = Vector2(art_scale, art_scale)
+	_k = rig.game_scale * art_scale
+	_i_body = rig.bone_index("body")
+	_i_arm_up = rig.bone_index("arm_up")
+	_i_arm_lo = rig.bone_index("arm_lo")
+	_i_cannon = rig.bone_index("cannon")
+	_cannon_only = PackedInt32Array([_i_cannon])
+	for bn in ["arm_up", "arm_lo"]:
+		var spr := rig.sprite_of(bn)
+		if spr:
+			_red_sprites.append(spr)
+	var socks: Dictionary = rig.data.get("sockets", {})
+	for sname in socks:
+		var sd: Dictionary = socks[sname]
+		_sock[sname] = [rig.bone_index(str(sd["bone"])), PartRig._v(sd["pos"])]
+	motion = RigMotion.new(rig)
+	motion.breath = 0.0   # 숨 대신 박마다 '쿵' (아래 _beat)
+	rig.setup_ghosts(["arm_up", "arm_lo"], 5)
+	if boss:
+		_face = float(boss.facing)
+		_sign = signf(_face)
+		_prev_x = boss.global_position.x
+		_light = boss.get_node_or_null("Light") as PointLight2D
+		boss.state_changed.connect(_on_state_changed)
+		boss.shot.connect(_on_shot)
+		boss.slammed.connect(_on_slammed)
+		boss.phase_changed.connect(_on_phase_changed)
+	scale = Vector2(_face, 1.0)
+	_make_effects()
+	_snap_to("dormant")
+
+
+# ---------- 효과 만들기 ----------
+
+func _make_effects() -> void:
+	if _glow_tex == null:
+		var grad := Gradient.new()
+		grad.offsets = PackedFloat32Array([0.0, 0.25, 0.6, 1.0])
+		grad.colors = PackedColorArray([Color(1, 1, 1, 0.95), Color(1, 1, 1, 0.4), Color(1, 1, 1, 0.08), Color(1, 1, 1, 0)])
+		var gt := GradientTexture2D.new()
+		gt.gradient = grad
+		gt.width = 64
+		gt.height = 64
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		_glow_tex = gt
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	# 핵 창의 빛 (HDR 1 넘김 → 글로우가 번진다). 뼈를 따라간다.
+	_core_glow = _glow_sprite(add, 4.2)
+	_attach_sock("core", _core_glow)
+	_mouth_glow = _glow_sprite(add, 2.2)
+	_attach_sock("mouth", _mouth_glow)
+	_muzzle_glow = _glow_sprite(add, 1.8)
+	_attach_sock("muzzle", _muzzle_glow)
+	_rays = Node2D.new()
+	_rays.name = "CoreRays"
+	_rays.material = add
+	_rays.visible = false
+	_rays.z_index = 1
+	_rays.draw.connect(_draw_rays)
+	_attach_sock("core", _rays)
+	_stream = Node2D.new()
+	_stream.name = "SuckStream"
+	_stream.top_level = true
+	_stream.z_index = 2
+	_stream.material = add
+	_stream.draw.connect(_draw_suck_stream)
+	add_child(_stream)
+	for i in 3:
+		var d := _particles(14, 0.75, Vector2(0, -1), 70.0, Vector2(0, 260), 60.0, 220.0, 5.0, 12.0, Color(0.58, 0.48, 0.4, 0.55), false)
+		d.top_level = true
+		d.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		d.emission_rect_extents = Vector2(40, 4)
+		_dust.append(d)
+	_sparks = _particles(16, 0.7, Vector2(0, -1), 80.0, Vector2(0, 520), 160.0, 440.0, 2.0, 4.5, Color(1.0, 0.75, 0.3, 0.95), true)
+	_sparks.top_level = true
+	_steam = _particles(10, 1.3, Vector2(0, 1), 22.0, Vector2(0, -60), 40.0, 110.0, 6.0, 15.0, Color(0.85, 0.88, 0.88, 0.32), false)
+	_steam.one_shot = false
+	_steam.explosiveness = 0.0
+	_steam.local_coords = false
+	_attach_sock("outlet", _steam)
+	_vent = _particles(16, 1.6, Vector2(0, -1), 30.0, Vector2(8, -50), 30.0, 90.0, 9.0, 20.0, Color(0.85, 0.85, 0.85, 0.28), false)
+	_vent.one_shot = false
+	_vent.explosiveness = 0.0
+	_vent.local_coords = false
+	_vent.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	_vent.emission_rect_extents = Vector2(60, 10)
+	_attach_sock("core", _vent, Vector2(0, -70))
+	_drips = _particles(12, 1.1, Vector2(0, 1), 6.0, Vector2(0, 900), 10.0, 40.0, 3.0, 6.0, Color(1.0, 0.72, 0.36, 0.85), true)
+	_drips.one_shot = false
+	_drips.explosiveness = 0.0
+	_drips.local_coords = false
+	_drips.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	_drips.emission_rect_extents = Vector2(120, 8)
+	_attach_sock("core", _drips, Vector2(0, 50))
+	_muzzle_smoke = _particles(10, 0.7, Vector2(1, -0.3), 25.0, Vector2(0, -60), 120.0, 320.0, 6.0, 13.0, Color(0.8, 0.9, 0.9, 0.4), false)
+	_muzzle_smoke.top_level = true
+	_spray = _particles(22, 1.0, Vector2(0, -1), 28.0, Vector2(0, 980), 260.0, 520.0, 5.0, 10.0, Color(1.0, 0.72, 0.36, 0.95), true)
+	_spray.top_level = true
+	_motes = _particles(40, 1.8, Vector2(0, -1), 70.0, Vector2(0, -90), 60.0, 200.0, 5.0, 12.0, Color(0.75, 1.0, 0.8, 0.9), true)
+	_motes.top_level = true
+	_motes.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	_motes.emission_rect_extents = Vector2(200, 60)
+	_inhale = CPUParticles2D.new()
+	_inhale.emitting = false
+	_inhale.amount = 48
+	_inhale.lifetime = 0.55
+	_inhale.local_coords = false
+	_inhale.top_level = true
+	_inhale.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	_inhale.emission_rect_extents = Vector2(40, 110)
+	_inhale.direction = Vector2(1, 0)
+	_inhale.spread = 8.0
+	_inhale.gravity = Vector2.ZERO
+	_inhale.initial_velocity_min = 520.0
+	_inhale.initial_velocity_max = 860.0
+	_inhale.texture = _glow_tex
+	_inhale.scale_amount_min = 7.0 / 26.0
+	_inhale.scale_amount_max = 14.0 / 26.0
+	_inhale.color = Color(SAP, 0.8)
 	_inhale.material = add
 	add_child(_inhale)
-	# 2페이즈: 이음새마다 새는 수액 (그림 좌표)
-	_drips = CPUParticles2D.new()
-	_drips.emitting = false
-	_drips.amount = 10
-	_drips.lifetime = 1.2
-	_drips.local_coords = true
-	_drips.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	_drips.emission_rect_extents = Vector2(260, 6)
-	_drips.position = Vector2(40, 120)
-	_drips.direction = Vector2(0, 1)
-	_drips.spread = 8.0
-	_drips.gravity = Vector2(0, 900)
-	_drips.initial_velocity_min = 10.0
-	_drips.initial_velocity_max = 40.0
-	_drips.scale_amount_min = 4.0
-	_drips.scale_amount_max = 7.0
-	_drips.color = Color(TEAL, 0.8)
-	add_child(_drips)
-	for i in 3:
-		var g := Sprite2D.new()
-		g.texture = texture
-		g.top_level = true
-		g.visible = false
-		g.show_behind_parent = true
-		g.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		add_child(g)
-		_ghosts.append(g)
 
 
-func _make_particles(n: int, life: float, dir: Vector2, spread: float, grav: Vector2, v0: float, v1: float, s0: float, s1: float, col: Color, additive: bool) -> CPUParticles2D:
+func _glow_sprite(mat: Material, size: float) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.texture = _glow_tex
+	s.material = mat
+	s.scale = Vector2.ONE * size
+	s.modulate = Color(1, 1, 1, 0)
+	s.z_index = 1
+	return s
+
+
+## 소켓(설계도 sockets)에 노드를 붙인다: 뼈를 따라 자리만 옮긴다 (회전은 따라가지 않는다). extra = 소켓에서 게임 px 만큼 더.
+func _attach_sock(sname: String, node: Node2D, extra := Vector2.ZERO) -> void:
+	if not _sock.has(sname):
+		add_child(node)
+		return
+	var sk: Array = _sock[sname]
+	rig.attach(rig.names[int(sk[0])], node, (sk[1] as Vector2) + extra / _k)
+
+
+func _particles(n: int, life: float, dir: Vector2, spread: float, grav: Vector2, v0: float, v1: float, s0: float, s1: float, col: Color, additive: bool) -> CPUParticles2D:
 	var p := CPUParticles2D.new()
 	p.emitting = false
 	p.one_shot = true
@@ -148,8 +302,10 @@ func _make_particles(n: int, life: float, dir: Vector2, spread: float, grav: Vec
 	p.gravity = grav
 	p.initial_velocity_min = v0
 	p.initial_velocity_max = v1
-	p.scale_amount_min = s0
-	p.scale_amount_max = s1
+	# 부드러운 둥근 알갱이 (텍스처 64px 의 빛 방울 — 네모 알갱이가 싸 보이지 않게). s0·s1 은 보이는 지름(px)쯤.
+	p.texture = _glow_tex
+	p.scale_amount_min = s0 / 26.0
+	p.scale_amount_max = s1 / 26.0
 	p.color = col
 	if additive:
 		var add := CanvasItemMaterial.new()
@@ -159,356 +315,748 @@ func _make_particles(n: int, life: float, dir: Vector2, spread: float, grav: Vec
 	return p
 
 
+# ---------- 사건 ----------
+
 func _on_state_changed(st: IronPump.State) -> void:
 	match st:
+		IronPump.State.INTRO:
+			# 싸움 시작(또는 다시 시작): 보는 쪽·자세를 바로 맞춘다 (지난 싸움에서 돌아선 채 남은 값으로 등장하며 몸을 틀지 않게)
+			_face = float(boss.facing)
+			_sign = signf(_face)
+			scale = Vector2(_face, 1.0)
+			_snap_to("dormant")
+			_core = 0.0
+			_beat_t = 0.0
+			_beat_len = BEAT
+			_purify = 0.0
+			rig.set_dissolve(0.0)
+			_crashed = false
 		IronPump.State.STAGGER:
-			_jolt(-1.0, -4.0)
-			_spark_burst(14)
+			motion.kick("impact", 90.0)
+			_spark_burst(14, _sock_global("core"))
+			_vent_burst()
 		IronPump.State.BROKEN:
-			_jolt(1.6, 2.0)
-			_puff(12, 0.0)
-			_spark_burst(14)
+			motion.kick("impact", 70.0)
+			motion.kick("crouch", 1.2)
+			_spark_burst(16, _sock_global("core"))
+			_puff(12, global_position)
 			Sfx.play("guard_break", -2.0, 0.05)
 		IronPump.State.FALLEN:
-			_jolt(2.4, 1.5)
-			_puff(18, 0.0)
-			_steam.emitting = true
-		IronPump.State.INTRO:
-			_jolt(1.2, 0.0)
+			motion.kick("impact", 120.0)
+			_spark_burst(16, _sock_global("core"))
+			_death_beats = 3
+			_crashed = false
+		IronPump.State.PURIFIED:
+			# 정화: 핵에서 맑은 빛 가루가 솟아 흩어진다 (몸은 BossRoom 이 밝게 지우고, 그 자리에 멈춘 펌프가 남는다)
+			_motes.global_position = _sock_global("core")
+			_motes.restart()
+			_motes.emitting = true
 
 
-func _jolt(squash: float, kick: float) -> void:
-	_imp_v += squash
-	_kick_v += (kick * float(_boss.facing)) if _boss else kick
+func _on_shot() -> void:
+	# 대포 반동: 대포가 위로 튀고 몸이 뒤로 밀리며 관 팔이 출렁인다
+	motion.kick("recoil", 300.0)
+	motion.kick("shove", -1.1)
+	motion.kick("crouch", 0.5)
+	_rock_v -= 2.5
+	_muzzle_a = 1.0
+	_muzzle_smoke.global_position = _sock_global("muzzle")
+	_muzzle_smoke.direction = Vector2(_sign, -0.25)
+	_muzzle_smoke.restart()
+	_muzzle_smoke.emitting = true
+	Juice.shake(2.5)
 
+
+func _on_slammed() -> void:
+	# 피스톤이 땅을 쳤다: 입 자리에 먼지·불꽃, 몸이 쿵 내려앉고 팔이 살짝 튀어 오른다
+	var at := _sock_global("mouth")
+	at.y = global_position.y
+	_puff(26, at)
+	_spark_burst(14, at + Vector2(0, -20))
+	motion.kick("crouch", 1.6)
+	motion.kick("parry", 70.0)
+	_rock_v += 4.0
+	_core_kick = 0.8
+
+
+func _on_phase_changed(ph: int) -> void:
+	if ph == 2:
+		_vent_burst()
+		_spark_burst(16, _sock_global("core"))
+		_stut_next = 0.05   # 곧바로 한 번 멈칫
+
+
+## 자세를 바로 그 자리로 (보이기 시작할 때·처음)
+func _snap_to(pose_name: String) -> void:
+	if motion == null:
+		return
+	motion.transition(0.0)
+	motion.set_target(motion.pose(pose_name), RigMotion.Drive.NORMAL, RigMotion.Feet.POSE)
+	motion.snap_feet()
+	motion.ground_lock = 0.0
+	motion.ground_settle = 0.0
+	motion.update(0.0, {})
+	rig.hide_ghosts()
+	_from = motion.capture()
+
+
+# ---------- 매 프레임 ----------
 
 func _process(delta: float) -> void:
-	_t += delta
-	if _boss == null:
+	if boss == null or motion == null:
 		return
-	var f := float(_boss.facing)
-	var st := _boss.state
-	var ph := _boss.attack_phase
-	var speed := absf(_boss.velocity.x)
-
-	# ---- 일회성 사건 ----
-	if ph != _prev_phase:
-		if ph == "active":
-			match st:
-				IronPump.State.SPRAY:
-					_jolt(0.3, 0.0)
-				IronPump.State.SUCK:
-					_inhale.emitting = true
-		if _prev_phase == "active" and st == IronPump.State.SUCK:
+	if not boss.visible:
+		if _visible_prev:
+			_stream.queue_redraw()   # 빨아들이던 띠가 다음 싸움에 남아 보이지 않게
 			_inhale.emitting = false
+		_visible_prev = false
+		return
+	delta = minf(delta, 0.05)
+	_t += delta
+	var st := boss.state
+	if not _visible_prev:
+		_visible_prev = true
+		_prev_x = boss.global_position.x
+	if st != _prev_state:
+		_state_t = 0.0
+		_prev_state = st
+		_once = 0
+		_from = motion.capture()
+		motion.transition(0.16)
+	else:
+		_state_t += delta
+	var ph := boss.attack_phase
+	if ph != _prev_phase:
+		if ph != "":
+			_from = motion.capture()
+		if _prev_phase == "active" and ph == "recovery" and boss.phase == 2:
+			_leak_fx()
 		_prev_phase = ph
-	if st != IronPump.State.SUCK:
-		_inhale.emitting = false
-	if _boss.anim_hint == "stagger" and _prev_hint != "stagger" and st == IronPump.State.SUCK:
-		_jolt(-0.8, -4.0)
-		_inhale.emitting = false
-	_prev_hint = _boss.anim_hint
-	if _boss._bit and not _prev_bit:
-		_recoil_v -= 14.0   # 물기: 관이 앞으로 덥석
-		_jolt(0.5, 2.0)
-	_prev_bit = _boss._bit
-	var fl := _boss.flash_amount()
-	if fl > _prev_flash + 0.4 and st not in [IronPump.State.BROKEN, IronPump.State.FALLEN, IronPump.State.STAGGER]:
-		_jolt(0.25, -0.6)
-	_prev_flash = fl
-	_drips.emitting = _boss.phase == 2 and st not in [IronPump.State.FALLEN, IronPump.State.PURIFIED, IronPump.State.WAIT]
+	# 몸 틀기: 1 → 0 → −1 을 지나며 돌아선다. 다만 종이처럼 납작해지지 않게 폭은 절반까지만 줄고(TURN_MIN_WIDTH),
+	# 가운데서 '쿵' 하고 뒤집힌다 (웅크림·발밑 먼지 — 무거운 기계가 제자리에서 몸을 돌린다). 뒤집는 순간 딛은 발은 세상에 남긴다.
+	_face = Motion.damp(_face, float(boss.facing), TURN_SPEED, delta)
+	var fx := _face
+	if absf(fx) < 0.001:
+		fx = 0.001 * (1.0 if fx >= 0.0 else -1.0)
+	var s := signf(fx)
+	if s != _sign:
+		_sign = s
+		_flip_legs()
+		motion.kick("crouch", 1.0)
+		_puff(10, global_position)
+	scale = Vector2(s * lerpf(TURN_MIN_WIDTH, 1.0, smoothstep(0.0, 1.0, absf(fx))), 1.0)
+	# 목표 자세
+	var info := _info
+	info["drive"] = RigMotion.Drive.NORMAL
+	info["feet"] = RigMotion.Feet.POSE
+	info["tremble"] = 0.0
+	info["core"] = 0.45
+	info["beat"] = 1.0
+	info["ghost"] = false
+	var pose := _pose_now(st, info)
+	pose = _stutter(pose, delta, info)
+	_beat(delta, st, float(info["beat"]))
+	# 덧붙임: 박 끄덕임(관 팔), 발 디딤 흔들림 — 자세 사전은 원형의 것을 함께 쓰므로 돌려 쓰는 사전에 옮겨 더한다
+	for key in pose:
+		_out[key] = pose[key]
+	var pj := Motion.spring(_pipe_jerk, 0.0, _pipe_jerk_v, 180.0, 9.0, delta)
+	_pipe_jerk = pj[0]
+	_pipe_jerk_v = pj[1]
+	_out["pipe"] = float(pose.get("pipe", 0.0)) + sin(_pump_ph) * 7.0 * _beat_amp * float(info["beat"]) + _pipe_jerk
+	_out["lean"] = float(pose.get("lean", 0.0)) + _rock
+	var drive: int = info["drive"]
+	if _snap_t > 0.0:
+		_snap_t -= delta
+		drive = RigMotion.Drive.QUICK
+	# 걷기 시작: 걸음 위상을 '앞발이 내딛는 중간, 뒷발은 디딘 걸음의 한가운데(= 제자리)'에서 시작한다 (RigMotion 걸음의 발 들기 몫 약 0.38 의 절반).
+	# 아무 위상에서나 시작하면 서 있던 뒷발이 한 걸음 넘게 디딘 채 몸 뒤로 멀어져 엉덩이가 확 내려앉고 앞다리 무릎이 땅에 박혔다.
+	var gait: bool = info["feet"] == RigMotion.Feet.GAIT
+	if gait and not _was_gait:
+		motion._phase = GAIT_START_PHASE
+	_was_gait = gait
+	motion.set_target(_out, drive, info["feet"])
+	# 몸이 간 거리 (뼈대 단위, 보는 쪽 + 앞)
+	var dxw := boss.global_position.x - _prev_x
+	_prev_x = boss.global_position.x
+	if absf(dxw) > 200.0:
+		dxw = 0.0
+		motion.snap_feet()   # 순간이동 (싸움 다시 시작)
+	_ctx["speed"] = boss.velocity.x * _sign / _k
+	_ctx["dx"] = dxw * _sign / _k
+	motion.update(delta, _ctx)
+	_guard_cannon()
+	_after_update(delta, st, info)
 
-	# ---- 목표 자세 ----
-	var target := NEUTRAL
-	var follow := 9.0
-	var ghost := false
-	var ext_target := 0.1 + 0.1 * sin(_t * TAU / (2.0 * BEAT))
-	var ext_follow := 8.0
-	var noz_target := _aim_angle()
-	var open_target := 0.15
-	var plates_target := 0.0
-	var core_target := 0.3 + 0.1 * sin(_t * 2.0)
-	var tremble := 0.0
-	# 기계의 숨: 매 박 '쿵'
-	var thump := exp(-7.0 * fmod(_t, BEAT) / BEAT)
-	target.z += 0.014 * thump
-	target.w += -5.0 * thump
+
+## 대포 땅 막기: 늘어진 대포(장갑 깨짐·잠든 자세 등)의 끝이 땅에 파고들면 들어 올려 땅 위에 얹는다
+## (RigMotion 의 땅 막기는 흡입 팔 사슬만 지킨다 — 대포는 여기서 따로).
+func _guard_cannon() -> void:
+	if _i_cannon < 0:
+		return
+	var fixed := false
+	for it in 24:
+		if rig.lowest_y(_cannon_only) < -3.0:
+			break
+		rig.rot[_i_cannon] -= 0.06   # 위로(앞쪽으로) 들어 올린다 (최대 약 80도)
+		rig.compute_from(_i_cannon)
+		fixed = true
+	if fixed:
+		rig.apply()
+
+
+## 돌아서는 순간: 딛은 발은 세상 자리에 남기되(flip_feet), 앞다리·뒷다리가 서로의 발을 이어받는다
+## (옆모습의 앞다리는 돌아서면 뒷다리가 된다 — 그대로 두면 앞다리가 몸 뒤의 발까지 닿지 못해 두 발이 허공에 떴다).
+func _flip_legs() -> void:
+	motion.flip_feet()
+	if motion.legs.size() < 2:
+		return
+	var a: RigMotion.Leg = motion.legs[0]
+	var b: RigMotion.Leg = motion.legs[1]
+	var ax := a.x
+	a.x = b.x
+	b.x = ax
+	for leg in [a, b]:
+		leg.h = 0.0
+		leg.swing = false
+		leg.knee_set = false
+
+
+## 상태 → 목표 자세. info 에 보간 방식·발 방식·떨림·핵 밝기·박 세기를 적는다.
+func _pose_now(st: IronPump.State, info: Dictionary) -> Dictionary:
+	var phase2 := boss.phase == 2
+	motion.ground_lock = 0.0
+	motion.ground_settle = 0.0
 	match st:
-		IronPump.State.IDLE, IronPump.State.INTRO:
-			_dist += speed * delta
-			var amount := clampf(speed / _boss.crawl_speed, 0.0, 1.2)
-			var bob := Motion.step_bob(_dist, STRIDE)
-			target.w += -bob * 10.0 * amount
-			target.x = 0.04 * amount * signf(_boss.velocity.x)
-			var step := int(floor(_dist / STRIDE))
-			if step != _last_step:
-				_last_step = step
-				if amount > 0.3:
-					_puff(6, -signf(_boss.velocity.x) * 120.0)
-					_imp_v += 0.5
+		IronPump.State.INTRO:
+			return _intro_pose(info)
+		IronPump.State.IDLE:
+			var spd := absf(boss.velocity.x)
+			var w := clampf(spd / maxf(boss.crawl_speed, 1.0), 0.0, 1.0)
+			var p := motion.mix(motion.pose("idle"), motion.pose("walk"), w)
+			if phase2:
+				p["lean"] = float(p["lean"]) + 4.0
+				p["hip_y"] = float(p["hip_y"]) + 0.03
+				info["core"] = 0.6
+			p["cannon"] = _cannon_aim(float(p["cannon"]), 0.35)
+			info["feet"] = RigMotion.Feet.GAIT if spd > 12.0 else RigMotion.Feet.POSE
+			info["drive"] = RigMotion.Drive.SOFT
+			return p
 		IronPump.State.PISTON:
-			var p := _boss.phase_progress()
-			match ph:
-				"startup":
-					target = NEUTRAL.lerp(Vector4(-0.1 * f, 0.98, 1.05, -10.0), Motion.anticipation(p))
-					ext_target = lerpf(0.1, -0.4, Motion.anticipation(p))
-					ext_follow = 7.0
-					tremble = clampf((p - 0.55) / 0.45, 0.0, 1.0)
-					core_target = 0.5
-				"active":
-					target = Vector4(-0.1 * f, 0.98, 1.05, -10.0).lerp(Vector4(0.14 * f, 1.1, 0.86, 26.0), Motion.strike(clampf(p / 0.5, 0.0, 1.0)))
-					ext_target = 1.0
-					ext_follow = 60.0
-					ghost = true
-				"recovery":
-					target = Vector4(0.14 * f, 1.1, 0.86, 26.0).lerp(NEUTRAL, Motion.settle(p))
-					ext_target = lerpf(1.0, 0.1, Motion.settle(p, 1.5, 3.0))
-					ext_follow = 10.0
-			follow = _beat_follow()
+			return _piston_pose(info)
 		IronPump.State.SPRAY:
-			var p := _boss.phase_progress()
-			open_target = 0.6
-			core_target = 0.6
-			match ph:
-				"startup":
-					target = NEUTRAL.lerp(Vector4(0.05 * f, 0.97, 1.03, -4.0), Motion.anticipation(p))
-					tremble = clampf((p - 0.6) / 0.4, 0.0, 1.0) * 0.5
-				"active":
-					target = Vector4(0.05 * f, 0.97, 1.03, -4.0)
-				"recovery":
-					target = Vector4(0.05 * f, 0.97, 1.03, -4.0).lerp(NEUTRAL, Motion.settle(p))
-					open_target = 0.25
-			follow = _beat_follow()
+			return _spray_pose(info)
 		IronPump.State.SUCK:
-			var p := _boss.phase_progress()
-			open_target = 1.0
-			core_target = 0.7
-			match ph:
-				"startup":
-					target = NEUTRAL.lerp(Vector4(0.1 * f, 0.96, 1.04, -6.0), Motion.anticipation(p))
-				"active":
-					# 들이마시며 몸이 조금씩 부푼다
-					target = Vector4(0.1 * f, 0.96 + 0.1 * p, 1.04 + 0.03 * p, -6.0)
-					tremble = 0.4
-				"recovery":
-					target = Vector4(0.1 * f, 1.06, 1.07, -6.0).lerp(NEUTRAL, Motion.settle(p))
-					open_target = 0.3
-			follow = _beat_follow()
+			return _suck_pose(info)
 		IronPump.State.STAGGER:
-			var k := _boss.state_progress(_boss.stagger_len)
-			target = Vector4(-0.25 * f, 0.94, 1.05, 6.0).lerp(NEUTRAL, Motion.settle(k, 1.5, 3.0))
-			follow = 12.0
-			tremble = 1.0 - k
+			# 휘청: 앞 30% 동안 홱 젖혀진 채(팔이 튀어 오름) → 출렁이며 제자리
+			var k := boss.state_progress(boss.stagger_len)
+			info["drive"] = RigMotion.Drive.QUICK if k < 0.3 else RigMotion.Drive.SETTLE
+			info["tremble"] = 1.0 - k
+			info["beat"] = 0.3
+			return motion.mix(motion.pose("stagger"), motion.pose("ready"), Motion.settle(clampf((k - 0.3) / 0.7, 0.0, 1.0), 1.5, 3.0))
 		IronPump.State.BROKEN:
-			target = Vector4(0.08 * f, 1.04, 0.94, 40.0)
-			target.z += Motion.breathe(_t, 0.5, 0.02)
-			plates_target = 1.0
-			core_target = 1.0 + 0.3 * sin(_t * 6.0)
-			ext_target = 0.6
-			open_target = 0.5
-			follow = 6.0
-		IronPump.State.FALLEN, IronPump.State.PURIFIED:
-			target = Vector4(0.22 * f, 1.0, 0.96, 80.0)
-			plates_target = 1.0
-			core_target = 0.15 if st == IronPump.State.FALLEN else 0.0
-			ext_target = 1.0
-			noz_target = 0.6
-			open_target = 0.2
-			follow = 5.0
-	if _boss.anim_hint == "stagger" and st == IronPump.State.SUCK:
-		var k := _boss.phase_progress()
-		target = Vector4(-0.3 * f, 0.93, 1.06, 6.0).lerp(NEUTRAL, Motion.settle(k, 2.0, 3.5))
-		follow = 10.0
+			# 무릎이 꺾여 주저앉은 채 떨고, 핵이 터질 듯 맥동한다. 끝 0.5초에 몸을 일으킨다.
+			var left: float = boss._timer
+			var p := motion.pose("broken")
+			if left < 0.5:
+				p = motion.mix(p, motion.pose("idle"), Motion.ease_in_out(1.0 - left / 0.5))
+			info["drive"] = RigMotion.Drive.HEAVY if left >= 0.5 else RigMotion.Drive.SOFT
+			info["tremble"] = 0.35 + 0.25 * sin(_t * 9.0)
+			info["core"] = 1.25 + 0.35 * sin(_t * 7.0)
+			info["beat"] = 0.5
+			return p
+		IronPump.State.FALLEN:
+			return _fall_pose(info)
+		IronPump.State.PURIFIED:
+			motion.ground_lock = 1.0
+			motion.ground_settle = 1.0
+			info["drive"] = RigMotion.Drive.SLOW
+			info["core"] = 0.0
+			info["beat"] = 0.0
+			return motion.pose("dead")
+	return motion.pose("idle")
 
-	# ---- 보간 ----
-	_pose = Vector4(
-		Motion.damp(_pose.x, target.x, follow, delta),
-		Motion.damp(_pose.y, target.y, follow, delta),
-		Motion.damp(_pose.z, target.z, follow, delta),
-		Motion.damp(_pose.w, target.w, follow, delta))
-	var s := Motion.spring(_imp, 0.0, _imp_v, 360.0, 13.0, delta)
-	_imp = s[0]; _imp_v = s[1]
-	s = Motion.spring(_kick, 0.0, _kick_v, 200.0, 9.0, delta)
-	_kick = s[0]; _kick_v = s[1]
-	s = Motion.spring(_recoil, 0.0, _recoil_v, 300.0, 10.0, delta)
-	_recoil = s[0]; _recoil_v = s[1]
-	_ext = Motion.damp(_ext, ext_target, ext_follow, delta)
-	_noz = Motion.damp(_noz, noz_target, 6.0, delta)
-	_open = Motion.damp(_open, open_target, 7.0, delta)
-	_plates = Motion.damp(_plates, plates_target, 5.0, delta)
-	_core = Motion.damp(_core, core_target, 6.0, delta)
-	_tremble = Motion.damp(_tremble, tremble, 10.0, delta)
-	_face = Motion.damp(_face, f, 9.0, delta)
-	var fx := -_face
-	if absf(fx) < 0.03:
-		fx = 0.03 * (1.0 if fx >= 0.0 else -1.0)
-	var tilt := _pose.x + _kick + sin(_t * 46.0) * 0.012 * _tremble
-	var sq := Vector2(_pose.y + _imp * 0.6, _pose.z - _imp * 0.9)
-	var dy := _pose.w + _imp * 36.0
-	rotation = tilt
-	scale = Vector2(_base_scale.x * sq.x * fx, _base_scale.y * maxf(sq.y, 0.05))
-	position = _base_pos + Vector2(sin(_t * 60.0) * 4.0 * _tremble, dy)
-	_update_ghosts(delta, ghost)
+
+## 등장: 잠든 채 웅크린 자세 → 핵이 깜빡이며 켜지고 몸을 일으킴 → 팔을 치켜들며 몸을 젖힘(김·불꽃) → 팔을 내리꽂으며 자리 잡기
+func _intro_pose(info: Dictionary) -> Dictionary:
+	var t := _state_t
+	info["beat"] = 0.0
+	if t < INTRO_WAKE:
+		info["core"] = 0.05 + 0.3 * float(fmod(t * 7.0, 1.0) < 0.3)
+		info["drive"] = RigMotion.Drive.SLOW
+		return motion.pose("dormant")
+	if t < INTRO_RISE:
+		var u := (t - INTRO_WAKE) / (INTRO_RISE - INTRO_WAKE)
+		info["core"] = lerpf(0.3, 0.9, u)
+		info["tremble"] = 0.5 * (1.0 - u)
+		info["drive"] = RigMotion.Drive.SOFT
+		return motion.mix(motion.pose("dormant"), motion.pose("idle"), Motion.ease_in_out(u))
+	if t < INTRO_ROAR:
+		var u := (t - INTRO_RISE) / (INTRO_ROAR - INTRO_RISE)
+		info["core"] = 1.2
+		info["tremble"] = 0.6 * u
+		info["drive"] = RigMotion.Drive.SOFT
+		if u > 0.1 and not (_once & ONCE_ROAR):
+			_once |= ONCE_ROAR
+			_vent_burst()
+			_spark_burst(10, _sock_global("core"))
+		return motion.mix(motion.pose("idle"), motion.pose("roar"), Motion.anticipation(u))
+	if t < INTRO_LAND:
+		var u := (t - INTRO_ROAR) / (INTRO_LAND - INTRO_ROAR)
+		info["core"] = 1.0
+		info["drive"] = RigMotion.Drive.FAST
+		info["ghost"] = true
+		if u > 0.85 and not (_once & ONCE_LAND):
+			_once |= ONCE_LAND
+			var at := _sock_global("mouth")
+			at.y = global_position.y
+			_puff(20, at)
+			motion.kick("crouch", 1.4)
+			_rock_v += 3.0
+			Juice.shake(6.0)
+		return motion.mix(motion.pose("roar"), motion.pose("strike"), Motion.ease_in(u, 2.2))
+	var u2 := clampf((t - INTRO_LAND) / 0.35, 0.0, 1.0)
+	info["drive"] = RigMotion.Drive.SETTLE
+	return motion.mix(motion.pose("strike"), motion.pose("idle"), Motion.settle(u2, 1.5, 3.0))
+
+
+## 피스톤 내려찍기: 예고에 팔을 하늘로 치켜들고 멈칫(붉게 떨림) → 예고 끝 몫에 내리치기 시작해 실행 순간 앞 땅에 닿음
+## → 실행 동안 팔이 땅에 박힌 채 몸이 쏠림 → 회복에 출렁이며 제자리.
+func _piston_pose(info: Dictionary) -> Dictionary:
+	var ph := boss.attack_phase
+	var p := boss.phase_progress()
+	info["beat"] = 0.25
+	info["core"] = 0.7
+	match ph:
+		"startup":
+			if boss.phase == 2:
+				p = _stairs(p, 5)
+			if p < SLAM_DROP:
+				var u := p / SLAM_DROP
+				info["drive"] = RigMotion.Drive.SOFT
+				info["tremble"] = clampf((u - 0.55) / 0.45, 0.0, 1.0) * 0.9
+				return motion.mix(_from, motion.pose("windup"), Motion.anticipation(u))
+			var u2 := (p - SLAM_DROP) / (1.0 - SLAM_DROP)
+			info["drive"] = RigMotion.Drive.FAST
+			info["ghost"] = true
+			return motion.mix(motion.pose("windup"), motion.pose("strike"), Motion.ease_in(u2, 2.4) * 0.92)
+		"active":
+			info["drive"] = RigMotion.Drive.FAST
+			info["ghost"] = p < 0.35
+			return motion.pose("strike")
+		"recovery":
+			info["drive"] = RigMotion.Drive.SETTLE
+			return motion.mix(motion.pose("strike"), motion.pose("ready"), Motion.settle(Motion.ease_in(p, 2.0), 1.5, 2.5))
+	return motion.pose("idle")
+
+
+## 수액 분사: 흡입 팔을 땅에 짚어 버티고(받침대) 대포가 소녀를 겨눈다 → 한 발마다 반동(_on_shot) → 출렁이며 제자리
+func _spray_pose(info: Dictionary) -> Dictionary:
+	var ph := boss.attack_phase
+	var p := boss.phase_progress()
+	info["beat"] = 0.3
+	info["core"] = 0.85
+	var brace := motion.pose("brace").duplicate()
+	brace["cannon"] = _cannon_aim(float(brace["cannon"]), 1.0)
+	match ph:
+		"startup":
+			if boss.phase == 2:
+				p = _stairs(p, 4)
+			info["drive"] = RigMotion.Drive.SOFT
+			info["tremble"] = clampf((p - 0.6) / 0.4, 0.0, 1.0) * 0.45
+			return motion.mix(_from, brace, Motion.anticipation(p))
+		"active":
+			info["drive"] = RigMotion.Drive.NORMAL
+			info["tremble"] = 0.2
+			return brace
+		"recovery":
+			info["drive"] = RigMotion.Drive.SETTLE
+			return motion.mix(brace, motion.pose("ready"), Motion.settle(Motion.ease_in(p, 2.0), 1.5, 2.5))
+	return motion.pose("idle")
+
+
+## 빨아들이기: 흡입 팔을 들어 입을 소녀에게 겨눈다 → 떨며 들이마심 → 끝에 덥석 물기 → 제자리.
+## 물기를 저스트 가드로 되받으면(anim_hint "stagger") 팔이 튕겨 올라가고 몸이 휘청인다.
+func _suck_pose(info: Dictionary) -> Dictionary:
+	var ph := boss.attack_phase
+	var p := boss.phase_progress()
+	info["beat"] = 0.2
+	info["core"] = 0.95
+	if boss.anim_hint == "stagger" and ph == "recovery":
+		info["drive"] = RigMotion.Drive.QUICK if p < 0.25 else RigMotion.Drive.SETTLE
+		info["tremble"] = 0.6 * (1.0 - p)
+		return motion.mix(motion.pose("stagger"), motion.pose("ready"), Motion.settle(clampf((p - 0.25) / 0.75, 0.0, 1.0), 1.5, 3.0))
+	var aim := motion.pose("suck").duplicate()
+	aim["arm_lo"] = _arm_aim(float(aim["arm_lo"]))
+	match ph:
+		"startup":
+			if boss.phase == 2:
+				p = _stairs(p, 4)
+			info["drive"] = RigMotion.Drive.SOFT
+			return motion.mix(_from, aim, Motion.anticipation(p))
+		"active":
+			if boss._bit:
+				info["drive"] = RigMotion.Drive.QUICK
+				_bite_pose = true
+				return motion.pose("bite")
+			_bite_pose = false
+			info["drive"] = RigMotion.Drive.NORMAL
+			info["tremble"] = 0.35
+			# 들이마시며 몸이 조금씩 웅크렸다 펴진다 (펌프질)
+			aim["hip_y"] = float(aim["hip_y"]) + 0.025 * sin(_t * 14.0)
+			aim["pipe"] = float(aim["pipe"]) + 9.0 * sin(_t * 9.0)
+			return aim
+		"recovery":
+			info["drive"] = RigMotion.Drive.SETTLE
+			var src: Dictionary = motion.pose("bite") if _bite_pose else aim
+			return motion.mix(src, motion.pose("ready"), Motion.settle(Motion.ease_in(p, 2.0), 1.5, 2.5))
+	return motion.pose("idle")
+
+
+## 쓰러짐: 경련 → 다리가 꺾이며 발이 밖으로 미끄러짐 → 몸이 땅에 부딪힘(튐·먼지) → 엎드려 누움 (정화를 기다리는 동안 그대로)
+func _fall_pose(info: Dictionary) -> Dictionary:
+	var t := _state_t
+	info["beat"] = 0.0
+	motion.ground_lock = 1.0
+	if t < FALL_JOLT:
+		info["drive"] = RigMotion.Drive.QUICK
+		info["tremble"] = 1.0
+		info["core"] = 0.9 * float(fmod(t * 11.0, 1.0) < 0.5)
+		return motion.mix(_from, motion.pose("die_jolt"), Motion.ease_out(t / FALL_JOLT, 2.0))
+	if t < FALL_BUCKLE:
+		var u := (t - FALL_JOLT) / (FALL_BUCKLE - FALL_JOLT)
+		info["drive"] = RigMotion.Drive.SOFT
+		info["tremble"] = 0.6 * (1.0 - u)
+		info["core"] = 0.5 + 0.3 * sin(t * 20.0)
+		return motion.mix(motion.pose("die_jolt"), motion.pose("die_buckle"), Motion.ease_in(u, 1.6))
+	if t < FALL_CRASH:
+		var u := (t - FALL_BUCKLE) / (FALL_CRASH - FALL_BUCKLE)
+		info["drive"] = RigMotion.Drive.FAST
+		info["core"] = 0.4
+		motion.ground_settle = Motion.ease_in(u, 2.0)
+		return motion.mix(motion.pose("die_buckle"), motion.pose("dead"), Motion.ease_in(u, 2.4))
+	if not _crashed:
+		_crashed = true
+		_crash()
+	var u3 := clampf((t - FALL_CRASH) / (FALL_REST - FALL_CRASH), 0.0, 1.0)
+	motion.ground_settle = 1.0
+	info["drive"] = RigMotion.Drive.SETTLE if u3 < 0.5 else RigMotion.Drive.SLOW
+	info["core"] = lerpf(0.35, 0.12, u3)
+	return motion.pose("dead")
+
+
+## 몸이 땅에 떨어진 순간: 넓은 먼지·흔들림·김·불꽃, 몸이 살짝 튀어 오른다
+func _crash() -> void:
+	var g := global_position
+	_puff(28, g + Vector2(-60.0 * _sign, 0))
+	_puff(22, g + Vector2(120.0 * _sign, 0))
+	_spark_burst(14, _sock_global("core"))
+	_vent_burst()
+	_bounce_v = 260.0
+	_rock_v += 6.0
+	motion.kick("parry", 60.0)
+	Juice.shake(9.0)
+	Juice.rumble(0.5, 0.9, 0.3)
+	Sfx.play("heavy_hit", -2.0, 0.05)
+
+
+## 계단처럼 끊기는 진행도 (2페이즈 예고: 스르르 대신 멈칫멈칫)
+static func _stairs(p: float, n: int) -> float:
+	var x := clampf(p, 0.0, 1.0) * n
+	var i := floorf(x)
+	var f := x - i
+	return (i + smoothstep(0.55, 1.0, f)) / n
+
+
+## 2페이즈: 가끔 동작이 그 자리에 멈칫 굳었다가(0.06~0.18초) 빠른 스프링으로 확 따라잡는다 — 리듬이 무너진 기계.
+## 타격 순간(실행 단계)과 쓰러진 뒤에는 멈추지 않는다 (보이는 동작이 판정과 어긋나지 않게).
+func _stutter(pose: Dictionary, delta: float, info: Dictionary) -> Dictionary:
+	var st := boss.state
+	var allow := boss.phase == 2 and boss.attack_phase != "active" and st in [IronPump.State.IDLE, IronPump.State.PISTON, IronPump.State.SPRAY, IronPump.State.SUCK]
+	if not allow:
+		_stut_hold = 0.0
+		return pose
+	if _stut_hold > 0.0:
+		_stut_hold -= delta
+		info["drive"] = RigMotion.Drive.QUICK
+		if _stut_hold <= 0.0:
+			_snap_t = 0.12
+		return _stut_pose
+	_stut_next -= delta
+	if _stut_next <= 0.0:
+		_stut_next = randf_range(0.3, 0.85)
+		_stut_hold = randf_range(0.06, 0.18)
+		_stut_pose = motion.capture()
+		motion.kick("impact", randf_range(-40.0, 40.0))
+		info["drive"] = RigMotion.Drive.QUICK
+		return _stut_pose
+	return pose
+
+
+## 박: 1페이즈는 정확히 128bpm 마다 '쿵'. 2페이즈는 길이가 들쭉날쭉(반 박·한 박 반)하고 가끔 두 번 연달아.
+## 쓰러진 뒤에는 약해지는 마지막 박동 몇 번 뒤 멈춘다.
+func _beat(delta: float, st: IronPump.State, amount: float) -> void:
+	_beat_t += delta
+	_pump_ph += delta * PI / _beat_len
+	_beat_amp = Motion.damp(_beat_amp, 0.0 if st == IronPump.State.FALLEN or st == IronPump.State.PURIFIED else 1.0, 1.5, delta)
+	_steam_t -= delta
+	_steam.emitting = _steam_t > 0.0
+	if _beat_t < _beat_len:
+		return
+	_beat_t = 0.0
+	_beat_n += 1
+	if st == IronPump.State.FALLEN or st == IronPump.State.PURIFIED:
+		if _death_beats > 0 and st == IronPump.State.FALLEN and _state_t > FALL_REST:
+			_death_beats -= 1
+			_core_kick = 0.25 * (_death_beats + 1)
+			motion.kick("crouch", 0.12 * (_death_beats + 1))
+		_beat_len = BEAT * 1.6
+		return
+	if boss.phase == 1:
+		_beat_len = BEAT
+	else:
+		var r := randf()
+		_beat_len = BEAT * (0.3 if r < 0.18 else (0.5 if r < 0.35 else (1.5 if r < 0.6 else (0.75 if r < 0.75 else 1.0))))
+	if amount <= 0.0:
+		return
+	motion.kick("crouch", 0.55 * amount)
+	_core_kick = maxf(_core_kick, 0.35 * amount)
+	if _beat_n % 2 == 0 or boss.phase == 2:
+		_steam_t = 0.12
+
+
+## 대포 겨눔 각도 (도). 소녀가 앞에 있으면 수액 방울이 날아갈 쪽(소녀 위로 조금, 거리만큼 더 높게)을 겨눈다. w = 겨눔 몫.
+func _cannon_aim(rest: float, w: float) -> float:
+	if _i_cannon < 0 or boss.player == null or not is_instance_valid(boss.player):
+		return rest
+	var pg := boss.player.global_position
+	var target := pg + Vector2(0, -50.0 - absf(pg.x - boss.global_position.x) * 0.15)
+	var d := _to_rig(target) - rig.xf[_i_cannon].origin
+	if d.x < 40.0:
+		return rest
+	var r := rad_to_deg(atan2(-d.x, d.y) - rig.world_rot(_i_body))
+	return lerpf(rest, clampf(r, CANNON_UP, CANNON_DOWN), w)
+
+
+## 빨아들이기: 아래팔(입)이 소녀 가슴을 향하는 각도 (위팔 틀 기준, 도)
+func _arm_aim(rest: float) -> float:
+	if _i_arm_lo < 0 or boss.player == null or not is_instance_valid(boss.player):
+		return rest
+	var d := _to_rig(boss.player.global_position + Vector2(0, -60)) - rig.xf[_i_arm_lo].origin
+	if d.x < 30.0:
+		return rest
+	var r := rad_to_deg(atan2(-d.x, d.y) - rig.world_rot(_i_arm_up))
+	return clampf(r, SUCK_LO_MIN, SUCK_LO_MAX)
+
+
+## 세상 점 → 뼈대 단위(뼈대 뿌리 틀)
+func _to_rig(g: Vector2) -> Vector2:
+	return rig.body_xf.affine_inverse() * (rig.to_local(g) / rig.game_scale)
+
+
+func _sock_global(sname: String) -> Vector2:
+	if not _sock.has(sname):
+		return global_position
+	var sk: Array = _sock[sname]
+	return rig.to_global(rig.to_rig_local(rig.xf[int(sk[0])] * (sk[1] as Vector2)))
+
+
+# ---------- 갱신 뒤: 효과·빛·색 ----------
+
+func _after_update(delta: float, st: IronPump.State, info: Dictionary) -> void:
+	var down := st == IronPump.State.FALLEN or st == IronPump.State.PURIFIED
+	# 발 디딤: 먼지와 몸 흔들림 (앞발은 앞으로, 뒷발은 뒤로 쏠림)
+	for k in motion.legs.size():
+		var leg: RigMotion.Leg = motion.legs[k]
+		if leg.planted_now and not down:
+			var fp := rig.to_global(rig.to_rig_local(rig.xf[leg.foot] * leg.sole))
+			fp.y = global_position.y
+			_puff(8, fp)
+			motion.kick("crouch", 0.7)
+			_rock_v += 2.2 if k == 0 else -2.2
+	# 흔들림·튐 스프링
+	var r := Motion.spring(_rock, 0.0, _rock_v, 160.0, 11.0, delta)
+	_rock = r[0]
+	_rock_v = r[1]
+	var b := Motion.spring(_bounce, 0.0, _bounce_v, 220.0, 9.0, delta)
+	_bounce = b[0]
+	_bounce_v = b[1]
+	if _bounce < 0.0:
+		_bounce = 0.0
+		_bounce_v = 0.0
+	_tremble = Motion.damp(_tremble, float(info["tremble"]), 12.0, delta)
+	rig.position = Vector2(sin(_t * 57.0) * 3.5 * _tremble, -_bounce + cos(_t * 43.0) * 1.5 * _tremble)
+	# 잔상 (피스톤 휘두름)
+	if info["ghost"]:
+		_ghost_timer += delta
+		if _ghost_timer >= 0.03:
+			_ghost_timer = 0.0
+			rig.snapshot_ghost(Color(1.0, 0.62, 0.42, 0.32))
+	else:
+		_ghost_timer = 0.0
+	rig.fade_ghosts(delta, 4.0)
+	# 핵 빛
+	_core_kick = maxf(_core_kick - delta * 2.2, 0.0)
+	_core = Motion.damp(_core, float(info["core"]), 6.0, delta)
+	var core := _core + _core_kick
+	_red = Motion.damp(_red, 1.0 if boss.is_red() else 0.0, 14.0, delta)
+	var purified := st == IronPump.State.PURIFIED
+	if purified:
+		_purify = minf(_purify + delta / 1.6, 1.0)
+	var core_col := CORE_AMBER.lerp(Color(1.0, 0.35, 0.25), _red).lerp(CORE_GREEN, _purify)
+	var glow := core if not purified else lerpf(1.4, 0.0, _purify)
+	_core_glow.modulate = Color(core_col.r * 1.5, core_col.g * 1.5, core_col.b * 1.5, clampf(glow, 0.0, 1.5) * 0.5)
+	_core_glow.scale = Vector2.ONE * (2.0 + 0.9 * clampf(glow, 0.0, 1.6))
+	_rays.visible = st == IronPump.State.BROKEN
+	if _rays.visible:
+		_rays.queue_redraw()
+	# 입 빛 (빨아들이기) / 대포 불빛 (분사)
+	var suck_on := st == IronPump.State.SUCK and boss.attack_phase == "active" and not boss._bit
+	var mouth_a := Motion.damp(_mouth_glow.modulate.a, 0.8 if suck_on else (0.25 if st == IronPump.State.SUCK else 0.0), 8.0, delta)
+	_mouth_glow.modulate = Color(SAP.r * 1.8, SAP.g * 1.8, SAP.b * 1.8, mouth_a)
+	_muzzle_a = maxf(_muzzle_a - delta * 6.0, 0.0)
+	var aim_glow := 0.25 if st == IronPump.State.SPRAY and boss.attack_phase != "recovery" else 0.0
+	_muzzle_glow.modulate = Color(1.8, 2.0, 1.9, maxf(_muzzle_a, aim_glow))
+	_muzzle_glow.scale = Vector2.ONE * (0.9 + 1.1 * _muzzle_a)
+	# 빨아들이기 띠·가루
+	_inhale.emitting = suck_on and boss.player != null and is_instance_valid(boss.player)
+	if _inhale.emitting:
+		var mouth := _sock_global("mouth")
+		var pc := boss.player.global_position + Vector2(0, -60)
+		var span := mouth - pc
+		_inhale.global_position = pc + span * 0.25
+		_inhale.global_rotation = span.angle()
+		_inhale.lifetime = clampf(span.length() * 0.75 / 690.0, 0.15, 0.9)
+	if suck_on or _stream_on:
+		_stream.queue_redraw()   # 켜져 있거나 막 꺼진 프레임만 다시 그린다
+	_stream_on = suck_on
+	# 김·수액
+	_vent.emitting = st == IronPump.State.BROKEN or st == IronPump.State.STAGGER or (st == IronPump.State.FALLEN and _state_t > FALL_CRASH)
+	_drips.emitting = boss.phase == 2 and not down
+	# 점빛 (보스 장면의 Light): 핵 자리를 따라간다
 	if _light:
-		_light.position = _light_base + Vector2(0, dy * 0.8)
-		_light.energy = 0.6 + 1.6 * _core
-		_light.color = TEAL.lerp(Color(1.0, 0.45, 0.3), _red)
-	_steam.global_position = global_position + Vector2(0, -80)
-
-	# ---- 색 ----
-	_red = Motion.damp(_red, 1.0 if _boss.is_red() else 0.0, 14.0, delta)
-	var base := Color(1.0, 0.97, 0.95) if _boss.phase == 1 else Color(1.08, 0.9, 0.84)
-	base = base.lerp(Color(2.4, 0.5, 0.4), _red * (0.5 + 0.5 * sin(_t * 32.0)))
-	modulate = base.lerp(Color(2.5, 2.5, 2.5), fl * 0.8)
-	if draw_parts:
-		queue_redraw()
-
-
-## 관이 소녀를 겨누는 각도 (그림 좌표: 앞 = −x, + = 아래). 멀거나 없으면 정면.
-func _aim_angle() -> float:
-	if _boss.player == null or not is_instance_valid(_boss.player):
-		return 0.0
-	var pivot := to_global(NOZ_PIVOT)   # 지금의 배율·뒤집힘을 그대로 거친 관의 축
-	var d := _boss.player.global_position + Vector2(0, -60) - pivot
-	return clampf(atan2(d.y, maxf(absf(d.x), 1.0)), -0.45, 0.6)
+		_light.position = boss.to_local(_core_glow.global_position)
+		_light.energy = 0.5 + 1.4 * clampf(glow, 0.0, 1.6)
+		_light.color = core_col
+	# 몸 색: 2페이즈엔 조금 달아오르고, 피스톤 예고엔 붉게 깜빡인다. 맞으면 번쩍(약하게 움찔).
+	var fl := boss.flash_amount()
+	if fl > _prev_flash + 0.4 and st != IronPump.State.FALLEN and st != IronPump.State.STAGGER:
+		motion.kick("impact", 60.0 if st == IronPump.State.BROKEN else 30.0)
+	_prev_flash = fl
+	var base := Color(1.0, 0.97, 0.95) if boss.phase == 1 else Color(1.06, 0.92, 0.86)
+	if down:
+		base = base.lerp(Color(0.82, 0.78, 0.76), clampf(_state_t / 2.0, 0.0, 1.0))
+	# 붉은 예고: 치켜든 흡입 팔(피스톤)이 달아오르고 몸은 조금만 물든다
+	var pulse := _red * (0.6 + 0.4 * sin(_t * 32.0))
+	rig.modulate = base.lerp(RED_HOT, pulse * 0.15)
+	for spr in _red_sprites:
+		spr.self_modulate = Color.WHITE.lerp(RED_HOT, pulse * 0.7)
+	rig.set_flash(fl * 0.75)
 
 
-func _beat_follow() -> float:
-	match _boss.attack_phase:
-		"startup": return 10.0
-		"active": return 36.0
-		"recovery": return 11.0
-	return 9.0
+
+## 2페이즈: 공격이 끝날 때마다 사방에서 수액이 솟는다(SapSpurt, 보스 논리) — 그림은 관 팔이 홱 치켜들며 끝에서 수액을 뿜고 김이 샌다.
+func _leak_fx() -> void:
+	_pipe_jerk_v += 260.0
+	_spray.global_position = _sock_global("outlet")
+	_spray.direction = Vector2(-_sign * 0.6, -1.0)
+	_spray.restart()
+	_spray.emitting = true
+	_vent_burst()
 
 
-func _puff(n: int, ox: float) -> void:
-	_dust.amount = n
-	_dust.global_position = _boss.global_position + Vector2(ox, 0)
-	_dust.restart()
-	_dust.emitting = true
+func _vent_burst() -> void:
+	_vent.restart()
+	_vent.emitting = true
 
 
-func _spark_burst(n: int) -> void:
+func _puff(n: int, at: Vector2) -> void:
+	var d := _dust[_dust_next]
+	_dust_next = (_dust_next + 1) % _dust.size()
+	d.amount = n
+	d.global_position = at
+	d.restart()
+	d.emitting = true
+
+
+func _spark_burst(n: int, at: Vector2) -> void:
 	_sparks.amount = n
-	_sparks.global_position = _boss.global_position + Vector2(0, -180)
+	_sparks.global_position = at
 	_sparks.restart()
 	_sparks.emitting = true
 
 
-func _update_ghosts(delta: float, active: bool) -> void:
-	if active:
-		_ghost_timer += delta
-		if _ghost_timer >= 0.04:
-			_ghost_timer = 0.0
-			var g: Sprite2D = _ghosts.pop_front()
-			g.visible = true
-			g.global_transform = global_transform
-			g.modulate = Color(1.0, 0.7, 0.5, 0.3)
-			_ghosts.append(g)
-	else:
-		_ghost_timer = 0.0
-	for g in _ghosts:
-		if g.visible:
-			g.modulate.a -= delta * 2.4
-			if g.modulate.a <= 0.0:
-				g.visible = false
+## 장갑 깨짐: 핵 창에서 사방으로 새어 나오는 빛살 (CoreRays 노드의 지역 좌표 = 핵 자리, 뒤집힘은 부모를 따른다)
+func _draw_rays() -> void:
+	var a := 0.22 + 0.16 * sin(_t * 7.0)
+	for i in 6:
+		var ang := -PI * 0.5 + (i - 2.5) * 0.5 + sin(_t * 2.0 + i) * 0.08
+		var len := 70.0 + 35.0 * sin(_t * 5.0 + i * 1.7)
+		var d := Vector2.from_angle(ang)
+		var side := d.orthogonal() * 4.5
+		_rays.draw_colored_polygon(PackedVector2Array([side, d * len, -side]), Color(1.6, 1.1, 0.55, a))
 
 
-## 그림에 없는 부품: 피스톤 팔(실린더 캡·막대·망치 머리), 관(노즐), 장갑 덮개, 핵. 그림 픽셀 좌표(가운데 원점)로 그린다.
-func _draw() -> void:
-	if not draw_parts:
+## 빨아들이기: 소녀와 흡입 팔의 입 사이에 빨려 드는 수액빛 띠 (흐르는 줄 여러 가닥 + 빛 알갱이). 세상 좌표.
+func _draw_suck_stream() -> void:
+	if boss == null or not boss.visible or boss.state != IronPump.State.SUCK or boss.attack_phase != "active" or boss._bit:
 		return
-	var open := clampf(_plates, 0.0, 1.0)
-	# 핵 (덮개가 열리면 드러난다): 빛 → 수액 구슬
-	var core_a := clampf(0.25 + 0.75 * open, 0.0, 1.0)
-	draw_circle(CORE_POS, 150.0 * (0.8 + 0.2 * _core), Color(TEAL, 0.12 * _core * core_a))
-	draw_circle(CORE_POS, 95.0, Color(0.12, 0.45, 0.55, core_a))
-	draw_circle(CORE_POS, 80.0 * (0.9 + 0.1 * sin(_t * 9.0)), Color(TEAL.lightened(0.2 * _core), core_a))
-	draw_circle(CORE_POS + Vector2(-22, -24), 26.0, Color(1, 1, 1, 0.7 * core_a))
-	# 장갑 덮개 두 짝 (닫히면 핵을 덮고, 열리면 양옆으로 벌어진다)
-	var slide := open * 120.0
-	var lp := Rect2(Vector2(-78.0 - slide, -42.0), Vector2(125.0, 250.0))
-	var rp := Rect2(Vector2(47.0 + slide, -42.0), Vector2(125.0, 250.0))
-	for r in [lp, rp]:
-		draw_rect(r, RUST)
-		draw_rect(r, RUST_DARK, false, 6.0)
-		draw_rect(Rect2(r.position + Vector2(18, 18), Vector2(r.size.x - 36.0, 6.0)), RUST_DARK)
-		draw_circle(r.position + Vector2(24, 48), 9.0, RUST_DARK)
-		draw_circle(r.position + Vector2(r.size.x - 24.0, 48), 9.0, RUST_DARK)
-	# 피스톤: 실린더 캡(위의 가로 막대) → 막대 → 망치 머리
-	# 망치 머리가 땅(보스 발 높이)을 뚫고 들어가 보이지 않게, 몸의 기울기·찌그러짐을 거친 바닥선 위에서 멈춘다
-	var head_y := minf(lerpf(HEAD_REST, HEAD_SLAM, _ext), _floor_local_y([-680.0, -460.0]) - 100.0 + 4.0)
-	draw_rect(Rect2(Vector2(-620, -300), Vector2(312, 50)), RUST.darkened(0.05))
-	draw_rect(Rect2(Vector2(-620, -300), Vector2(312, 50)), RUST_DARK, false, 5.0)
-	draw_rect(Rect2(Vector2(-596, -250), Vector2(56, maxf(head_y + 250.0, 10.0))), STEEL)
-	draw_line(Vector2(-586, -250), Vector2(-586, head_y), STEEL.lightened(0.25), 8.0)
-	var head := Rect2(Vector2(-680, head_y), Vector2(220, 100))
-	draw_rect(head, RUST)
-	draw_rect(head, RUST_DARK, false, 6.0)
-	for i in 3:
-		draw_circle(head.position + Vector2(36.0 + i * 74.0, 50), 9.0, RUST_DARK)
-	if _ext > 0.9:
-		# 땅을 친 순간: 머리 아래 먼지 띠
-		draw_rect(Rect2(Vector2(-720, head_y + 92), Vector2(300, 14)), Color(0.6, 0.5, 0.42, (_ext - 0.9) * 4.0))
-	# 관(노즐): 몸 앞 아래에서 소녀 쪽으로 뻗는다. 반동이면 뒤로 밀린다.
-	var dir := Vector2(-cos(_noz), sin(_noz))
-	var back := dir * _recoil * -6.0
-	var p0 := NOZ_PIVOT + back
-	var p1 := p0 + dir * NOZ_LEN
-	draw_line(p0, p1, RUST_DARK, 96.0)
-	draw_line(p0, p1, RUST, 80.0)
-	draw_line(p0 + dir * 60.0, p1 - dir * 30.0, RUST.lightened(0.12), 20.0)
-	for i in 3:
-		var q := p0 + dir * (70.0 + i * 80.0)
-		draw_line(q + dir.orthogonal() * 46.0, q - dir.orthogonal() * 46.0, RUST_DARK, 8.0)
-	# 입: 벌어질수록 크고 어두워지며 안쪽에 수액빛
-	var mouth_r := 46.0 + 30.0 * _open
-	draw_circle(p1, mouth_r + 8.0, RUST_DARK)
-	draw_circle(p1, mouth_r, Color(0.05, 0.1, 0.12))
-	draw_circle(p1, mouth_r * 0.6, Color(TEAL, 0.25 + 0.6 * _open))
-	if _boss.state == IronPump.State.SUCK and _boss.attack_phase == "active" and _boss.player and is_instance_valid(_boss.player):
-		_draw_suck_stream(p1, mouth_r)
-	if _open > 0.5:
-		# 들이마시는 소용돌이
-		for i in 3:
-			var a := _t * 10.0 + i * 2.1
-			draw_arc(p1, mouth_r * (0.35 + 0.2 * i), a, a + 2.2, 10, Color(TEAL.lightened(0.3), (_open - 0.5) * 1.2), 4.0, true)
-
-
-## 그림 좌표에서 보스 발 높이(부모 y = 0)가 되는 y. xs 의 여러 x 가운데 가장 위(작은 값) — 기울면 앞 모서리가 먼저 닿는다.
-func _floor_local_y(xs: Array) -> float:
-	var t := transform
-	var best := INF
-	for x in xs:
-		if absf(t.y.y) < 0.0001:
-			continue
-		best = minf(best, -(t.origin.y + t.x.y * float(x)) / t.y.y)
-	return best if best < INF else HEAD_SLAM + 100.0
-
-
-## 빨아들이기: 소녀와 관 입 사이에 빨려 드는 수액빛 띠 (흐르는 줄 여러 가닥 + 빛 알갱이). 그림 좌표.
-func _draw_suck_stream(mouth: Vector2, mouth_r: float) -> void:
-	var from := to_local(_boss.player.global_position + Vector2(0, -60))
+	if boss.player == null or not is_instance_valid(boss.player):
+		return
+	var mouth := _sock_global("mouth")
+	var from := boss.player.global_position + Vector2(0, -60)
 	var span := mouth - from
 	var len := span.length()
 	if len < 10.0:
 		return
-	var along := span / len
-	var side := along.orthogonal()
-	var p := _boss.phase_progress()
-	var a := clampf(p * 4.0, 0.0, 1.0)
-	# 띠의 바탕: 소녀 쪽은 넓고 흐리게, 입 쪽은 좁고 진하게
-	var band := PackedVector2Array([from + side * 130.0, mouth + side * mouth_r * 0.7, mouth - side * mouth_r * 0.7, from - side * 130.0])
-	draw_colored_polygon(band, Color(TEAL, 0.07 * a))
-	# 흐르는 줄: 소녀 쪽에서 입 쪽으로 빠르게 미끄러진다
+	var side := (span / len).orthogonal()
+	var a := clampf(boss.phase_progress() * 4.0, 0.0, 1.0)
+	var mouth_r := 40.0
+	var band := PackedVector2Array([from + side * 120.0, mouth + side * mouth_r * 0.7, mouth - side * mouth_r * 0.7, from - side * 120.0])
+	_stream.draw_colored_polygon(band, Color(SAP, 0.07 * a))
 	for i in 9:
 		var k := fposmod(_t * 1.8 + i / 9.0, 1.0)
-		var off := sin(i * 2.3) * 110.0 * (1.0 - k)
+		var off := sin(i * 2.3) * 100.0 * (1.0 - k)
 		var q0 := from + span * k + side * off
 		var q1 := from + span * minf(k + 0.14, 1.0) + side * off * 0.8
-		draw_line(q0, q1, Color(TEAL.lightened(0.35), 0.55 * a * (0.4 + 0.6 * k)), 10.0 + 8.0 * k, true)
-	# 빛 알갱이
+		_stream.draw_line(q0, q1, Color(SAP.lightened(0.35), 0.55 * a * (0.4 + 0.6 * k)), 8.0 + 7.0 * k, true)
 	for i in 7:
 		var k := fposmod(_t * 1.25 + i / 7.0, 1.0)
-		var q := from + span * k + side * sin(_t * 5.0 + i) * 70.0 * (1.0 - k)
-		draw_circle(q, 9.0 + 6.0 * k, Color(1.0, 1.0, 1.0, 0.5 * a))
+		var q := from + span * k + side * sin(_t * 5.0 + i) * 64.0 * (1.0 - k)
+		_stream.draw_circle(q, 8.0 + 5.0 * k, Color(1.0, 1.0, 1.0, 0.5 * a))
+
+
+# ---------- 시험·도구용 ----------
+
+## 지금 자세 값 (시험이 읽는다): 발바닥 높이(게임 px, 땅 0·아래 +), 몸(무기 팔·천 뺌)의 가장 낮은 점·가장 높은 점(게임 px, 땅 기준),
+## 몸통 관절 높이, 흡입 팔 입·대포 끝 자리(세상), 기울기·팔·대포 각도, 몸 틀기 값
+func probe_pose() -> Dictionary:
+	var soles: Array = []
+	for y in motion.sole_ys():
+		soles.append(y * _k + rig.position.y)
+	return {
+		"soles": soles,
+		"lowest": rig.lowest_y(motion._lock_bones) * _k + rig.position.y,
+		"settle_low": rig.lowest_y(motion._settle_bones) * _k + rig.position.y,
+		"top": rig.highest_y() * _k + rig.position.y,
+		"body_y": rig.to_global(rig.to_rig_local(rig.xf[_i_body].origin)).y - global_position.y,
+		"mouth": _sock_global("mouth"),
+		"muzzle": _sock_global("muzzle"),
+		"core": _sock_global("core"),
+		"lean": float(motion.fin.get("lean", 0.0)),
+		"arm_up": float(motion.fin.get("arm_up", 0.0)),
+		"cannon": float(motion.fin.get("cannon", 0.0)),
+		"face": _face,
+		"low_bone": _lowest_bone(),
+	}
+
+
+func _lowest_bone() -> String:
+	var best := -INF
+	var name := ""
+	for i in motion._lock_bones:
+		var y := rig.lowest_y(PackedInt32Array([i]))
+		if y > best:
+			best = y
+			name = rig.names[i]
+	return name
