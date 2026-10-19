@@ -1,0 +1,263 @@
+{
+ "_설명": "약초꾼(포자 몹) 원형: 사람 모양을 물려받는다. herbalist / herbalist_savable 두 뼈대가 함께 쓴다. 등이 굽은 채 앞손(weapon = 손)을 늘어뜨리고 거리를 둔다. 예고 = 숙이며 손을 뒤로 끌어 모음, scatter_a = 앞으로 뿌리며 손을 폄(포자 구름이 생기는 순간), scatter_b = 두 팔을 벌려 흩뿌림, strike = 포자 어미의 몸통 후려치기(앞팔이 앞 아래로 쓸어 내림). 팔 각도는 몸통 틀 기준(세상 각도 − 몸통 각도).",
+ "extends": "humanoid",
+ "base": {
+  "mantle": 0,
+  "robe": 0,
+  "robe_b": 0,
+  "hair": 0,
+  "mush_a": 0,
+  "mush_b": 0,
+  "robe_f": 0
+ },
+ "idle": {
+  "torso": 26,
+  "head": -14,
+  "hip_y": 0.12,
+  "lean": 3,
+  "arm_f_up": -46,
+  "arm_f_lo": -22,
+  "weapon": -10,
+  "arm_b_up": -16,
+  "arm_b_lo": -20,
+  "foot_f": 0.26,
+  "foot_b": -0.26
+ },
+ "walk": {
+  "torso": 30,
+  "head": -16,
+  "hip_y": 0.16,
+  "lean": 3,
+  "arm_f_up": -52,
+  "arm_f_lo": -24,
+  "weapon": -12,
+  "arm_b_up": -18,
+  "arm_b_lo": -22
+ },
+ "backstep": {
+  "torso": 14,
+  "head": -12,
+  "hip_y": 0.17,
+  "arm_f_up": -60,
+  "arm_f_lo": -34,
+  "weapon": -22,
+  "arm_b_up": 10,
+  "arm_b_lo": -24
+ },
+ "alert": {
+  "torso": 10,
+  "head": -14,
+  "arm_f_up": -64,
+  "arm_f_lo": -36,
+  "weapon": -26,
+  "arm_b_up": -30,
+  "arm_b_lo": -34
+ },
+ "air": {
+  "torso": 14,
+  "head": -10,
+  "arm_f_up": -70,
+  "arm_f_lo": -24,
+  "arm_b_up": -40,
+  "arm_b_lo": -24
+ },
+ "windup": {
+  "hip_x": -0.08,
+  "hip_y": 0.19,
+  "lean": -3,
+  "torso": 10,
+  "head": -16,
+  "arm_f_up": 30,
+  "arm_f_lo": -64,
+  "weapon": -36,
+  "arm_b_up": 24,
+  "arm_b_lo": -50,
+  "foot_f": 0.32,
+  "foot_b": -0.32,
+  "step_thr": 0.12,
+  "step_dur": 0.18
+ },
+ "strike": {
+  "hip_x": 0.14,
+  "hip_y": 0.16,
+  "lean": 6,
+  "torso": 34,
+  "head": 6,
+  "arm_f_up": -88,
+  "arm_f_lo": -10,
+  "weapon": -14,
+  "arm_b_up": 40,
+  "arm_b_lo": -12,
+  "foot_f": 0.46,
+  "foot_b": -0.3,
+  "step_thr": 0.1,
+  "step_dur": 0.1
+ },
+ "ready": {
+  "hip_x": 0.04,
+  "hip_y": 0.11,
+  "torso": 22,
+  "head": -12,
+  "arm_f_up": -50,
+  "arm_f_lo": -24,
+  "weapon": -14,
+  "arm_b_up": -6,
+  "arm_b_lo": -18,
+  "foot_f": 0.32,
+  "foot_b": -0.28,
+  "step_thr": 0.12
+ },
+ "scatter_a": {
+  "hip_x": 0.1,
+  "hip_y": 0.1,
+  "lean": 4,
+  "torso": 30,
+  "head": 0,
+  "arm_f_up": -124,
+  "arm_f_lo": -6,
+  "weapon": -20,
+  "arm_b_up": -56,
+  "arm_b_lo": -30,
+  "foot_f": 0.4,
+  "foot_b": -0.3,
+  "step_thr": 0.1,
+  "step_dur": 0.12
+ },
+ "scatter_b": {
+  "hip_x": 0.04,
+  "hip_y": 0.05,
+  "torso": 8,
+  "head": -14,
+  "arm_f_up": -150,
+  "arm_f_lo": -4,
+  "weapon": 8,
+  "arm_b_up": -140,
+  "arm_b_lo": -8,
+  "foot_f": 0.38,
+  "foot_b": -0.3,
+  "step_thr": 0.1,
+  "step_dur": 0.12
+ },
+ "hit": {
+  "arm_f_up": -24,
+  "arm_f_lo": -18,
+  "weapon": -6
+ },
+ "broken": {
+  "arm_f_up": -44,
+  "arm_f_lo": -12,
+  "weapon": -10
+ },
+ "kneel": {
+  "head": 14,
+  "arm_f_up": -34,
+  "arm_f_lo": -40,
+  "weapon": -20,
+  "arm_b_up": -10,
+  "arm_b_lo": -40
+ },
+ "rescued": {
+  "arm_f_up": -20,
+  "arm_f_lo": -30,
+  "weapon": -10
+ },
+ "npc": {
+  "torso": 6,
+  "head": 2,
+  "arm_f_up": -14,
+  "arm_f_lo": -24,
+  "weapon": -10,
+  "arm_b_up": 6,
+  "arm_b_lo": -14
+ },
+ "dead_lie": {
+  "arm_f_up": -150,
+  "arm_f_lo": -12,
+  "weapon": -6
+ },
+ "dead_back_lie": {
+  "arm_f_up": 14,
+  "arm_f_lo": -20,
+  "weapon": -6
+ },
+ "_motion": {
+  "_설명": "사람 모양 움직임 지도에 버섯 덮인 긴 머리·망토(mantle), 흰 머리(hair), 천 자락(robe), 버섯(mush_*)을 더했다: 숨쉴 때 천천히 출렁이고, 맞거나 뿌리면 크게 흔들린다.",
+  "breath": {
+   "torso": [
+    1.6,
+    0.0
+   ],
+   "head": [
+    1.4,
+    0.7
+   ],
+   "arm_b_up": [
+    1.6,
+    0.3
+   ],
+   "arm_f_up": [
+    1.4,
+    0.5
+   ],
+   "arm_f_lo": [
+    1.2,
+    0.9
+   ],
+   "mantle": [
+    2.5,
+    1.0
+   ],
+   "hair": [
+    4.0,
+    1.6
+   ],
+   "robe": [
+    3.0,
+    1.3
+   ],
+   "mush_a": [
+    3.0,
+    2.0
+   ],
+   "mush_b": [
+    3.0,
+    2.6
+   ],
+   "robe_f": [
+    3.0,
+    1.9
+   ]
+  },
+  "impact": {
+   "torso": -1.0,
+   "head": -1.4,
+   "arm_b_up": 0.9,
+   "arm_b_lo": 0.5,
+   "arm_f_up": 0.5,
+   "arm_f_lo": 0.4,
+   "mantle": 1.2,
+   "hair": 1.6,
+   "mush_a": 1.0,
+   "mush_b": 0.8
+  },
+  "recoil": {
+   "torso": -0.3,
+   "arm_f_up": -1.0,
+   "arm_f_lo": -0.4,
+   "mantle": 0.8,
+   "hair": 1.0
+  },
+  "swing": {
+   "arm_b_up": -16.0,
+   "arm_f_up": 8.0
+  },
+  "swing_abs": {
+   "arm_b_lo": -6.0,
+   "torso": 1.5,
+   "mantle": 6.0,
+   "hair": 8.0,
+   "robe": 8.0,
+   "robe_f": 8.0
+  }
+ }
+}
