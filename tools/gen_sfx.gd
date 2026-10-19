@@ -14,7 +14,13 @@ func _init() -> void:
 	_save("swing", _noise(0.13, 0.4, 10.0, 2500.0))
 	_save("hit", _mix([_noise(0.1, 0.6, 18.0, 1800.0), _tone_sweep(0.12, 180.0, 90.0, 0.7, 10.0)]))
 	_save("heavy_hit", _mix([_noise(0.16, 0.7, 12.0, 1200.0), _tone_sweep(0.2, 140.0, 60.0, 0.9, 7.0)]))
-	_save("guard", _mix([_tone(0.08, 420.0, 0.5, 20.0), _noise(0.05, 0.3, 30.0, 1000.0)]))
+	# 일반 가드: 잘 들리는 나무 방패 막는 소리 (둔탁음 + 중음 짧은 감쇠 + 노이즈 버스트). 2026-10-18 전엔 0.08초짜리라 안 들렸다.
+	# 둔탁음은 180Hz 가 아니라 280Hz: 폰 스피커는 400Hz 아래를 거의 못 내는데 180Hz 가 피크를 차지해 들리는 대역이 깎였다 (검토).
+	_save("guard", _mix([_tone(0.16, 280.0, 0.5, 14.0), _tone(0.12, 820.0, 0.6, 26.0), _noise(0.08, 0.7, 28.0, 2200.0)]))
+	# 씨앗 베기: 길고 무거운, 바람을 가르는 소리 (부풀었다 잦아드는 휘파람 노이즈 + 낮은 울림)
+	_save("slash_wide", _mix([_whoosh(0.5, 0.7, 600.0, 2600.0, 0.3), _tone_sweep(0.4, 140.0, 70.0, 0.35, 5.0)]))
+	# 낙하 공격: 떨어지는 휘파람 (높은 데서 낮은 데로) + 바람
+	_save("plunge", _mix([_tone_sweep(0.32, 1100.0, 320.0, 0.3, 3.0), _whoosh(0.3, 0.45, 2400.0, 900.0, 0.5)]))
 	_save("just_guard", _mix([_tone(0.5, 1320.0, 0.55, 5.0), _tone(0.45, 1980.0, 0.35, 6.0), _tone(0.35, 2640.0, 0.25, 8.0), _noise(0.04, 0.5, 40.0, 4000.0)]))
 	_save("guard_break", _mix([_noise(0.3, 0.6, 6.0, 700.0), _tone_sweep(0.3, 300.0, 80.0, 0.6, 5.0)]))
 	_save("hurt", _tone_sweep(0.22, 240.0, 110.0, 0.6, 6.0, true))
@@ -75,6 +81,29 @@ func _noise(dur: float, vol: float, decay: float, cutoff: float) -> PackedFloat3
 		var t := float(i) / RATE
 		y += (rng.randf_range(-1.0, 1.0) - y) * k
 		out[i] = y * vol * exp(-decay * t) * 2.5
+	return out
+
+
+## 바람 가르는 소리: 필터 컷오프가 f0→f1 로 움직이는 노이즈에, peak(0~1) 지점에서 가장 커지는 부푼 봉투를 씌운다.
+func _whoosh(dur: float, vol: float, f0: float, f1: float, peak: float) -> PackedFloat32Array:
+	var n := int(dur * RATE)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(f0 + f1) + n
+	var y := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var u := t / dur
+		var cutoff := lerpf(f0, f1, u)
+		var k := clampf(cutoff / (RATE * 0.5), 0.01, 1.0)
+		y += (rng.randf_range(-1.0, 1.0) - y) * k
+		var env := 0.0
+		if u < peak:
+			env = pow(u / maxf(peak, 0.001), 1.4)
+		else:
+			env = pow(1.0 - (u - peak) / maxf(1.0 - peak, 0.001), 1.8)
+		out[i] = y * vol * env * 2.5
 	return out
 
 

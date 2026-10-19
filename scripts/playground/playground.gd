@@ -134,7 +134,8 @@ func _rigtest() -> void:
 	var shots := {
 		"idle": Player.State.IDLE, "walk": Player.State.WALK, "run": Player.State.RUN, "jump": Player.State.JUMP,
 		"guard": Player.State.GUARD, "attack2": Player.State.ATTACK, "attack3": Player.State.ATTACK,
-		"heavy": Player.State.HEAVY_CHARGE, "hit": Player.State.HIT, "rest": Player.State.REST, "purify": Player.State.PURIFY,
+		"slash": Player.State.SOUL_SLASH, "plunge": Player.State.PLUNGE,
+		"hit": Player.State.HIT, "rest": Player.State.REST, "purify": Player.State.PURIFY,
 	}
 	for name in shots:
 		player.state = shots[name]
@@ -142,12 +143,14 @@ func _rigtest() -> void:
 			player.attack_step = 2; player.attack_phase = "active"
 		elif name == "attack3":
 			player.attack_step = 3; player.attack_phase = "active"
+		elif name == "slash":
+			player.attack_phase = "active"   # 씨앗 베기: 휘두르는 순간
+		elif name == "plunge":
+			player.attack_phase = "dive"     # 낙하 공격: 칼끝을 아래로 향한 급강하 자세
 		if name in ["walk", "run"]:
 			player.velocity.x = player.run_speed if name == "run" else player.walk_speed
 		else:
 			player.velocity.x = 0.0
-		if name == "heavy":
-			player.charge = player.heavy_max_charge
 		await tree.create_timer(0.7).timeout
 		_save_screenshot("rig_%s.png" % name)
 		player.attack_step = 0

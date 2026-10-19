@@ -1,7 +1,8 @@
 extends Node2D
 ## 셀레니아의 뼈대 애니메이션 (8단계, 2026-10-18 모션 개편). 부위 그림(art/characters/selenia/)을 관절로 이어 코드로 움직인다.
 ## 좌표 단위는 원본 부위 시트의 픽셀(PART_SCALE 로 줄인 그림을 쓰므로 안에서 곱한다). 오른쪽을 보는 기준.
-## 동작: 대기·걷기·달리기·점프·낙하·구르기·약공격(3)·강공격(차지/휘두름)·가드·피격·회복·정화의 손길·쉬기·사망.
+## 동작: 대기·걷기·달리기·점프·낙하·구르기·약공격(3)·씨앗 베기(넓은 호)·낙하 공격·가드(보호막)·피격·회복·정화의 손길·쉬기·사망.
+## (강공격은 2026-10-18 기획자 결정으로 없앴다. 그 자리에 영혼 기술이 들어간다.)
 ##
 ## 움직임 원칙 (기획자: "휘두르기가 저렴하고 단절돼 보인다"):
 ## 1) 자세 값은 절대 '툭' 바뀌지 않는다. 매 프레임 '목표 자세'를 만들고, 상태가 바뀌면 이전 목표가 관성을 갖고 흘러가며
@@ -12,6 +13,8 @@ extends Node2D
 ##    휘두르는 동안은 관절이 곡선을 거의 그대로 따라간다(ATTACK_FOLLOW_MUL). 안 그러면 0.1초짜리 휘두름이 화면에 반도 안 나온다.
 ## 3) 몸 전체가 따라간다: 몸통 회전이 머리·팔·망토의 위치로 전달되고(머리·망토는 회전을 한 박자 늦게 따라감), 허리가 앞뒤로 옮겨 간다.
 ## 4) 2차 움직임(망토·등불·머리·찌그러짐·웅크림·피격 충격)은 전부 스프링. 충격은 '속도'로 주고 스스로 돌아온다.
+##
+## 빛 효과(_draw)의 세기 조절 상수는 이 파일 위쪽 GUARD_* / SLASH_* / PLUNGE_* 에 모여 있다.
 
 const PART_SCALE := 0.25        # 그림을 1/4로 줄여 두었다
 const RIG_SCALE := 0.135        # 원본 px → 게임 px (키 약 132). 바꾸면 발 위치·등장 자리가 틀어진다
@@ -21,6 +24,28 @@ const SEED := Color("ffd46a")
 const SEED_HDR := Color(2.2, 1.8, 0.9)
 const SKIN := Color("efe6d8")
 const GUARD_BLUE := Color("8fd3ff")
+
+## 가드 보호막: 소녀 앞에 얇고 키만 한 타원 호. 중심·세로 반지름·가로 납작함·앞쪽 각도 범위·선 두께.
+## Visual 원점은 몸 가운데(머리 꼭대기 약 -51, 발바닥 FOOT_Y 67)이므로 중심 y 는 12, 세로 반지름 80 → y -64 ~ +88 (머리 위 13px, 발 아래 21px).
+## (처음 값 (24,-62)/92 는 머리 위로 98px 떠 있고 무릎 아래를 안 덮었다 — 2026-10-18 검토)
+const GUARD_CENTER := Vector2(24, 12)
+const GUARD_RY := 80.0
+const GUARD_RX_RATIO := 0.55
+const GUARD_SPAN := 1.25
+const GUARD_LINE := 2.5
+## 씨앗 베기 흔적: 어깨를 중심으로 한 타원 초승달. 판정 상자(slash_box: 앞 340, 위 250, 아래 180) 안에 들어오게
+## 앞 반지름·위 반지름·아래 반지름을 따로 둔다 (원 하나로 그리면 아래가 판정보다 50px 더 내려가 보였다 — 2026-10-18 검토).
+const SLASH_RX := 300.0
+const SLASH_RY_UP := 235.0
+const SLASH_RY_DOWN := 172.0
+## 초승달 가운데 두께 (px), 시작·끝 각도 (0 = 정면, 음수 = 위), 사라지는 시간
+const SLASH_THICK := 60.0
+const SLASH_A0 := -2.15
+const SLASH_A1 := 1.75
+const SLASH_FADE := 0.25
+## 낙하 공격 착지 충격 링 (최대 반지름, 시간)
+const PLUNGE_RING_R := 170.0
+const PLUNGE_RING_TIME := 0.3
 
 ## 부위 정의: 이름 -> {file, pivot(그림 안의 관절 px), parent(관절이 붙는 뼈), at(부모 기준 관절 위치 px)}
 ## 뿌리(hip)는 두 다리 사이 엉덩이. 오른쪽을 본다. 몸통(torso)은 엉덩이(0,0)에 붙으므로 몸통 자식들의 at 은 엉덩이 기준과 같다.
@@ -45,14 +70,15 @@ const KEYS := ["torso", "head", "arm_back", "arm_sword", "leg_back", "leg_front"
 const BASE := {"torso": 0.0, "head": 0.0, "arm_back": 0.1, "arm_sword": 0.3, "leg_back": 0.0, "leg_front": 0.0, "hip_x": 0.0, "hip_y": 0.0}
 ## 관절마다 목표를 따라가는 빠르기 (Motion.damp). 머리가 가장 느리고 다리가 가장 빠르다.
 const FOLLOW_SPEED := {"torso": 40.0, "head": 30.0, "arm_back": 45.0, "arm_sword": 45.0, "leg_back": 50.0, "leg_front": 50.0, "hip_x": 45.0, "hip_y": 45.0}
-## 휘두르는 동안(약공격·강공격)은 머리를 뺀 관절이 이 배수만큼 빨리 따라간다. 타격 구간이 0.06초쯤이라 평소 빠르기(45)로는
+## 휘두르는 동안(약공격·씨앗 베기·낙하 공격)은 머리를 뺀 관절이 이 배수만큼 빨리 따라간다. 타격 구간이 0.06초쯤이라 평소 빠르기(45)로는
 ## 화면의 팔이 '휘두른 자세'와 지나침에 닿기 전에 되돌림이 시작돼 버린다. 곡선 자체가 이미 부드러우니 거의 그대로 보여 준다.
 const ATTACK_FOLLOW_MUL := 3.0
 ## 타격 곡선이 도는 시간 창: 예비동작(startup) 진행도 x 부터 히트박스 구간(active) 진행도 y 까지 한 번에 이어진다.
 ## 히트박스가 켜지는 순간엔 칼이 아직 거의 당긴 자리(swing 의 6%)에 있고, 몸 앞을 지나는 순간이 active 의 35~55% 에 온다.
 ## active 만으로는 0.06초(60fps 세 프레임 반)라 '휘두른 자세'에 닿기도 전에 끝나 버려서 조금 앞당겨 시작한다.
 const STRIKE_WINDOW_LIGHT := Vector2(0.85, 0.95)
-const STRIKE_WINDOW_HEAVY := Vector2(0.92, 0.95)
+## 씨앗 베기는 예비동작이 길어(0.28초) 그 끝 8% 만 당겨 쓰고, 긴 히트박스 구간(0.18초)의 95% 에서 끝난다.
+const STRIKE_WINDOW_SLASH := Vector2(0.92, 0.95)
 
 ## ---- 공격 키 자세 ----
 ## 되돌림이 끝나는 '준비' 자세 (다음 타로 이어지기 좋게 조금 앞으로 기운 자세)
@@ -67,10 +93,16 @@ const STRIKE_2 := {"torso": -0.22, "head": -0.16, "arm_back": 0.6, "arm_sword": 
 ## (-3.75 까지 넘기면 칼팔이 얼굴을 가린다. 맥에서 눈으로 본 뒤 더 넘길지 정한다.)
 const WINDUP_3 := {"torso": -0.4, "head": -0.22, "arm_back": 0.9, "arm_sword": -3.3, "leg_back": 0.5, "leg_front": -0.15, "hip_x": -22.0, "hip_y": 2.0}
 const STRIKE_3 := {"torso": 0.5, "head": 0.15, "arm_back": -0.6, "arm_sword": -0.85, "leg_back": 0.25, "leg_front": -0.65, "hip_x": 30.0, "hip_y": 18.0}
-## 강공격: 차지 자세(칼을 뒤로 세움) → 한 번 더 깊게 당기며 무게를 뒷발로 → 크게 돌아 앞으로, 지나침이 크다.
-const CHARGE_H := {"torso": -0.22, "head": -0.08, "arm_back": 0.5, "arm_sword": 2.5, "leg_back": 0.4, "leg_front": -0.25, "hip_x": -14.0, "hip_y": 8.0}
-const WINDUP_H := {"torso": -0.42, "head": -0.15, "arm_back": 0.7, "arm_sword": 3.1, "leg_back": 0.55, "leg_front": -0.1, "hip_x": -28.0, "hip_y": 16.0}
-const STRIKE_H := {"torso": 0.55, "head": 0.18, "arm_back": -0.7, "arm_sword": -1.35, "leg_back": 0.3, "leg_front": -0.7, "hip_x": 36.0, "hip_y": 22.0}
+## 씨앗 베기: 칼을 머리 위 뒤로 크게 들어 올리며 몸을 젖혔다가(0.28초 예비) → 앞 위에서 앞 아래까지 큰 호를 그리며 내려 벤다.
+## 칼팔 -3.5(뒤 어깨 위) → -0.35(앞 아래, 거의 수직) 로 3rad 넘게 돈다. 몸은 뒤로 젖혔다가 앞으로 깊게 쏟아지고 허리가 크게 앞으로.
+const WINDUP_S := {"torso": -0.5, "head": -0.2, "arm_back": 0.8, "arm_sword": -3.5, "leg_back": 0.55, "leg_front": -0.1, "hip_x": -30.0, "hip_y": 10.0}
+const STRIKE_S := {"torso": 0.6, "head": 0.2, "arm_back": -0.75, "arm_sword": -0.35, "leg_back": 0.3, "leg_front": -0.75, "hip_x": 38.0, "hip_y": 24.0}
+## 낙하 공격: 멈칫(칼을 높이 들어 올림) → 급강하(몸을 세우고 칼끝을 아래로, 다리를 모아 올림) → 착지(깊게 웅크리고 칼을 앞 땅에 꽂음)
+const PLUNGE_PAUSE := {"torso": -0.15, "head": 0.05, "arm_back": 0.6, "arm_sword": -2.4, "leg_back": 0.2, "leg_front": -0.2, "hip_x": -8.0, "hip_y": -6.0}
+## 멈칫 자세에서 급강하 자세로 칼을 내리꽂는 데 걸리는 시간 (초). 더 짧으면 1/120초 프레임에서 '툭' 한다
+const PLUNGE_FLIP_TIME := 0.14
+const PLUNGE_DIVE := {"torso": 0.18, "head": 0.3, "arm_back": 1.4, "arm_sword": 0.5, "leg_back": 0.7, "leg_front": -0.9, "hip_x": 4.0, "hip_y": -10.0}
+const PLUNGE_LAND := {"torso": 0.55, "head": 0.25, "arm_back": 0.9, "arm_sword": -0.2, "leg_back": 0.9, "leg_front": -1.2, "hip_x": 10.0, "hip_y": 110.0}
 
 var _player: Player
 var _bones := {}          # 이름 -> Node2D (관절)
@@ -82,6 +114,11 @@ var _hurt := 0.0
 var _purify_ring := -1.0
 var _air_ring := -1.0
 var _gust_t := -1.0
+var _slash_t := -1.0      # 씨앗 베기 흔적 (0→1, SLASH_FADE 초)
+var _guard_ring := -1.0   # 일반 가드로 막은 순간의 충격 고리 (0→1, 0.2초)
+var _plunge_ring := -1.0  # 낙하 공격 착지 충격 링 (0→1, PLUNGE_RING_TIME 초)
+## 시간이 흐르는 빛 효과들: 이름 -> 1초에 얼마나 진행하는지 (1/시간)
+const EFFECT_RATES := {"_purify_ring": 1.6, "_air_ring": 3.0, "_gust_t": 3.0, "_slash_t": 1.0 / SLASH_FADE, "_guard_ring": 5.0, "_plunge_ring": 1.0 / PLUNGE_RING_TIME}
 var _death_t := 0.0
 var _seed_glow: Sprite2D
 var _lantern: Sprite2D
@@ -111,6 +148,7 @@ var _trail_on := false
 var _trail_a0 := 0.0
 var _trail_a1 := 0.0
 var _trail_alpha := 0.0
+var _trail_r := 100.0     # 칼끝 잔상의 반지름 (씨앗 베기는 더 크다)
 var _impact_pending := false
 var _sp := {}             # 2차 스프링들: 이름 -> [값, 속도]
 const SPRINGS := {
@@ -205,12 +243,15 @@ func _ready() -> void:
 	_player.landed.connect(_on_landed)
 	_player.roll_started.connect(func(): _kick("squash", 2.0))
 	_player.just_guarded.connect(func(_s): _flash = 1.0; _kick("parry", 28.0))
+	_player.guard_hit.connect(func(_d): _guard_ring = 0.0; _kick("impact", 3.0); _kick("parry", 6.0))
 	_player.guard_broken.connect(func(): _kick("impact", 10.0); _kick("squash", 2.0))
 	_player.hit_taken.connect(func(_d): _hurt = 1.0; _impact_pending = true; _kick("squash", 2.4))
 	_player.purified.connect(func(_t): _purify_ring = 0.0; _flash = 1.0)
 	_player.healed.connect(func(): _flash = 0.5)
 	_player.gust_cast.connect(func(): _gust_t = 0.0; _kick("recoil", 5.0))
 	_player.blocked.connect(func(): _kick("recoil", 21.0); _kick("impact", 6.0))
+	_player.plunge_started.connect(func(): _kick("squash", -2.5))
+	_player.plunge_landed.connect(_on_plunge_landed)
 	# 히트박스(@onready)는 부모가 준비된 뒤에야 있다 (자식의 _ready 가 먼저 불린다)
 	if _player.is_node_ready():
 		_player.hitbox.landed.connect(_on_hit_landed)
@@ -246,10 +287,10 @@ func _process(delta: float) -> void:
 	_state_t += delta
 	_flash = maxf(_flash - delta * 6.0, 0.0)
 	_hurt = maxf(_hurt - delta * 3.0, 0.0)
-	for k in ["_purify_ring", "_air_ring", "_gust_t"]:
+	for k in EFFECT_RATES:
 		var v: float = get(k)
 		if v >= 0.0:
-			v += delta * (1.6 if k == "_purify_ring" else 3.0)
+			v += delta * EFFECT_RATES[k]
 			set(k, v if v <= 1.0 else -1.0)
 	var st := _player.state
 	if st != _prev_state:
@@ -283,16 +324,17 @@ func _on_state_enter(st: Player.State, prev: int) -> void:
 	_state_t = 0.0
 	var fade := 0.1
 	match st:
-		Player.State.ATTACK, Player.State.HEAVY_SWING:
+		Player.State.ATTACK, Player.State.SOUL_SLASH:
 			fade = 0.0     # 휘두르기 곡선이 지금 자세에서 출발하므로 섞을 필요가 없다
 		Player.State.ROLL, Player.State.HIT, Player.State.GUARD:
 			fade = 0.06
+		Player.State.PLUNGE:
+			fade = 0.06
+			_atk_from = _out.duplicate()   # 멈칫 자세는 지금 보이는 자세에서 당긴다
 		Player.State.REST:
 			fade = 0.35
 		Player.State.DEAD:
 			fade = 0.2
-		Player.State.HEAVY_CHARGE:
-			fade = 0.14
 	# 쉬다가 일어날 때는 앉을 때(0.35초)만큼은 아니어도 천천히 (안 그러면 벌떡 일어선다)
 	if prev == Player.State.REST:
 		fade = maxf(fade, 0.3)
@@ -318,14 +360,12 @@ func _on_state_enter(st: Player.State, prev: int) -> void:
 		_fade_len = fade
 	# 휘두르기에서 나올 때: 칼팔 각도는 한 바퀴 넘게 돌아갔을 수 있다. 같은 모양이 되는 가장 가까운 각도로 바꿔 둔다
 	# (2π 차이는 그림이 똑같으므로 '툭' 하지 않는다). 세 값에 같은 양을 빼서 서로의 관계는 그대로.
-	if prev == Player.State.ATTACK or prev == Player.State.HEAVY_SWING:
+	if prev == Player.State.ATTACK or prev == Player.State.SOUL_SLASH:
 		var n := roundf((_out["arm_sword"] - BASE["arm_sword"]) / TAU)
 		if n != 0.0:
 			_out["arm_sword"] -= n * TAU
 			_tgt["arm_sword"] -= n * TAU
 			_fade_from["arm_sword"] -= n * TAU
-	if st == Player.State.HEAVY_SWING:
-		_kick("squash", 0.8)
 
 
 # ---------- 자세 ----------
@@ -335,7 +375,8 @@ func _apply_pose(delta: float, st: Player.State) -> void:
 	var grounded := _player.is_on_floor()
 	var raw := BASE.duplicate()
 	var ph := _player.attack_phase
-	var in_attack := st == Player.State.ATTACK or st == Player.State.HEAVY_SWING
+	var in_attack := st == Player.State.ATTACK or st == Player.State.SOUL_SLASH
+	var fast := in_attack or st == Player.State.PLUNGE
 
 	# 새 휘두르기(상태·타가 바뀌거나 다시 startup 으로)가 시작되면 지금 목표 자세에서 당기기 시작한다
 	if in_attack:
@@ -343,9 +384,10 @@ func _apply_pose(delta: float, st: Player.State) -> void:
 		if key != _atk_key or (ph == "startup" and _prev_phase != "startup"):
 			_atk_key = key
 			_atk_from = _out.duplicate()   # 화면에 보이는 자세에서 당기기 시작한다 (목표가 아니라) → 첫 프레임이 튀지 않는다
-		# 강공격이 실제로 휘두르는 순간(국면 active 진입) 몸이 쿵 하고 눌린다
-		if st == Player.State.HEAVY_SWING and ph == "active" and _prev_phase != "active":
+		# 실제로 휘두르는 순간(국면 active 진입) 몸이 쿵 하고 눌린다. 씨앗 베기는 크게, 그리고 베기 흔적이 시작된다
+		if st == Player.State.SOUL_SLASH and ph == "active" and _prev_phase != "active":
 			_kick("squash", 1.7)
+			_slash_t = 0.0
 		elif st == Player.State.ATTACK and ph == "active" and _prev_phase != "active":
 			_kick("squash", 0.6)
 	else:
@@ -404,18 +446,10 @@ func _apply_pose(delta: float, st: Player.State) -> void:
 			raw["torso"] = 0.55 * curl + 0.1
 			raw["head"] = 0.5 * curl
 			raw["hip_y"] = 20.0 * curl
-		Player.State.ATTACK:
-			raw = _attack_pose(false)
-		Player.State.HEAVY_CHARGE:
-			var c := _player.charge / maxf(_player.heavy_max_charge, 0.001)
-			raw = CHARGE_H.duplicate()
-			# 차지가 찰수록 떨리고 더 깊게 웅크린다
-			raw["arm_sword"] += sin(t * 42.0) * 0.05 * c
-			raw["torso"] += sin(t * 37.0) * 0.015 * c - 0.06 * c
-			raw["hip_y"] += 8.0 * c
-			raw["hip_x"] -= 6.0 * c
-		Player.State.HEAVY_SWING:
-			raw = _attack_pose(true)
+		Player.State.ATTACK, Player.State.SOUL_SLASH:
+			raw = _attack_pose()
+		Player.State.PLUNGE:
+			raw = _plunge_pose()
 		Player.State.GUARD:
 			# 방패 없이 검을 세워 막는다: 칼팔을 앞 위로 올려 칼날이 서고, 뒷손이 받친다. 가드 걷기는 발을 조금만 끈다
 			raw["arm_sword"] = -1.9
@@ -504,7 +538,7 @@ func _apply_pose(delta: float, st: Player.State) -> void:
 		_tgt_vel[k] = (raw[k] - _tgt[k]) / maxf(delta, 0.0001)
 		_tgt[k] = raw[k]
 		# 휘두르는 동안은 머리만 느리게, 나머지는 곡선을 거의 그대로 따라간다 (타격 구간이 짧아서)
-		var spd: float = FOLLOW_SPEED[k] * (ATTACK_FOLLOW_MUL if in_attack and k != "head" else 1.0)
+		var spd: float = FOLLOW_SPEED[k] * (ATTACK_FOLLOW_MUL if fast and k != "head" else 1.0)
 		_out[k] = Motion.damp(_out[k], raw[k], spd, delta)
 
 	# ---- 2차 움직임 (스프링) ----
@@ -554,13 +588,13 @@ func _apply_pose(delta: float, st: Player.State) -> void:
 	_bones["cloak_near"].rotation = near * 0.9 + sway + cloth_follow * 0.5
 	_bones["cloak_far"].rotation = far * 0.7 + sway * 0.8 + 0.12 + cloth_follow * 0.5
 	_bones["cape"].rotation = cape * 0.5 + cloth_follow * 0.8
-	# 씨앗 빛 맥동 (차지 중에는 빛이 모인다)
+	# 씨앗 빛 맥동 (씨앗 베기 예비동작 중에는 빛이 모인다)
 	var pulse := 0.8 + 0.2 * sin(t * 3.0)
 	if st in [Player.State.HEAL, Player.State.PURIFY, Player.State.REST]:
 		pulse += 0.35 + 0.2 * sin(t * 9.0)
-	elif st == Player.State.HEAVY_CHARGE:
-		var c := _player.charge / maxf(_player.heavy_max_charge, 0.001)
-		pulse += c * (0.5 + 0.3 * sin(t * 14.0))
+	elif st == Player.State.SOUL_SLASH and ph == "startup":
+		var c := _phase_progress()
+		pulse += c * (0.6 + 0.3 * sin(t * 14.0))
 	_seed_glow.modulate = Color(1.3, 1.15, 0.8, 0.9) * pulse
 	_seed_glow.scale = Vector2(2.6, 2.6) * (0.85 + pulse * 0.3)
 	if _lantern and _lantern.visible:
@@ -575,6 +609,7 @@ func _apply_pose(delta: float, st: Player.State) -> void:
 		if not _trail_on:
 			_trail_on = true
 			_trail_a0 = ang
+			_trail_r = 170.0 if st == Player.State.SOUL_SLASH else 100.0
 		_trail_a1 = ang
 		_trail_alpha = 1.0
 	else:
@@ -583,14 +618,21 @@ func _apply_pose(delta: float, st: Player.State) -> void:
 	_guard_a = Motion.damp(_guard_a, 1.0 if st == Player.State.GUARD else 0.0, 16.0 if st == Player.State.GUARD else 9.0, delta)
 
 
+## 지금 공격의 국면 길이 [startup, active, recovery] (초). 씨앗 베기는 약공격보다 느리다.
+func _phase_lens() -> Vector3:
+	if _player.state == Player.State.SOUL_SLASH:
+		return Vector3(_player.slash_startup, _player.slash_active, _player.slash_recovery)
+	return Vector3(_player.light_startup, _player.light_active, _player.light_recovery)
+
+
 ## 지금 국면의 진행도 (0 → 1). player 의 남은 시간으로 계산하므로 국면 길이가 달라도 모양이 같다.
 func _phase_progress() -> float:
+	var lens := _phase_lens()
 	var len := 0.0
-	var heavy := _player.state == Player.State.HEAVY_SWING
 	match _player.attack_phase:
-		"startup": len = _player.heavy_startup if heavy else _player.light_startup
-		"active": len = _player.heavy_active if heavy else _player.light_active
-		"recovery": len = _player.heavy_recovery if heavy else _player.light_recovery
+		"startup": len = lens.x
+		"active": len = lens.y
+		"recovery": len = lens.z
 	if len <= 0.0:
 		return 1.0
 	return 1.0 - clampf(_player._attack_timer / len, 0.0, 1.0)
@@ -599,10 +641,10 @@ func _phase_progress() -> float:
 ## 타격 곡선의 진행도 (0 → 1). 예비동작 끝자락(STRIKE_WINDOW.x)에서 0, 히트박스 구간의 STRIKE_WINDOW.y 에서 1.
 ## 두 국면을 '시간'으로 이어 붙여 하나의 창으로 보므로, 국면 길이가 바뀌어도(2페이즈 배속 등) 모양은 같다. 0 이면 아직 당기는 중.
 func _strike_t() -> float:
-	var heavy := _player.state == Player.State.HEAVY_SWING
-	var win := STRIKE_WINDOW_HEAVY if heavy else STRIKE_WINDOW_LIGHT
-	var s_len: float = _player.heavy_startup if heavy else _player.light_startup
-	var a_len: float = _player.heavy_active if heavy else _player.light_active
+	var win := STRIKE_WINDOW_SLASH if _player.state == Player.State.SOUL_SLASH else STRIKE_WINDOW_LIGHT
+	var lens := _phase_lens()
+	var s_len: float = lens.x
+	var a_len: float = lens.y
 	var before := s_len * (1.0 - win.x)          # startup 안에서 타격이 도는 시간
 	var total := before + a_len * win.y          # 타격 전체 길이
 	var elapsed := 0.0
@@ -614,18 +656,19 @@ func _strike_t() -> float:
 
 
 ## 휘두르기 세 박자. 예비(지금 자세 → 당긴 자세, 끝에서 멈칫) → 타격(당긴 자세 → 휘두른 자세, 속도가 차올라 앞을 지나며 지나침) → 되돌림(출렁이며 준비 자세).
-func _attack_pose(heavy: bool) -> Dictionary:
+## 약공격 1~3타와 씨앗 베기가 같은 틀을 쓴다 (당긴·휘두른 자세와 지나침·출렁임 크기만 다르다).
+func _attack_pose() -> Dictionary:
 	var windup: Dictionary
 	var strike: Dictionary
 	var over := 2.0          # 지나침의 크기 (ease_out_back 의 s)
 	var bounces := 1.5
 	var win := STRIKE_WINDOW_LIGHT
-	if heavy:
-		windup = WINDUP_H
-		strike = STRIKE_H
-		over = 3.6
+	if _player.state == Player.State.SOUL_SLASH:
+		windup = WINDUP_S
+		strike = STRIKE_S
+		over = 2.6
 		bounces = 2.0
-		win = STRIKE_WINDOW_HEAVY
+		win = STRIKE_WINDOW_SLASH
 	else:
 		match _player.attack_step:
 			1: windup = WINDUP_1; strike = STRIKE_1
@@ -645,6 +688,27 @@ func _attack_pose(heavy: bool) -> Dictionary:
 			# 되돌림: 휘두른 자세에서 잠깐 머물렀다가(앞 20%쯤, 칼이 멈추는 '여운') 출렁이며 준비 자세로.
 			# settle 을 그대로 쓰면 첫 순간이 너무 가팔라 휘두른 자세가 화면에 보이기도 전에 돌아와 버린다.
 			return _mix(strike, READY, Motion.settle(Motion.ease_in(p, 2.0), bounces, 2.5))
+
+
+## 낙하 공격 자세: 멈칫(칼을 번쩍) → 급강하(칼끝 아래, 몸을 세움) → 착지(깊게 웅크림) → 일어남(출렁이며 준비 자세)
+func _plunge_pose() -> Dictionary:
+	match _player.attack_phase:
+		"pause":
+			var p := 1.0 - clampf(_player._attack_timer / maxf(_player.plunge_pause, 0.001), 0.0, 1.0)
+			return _mix(_atk_from if not _atk_from.is_empty() else BASE, PLUNGE_PAUSE, Motion.anticipation(p))
+		"dive":
+			# 멈칫 자세에서 칼을 아래로 내리꽂는다: 타격 곡선(속도 0 에서 차올라 살짝 지나침)으로 이어 '툭' 하지 않는다.
+			# 급강하가 시작된 뒤 지난 시간은 player 의 타이머가 음수로 계속 내려가는 것으로 안다.
+			var e := maxf(-_player._attack_timer, 0.0)
+			var d := _mix(PLUNGE_PAUSE, PLUNGE_DIVE, _strike_curve(e / PLUNGE_FLIP_TIME, 1.5))
+			d["arm_sword"] += sin(_time * 30.0) * 0.03 * clampf(e / PLUNGE_FLIP_TIME, 0.0, 1.0)   # 바람에 칼이 떤다
+			return d
+		"land":
+			var p := 1.0 - clampf(_player._attack_timer / maxf(_player.plunge_land_time, 0.001), 0.0, 1.0)
+			return _mix(PLUNGE_DIVE, PLUNGE_LAND, Motion.ease_out(p, 3.0))
+		_:
+			var p := 1.0 - clampf(_player._attack_timer / maxf(_player.plunge_recovery, 0.001), 0.0, 1.0)
+			return _mix(PLUNGE_LAND, READY, Motion.settle(Motion.ease_in(p, 1.5), 1.5, 2.5))
 
 
 ## 타격 곡선 (0→1, 1 = 휘두른 자세): 멈춘 자세에서 속도가 차오르고(앞 55%, 기울기 0 에서 출발) → 가장 빠르게 몸 앞을 지나
@@ -728,22 +792,35 @@ func _draw() -> void:
 	if _gust_t >= 0.0:
 		draw_arc(Vector2(44, -18), 14.0 + _gust_t * 20.0, -0.9, 0.9, 10, Color(0.8, 1.0, 0.85, 1.0 - _gust_t), 2.5, true)
 	if _guard_a > 0.02:
-		draw_arc(Vector2(38, -14), 48.0, -1.1, 1.1, 14, Color(GUARD_BLUE, (0.5 + _flash * 0.5) * _guard_a), 3.0, true)
-		if _flash > 0.0:
-			draw_circle(Vector2(44, -12), 26.0 * _flash + 8.0, Color(1, 1, 1, _flash * 0.8 * _guard_a))
+		_draw_guard_shield()
+	if _guard_ring >= 0.0:
+		_draw_guard_ring()
 	# 칼끝 잔상: 지나간 호가 남았다가 흐려진다
 	if _trail_alpha > 0.02 and absf(_trail_a1 - _trail_a0) > 0.05:
 		var o := _sword_origin()
-		draw_arc(o, 100.0, _trail_a0, _trail_a1, 24, Color(SEED, 0.65 * _trail_alpha), 1.5 + 3.5 * _trail_alpha, true)
-		draw_arc(o, 78.0, _trail_a0, _trail_a1, 20, Color(SEED, 0.3 * _trail_alpha), 1.0 + 2.0 * _trail_alpha, true)
-	# 강공격 차지: 칼끝에 빛이 모인다
-	if _player.state == Player.State.HEAVY_CHARGE:
-		var c := _player.charge / maxf(_player.heavy_max_charge, 0.001)
+		draw_arc(o, _trail_r, _trail_a0, _trail_a1, 24, Color(SEED, 0.65 * _trail_alpha), 1.5 + 3.5 * _trail_alpha, true)
+		draw_arc(o, _trail_r * 0.78, _trail_a0, _trail_a1, 20, Color(SEED, 0.3 * _trail_alpha), 1.0 + 2.0 * _trail_alpha, true)
+	# 씨앗 베기 흔적: 앞·위·아래를 덮는 반투명 초승달
+	if _slash_t >= 0.0:
+		_draw_slash_crescent()
+	# 씨앗 베기 예비동작: 칼끝에 빛이 모인다 (씨앗의 힘)
+	if _player.state == Player.State.SOUL_SLASH and _player.attack_phase == "startup":
+		var c := _phase_progress()
 		if c > 0.05:
 			var tip := _sword_origin() + Vector2(112.0, 0.0).rotated(_sword_angle())
-			draw_circle(tip, 5.0 + 14.0 * c, Color(SEED, 0.45 * c))
-			var ring := 1.0 - fmod(_time * 1.6, 1.0)
-			draw_arc(tip, 8.0 + 55.0 * ring, 0, TAU, 24, Color(SEED, 0.5 * c * (1.0 - ring)), 2.0, true)
+			draw_circle(tip, 4.0 + 12.0 * c, Color(SEED, 0.4 * c))
+			var ring := 1.0 - fmod(_time * 2.2, 1.0)
+			draw_arc(tip, 6.0 + 45.0 * ring, 0, TAU, 24, Color(SEED, 0.45 * c * (1.0 - ring)), 2.0, true)
+	# 낙하 공격: 급강하 중 칼끝 빛과 바람 줄, 착지 충격 링
+	if _player.state == Player.State.PLUNGE and _player.attack_phase == "dive":
+		var tip := _sword_origin() + Vector2(112.0, 0.0).rotated(_sword_angle())
+		draw_circle(tip, 9.0, Color(SEED, 0.45))
+		for i in 3:
+			var x := -26.0 + i * 26.0
+			var y0 := -120.0 - fmod(_time * 900.0 + i * 70.0, 90.0)
+			draw_line(Vector2(x, y0), Vector2(x, y0 - 60.0), Color(1, 1, 1, 0.18), 2.0, true)
+	if _plunge_ring >= 0.0:
+		_draw_plunge_ring()
 	# 정화의 손길: 뻗은 손에 빛
 	if _player.state == Player.State.PURIFY:
 		var arm: Node2D = _bones["arm_back"]
@@ -753,6 +830,101 @@ func _draw() -> void:
 	if _purify_ring >= 0.0:
 		var rr := 20.0 + _purify_ring * 160.0
 		draw_arc(Vector2(50, -20), rr, 0, TAU, 40, Color(SEED, 1.0 - _purify_ring), 5.0 * (1.0 - _purify_ring) + 1.0, true)
+
+
+## 보호막 위의 점 (앞쪽 각도 a: 0 = 정면, 음수 = 위). 가로는 납작한 타원.
+func _shield_point(a: float, ry: float) -> Vector2:
+	return GUARD_CENTER + Vector2(cos(a) * ry * GUARD_RX_RATIO, sin(a) * ry)
+
+
+## 가드 보호막: 얇고 키만 한 타원 호 + 옅은 채움 + 안쪽 가는 선. 살짝 일렁이고, 저스트 가드 때는 전체가 흰빛으로 번쩍인다.
+func _draw_guard_shield() -> void:
+	var a := _guard_a
+	var ry := GUARD_RY + 2.0 * sin(_time * 6.0)
+	var col := Color(GUARD_BLUE, 0.75 * a).lerp(Color(1, 1, 1, 0.95 * a), _flash)
+	var n := 22
+	var outer := PackedVector2Array()
+	var inner := PackedVector2Array()
+	for i in n + 1:
+		var ang := lerpf(-GUARD_SPAN, GUARD_SPAN, float(i) / n)
+		outer.append(_shield_point(ang, ry))
+		inner.append(_shield_point(ang, ry * 0.9))
+	# 옅은 채움 (호와 그 현 사이)
+	draw_colored_polygon(outer, Color(GUARD_BLUE, 0.10 * a).lerp(Color(1, 1, 1, 0.35 * a), _flash))
+	draw_polyline(outer, col, GUARD_LINE, true)
+	draw_polyline(inner, Color(GUARD_BLUE, 0.35 * a).lerp(Color(1, 1, 1, 0.6 * a), _flash), 1.2, true)
+	# 위아래 끝에 작은 빛점 (막은 뒤 잠깐 더 밝다)
+	for p in [outer[0], outer[n]]:
+		draw_circle(p, 2.5, Color(1, 1, 1, 0.5 * a))
+	if _flash > 0.0:
+		draw_circle(_shield_point(0.0, GUARD_RY) + Vector2(-16.0, -20.0), 26.0 * _flash + 8.0, Color(1, 1, 1, _flash * 0.8 * a))
+
+
+## 일반 가드로 막은 순간: 보호막에서 충격 고리가 퍼지고 작은 불꽃 점이 튄다 (0.2초).
+func _draw_guard_ring() -> void:
+	var t := _guard_ring
+	var c := _shield_point(0.0, GUARD_RY)
+	c.x -= 10.0
+	var fade := 1.0 - t
+	draw_arc(c, 14.0 + 64.0 * Motion.ease_out(t, 2.0), 0, TAU, 28, Color(GUARD_BLUE, 0.85 * fade), 1.0 + 3.0 * fade, true)
+	draw_arc(c, 6.0 + 30.0 * t, 0, TAU, 20, Color(1, 1, 1, 0.5 * fade), 1.5, true)
+	for ang in [-0.95, -0.35, 0.3, 0.9]:
+		var d := 18.0 + 72.0 * Motion.ease_out(t, 1.6)
+		var p := c + Vector2(cos(ang) * d, sin(ang) * d * 0.8)
+		draw_circle(p, 1.5 + 2.5 * fade, Color(1.0, 0.97, 0.85, 0.9 * fade))
+
+
+## 초승달 위의 점: 어깨 o 에서 각도 a 로, 바깥 가장자리에서 shrink px 안쪽. 위쪽(sin<0)과 아래쪽의 세로 반지름이 다르다.
+static func _slash_point(o: Vector2, a: float, shrink: float) -> Vector2:
+	var ry := SLASH_RY_UP if sin(a) < 0.0 else SLASH_RY_DOWN
+	return o + Vector2(cos(a) * (SLASH_RX - shrink), sin(a) * (ry - shrink))
+
+
+## 씨앗 베기 흔적: 어깨를 중심으로 위 뒤(SLASH_A0)에서 앞을 지나 아래(SLASH_A1)까지 드러나는 큰 초승달. SLASH_FADE 초에 사라진다.
+func _draw_slash_crescent() -> void:
+	var t := _slash_t
+	var o := _sword_origin()
+	var reveal := Motion.ease_out(clampf(t / 0.45, 0.0, 1.0), 2.0)
+	var end := lerpf(SLASH_A0, SLASH_A1, reveal)
+	if end - SLASH_A0 < 0.05:
+		return   # 아직 드러난 호가 없다 (점 하나짜리 다각형은 그릴 수 없다)
+	var alpha := 1.0 - smoothstep(0.25, 1.0, t)
+	var n := 30
+	var pts := PackedVector2Array()
+	var edge := PackedVector2Array()
+	var edge_in := PackedVector2Array()
+	for i in n + 1:
+		var a := lerpf(SLASH_A0, end, float(i) / n)
+		var p := _slash_point(o, a, 0.0)
+		pts.append(p)
+		edge.append(p)
+		edge_in.append(_slash_point(o, a, 14.0))
+	for i in range(n, -1, -1):
+		var a := lerpf(SLASH_A0, end, float(i) / n)
+		# 안쪽은 호의 가운데가 가장 두껍고 양 끝이 뾰족한 초승달
+		var w := sin(float(i) / n * PI)
+		pts.append(_slash_point(o, a, lerpf(6.0, SLASH_THICK, w)))
+	if pts.size() >= 3:
+		draw_colored_polygon(pts, Color(1.0, 0.95, 0.8, 0.28 * alpha))
+	draw_polyline(edge, Color(SEED, 0.7 * alpha), 2.0 + 3.0 * alpha, true)
+	draw_polyline(edge_in, Color(1, 1, 1, 0.35 * alpha), 1.5, true)
+
+
+## 낙하 공격 착지: 발밑에서 납작한 충격 링이 퍼지고 흙먼지가 양옆으로 튄다.
+func _draw_plunge_ring() -> void:
+	var t := _plunge_ring
+	var fade := 1.0 - t
+	var r := 24.0 + PLUNGE_RING_R * Motion.ease_out(t, 2.2)
+	draw_set_transform(Vector2(0, FOOT_Y - 2.0), 0.0, Vector2(1.0, 0.3))
+	draw_arc(Vector2.ZERO, r, 0, TAU, 40, Color(SEED, 0.9 * fade), 2.0 + 5.0 * fade, true)
+	draw_arc(Vector2.ZERO, r * 0.6, 0, TAU, 32, Color(1, 1, 1, 0.5 * fade), 2.0, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	for i in 6:
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var k := floorf(i * 0.5) / 3.0
+		var x := side * (18.0 + (70.0 + 50.0 * k) * Motion.ease_out(t, 1.8))
+		var y := FOOT_Y - 6.0 - (22.0 + 18.0 * k) * sin(PI * minf(t * 1.1, 1.0))
+		draw_circle(Vector2(x, y), (9.0 + 5.0 * k) * (1.0 - 0.5 * t), Color(0.72, 0.66, 0.5, 0.45 * fade))
 
 
 # ---------- 신호 ----------
@@ -768,6 +940,13 @@ func _on_landed(fall_speed: float) -> void:
 	var amount := clampf(fall_speed / 1600.0, 0.1, 0.35)
 	_kick("squash", amount * 21.0)
 	_kick("crouch", amount * 20.0)
+
+
+## 낙하 공격으로 바닥에 꽂혔다: 착지보다 훨씬 깊게 찌그러지고 웅크리며 충격 링이 퍼진다.
+func _on_plunge_landed() -> void:
+	_kick("squash", 7.0)
+	_kick("crouch", 12.0)
+	_plunge_ring = 0.0
 
 
 func _on_hit_landed(result: String, _target: Node) -> void:

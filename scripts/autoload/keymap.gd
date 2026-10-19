@@ -3,10 +3,13 @@ extends Node
 ## 이벤트 표기: "key:<물리 키코드>", "btn:<버튼 번호>", "axis:<축>:<+|->"
 
 const PATH := "user://keymap.json"
-const ACTIONS := ["move_left", "move_right", "move_up", "move_down", "jump", "dodge", "attack_light", "attack_heavy", "guard", "soul_ability", "heal", "interact", "soul_prev", "soul_next", "map", "pause", "run_toggle"]
+## 저장 파일의 배치 판. 기본 배치가 크게 바뀌면 올린다. 옛 판 파일은 _load 가 맞춰 읽고 새 판으로 다시 저장한다.
+## 2: 강공격 삭제, 그 입력(K, R2/RT)이 영혼 기술로 (2026-10-18) — 옛 파일의 강공격 배치는 영혼 기술에 합친다
+const VERSION := 2
+const ACTIONS := ["move_left", "move_right", "move_up", "move_down", "jump", "dodge", "attack_light", "guard", "soul_ability", "heal", "interact", "soul_prev", "soul_next", "map", "pause", "run_toggle"]
 const NAMES := {
 	"move_left": "이동 ←", "move_right": "이동 →", "move_up": "위", "move_down": "아래", "jump": "점프", "dodge": "회피 / 달리기",
-	"attack_light": "약공격", "attack_heavy": "강공격 / 차지", "guard": "가드 / 저스트 가드", "soul_ability": "영혼 능력", "heal": "회복 (이슬 방울)",
+	"attack_light": "약공격 (공중 ↓ = 낙하 공격)", "guard": "가드 / 저스트 가드", "soul_ability": "영혼 기술", "heal": "회복 (이슬 방울)",
 	"interact": "상호작용 / 정화의 손길", "soul_prev": "영혼 전환 ←", "soul_next": "영혼 전환 →", "map": "지도", "pause": "메뉴", "run_toggle": "걷기 고정",
 }
 ## 듀얼센스 / 엑스박스 버튼 이름
@@ -134,7 +137,7 @@ func _decode(s: String) -> InputEvent:
 
 
 func _save() -> void:
-	var data := {}
+	var data := {"_version": VERSION}
 	for a in ACTIONS:
 		var arr := []
 		for e in InputMap.action_get_events(a):
@@ -154,6 +157,14 @@ func _load() -> void:
 	var data = JSON.parse_string(FileAccess.get_file_as_string(PATH))
 	if typeof(data) != TYPE_DICTIONARY:
 		return
+	var old_version := int(data.get("_version", 1)) < VERSION
+	if old_version and data.has("attack_heavy"):
+		# 판 1 (강공격이 있던 때): 강공격에 쓰던 입력을 영혼 기술에 합치고, 나머지 배치(점프·회피 등)는 그대로 살린다
+		var merged: Array = (data.get("soul_ability", []) as Array).duplicate()
+		for s in data["attack_heavy"]:
+			if not merged.has(s):
+				merged.append(s)
+		data["soul_ability"] = merged
 	for a in ACTIONS:
 		if not data.has(a):
 			continue
@@ -162,4 +173,6 @@ func _load() -> void:
 			var e := _decode(str(s))
 			if e:
 				InputMap.action_add_event(a, e)
+	if old_version:
+		_save()   # 새 판으로 다시 저장 (없는 동작 attack_heavy 는 빠진다)
 	changed.emit()

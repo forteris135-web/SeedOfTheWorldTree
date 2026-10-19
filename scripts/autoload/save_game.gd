@@ -16,6 +16,7 @@ func save(grass_id: String, scene_path: String) -> void:
 		"scene": scene_path,
 		"flags": Progress.flags,
 		"abilities": Progress.abilities,
+		"soul": Progress.soul,
 		"upgrades": Progress.upgrades,
 		"grasses": Progress.grasses,
 		"rescued": Progress.rescued,
@@ -64,6 +65,7 @@ func load_game() -> String:
 	Progress.reset()
 	Progress.flags = data.get("flags", {})
 	Progress.abilities = data.get("abilities", {})
+	Progress.soul = str(data.get("soul", "seed"))   # 옛 저장 파일에는 없다 → 씨앗
 	Progress.upgrades = data.get("upgrades", {})
 	Progress.grasses = data.get("grasses", {})
 	Progress.rescued = data.get("rescued", {})

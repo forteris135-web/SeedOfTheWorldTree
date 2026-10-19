@@ -2,9 +2,13 @@ extends CharacterBody2D
 class_name Player
 ## 셀레니아. 이동·점프·구르기(3단계) + 전투(5단계).
 ## 손맛에 관한 숫자는 모두 아래 @export 에 모여 있다. 느낌 피드백이 오면 여기만 고친다.
+## 2026-10-18 기획자 요청: 강공격을 없애고 그 자리(R2/RT, K)에 영혼 기술. 처음부터 '씨앗' 영혼(넓은 베기)이 있다.
+##   낙하 공격(공중에서 ↓ + 약공격), 하단 점프(한쪽 방향 발판 위에서 ↓ + 점프), 가드 보호막·막기 소리.
 
-enum State { IDLE, WALK, RUN, JUMP, FALL, ROLL, ATTACK, HEAVY_CHARGE, HEAVY_SWING, GUARD, HIT, HEAL, PURIFY, REST, DEAD }
+enum State { IDLE, WALK, RUN, JUMP, FALL, ROLL, ATTACK, SOUL_SLASH, PLUNGE, GUARD, HIT, HEAL, PURIFY, REST, DEAD }
 const LOCOMOTION := [State.IDLE, State.WALK, State.RUN, State.JUMP, State.FALL]
+## 히트박스를 쓰는 공격 상태들 (나가면 히트박스를 끈다)
+const ATTACK_STATES := [State.ATTACK, State.SOUL_SLASH, State.PLUNGE]
 
 signal state_changed(new_state: State)
 signal jumped(air_jump: bool)
@@ -15,8 +19,17 @@ signal roll_started
 signal hp_changed(hp: float, max_hp: float)
 signal guard_changed(guard: float, max_guard: float)
 signal dews_changed(dews: int)
-signal attacked(step: int, heavy: bool)
+signal attacked(step: int)
+## 씨앗 영혼의 넓은 베기를 시작했다
+signal soul_slash_started
+## 낙하 공격을 시작했다 / 바닥에 꽂혔다
+signal plunge_started
+signal plunge_landed
+## 한쪽 방향 발판을 ↓+점프로 통과해 내려간다
+signal dropped_through(platform: Node)
 signal just_guarded(source: Node)
+## 일반 가드로 막았다 (막은 피해). 보호막 충격 고리와 소리가 여기에 붙는다.
+signal guard_hit(damage: float)
 signal guard_broken
 signal hit_taken(damage: float)
 signal healed
@@ -61,6 +74,8 @@ signal blocked
 @export var jump_buffer_time := 0.12
 ## 점프 횟수. 이단 점프를 얻으면 2.
 @export var max_jumps := 1
+## 하단 점프(↓+점프로 한쪽 방향 발판 통과): 발판과의 충돌을 이 시간(초) 동안 끈다.
+@export var drop_through_time := 0.25
 
 @export_group("구르기")
 ## 구르는 속도.
@@ -89,16 +104,43 @@ signal blocked
 ## 공격하며 앞으로 살짝 나아가는 속도.
 @export var light_lunge := 180.0
 
-@export_group("강공격 (길게 차지)")
-## 이 시간(초)까지 차지하면 최대.
-@export var heavy_max_charge := 0.9
-@export var heavy_damage := 26.0
-@export var heavy_damage_charged := 52.0
-@export var heavy_poise := 35.0
-@export var heavy_poise_charged := 85.0
-@export var heavy_startup := 0.14
-@export var heavy_active := 0.14
-@export var heavy_recovery := 0.45
+@export_group("씨앗 베기 (처음부터 있는 영혼 기술)")
+## 느리지만 앞·위·아래를 한꺼번에 베는 큰 호. 땅·공중 모두 쓸 수 있다.
+@export var slash_damage := 32.0
+@export var slash_poise := 60.0
+## 예비동작(칼을 머리 뒤로 크게 들어 올림) → 타격 → 되돌림 (초)
+@export var slash_startup := 0.28
+@export var slash_active := 0.18
+@export var slash_recovery := 0.32
+@export var slash_cooldown := 1.4
+## 판정 상자 (소녀 중심 기준, 오른쪽을 볼 때): 뒤로 60, 위로 250, 앞으로 340, 아래로 180
+## (앞 260 은 약공격(225)보다 35px 밖에 안 넓어 '상당히 넓은 전방'이 아니었다 — 2026-10-18 검토로 340 으로)
+@export var slash_box := Rect2(-60, -250, 400, 430)
+@export var slash_knockback := Vector2(420, -200)
+
+@export_group("낙하 공격 (공중에서 ↓ + 약공격)")
+## 멈칫하는 시간 (칼을 아래로 겨눔) → 급강하 속도
+@export var plunge_pause := 0.08
+@export var plunge_speed := 1500.0
+## 떨어지는 동안의 하단 판정 (발 아래 넉넉히)
+@export var plunge_damage := 26.0
+@export var plunge_poise := 45.0
+@export var plunge_box := Rect2(-110, -40, 220, 160)
+@export var plunge_knockback := Vector2(300, -260)
+## 적을 맞히면 이 속도로 튕겨 오른다 (이단 점프가 있으면 공중 점프 1회도 되돌려 준다)
+@export var plunge_bounce := -620.0
+## 튕긴 뒤 다시 낙하 공격을 시작할 수 있기까지 (초). 그동안 누른 ↓+약공격은 기억했다가 풀리는 순간 나간다.
+## (없으면 적 위에서 0.17초마다 한 번씩 맞혀 초당 100 넘는 피해가 나오고 적이 반격할 틈이 없다 — 2026-10-18 검토)
+@export var plunge_relock := 0.25
+## 바닥에 닿기 전에 두 번째부터 맞히는 낙하 공격의 피해 비율 (연속 튕김 약화)
+@export var plunge_repeat_ratio := 0.6
+## 바닥에 닿았을 때의 충격 판정 (넓고 낮게) 과 그 시간
+@export var plunge_land_time := 0.12
+@export var plunge_land_damage := 18.0
+@export var plunge_land_poise := 35.0
+@export var plunge_land_box := Rect2(-170, -60, 340, 100)
+## 착지 뒤 일어서는 시간
+@export var plunge_recovery := 0.22
 
 @export_group("가드와 저스트 가드")
 @export var max_guard := 100.0
@@ -120,19 +162,23 @@ signal blocked
 ## 저스트 가드가 적에게 주는 흐트러짐.
 @export var just_guard_poise := 45.0
 
-@export_group("바람 공격 (영혼 능력)")
-@export var gust_damage := 14.0
+@export_group("바람 공격 (잿빛 잎새의 새의 영혼)")
+## 2026-10-18 강화: 피해 14→24, 크기 60×34→110×60, 사거리 0.5초→0.95초(약 720px)
+@export var gust_damage := 24.0
 @export var gust_poise := 24.0
 @export var gust_speed := 760.0
-@export var gust_range_time := 0.5
+@export var gust_range_time := 0.95
 @export var gust_cooldown := 1.1
+@export var gust_size := Vector2(110, 60)
 
 @export_group("빛 공격 (등불 기사의 영혼)")
-@export var light_shot_damage := 22.0
+## 2026-10-18 강화: 피해 22→34, 크기 70×22→120×40, 사거리 0.7초→1.1초(약 1200px)
+@export var light_shot_damage := 34.0
 @export var light_shot_poise := 30.0
 @export var light_shot_speed := 1100.0
-@export var light_shot_time := 0.7
+@export var light_shot_time := 1.1
 @export var light_shot_cooldown := 0.9
+@export var light_shot_size := Vector2(120, 40)
 
 @export_group("피격")
 @export var hit_stun := 0.3
@@ -155,10 +201,11 @@ var can_interact: bool:
 	get: return not interactables.is_empty()
 ## 자동 시험이나 터치 조작이 아닌, 실제 입력을 잠시 막을 때.
 var input_enabled := true
-## 공격 단계 (1~3), 공격 국면 ("startup" / "active" / "recovery")
+## 공격 단계 (약공격 1~3), 공격 국면
+##   약공격·씨앗 베기: "startup" / "active" / "recovery"
+##   낙하 공격: "pause"(멈칫) / "dive"(급강하) / "land"(착지 충격) / "recovery"
 var attack_step := 0
 var attack_phase := ""
-var charge := 0.0
 var purify_target: Node2D
 
 var _dodge_running := false
@@ -181,12 +228,17 @@ var _hit_timer := 0.0
 var _invuln_timer := 0.0
 var _heal_timer := 0.0
 var _guard_regen_delay := 0.0
-var _gust_cooldown := 0.0
+var _soul_cooldown := 0.0
 var _interact_buffer := 0.0
+var _drop_timer := 0.0
+var _drop_body: Node = null
+var _plunge_lock := 0.0        # 튕긴 뒤 다시 낙하 공격을 받기까지 남은 시간
+var _plunge_buffered := false  # 잠금 중에 누른 ↓+약공격 (풀리면 바로 낙하 공격)
+var _plunge_hits := 0          # 바닥에 닿기 전에 낙하 공격으로 맞힌 횟수 (두 번째부터 피해 감쇠)
 var _light: PointLight2D
 ## 포자 구름 등으로 느려진 비율 (1 = 정상). 매 프레임 되돌아온다.
 var slow_factor := 1.0
-## 지금 고른 영혼: "wind" / "light"
+## 지금 고른 영혼: "seed"(처음부터) / "wind" / "light"
 var soul := ""
 ## 마지막으로 안전하게 서 있던 자리 (가시에 떨어지면 여기로 돌아온다).
 var last_safe_position := Vector2.ZERO
@@ -196,6 +248,9 @@ var attack_multiplier := 1.0
 var _wind := 0.0   # 이번 물리 프레임에 받는 바람 (픽셀/초²)
 
 const PROJECTILE := preload("res://scenes/combat/projectile.tscn")
+## ↓를 '분명히' 누르고 있다고 볼 세기 (0~1). 터치 스틱은 12% 만 내려도 move_down 이 '눌림'이 되므로(action_press),
+## 낙하 공격·하단 점프는 이 세기를 넘을 때만. 키보드 1.0, 터치·컨트롤러 스틱은 내린 비율 그대로(raw) 잰다.
+const DOWN_HOLD_STRENGTH := 0.5
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -216,8 +271,12 @@ func _ready() -> void:
 	jumped.connect(func(_air): Sfx.play("jump"))
 	landed.connect(func(v): if v > 300.0: Sfx.play("land", -6.0 + clampf(v / 400.0, 0.0, 6.0)))
 	roll_started.connect(func(): Sfx.play("roll", -4.0))
-	attacked.connect(func(_s, heavy): Sfx.play("swing", -2.0 if heavy else -6.0, 0.1))
+	attacked.connect(func(_s): Sfx.play("swing", -6.0, 0.1))
+	soul_slash_started.connect(func(): Sfx.play("slash_wide", -2.0, 0.04))
+	plunge_started.connect(func(): Sfx.play("plunge", -4.0, 0.04))
+	plunge_landed.connect(func(): Sfx.play("heavy_hit", -1.0, 0.05))
 	just_guarded.connect(func(_s): Sfx.play("just_guard", 2.0, 0.02))
+	guard_hit.connect(func(_d): Sfx.play("guard", 0.0, 0.05))
 	guard_broken.connect(func(): Sfx.play("guard_break"))
 	hit_taken.connect(func(_d): Sfx.play("hurt", -2.0))
 	healed.connect(func(): Sfx.play("heal", -4.0))
@@ -238,8 +297,10 @@ func _apply_settings() -> void:
 func _apply_abilities() -> void:
 	max_jumps = 2 if Progress.has_ability("double_jump") else 1
 	var owned := owned_souls()
-	if soul == "" or not owned.has(soul):
-		soul = owned[-1] if not owned.is_empty() else ""
+	# 처음부터 '씨앗' 영혼이 있다. 새 영혼을 얻어도 저절로 바꾸지 않는다 (고른 것은 그대로).
+	# 고른 영혼은 Progress.soul 에 둔다: 소녀는 방마다 새로 만들어지므로 여기 변수만으로는 방을 옮길 때마다 '씨앗'으로 돌아간다.
+	soul = Progress.soul if owned.has(Progress.soul) else "seed"
+	Progress.soul = soul
 	if _light:
 		_light.texture_scale = 3.6 if Progress.has_ability("lantern") else 1.0
 		_light.energy = 2.4 if Progress.has_ability("lantern") else 0.9
@@ -304,7 +365,7 @@ func _physics_process(delta: float) -> void:
 	_handle_attacks(delta, on_floor)
 	_handle_heal(on_floor)
 	_handle_interact()
-	_handle_gust(on_floor)
+	_handle_soul(on_floor)
 	_apply_gravity(delta, on_floor)
 	_handle_jump(on_floor)
 	_handle_horizontal(delta, on_floor, move_input)
@@ -325,7 +386,8 @@ func _physics_process(delta: float) -> void:
 				if c.get_collider() and c.get_collider().has_method("on_head_bump"):
 					c.get_collider().on_head_bump(self, -_last_fall_speed)
 
-	if is_on_floor() and not _was_on_floor and state != State.ROLL:
+	# (낙하 공격의 착지는 다음 프레임 _plunge_land 가 plunge_landed 로 알린다 — 착지음·찌그러짐이 두 번 겹치지 않게)
+	if is_on_floor() and not _was_on_floor and state != State.ROLL and state != State.PLUNGE:
 		landed.emit(_last_fall_speed)
 	_was_on_floor = is_on_floor()
 	_resolve_locomotion_state()
@@ -342,22 +404,35 @@ func _tick_timers(delta: float, on_floor: bool) -> void:
 	if on_floor:
 		_coyote_timer = coyote_time
 		_jumps_left = max_jumps
+		_plunge_hits = 0
+		_plunge_buffered = false
 	else:
 		_coyote_timer = maxf(_coyote_timer - delta, 0.0)
+		# 발판에서 걸어 떨어져 코요테 시간이 지났다: 땅 점프는 쓴 것으로 (이단 점프만 남는다).
+		# 전에는 그대로 남아 있어서, 이단 점프가 없어도 떨어지는 중에 한 번 더 뛸 수 있었다 (2026-10-18).
+		if _coyote_timer <= 0.0 and _jumps_left >= max_jumps:
+			_jumps_left = max_jumps - 1
+	_plunge_lock = maxf(_plunge_lock - delta, 0.0)
 	_buffer_timer = maxf(_buffer_timer - delta, 0.0)
 	_roll_cooldown_timer = maxf(_roll_cooldown_timer - delta, 0.0)
 	_hit_timer = maxf(_hit_timer - delta, 0.0)
 	_invuln_timer = maxf(_invuln_timer - delta, 0.0)
 	_heal_timer = maxf(_heal_timer - delta, 0.0)
 	_guard_regen_delay = maxf(_guard_regen_delay - delta, 0.0)
-	_gust_cooldown = maxf(_gust_cooldown - delta, 0.0)
+	_soul_cooldown = maxf(_soul_cooldown - delta, 0.0)
 	_interact_buffer = maxf(_interact_buffer - delta, 0.0)
+	if _drop_timer > 0.0:
+		_drop_timer -= delta
+		if _drop_timer <= 0.0:
+			_end_drop_through()
 	if state != State.GUARD and _guard_regen_delay <= 0.0 and guard < max_guard:
 		guard = minf(guard + guard_regen * delta, max_guard)
 		guard_changed.emit(guard, max_guard)
 
 
 func _apply_gravity(delta: float, on_floor: bool) -> void:
+	if state == State.PLUNGE:
+		return   # 낙하 공격은 속도를 직접 정한다 (멈칫 → 일정한 급강하)
 	var gravity := _jump_gravity
 	if velocity.y > 0.0:
 		gravity *= fall_gravity_multiplier
@@ -410,12 +485,22 @@ func _handle_guard(on_floor: bool) -> void:
 
 func _handle_attacks(delta: float, on_floor: bool) -> void:
 	if state in LOCOMOTION or state == State.GUARD:
-		if input_enabled and Input.is_action_just_pressed("attack_light"):
-			_start_light(1)
-		elif input_enabled and Input.is_action_just_pressed("attack_heavy"):
-			charge = 0.0
-			velocity.x = 0.0 if on_floor else velocity.x
-			_set_state(State.HEAVY_CHARGE)
+		if not input_enabled:
+			_plunge_buffered = false
+			return
+		if Input.is_action_just_pressed("attack_light"):
+			# 공중에서 ↓를 분명히 누른 채 약공격 = 낙하 공격. 아니면 평소 약공격(공중 포함).
+			if not on_floor and _down_held():
+				if _plunge_lock > 0.0:
+					_plunge_buffered = true   # 튕겨 오르는 중: 기억했다가 잠금이 풀리는 순간 나간다
+				else:
+					_start_plunge()
+			else:
+				_start_light(1)
+		elif _plunge_buffered and not on_floor and _plunge_lock <= 0.0:
+			_plunge_buffered = false
+			if _down_held():
+				_start_plunge()
 		return
 	if state == State.ATTACK:
 		if input_enabled and Input.is_action_just_pressed("attack_light"):
@@ -442,33 +527,18 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 					_start_light(attack_step + 1)
 				elif _attack_timer <= 0.0:
 					_set_state(State.IDLE)
-	elif state == State.HEAVY_CHARGE:
-		charge = minf(charge + delta, heavy_max_charge)
-		var still_held := Input.is_action_pressed("attack_heavy") if input_enabled else false
-		if not still_held or charge >= heavy_max_charge:
-			_start_heavy_swing()
-	elif state == State.HEAVY_SWING:
-		_attack_timer -= delta
-		match attack_phase:
-			"startup":
-				if _attack_timer <= 0.0:
-					attack_phase = "active"
-					_attack_timer = heavy_active
-					var t := charge / heavy_max_charge
-					var hit := HitData.make(lerpf(heavy_damage, heavy_damage_charged, t) * attack_multiplier, lerpf(heavy_poise, heavy_poise_charged, t), self, Vector2(700, -260))
-					hit.from_player = true
-					hit.hitstop = 0.09
-					hitbox.set_box(Rect2(20, -110, 265, 148), facing)
-					hitbox.activate(hit, heavy_active)
-					if on_floor:
-						velocity.x = facing * light_lunge * 0.6
-			"active":
-				if _attack_timer <= 0.0:
-					attack_phase = "recovery"
-					_attack_timer = heavy_recovery
-			"recovery":
-				if _attack_timer <= 0.0:
-					_set_state(State.IDLE)
+	elif state == State.SOUL_SLASH:
+		_tick_soul_slash(delta)
+	elif state == State.PLUNGE:
+		# 착지·일어서는 동안 누른 약공격은 기억했다가 일어서자마자 1타로 잇는다 (씹히지 않게)
+		if input_enabled and Input.is_action_just_pressed("attack_light") and attack_phase in ["land", "recovery"]:
+			_attack_buffered = true
+		_tick_plunge(delta, on_floor)
+
+
+## ↓를 분명히 누르고 있는가 (DOWN_HOLD_STRENGTH 참고). 위·아래를 같이 누르면 아니다.
+func _down_held() -> bool:
+	return Input.get_action_raw_strength("move_down") - Input.get_action_raw_strength("move_up") >= DOWN_HOLD_STRENGTH
 
 
 func _start_light(step: int) -> void:
@@ -481,14 +551,118 @@ func _start_light(step: int) -> void:
 		if absf(axis) > 0.3:
 			facing = 1 if axis > 0.0 else -1
 	_set_state(State.ATTACK)
-	attacked.emit(step, false)
+	attacked.emit(step)
 
 
-func _start_heavy_swing() -> void:
+# ---------- 씨앗 베기 (처음부터 있는 영혼 기술) ----------
+
+## 느리지만 넓은 베기. 땅에서는 멈춰 서서, 공중에서는 관성과 중력을 그대로 둔 채 벤다.
+func _start_soul_slash() -> void:
+	attack_step = 0
 	attack_phase = "startup"
-	_attack_timer = heavy_startup
-	_set_state(State.HEAVY_SWING)
-	attacked.emit(0, true)
+	_attack_timer = slash_startup
+	# 쿨다운은 실제로 베는 순간(active)에 건다: 예비동작 중에 맞아 끊기면 바로 다시 쓸 수 있다
+	if input_enabled:
+		var axis := Input.get_axis("move_left", "move_right")
+		if absf(axis) > 0.3:
+			facing = 1 if axis > 0.0 else -1
+	_set_state(State.SOUL_SLASH)
+	soul_slash_started.emit()
+
+
+func _tick_soul_slash(delta: float) -> void:
+	_attack_timer -= delta
+	match attack_phase:
+		"startup":
+			if _attack_timer <= 0.0:
+				attack_phase = "active"
+				_attack_timer = slash_active
+				_soul_cooldown = slash_cooldown
+				var hit := HitData.make(slash_damage * attack_multiplier, slash_poise, self, slash_knockback)
+				hit.from_player = true
+				hit.hitstop = 0.08
+				hitbox.set_box(slash_box, facing)
+				hitbox.activate(hit, slash_active)
+				Juice.shake(3.0)
+				Juice.rumble(0.3, 0.5, 0.1)
+		"active":
+			if _attack_timer <= 0.0:
+				attack_phase = "recovery"
+				_attack_timer = slash_recovery
+		"recovery":
+			if _attack_timer <= 0.0:
+				_set_state(State.IDLE)
+
+
+# ---------- 낙하 공격 (공중에서 ↓ + 약공격) ----------
+
+func _start_plunge() -> void:
+	attack_step = 0
+	attack_phase = "pause"
+	_attack_timer = plunge_pause
+	_attack_buffered = false
+	velocity = Vector2(velocity.x * 0.2, 0.0)
+	_set_state(State.PLUNGE)
+	plunge_started.emit()
+
+
+func _tick_plunge(delta: float, on_floor: bool) -> void:
+	_attack_timer -= delta
+	match attack_phase:
+		"pause":
+			velocity.y = 0.0   # 공중에 잠깐 멈춰 칼을 아래로 겨눈다
+			if _attack_timer <= 0.0:
+				attack_phase = "dive"
+				velocity.y = plunge_speed
+				# 바닥에 닿기 전 두 번째부터는 피해가 줄어든다 (적 위에서 튕기며 반복하는 것을 약하게)
+				var ratio := 1.0 if _plunge_hits == 0 else plunge_repeat_ratio
+				var hit := HitData.make(plunge_damage * attack_multiplier * ratio, plunge_poise, self, plunge_knockback)
+				hit.from_player = true
+				hit.hitstop = 0.06
+				hitbox.set_box(plunge_box, facing)
+				hitbox.activate(hit, 10.0)   # 떨어지는 내내 켜 둔다 (맞히거나 착지하면 끈다)
+		"dive":
+			if on_floor:
+				_plunge_land()
+			else:
+				velocity.y = plunge_speed   # 중력 없이 일정한 급강하
+		"land":
+			velocity.x = 0.0
+			if _attack_timer <= 0.0:
+				attack_phase = "recovery"
+				_attack_timer = plunge_recovery
+		"recovery":
+			if _attack_buffered:
+				_start_light(1)
+			elif _attack_timer <= 0.0:
+				_set_state(State.IDLE)
+
+
+## 바닥에 꽂혔다: 넓고 낮은 충격 판정 + 흔들림.
+func _plunge_land() -> void:
+	attack_phase = "land"
+	_attack_timer = plunge_land_time
+	velocity = Vector2.ZERO
+	var hit := HitData.make(plunge_land_damage * attack_multiplier, plunge_land_poise, self, Vector2(380, -200))
+	hit.from_player = true
+	hit.hitstop = 0.04
+	hitbox.set_box(plunge_land_box, facing)
+	hitbox.activate(hit, plunge_land_time)
+	Juice.shake(6.0)
+	Juice.hitstop(0.04, 0.05)
+	Juice.rumble(0.5, 0.9, 0.15)
+	plunge_landed.emit()
+
+
+## 떨어지다 적을 맞혔다: 작게 튕겨 오르고, 이단 점프가 있으면 공중 점프를 한 번 되돌려 준다 (연속 낙하 공격 가능).
+## 이단 점프가 없는데 공중 점프를 '만들어' 주면 적을 발판 삼아 능력 관문(첫 방 천장 틈 등)을 건너뛸 수 있다 — 2026-10-18 검토.
+func _plunge_bounce() -> void:
+	velocity.y = plunge_bounce
+	_jumps_left = maxi(_jumps_left, max_jumps - 1)
+	_plunge_lock = plunge_relock
+	_plunge_hits += 1
+	_set_state(State.FALL)   # 바로 다음 프레임 _resolve_locomotion_state 가 JUMP/FALL 로 정리한다
+	Juice.rumble(0.3, 0.6, 0.1)
 
 
 func _handle_heal(on_floor: bool) -> void:
@@ -527,8 +701,9 @@ func apply_wind(force: float, _delta: float) -> void:
 	_wind += force
 
 
+## 가진 영혼들. '씨앗'은 처음부터 있고 늘 맨 앞.
 func owned_souls() -> Array:
-	var out := []
+	var out := ["seed"]
 	if Progress.has_ability("wind"):
 		out.append("wind")
 	if Progress.has_ability("light"):
@@ -538,13 +713,14 @@ func owned_souls() -> Array:
 
 func soul_name() -> String:
 	match soul:
+		"seed": return "씨앗 (세계수의 씨앗)"
 		"wind": return "바람 (잿빛 잎새의 새)"
 		"light": return "빛 (등불 기사)"
 	return ""
 
 
-## 영혼 능력. I / L2. 영혼 전환은 Q / 십자키 ← →.
-func _handle_gust(_on_floor: bool) -> void:
+## 영혼 기술. I / K / L2 / R2 (강공격 자리). 영혼 전환은 Q / 십자키 ← →.
+func _handle_soul(_on_floor: bool) -> void:
 	if not input_enabled:
 		return
 	var owned := owned_souls()
@@ -552,34 +728,46 @@ func _handle_gust(_on_floor: bool) -> void:
 		var i := owned.find(soul)
 		var step := 1 if Input.is_action_just_pressed("soul_next") else -1
 		soul = owned[(i + step + owned.size()) % owned.size()]
+		Progress.soul = soul   # 방을 옮겨도(소녀가 새로 만들어져도) 고른 영혼이 남게
 		soul_changed.emit(soul)
 	if soul == "":
 		return
-	if Input.is_action_just_pressed("soul_ability") and _gust_cooldown <= 0.0 and (state in LOCOMOTION or state == State.GUARD):
-		var p: Projectile = PROJECTILE.instantiate()
-		if soul == "light":
-			_gust_cooldown = light_shot_cooldown
-			p.kind = Projectile.Kind.FEATHER
-			p.speed = light_shot_speed
-			p.damage = light_shot_damage * attack_multiplier
-			p.poise = light_shot_poise
-			p.lifetime = light_shot_time
-			p.size = Vector2(70, 22)
-			p.color = Color(1.0, 0.85, 0.5)
-		else:
-			_gust_cooldown = gust_cooldown
-			p.kind = Projectile.Kind.GUST
-			p.speed = gust_speed
-			p.damage = gust_damage * attack_multiplier
-			p.poise = gust_poise
-			p.lifetime = gust_range_time
-			p.size = Vector2(60, 34)
-			p.color = Color(0.8, 1.0, 0.85)
-		get_parent().add_child(p)
-		p.global_position = global_position + Vector2(facing * 50.0, -20.0)
-		p.launch(Vector2(facing, 0), self, true)
-		gust_cast.emit()
-		Juice.rumble(0.2, 0.3, 0.08)
+	# 약공격 되돌림 중에도 이어 쓸 수 있다 (가드·구르기와 같은 허용: 3연타 → 영혼 기술 연계)
+	var can_cast := state in LOCOMOTION or state == State.GUARD or (state == State.ATTACK and attack_phase == "recovery")
+	if Input.is_action_just_pressed("soul_ability") and _soul_cooldown <= 0.0 and can_cast:
+		match soul:
+			"seed":
+				_start_soul_slash()
+			"wind", "light":
+				_cast_projectile()
+
+
+## 바람(새의 영혼) / 빛(기사의 영혼) 투사체.
+func _cast_projectile() -> void:
+	var p: Projectile = PROJECTILE.instantiate()
+	if soul == "light":
+		_soul_cooldown = light_shot_cooldown
+		p.kind = Projectile.Kind.FEATHER
+		p.speed = light_shot_speed
+		p.damage = light_shot_damage * attack_multiplier
+		p.poise = light_shot_poise
+		p.lifetime = light_shot_time
+		p.size = light_shot_size
+		p.color = Color(1.0, 0.85, 0.5)
+	else:
+		_soul_cooldown = gust_cooldown
+		p.kind = Projectile.Kind.GUST
+		p.speed = gust_speed
+		p.damage = gust_damage * attack_multiplier
+		p.poise = gust_poise
+		p.lifetime = gust_range_time
+		p.size = gust_size
+		p.color = Color(0.8, 1.0, 0.85)
+	get_parent().add_child(p)
+	p.global_position = global_position + Vector2(facing * 50.0, -20.0)
+	p.launch(Vector2(facing, 0), self, true)
+	gust_cast.emit()
+	Juice.rumble(0.2, 0.3, 0.08)
 
 
 ## 어두운 방에서 소녀 주변을 밝힌다 (티아의 등불은 희미하게, 기사의 영혼이 깃들면 넓게).
@@ -607,24 +795,55 @@ func set_light(on: bool) -> void:
 
 func _handle_jump(on_floor: bool) -> void:
 	if _buffer_timer > 0.0 and state in LOCOMOTION:
+		# ↓를 분명히 누른 채 점프: 발밑이 한쪽 방향 발판이면 점프 대신 통과해 내려간다 (하단 점프)
+		if on_floor and input_enabled and _down_held() and _try_drop_through():
+			return
 		if on_floor or _coyote_timer > 0.0:
 			_do_jump(false)
 		elif _jumps_left > 0:
 			_do_jump(true)
 
 
+## 발밑 지형이 one_way 발판(Platform.one_way)이면 잠깐 충돌을 끄고 떨어진다. 성공하면 true.
+func _try_drop_through() -> bool:
+	# 아래로 살짝 밀어 보아 막는 몸을 찾는다 (한쪽 방향 발판도 위에서 내려갈 때는 막으므로 잡힌다)
+	var col := move_and_collide(Vector2(0, 6), true)
+	if col == null:
+		return false
+	var body := col.get_collider()
+	if not (body is Platform and body.one_way):
+		return false
+	if _drop_body and is_instance_valid(_drop_body) and _drop_body != body:
+		remove_collision_exception_with(_drop_body)
+	_drop_body = body
+	add_collision_exception_with(body)
+	_drop_timer = drop_through_time
+	_buffer_timer = 0.0
+	_coyote_timer = 0.0
+	_jumps_left = maxi(max_jumps - 1, 0)   # 코요테 없음: 땅 점프는 쓴 것으로 (이단 점프는 남는다)
+	velocity.y = maxf(velocity.y, 160.0)
+	_set_state(State.FALL)
+	dropped_through.emit(body)
+	return true
+
+
+func _end_drop_through() -> void:
+	_drop_timer = 0.0
+	if _drop_body and is_instance_valid(_drop_body):
+		remove_collision_exception_with(_drop_body)
+	_drop_body = null
+
+
 func _handle_horizontal(delta: float, on_floor: bool, move_input: float) -> void:
 	match state:
 		State.ROLL:
 			velocity.x = facing * roll_speed
-		State.ATTACK, State.HEAVY_SWING:
+		State.ATTACK, State.SOUL_SLASH:
+			# 땅에서는 멈춰 서서 벤다. 공중에서는 관성 그대로.
 			if on_floor:
 				velocity.x = move_toward(velocity.x, 0.0, ground_decel * 0.8 * delta)
-		State.HEAVY_CHARGE:
-			if on_floor:
-				velocity.x = move_toward(velocity.x, 0.0, ground_decel * delta)
-			if absf(move_input) > 0.3:
-				facing = 1 if move_input > 0.0 else -1
+		State.PLUNGE:
+			velocity.x = move_toward(velocity.x, 0.0, 3000.0 * delta)
 		State.GUARD:
 			velocity.x = move_toward(velocity.x, move_input * walk_speed * guard_move_ratio, ground_accel * delta)
 			# 가드 중에는 방향을 바꾸지 않는다 (정면만 막는다)
@@ -661,7 +880,8 @@ func _do_jump(air_jump: bool) -> void:
 func _try_roll(on_floor: bool) -> void:
 	if _roll_cooldown_timer > 0.0:
 		return
-	var can := state in LOCOMOTION or state == State.GUARD or (state == State.ATTACK and attack_phase == "recovery")
+	var can := state in LOCOMOTION or state == State.GUARD \
+		or ((state == State.ATTACK or state == State.SOUL_SLASH) and attack_phase == "recovery")
 	if not can or not (on_floor or _coyote_timer > 0.0):
 		return
 	hitbox.deactivate()
@@ -679,10 +899,10 @@ func _wants_to_leave_rest() -> bool:
 func _set_state(new_state: State) -> void:
 	if new_state == state:
 		return
-	if state == State.ATTACK or state == State.HEAVY_SWING:
+	if state in ATTACK_STATES:
 		hitbox.deactivate()
 	state = new_state
-	if new_state == State.IDLE:
+	if not (new_state in ATTACK_STATES):
 		attack_step = 0
 		attack_phase = ""
 	state_changed.emit(new_state)
@@ -713,7 +933,6 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 			if hit.source and hit.source.has_method("on_just_guarded"):
 				hit.source.on_just_guarded(self, just_guard_poise)
 			return "just_guard"
-		Sfx.play("guard", -4.0)
 		guard -= hit.damage * guard_drain_ratio
 		hp = maxf(hp - hit.damage * guard_damage_ratio, 0.0)
 		hp_changed.emit(hp, max_hp)
@@ -731,6 +950,7 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 			Juice.shake(8.0)
 			return "guard_break"
 		guard_changed.emit(guard, max_guard)
+		guard_hit.emit(hit.damage)   # 보호막 충격 고리 + 막는 소리
 		return "guard"
 
 	hp = maxf(hp - hit.damage, 0.0)
@@ -752,15 +972,22 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 
 func _on_hit_landed(result: String, _target: Node) -> void:
 	if result == "hit":
-		Sfx.play("heavy_hit" if state == State.HEAVY_SWING else "hit", -3.0, 0.1)
+		# 낙하 공격 착지 충격은 착지음(plunge_landed → heavy_hit)이 이미 났으니 타격음을 또 내지 않는다
+		if not (state == State.PLUNGE and attack_phase == "land"):
+			Sfx.play("heavy_hit" if (state == State.SOUL_SLASH or state == State.PLUNGE) else "hit", -3.0, 0.1)
 		Juice.hitstop(0.05, 0.05)
 		Juice.rumble(0.25, 0.5, 0.08)
 		Juice.shake(3.0)
+		# 낙하 공격으로 적을 맞혔다: 튕겨 오른다 (떨어지는 중에만. 착지 충격은 그대로)
+		if state == State.PLUNGE and attack_phase == "dive":
+			_plunge_bounce()
 	elif result == "blocked":
 		# 방패에 튕겼다: 살짝 밀려난다
 		velocity.x = -facing * 260.0
 		Juice.rumble(0.1, 0.2, 0.06)
 		blocked.emit()
+		if state == State.PLUNGE and attack_phase == "dive":
+			_plunge_bounce()
 
 
 func _die() -> void:
@@ -796,7 +1023,7 @@ func take_hazard(damage: float) -> void:
 		return
 	_invuln_timer = 1.2
 	_hit_timer = 0.5
-	_set_state(State.HIT)
+	_set_state(State.HIT)   # 낙하 공격 중이었어도 여기서 끝난다
 	velocity = Vector2.ZERO
 	input_enabled = false
 	await get_tree().create_timer(0.35).timeout
@@ -819,6 +1046,10 @@ func revive(at: Vector2) -> void:
 	dews = max_dews
 	_invuln_timer = 1.0
 	last_safe_position = at
+	_end_drop_through()
+	_plunge_lock = 0.0
+	_plunge_buffered = false
+	_plunge_hits = 0
 	_set_state(State.IDLE)
 	hp_changed.emit(hp, max_hp)
 	guard_changed.emit(guard, max_guard)
@@ -887,8 +1118,8 @@ func state_name() -> String:
 		State.FALL: return "낙하"
 		State.ROLL: return "구르기"
 		State.ATTACK: return "약공격 %d" % attack_step
-		State.HEAVY_CHARGE: return "차지 %.0f%%" % (charge / heavy_max_charge * 100.0)
-		State.HEAVY_SWING: return "강공격"
+		State.SOUL_SLASH: return "씨앗 베기"
+		State.PLUNGE: return "낙하 공격"
 		State.GUARD: return "가드"
 		State.HIT: return "피격"
 		State.HEAL: return "회복"

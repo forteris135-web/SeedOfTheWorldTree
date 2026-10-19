@@ -368,17 +368,18 @@ func _autotest() -> void:
 	await tree.create_timer(0.4).timeout
 	print("[자동시험] 약공격 3연타 뒤 적 체력: %.0f → %.0f (흐트러짐 %.0f)" % [hp0, enemy.hp, enemy.poise])
 	_save_screenshot("debug_autotest_attack.png")
-	# 강공격 차지
+	# 씨앗 베기 (처음부터 있는 영혼 기술, 옛 강공격 자리)
 	var hp1 := enemy.hp
-	player._invuln_timer = 2.5   # 시험용: 차지 중에 맞아 끊기지 않게
-	Input.action_press("attack_heavy")
-	await tree.create_timer(0.95).timeout
-	Input.action_release("attack_heavy")
-	await tree.create_timer(0.8).timeout
+	player._invuln_timer = 2.5   # 시험용: 예비동작 중에 맞아 끊기지 않게
+	player.soul = "seed"
+	Input.action_press("soul_ability")
+	await tree.physics_frame
+	Input.action_release("soul_ability")
+	await tree.create_timer(1.0).timeout
 	if is_instance_valid(enemy):
-		print("[자동시험] 강공격(최대 차지) 뒤 적 체력: %.0f → %.0f (흐트러짐 %.0f, 상태 %s)" % [hp1, enemy.hp, enemy.poise, enemy.state_name()])
+		print("[자동시험] 씨앗 베기 뒤 적 체력: %.0f → %.0f (흐트러짐 %.0f, 상태 %s)" % [hp1, enemy.hp, enemy.poise, enemy.state_name()])
 	else:
-		print("[자동시험] 강공격(최대 차지)으로 적이 쓰러졌다 (체력 %.0f 에서). 다음 적으로 옮긴다." % hp1)
+		print("[자동시험] 씨앗 베기로 적이 쓰러졌다 (체력 %.0f 에서). 다음 적으로 옮긴다." % hp1)
 		enemy = null
 		for e in tree.get_nodes_in_group("enemy"):
 			if is_instance_valid(e) and e.state != EnemyBase.State.DEAD:
@@ -393,14 +394,31 @@ func _autotest() -> void:
 		player.velocity = Vector2.ZERO
 		await tree.create_timer(0.3).timeout
 	# 가드 들고 적의 공격을 기다린다 (일반 가드)
+	# 씨앗 베기의 넉백(420)과 무너짐(3.5초) 때문에 적이 제때 못 와서 결과가 들쭉날쭉했다 (2026-10-18 검토):
+	# 적을 싸울 수 있는 상태로 되돌리고 바로 옆에 서서, 실제로 막은 신호(guard_hit)가 올 때까지 기다린다.
+	if enemy.state == EnemyBase.State.BROKEN or enemy.state == EnemyBase.State.HIT:
+		enemy._set_state(EnemyBase.State.IDLE)
+	enemy.poise = 0.0
+	enemy.velocity = Vector2.ZERO
+	player.position = enemy.position + Vector2(-130, -10)
+	player.facing = 1
+	player.velocity = Vector2.ZERO
+	player._invuln_timer = 0.0
+	await tree.create_timer(0.3).timeout
 	var php0 := player.hp
+	var guard_hits := []
+	var on_guard_hit := func(d): guard_hits.append(d)
+	player.guard_hit.connect(on_guard_hit)
 	Input.action_press("guard")
 	var waited := 0.0
-	while waited < 4.0 and player.hp == php0 and player.state != Player.State.HIT:
+	while waited < 6.0 and guard_hits.is_empty() and player.state != Player.State.HIT:
 		await tree.physics_frame
 		waited += get_physics_process_delta_time()
+		if player.state != Player.State.GUARD and player.state != Player.State.HIT:
+			Input.action_press("guard")
 	await tree.create_timer(0.2).timeout
-	print("[자동시험] 가드 중 피격: 소녀 체력 %.0f → %.0f, 가드 게이지 %.0f, 상태 %s" % [php0, player.hp, player.guard, player.state_name()])
+	player.guard_hit.disconnect(on_guard_hit)
+	print("[자동시험] 가드 중 피격: 소녀 체력 %.0f → %.0f, 가드 게이지 %.0f, 상태 %s, 막은 피해 %s (%.1f초 기다림)" % [php0, player.hp, player.guard, player.state_name(), guard_hits, waited])
 	Input.action_release("guard")
 	_save_screenshot("debug_autotest_guard.png")
 	# 가드 없이 맞기
@@ -411,7 +429,11 @@ func _autotest() -> void:
 		waited += get_physics_process_delta_time()
 	await tree.create_timer(0.5).timeout
 	print("[자동시험] 맨몸 피격: 소녀 체력 %.0f → %.0f" % [php1, player.hp])
-	# 회복
+	# 회복 (시험용으로 잠깐 무적: 적의 공격에 끊기면 회복 자체를 못 본다)
+	player._invuln_timer = 1.5
+	if not (player.state in Player.LOCOMOTION):
+		player._set_state(Player.State.IDLE)
+	await tree.physics_frame
 	var php2 := player.hp
 	Input.action_press("heal")
 	await tree.physics_frame

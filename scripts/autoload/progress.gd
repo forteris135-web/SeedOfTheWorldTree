@@ -8,6 +8,8 @@ signal ability_gained(ability: String)
 var flags := {}
 ## 얻은 능력: double_jump, wind, lantern ...
 var abilities := {}
+## 고른 영혼 기술: "seed"(처음부터) / "wind" / "light". 소녀는 방마다 새로 만들어지므로 선택은 여기 둔다 (세이브에도 들어간다).
+var soul := "seed"
 ## 다음 방에서 소녀가 설 자리 (RoomExit 가 정한다). 비어 있으면 방의 기본 자리.
 var next_spawn := ""
 ## 지금 보여 줄 회상 (memories.json 의 키)과 끝난 뒤 돌아갈 방.
@@ -75,6 +77,7 @@ func gain_ability(ability: String) -> void:
 func reset() -> void:
 	flags.clear()
 	abilities.clear()
+	soul = "seed"
 	upgrades.clear()
 	grasses.clear()
 	last_grass = {}
