@@ -355,8 +355,12 @@ func _process(delta: float) -> void:
 		settle = 1.0 if debug_pose.begins_with("dead_lie") else 0.0
 	if p.is_empty():
 		p = motion.pose("idle")
-	# 지팡이가 튕겼다(저스트 가드): stagger 1 → 0 동안 팔·몸통이 뒤로 젖혀졌다 돌아온다
+	# 지팡이가 튕겼다(저스트 가드): stagger 1 → 0 동안 지팡이가 치켜든 자리 쪽으로 되튕기고 팔·몸통이 뒤로 젖혀졌다 돌아온다
+	# (판정·시간은 그대로 — 그림만 휘청)
 	if _boss.stagger > 0.0:
+		if st == RootKeeper.State.SWEEP or st == RootKeeper.State.SWEEP2:
+			var back := "sweep_up" if st == RootKeeper.State.SWEEP else "sweep2_hit"
+			p = motion.mix(p, motion.pose(back), _boss.stagger * 0.6)
 		p = p.duplicate()
 		p["arm_f_up"] = float(p.get("arm_f_up", 0.0)) + 46.0 * _boss.stagger
 		p["torso"] = float(p.get("torso", 0.0)) - 10.0 * _boss.stagger
@@ -425,6 +429,8 @@ func _stance_pose(speed_rig: float) -> Dictionary:
 	idle["head"] = float(idle["head"]) + sin(_t * 0.9 + 0.9) * 2.2
 	idle["toe_f"] = (0.5 + 0.5 * sin(_t * 0.7)) * 3.0
 	idle["toe_b"] = (0.5 + 0.5 * sin(_t * 0.7 + 2.0)) * 3.0
+	# 골반째 아주 조금 흔들린다 → 치마 자락(늘어진 천)이 한 박자 늦게 따라 흔들린다
+	idle["lean"] = float(idle.get("lean", 0.0)) + sin(_t * 0.9 - 0.6) * 1.2
 	var walk := motion.pose("walk_back" if speed_rig < 0.0 else "walk")
 	return motion.mix(idle, walk, amt)
 
@@ -586,7 +592,12 @@ func _on_entered(st: int) -> void:
 		RootKeeper.State.STANCE:
 			fade = 0.25
 		RootKeeper.State.INTRO:
+			# 나타나는 순간부터 고개 숙여 웅크린 자세 (서 있다가 숙이지 않게: 채널을 바로 그 자세로)
+			motion.transition(0.0)
+			motion.set_target(motion.pose("intro_bow"), RigMotion.Drive.SOFT, RigMotion.Feet.POSE)
+			motion.update(0.0, {})
 			motion.snap_feet()
+			_state_from = motion.capture()
 			fade = 0.0
 	if st in RootKeeper.ATTACK_STATES:
 		fade = 0.0     # 세 박자 곡선이 지금 자세에서 출발한다
