@@ -143,3 +143,23 @@
   **GPU 칠하기 비용(겹쳐 칠하기)은 이 렌더러에서 잴 수 없어 재지 않았다** — 잿빛 셰이더는 정화 전 화면의 잿빛 재질 겹마다 색상 계산 + 표 찾기 3번을 한다.
   아이폰 11 Pro 의 잿빛 수관 방에서 프레임을 꼭 확인할 것. (`probe_terrain -- --cost` 의 '0.49배'는 옛 방식 두 가지끼리의 비교다.)
 - atlas 는 GPU 압축(VRAM 압축 — 모바일은 ETC2, `compress/high_quality` 를 켜면 ASTC)·밉맵, 몸통 결은 512×512 반복.
+
+---
+
+## 7. 수액의 호수 (sap_lake · sap_descent) — 추가된 것
+
+- 그림 옷 두 벌: `data/terrain/sap_lake.json` (호숫가의 뿌리·수면 자국 벽·호수 한가운데 — 금빛 뿌리 발판 시트 78493128 + 물 지형 시트),
+  `data/terrain/sap_descent.json` (숨은 내리막 — 어두운 뿌리·폭포 시트 C082DF1A).
+- **방 하나만 다른 그림 옷**: 방(Room) 노드 메타 `terrain_skin = "sap_descent"` → `TerrainSkin.for_node` 가 그 그림 옷을 쓴다.
+  지역(`region`)은 그대로라 정화·음악·잿빛 표는 지역 것(sap_lake)을 쓴다.
+- **`wall` 역할** (`scripts/world/terrain_wall.gd`, 추가만 — wall 조각이 없는 그림 옷은 그대로): 덩어리의 드러난 높은 옆면(`min_h` 이상)을
+  세로로 긴 줄기·기둥 조각으로 덮는다. 바깥 가장자리는 충돌 옆면 밖으로 `out` px, 안쪽 가장자리는 `inner_fade` 동안 몸통 결로 녹는다.
+  `params.wall`: `width`, `out`, `min_h`, `inner_fade`, `v_lo`/`v_hi`(조각 안에서 쓰는 세로 구간 — 빛 구멍처럼 되풀이되면 티 나는 부분은 뺀다), `top_inset`.
+- **`water`·`wave` 역할** (`scripts/world/sap_water_art.gd`): 수액 웅덩이(SapPool)의 겉모습. 그 방의 그림 옷에 water 조각이 있으면
+  몸통(수면 조각 가운데 토막을 이어 붙임)·물결 띠를 그림으로 그리고, SapPool 은 빛 띠·방울·잔물결만 얹는다. **판정·수면 높이는 그대로.**
+  끝이 지형에 막혔으면 곧게, 열려 있으면 비스듬한 물가 끝(판정 끝 밖으로 조금, 서서히 사라짐). water 조각이 없는 지역(잠긴 채굴장)은 옛 그림 그대로.
+  `params.water`: `alpha`(정화 후), `alpha_ash`(정화 전), `wave_alpha`.
+- `params.ground.flip_right_cap` (기본 꺼짐): 오른쪽 절벽 끝에 끝 조각의 왼끝을 뒤집어 쓴다 (오른끝이 내리막 비탈인 조각용).
+- 시험: `godot --headless --path . res://tools/probe_lake_terrain.tscn` (probe_terrain 의 재기 도우미를 물려 쓰는 호수 전용 시험 — 방 4곳 맞춤·끝 밖 그림·
+  가시·벽 조각·웅덩이 그림·배경·비용). 다른 지역도 같은 식으로 `extends "res://tools/probe_terrain.gd"` 해 방 목록·atlas 만 바꿔 쓸 수 있다.
+- 배경: `art/backgrounds/bg_sap_lake_1.png`(4-1)·`bg_sap_lake_boss.png`(4-2)·`bg_hidden_descent.png`(5) 는 기획자 그림. `tools/make_placeholders_lake.gd` 는 더는 배경을 만들지 않는다.

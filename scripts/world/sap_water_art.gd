@@ -21,7 +21,7 @@ const DEPTH_PAD := 14.0
 ## 끝이 열린 웅덩이(바닥 위에 고인 수액)는 몸통을 이만큼 더 깊게 — 바닥 띠를 덮어 '바닥이 움푹 팬 웅덩이'로 읽히게
 const OPEN_PAD := 56.0
 ## 열린 끝(물가)이 서서히 사라지는 길이 (px)
-const SHORE_FADE := 70.0
+const SHORE_FADE := 120.0
 ## 열린 끝 조각이 판정 끝 밖으로 나가는 비율 (끝 조각 폭 기준)
 const SHORE_OUT := 0.55
 ## 물결 띠 높이 (px) 와 흔들림 (px)
