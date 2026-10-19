@@ -60,11 +60,13 @@ func _shoot() -> void:
 	p.reflectable = true
 	p.size = Vector2(26, 18)
 	p.color = Color(0.76, 0.62, 0.3)
+	p.look = "gardener_seed"   # 이펙트 리뉴얼 F2: 금빛 씨앗 그림
 	get_parent().add_child(p)
 	var origin := global_position + Vector2(facing * 70.0, -hurt_height * 0.55)
 	p.global_position = origin
 	var dir := (player.global_position + Vector2(0, -40) - origin).normalized()
 	p.launch(dir, self, false)
+	Fx.spawn("seed_muzzle", origin, {"rot": rad_to_deg(dir.angle())})
 	_shot += 1
 	# 반동은 실제로 쏘는 순간에 맞춰 그림에 직접 전한다
 	_visual_call("recoil", [1.0])

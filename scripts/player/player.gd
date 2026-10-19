@@ -5,6 +5,9 @@ class_name Player
 ## 2026-10-18 기획자 요청: 강공격을 없애고 그 자리(R2/RT, K)에 영혼 기술. 처음부터 '씨앗' 영혼(넓은 베기)이 있다.
 ##   낙하 공격(공중에서 ↓ + 약공격, 또는 터치 '낙하' 버튼 = 동작 plunge), 하단 점프(한쪽 방향 발판 위에서 ↓ + 점프), 가드 보호막·막기 소리.
 ## 2026-10-19 기획자 요청: 바람·빛 영혼 기술 파격 상향(피해 ×4, 크기 2배쯤, 쿨 5/7초), 낙하 공격 버튼, 영혼 이름·색·쿨다운 조회 함수(HUD·터치가 쓴다).
+## 2026-10-19 이펙트 리뉴얼 F1: 바람 = 날아가는 초승달 검기(WindCrescent, 판정은 보이는 초승달 머리 = 세로로 긴 사각형),
+##   빛 = 레이저(SoulLaser: 손에 0.12초 모았다가 벽까지 곧게, 빛줄기 안의 적을 한 번씩 모두 맞힌다).
+##   피해·흐트러짐·쿨다운·사거리는 그대로. 맞힌 자리의 불꽃(hit_spark)은 여기서 띄운다 (Fx).
 
 enum State { IDLE, WALK, RUN, JUMP, FALL, ROLL, ATTACK, SOUL_SLASH, PLUNGE, GUARD, HIT, HEAL, PURIFY, REST, DEAD }
 const LOCOMOTION := [State.IDLE, State.WALK, State.RUN, State.JUMP, State.FALL]
@@ -45,6 +48,9 @@ signal rest_ended
 signal died
 signal interactables_changed(can_interact: bool)
 signal gust_cast
+## 빛의 영혼 레이저: 모으기 시작 / 발사 (맞힌 수)
+signal laser_charge_started
+signal laser_fired(hits: int)
 signal soul_changed(soul: String)
 signal blocked
 
@@ -176,7 +182,9 @@ signal blocked
 @export var gust_speed := 760.0
 @export var gust_range_time := 1.3
 @export var gust_cooldown := 5.0
-@export var gust_size := Vector2(240, 130)
+## 2026-10-19 이펙트 리뉴얼: 초승달 검기 그림의 머리(세로로 선 초승달)에 맞춰 240×130(가로로 긴 바람 호) → 190×230.
+## 판정은 예전처럼 크기 × 0.9 사각형 (171×207). 그림의 꼬리(옅은 빛줄기)는 판정에 넣지 않는다.
+@export var gust_size := Vector2(190, 230)
 
 @export_group("빛 공격 (등불 기사의 영혼)")
 ## 2026-10-18 강화: 피해 22→34, 크기 70×22→120×40, 사거리 0.7초→1.1초(약 1200px)
@@ -186,13 +194,20 @@ signal blocked
 @export var light_shot_speed := 1100.0
 @export var light_shot_time := 1.4
 @export var light_shot_cooldown := 7.0
+## 2026-10-19 이펙트 리뉴얼: 날아가는 빛의 창 → 레이저. 사거리 = 예전에 날아가던 거리 (속도 × 수명 = 1540px),
+## 빛줄기 판정 높이 = light_shot_size.y × 0.9 (81px, 예전 판정 높이 그대로). light_shot_size.x 는 더 쓰지 않는다.
 @export var light_shot_size := Vector2(280, 90)
+## 손에 빛을 모으는 시간 (초) — 이 동안은 움직일 수 있고, 맞으면 쏘지 않고 쿨다운을 돌려받는다
+@export var light_charge_time := 0.12
+## 빛줄기가 화면에 남는 시간 (초) / 그중 적을 맞히는 앞부분 (초)
+@export var light_beam_time := 0.42
+@export var light_beam_active := 0.08
 
 ## 영혼마다의 이름·설명·색 (HUD·터치 버튼·전환 알림이 함께 쓴다). 색: 씨앗 연둣빛 / 바람 민트 / 빛 금빛.
 const SOUL_INFO := {
 	"seed": {"name": "씨앗", "title": "씨앗의 영혼", "source": "세계수의 씨앗", "desc": "넓은 베기 — 앞·위·아래를 한 번에 벤다", "color": Color(0.85, 1.0, 0.75)},
-	"wind": {"name": "바람", "title": "바람의 영혼", "source": "잿빛 잎새의 새", "desc": "커다란 돌풍 — 멀리 날아가 크게 친다", "color": Color(0.85, 1.0, 0.9)},
-	"light": {"name": "빛", "title": "빛의 영혼", "source": "등불 기사", "desc": "빛의 창 — 가장 멀리 날아가 가장 세게 친다", "color": Color(1.0, 0.9, 0.7)},
+	"wind": {"name": "바람", "title": "바람의 영혼", "source": "잿빛 잎새의 새", "desc": "초승달 검기 — 멀리 날아가 크게 친다", "color": Color(0.85, 1.0, 0.9)},
+	"light": {"name": "빛", "title": "빛의 영혼", "source": "등불 기사", "desc": "빛줄기 — 벽까지 곧게 뻗어 늘어선 적을 모두 꿰뚫는다", "color": Color(1.0, 0.9, 0.7)},
 }
 
 @export_group("피격")
@@ -283,7 +298,8 @@ var _safe_sample_timer := 0.0
 var attack_multiplier := 1.0
 var _wind := 0.0   # 이번 물리 프레임에 받는 바람 (픽셀/초²)
 
-const PROJECTILE := preload("res://scenes/combat/projectile.tscn")
+const WIND_CRESCENT := preload("res://scripts/combat/wind_crescent.gd")
+const SOUL_LASER := preload("res://scripts/combat/soul_laser.gd")
 ## ↓를 '분명히' 누르고 있다고 볼 세기 (0~1). 터치 스틱은 12% 만 내려도 move_down 이 '눌림'이 되므로(action_press),
 ## 낙하 공격·하단 점프는 이 세기를 넘을 때만. 키보드 1.0, 터치·컨트롤러 스틱은 내린 비율 그대로(raw) 잰다.
 const DOWN_HOLD_STRENGTH := 0.5
@@ -317,7 +333,9 @@ func _ready() -> void:
 	hit_taken.connect(func(_d): Sfx.play("hurt", -2.0))
 	healed.connect(func(): Sfx.play("heal", -4.0))
 	purify_started.connect(func(_t): Sfx.play("purify", -2.0, 0.0))
-	gust_cast.connect(func(): Sfx.play("gust", -6.0))
+	gust_cast.connect(_on_gust_cast_sfx)
+	laser_charge_started.connect(func(): Sfx.play("ring_hum", -10.0, 0.0))
+	laser_fired.connect(func(_n): Sfx.play("sword_wave", -3.0, 0.03))
 	soul_changed.connect(func(_s): Sfx.play("select", -4.0))
 	rest_started.connect(func(_g): Sfx.play("bloom", -6.0, 0.0))
 	died.connect(func(): Sfx.play("boss_fall", -4.0))
@@ -895,41 +913,39 @@ func _handle_soul(_on_floor: bool) -> void:
 	# 약공격 되돌림 중에도 이어 쓸 수 있다 (가드·구르기와 같은 허용: 3연타 → 영혼 기술 연계)
 	var can_cast := state in LOCOMOTION or state == State.GUARD or (state == State.ATTACK and attack_phase == "recovery")
 	if Input.is_action_just_pressed("soul_ability") and soul_cooldown_left() <= 0.0 and can_cast:
-		match soul:
-			"seed":
-				_start_soul_slash()
-			"wind", "light":
-				_cast_projectile()
+		cast_soul_skill()
 
 
-## 바람(새의 영혼) / 빛(기사의 영혼) 투사체.
+## 지금 고른 영혼의 기술을 쓴다 (쿨다운·상태 검사는 부르는 쪽이 한다. 시험 도구도 부른다).
+func cast_soul_skill() -> void:
+	match soul:
+		"seed":
+			_start_soul_slash()
+		"wind", "light":
+			_cast_projectile()
+
+
+## 바람(새의 영혼) = 초승달 검기 / 빛(기사의 영혼) = 레이저.
 func _cast_projectile() -> void:
-	var p: Projectile = PROJECTILE.instantiate()
 	if soul == "light":
-		_soul_cooldowns["light"] = light_shot_cooldown
-		p.kind = Projectile.Kind.FEATHER
-		p.speed = light_shot_speed
-		p.damage = light_shot_damage * attack_multiplier
-		p.poise = light_shot_poise
-		p.lifetime = light_shot_time
-		p.size = light_shot_size
-		p.color = Color(1.0, 0.85, 0.5)
-		# 깃털 그림의 '심'(가운데 줄과 점)은 정하지 않으면 몸 색을 어둡힌 색이라, 금빛 잎 한가운데 진한 갈색 원이 찍혀
-		# 빛이 아니라 눈알처럼 보였다 (2026-10-19 검수) → 빛의 창은 밝은 흰금빛 심과 테두리
-		p.core_color = Color(1.0, 1.0, 0.92, 1.0)
-		p.outline_color = Color(1.0, 0.97, 0.82, 1.0)
+		_cast_laser()
 	else:
-		_soul_cooldowns["wind"] = gust_cooldown
-		p.kind = Projectile.Kind.GUST
-		p.speed = gust_speed
-		p.damage = gust_damage * attack_multiplier
-		p.poise = gust_poise
-		p.lifetime = gust_range_time
-		p.size = gust_size
-		p.color = Color(0.8, 1.0, 0.85)
+		_cast_wind()
+
+
+## 바람의 영혼: 앞으로 날아가는 초승달 검기 (WindCrescent — 예전 바람 투사체와 같은 바탕, 그림·판정 모양만 새것)
+func _cast_wind() -> void:
+	var p: Projectile = WIND_CRESCENT.new()
+	_soul_cooldowns["wind"] = gust_cooldown
+	p.speed = gust_speed
+	p.damage = gust_damage * attack_multiplier
+	p.poise = gust_poise
+	p.lifetime = gust_range_time
+	p.size = gust_size
+	p.color = Color(0.8, 1.0, 0.85)
 	get_parent().add_child(p)
 	# 생기는 자리 (2026-10-19 검토): 판정 사각형(size×0.9)의 뒤끝이 소녀 가운데에서 SHOT_BACK_REACH 만큼 뒤에 오도록
-	# 크기 절반만큼 앞으로 민다. 옛 자리(+50)에선 커진 바람·빛 판정이 등 뒤 60~90px 의 적까지 덮었다. 작은 투사체는 예전처럼 +50.
+	# 크기 절반만큼 앞으로 민다 (등 뒤의 적을 덮지 않게).
 	var origin := global_position + Vector2(0.0, -20.0)
 	var ahead := maxf(50.0, p.size.x * 0.45 - SHOT_BACK_REACH)
 	# 벽에 붙어 쏘면 생기는 자리가 벽 속·벽 너머가 되지 않게 소녀 가운데에서 선을 그어 본다. 투사체는 처음 두 프레임 안에
@@ -948,6 +964,44 @@ func _cast_projectile() -> void:
 	p.launch(Vector2(facing, 0), self, true)
 	gust_cast.emit()
 	# 한 방이 큰 기술이 됐으니 쏘는 손맛도 크게 (2026-10-19): 흔들림 6, 진동, 아주 짧은 히트스톱
+	Juice.shake(6.0)
+	Juice.rumble(0.45, 0.8, 0.14)
+	Juice.hitstop(0.03, 0.2)
+
+
+## 빛의 영혼: 레이저 (SoulLaser). 쿨다운은 지금 건다 — 모으는 동안 끊기면 돌려준다.
+func _cast_laser() -> void:
+	_soul_cooldowns["light"] = light_shot_cooldown
+	var l: SoulLaser = SOUL_LASER.new()
+	l.player = self
+	l.facing = facing
+	l.damage = light_shot_damage * attack_multiplier
+	l.poise = light_shot_poise
+	l.beam_range = light_beam_range()
+	l.width = light_shot_size.y * 0.9
+	l.charge_time = light_charge_time
+	l.show_time = light_beam_time
+	l.active_time = light_beam_active
+	l.cancelled.connect(func(): _soul_cooldowns["light"] = 0.0)
+	l.fired.connect(_on_laser_fired)
+	get_parent().add_child(l)
+	laser_charge_started.emit()
+
+
+## 레이저 사거리 (소녀 가운데에서): 예전 빛 투사체가 날아가던 거리
+func light_beam_range() -> float:
+	return light_shot_speed * light_shot_time
+
+
+func _on_gust_cast_sfx() -> void:
+	if soul == "wind":
+		Sfx.play("gust", -6.0)
+		Sfx.play("sword_wave", -9.0, 0.05)
+
+
+func _on_laser_fired(hits: int) -> void:
+	laser_fired.emit(hits)
+	gust_cast.emit()   # 뼈대의 반동 (소리는 laser_fired 쪽)
 	Juice.shake(6.0)
 	Juice.rumble(0.45, 0.8, 0.14)
 	Juice.hitstop(0.03, 0.2)
@@ -1182,7 +1236,9 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	return "hit"
 
 
-func _on_hit_landed(result: String, _target: Node) -> void:
+func _on_hit_landed(result: String, target: Node) -> void:
+	if result == "hit" or result == "blocked":
+		_spawn_hit_fx(target, result)
 	if result == "hit":
 		# 낙하 공격 착지 충격은 착지음(plunge_landed → heavy_hit)이 이미 났으니 타격음을 또 내지 않는다
 		if not (state == State.PLUNGE and attack_phase == "land"):
@@ -1200,6 +1256,29 @@ func _on_hit_landed(result: String, _target: Node) -> void:
 		blocked.emit()
 		if state == State.PLUNGE and attack_phase == "dive":
 			_plunge_bounce()
+
+
+## 칼이 닿은 자리에 불꽃: 판정 상자 안에서 상대 쪽으로 (큰 공격은 큰 불꽃, 방패에 막히면 하얀 고리)
+func _spawn_hit_fx(target: Node, result: String) -> void:
+	var box := _hitbox_world_rect()
+	var at := box.get_center()
+	if target is Node2D and is_instance_valid(target):
+		at.x = clampf((target as Node2D).global_position.x, box.position.x, box.end.x)
+		at.x = lerpf(at.x, box.get_center().x, 0.25)
+	if result == "blocked":
+		Fx.spawn("ring_pop", at, {"facing": facing, "palette": "white", "scale": 0.8})
+		return
+	var big := state == State.SOUL_SLASH or state == State.PLUNGE
+	Fx.spawn("hit_spark_big" if big else "hit_spark", at, {"facing": facing, "palette": "seed" if state == State.SOUL_SLASH else ""})
+
+
+## 지금 판정 상자 (세계 좌표)
+func _hitbox_world_rect() -> Rect2:
+	var cs: CollisionShape2D = hitbox._shape
+	if cs == null or not (cs.shape is RectangleShape2D):
+		return Rect2(global_position, Vector2.ZERO)
+	var sz: Vector2 = (cs.shape as RectangleShape2D).size
+	return Rect2(hitbox.global_position + cs.position - sz * 0.5, sz)
 
 
 ## 적의 몸통 부딪힘을 지금 받지 않는가 (낙하 공격으로 튕긴 직후). EnemyBase._tick_contact 가 묻는다.

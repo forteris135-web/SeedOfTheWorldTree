@@ -6,6 +6,8 @@ extends Node
 ## 같은 날 검토 지적분: 영혼마다 따로 세는 쿨다운(빛 뒤 씨앗 베기 바로 가능, 호가 멈추지 않음) / 쿨다운 글자 '0' 없음 /
 ##   땅에서 낙하+공격 같은 프레임 → 공격 / 공중 공격 중 낙하 버튼 기억 / 맞으면 기억 버림 / 흐트러짐 그대로(기계 35%) /
 ##   투사체가 등 뒤 적을 안 맞힘 / 벽에 붙어 쏘면 사이에 낀 적을 한 번만 맞힘.
+## 2026-10-19 이펙트 리뉴얼 F1: 바람 = 초승달 검기(판정 = 초승달 머리), 빛 = 레이저(벽에서 멈춤, 여러 적 한 번씩) 로 시험을 바꿈.
+##   보호막·씨앗 베기 초승달 크기는 이제 그림(보호막 dome, 큰 초승달 slash_big)의 실제 범위로 잰다.
 ## 실행: godot --headless --path . res://tools/probe_player.tscn
 ## 첫 방(canopy_01)을 통째로 띄워 진짜 소녀를 Input.action_press 로 조종한다. 마지막 줄 "[probe] 끝: 실패 N".
 
@@ -667,48 +669,46 @@ func _test_touch_threshold() -> void:
 	print("[probe] 컨트롤러 L스틱 y: %s" % " | ".join(notes))
 
 
-# ---------- (e) 바람·빛 투사체 사거리 ----------
+# ---------- (e) 바람(초승달 검기)·빛(레이저) 사거리 ----------
+## 2026-10-19 이펙트 리뉴얼: 바람 = WindCrescent (예전 바람 투사체 바탕, 판정은 세로로 선 초승달 머리 190×230 × 0.9),
+## 빛 = SoulLaser (0.12초 모았다가 벽까지 곧게, 빛줄기 안의 적을 한 번씩). 피해·쿨다운·사거리는 그대로.
+func _find_laser() -> SoulLaser:
+	for c in _room.get_children():
+		if c is SoulLaser and not c.is_queued_for_deletion():
+			return c
+	return null
+
+
 func _test_projectiles() -> void:
 	Progress.gain_ability("wind")
 	Progress.gain_ability("light")
 	await get_tree().process_frame
 	_check(_player.owned_souls() == ["seed", "wind", "light"], "능력을 얻으면 영혼 목록 %s" % [_player.owned_souls()])
 	_check(_player.soul == "seed", "능력을 얻어도 고른 영혼은 그대로 seed (%s)" % _player.soul)
-	for soul in ["wind", "light"]:
-		_teleport(Vector2(150, 2200 - 67 - 1), 1)
-		await _frames(4)
-		_player.soul = soul
-		_player._soul_cooldown = 0.0
-		var before := get_tree().get_nodes_in_group("projectile").size()
-		await _tap("soul_ability")
-		await get_tree().physics_frame
-		var p: Projectile = null
-		for n in get_tree().get_nodes_in_group("projectile"):
-			p = n
-		_check(p != null and get_tree().get_nodes_in_group("projectile").size() == before + 1, "%s: 투사체가 하나 나간다" % soul)
-		if p == null:
-			continue
+	# ---- 바람: 초승달 검기 ----
+	_teleport(Vector2(150, 2200 - 67 - 1), 1)
+	await _frames(4)
+	_player.soul = "wind"
+	_player._soul_cooldown = 0.0
+	var before := get_tree().get_nodes_in_group("projectile").size()
+	await _tap("soul_ability")
+	await get_tree().physics_frame
+	var p: Projectile = null
+	for n in get_tree().get_nodes_in_group("projectile"):
+		p = n
+	_check(p != null and p is WindCrescent and get_tree().get_nodes_in_group("projectile").size() == before + 1, "wind: 초승달 검기(WindCrescent)가 하나 나간다")
+	if p:
 		var start := p.global_position
-		var shape_desc := ""
 		var rect_size := Vector2.ZERO
 		for c in p.get_children():
-			if c is CollisionShape2D:
-				shape_desc = "%s %s" % [c.shape.get_class(), (c.shape as RectangleShape2D).size if c.shape is RectangleShape2D else (c.shape as CircleShape2D).radius]
-				if c.shape is RectangleShape2D:
-					rect_size = (c.shape as RectangleShape2D).size
-		if soul == "wind":
-			# 그림(초승달 호 3겹)의 범위가 판정 사각형 안에 드는지 (projectile.gd _draw 의 식과 같은 계산)
-			var x_min := INF
-			var x_max := -INF
-			var y_max := 0.0
-			for i in 3:
-				var r: float = p.size.y * (0.26 + i * 0.11)
-				var cx: float = p.size.x * (0.26 - i * 0.3)
-				x_min = minf(x_min, cx + r * cos(1.15))
-				x_max = maxf(x_max, cx + r)
-				y_max = maxf(y_max, r * sin(1.15))
-			print("[probe] 바람 그림 범위 x %.0f ~ %.0f, y ±%.0f / 판정 ±%.1f × ±%.1f" % [x_min, x_max, y_max, rect_size.x * 0.5, rect_size.y * 0.5])
-			_check(x_max <= rect_size.x * 0.5 + 1.0 and y_max <= rect_size.y * 0.5 + 1.0 and x_min >= -rect_size.x * 0.5, "바람 그림이 판정 사각형 안에 든다")
+			if c is CollisionShape2D and c.shape is RectangleShape2D:
+				rect_size = (c.shape as RectangleShape2D).size
+		var head: Rect2 = (p as WindCrescent).head_rect()
+		var half := rect_size * 0.5
+		print("[probe] 초승달 머리 그림 %s / 판정 ±%.1f × ±%.1f" % [head, half.x, half.y])
+		# 판정 사각형이 초승달 머리(UV 0~0.44)를 덮고, 머리 그림보다 지나치게 크지 않다 (가로·세로 각각 ±25% 안)
+		_check(absf(head.size.x - rect_size.x) <= rect_size.x * 0.25 and absf(head.size.y - rect_size.y) <= rect_size.y * 0.25 \
+			and absf(head.get_center().x) < 30.0 and absf(head.get_center().y) < 10.0, "바람 판정 사각형이 보이는 초승달 머리와 맞는다")
 		var far := 0.0
 		var frames := 0
 		while is_instance_valid(p) and not p._dead and frames < 400:
@@ -716,17 +716,35 @@ func _test_projectiles() -> void:
 			frames += 1
 			if is_instance_valid(p):
 				far = maxf(far, p.global_position.distance_to(start))
-		var expect: float = (_player.gust_speed * _player.gust_range_time) if soul == "wind" else (_player.light_shot_speed * _player.light_shot_time)
-		print("[probe] %s 투사체: 그림 크기 %s, 판정 %s, 피해 %.0f, 사거리 %.0f px (%.2f초, 기대 %.0f)" % [soul, p.size if is_instance_valid(p) else "-", shape_desc, p.damage if is_instance_valid(p) else -1.0, far, frames / 60.0, expect])
-		_check(far > expect * 0.9 and far < expect * 1.1, "%s 사거리가 속도×수명(%.0f)에 맞는다" % [soul, expect])
-		# 2026-10-19 파격 상향: 피해 ×4, 크기 240×130 / 280×90, 쿨 5 / 7초 (씨앗 베기는 1.4 그대로)
-		if soul == "wind":
-			_check(is_instance_valid(p) and p.size == Vector2(240, 130) and absf(p.damage - 96.0 * _player.attack_multiplier) < 0.01, "바람: 크기 240×130, 피해 96 (24×4)")
-			_check(is_equal_approx(_player.gust_cooldown, 5.0) and is_equal_approx(_player.gust_range_time, 1.3) and rect_size == Vector2(240, 130) * 0.9, "바람: 쿨다운 5초, 사거리 1.3초, 판정 = 크기×0.9 (%s)" % rect_size)
-		else:
-			_check(is_instance_valid(p) and p.size == Vector2(280, 90) and absf(p.damage - 136.0 * _player.attack_multiplier) < 0.01, "빛: 크기 280×90, 피해 136 (34×4)")
-			_check(is_equal_approx(_player.light_shot_cooldown, 7.0) and is_equal_approx(_player.light_shot_time, 1.4) and rect_size == Vector2(280, 90) * 0.9, "빛: 쿨다운 7초, 사거리 1.4초, 판정 = 크기×0.9 (%s)" % rect_size)
-		await _frames(10)
+		var expect: float = _player.gust_speed * _player.gust_range_time
+		print("[probe] wind 초승달: 판정 %s, 피해 %.0f, 사거리 %.0f px (%.2f초, 기대 %.0f)" % [rect_size, p.damage if is_instance_valid(p) else -1.0, far, frames / 60.0, expect])
+		_check(far > expect * 0.9 and far < expect * 1.1, "wind 사거리가 속도×수명(%.0f)에 맞는다" % expect)
+		_check(is_instance_valid(p) and p.size == Vector2(190, 230) and absf(p.damage - 96.0 * _player.attack_multiplier) < 0.01, "바람: 크기 190×230 (세로로 선 초승달), 피해 96 (24×4)")
+		_check(is_equal_approx(_player.gust_cooldown, 5.0) and is_equal_approx(_player.gust_range_time, 1.3) and rect_size == Vector2(190, 230) * 0.9, "바람: 쿨다운 5초, 사거리 1.3초, 판정 = 크기×0.9 (%s)" % rect_size)
+	await _frames(10)
+	# ---- 빛: 레이저 ----
+	_teleport(Vector2(150, 2200 - 67 - 1), 1)
+	await _frames(4)
+	_player.soul = "light"
+	_player._soul_cooldown = 0.0
+	var fired := {"n": -1}
+	var on_fired := func(n): fired["n"] = n
+	_player.laser_fired.connect(on_fired)
+	await _tap("soul_ability")
+	await get_tree().physics_frame
+	var l := _find_laser()
+	_check(l != null and l.phase == "charge" and get_tree().get_nodes_in_group("projectile").size() == 0, "light: 레이저가 손에 빛을 모으기 시작한다 (날아가는 투사체는 없다)")
+	await _frames(12)
+	if l and is_instance_valid(l):
+		var len: float = absf(l.end_point.x - _player.global_position.x)
+		var rng := _player.light_beam_range()
+		print("[probe] 레이저: 발사 %s, 벽 %s, 길이 %.0f (사거리 %.0f), 판정 높이 %.0f, 피해 %.0f" % [fired["n"] >= 0, l.hit_wall, len, rng, l.width, l.damage])
+		_check(fired["n"] >= 0 and l.phase == "beam", "light: 모으기 0.12초 뒤 발사된다")
+		_check((l.hit_wall and len < rng) or (not l.hit_wall and absf(len - rng) < 2.0), "light: 빛줄기는 벽에서 멈추거나 사거리(%.0f)만큼 뻗는다" % rng)
+		_check(is_equal_approx(rng, 1540.0) and absf(l.width - 81.0) < 0.01 and absf(l.damage - 136.0 * _player.attack_multiplier) < 0.01, "빛: 사거리 1540 (예전 투사체 1100×1.4), 판정 높이 81, 피해 136 (34×4)")
+		_check(is_equal_approx(_player.light_shot_cooldown, 7.0), "빛: 쿨다운 7초")
+	_player.laser_fired.disconnect(on_fired)
+	await _frames(30)
 	_check(is_equal_approx(_player.slash_cooldown, 1.4), "씨앗 베기 쿨다운은 1.4초 그대로")
 	# 쏜 직후 쿨다운이 걸리고, 쿨다운 글자가 7 → 1 로 내려간다 (HUD·터치 버튼이 같은 함수를 쓴다)
 	_player.soul = "light"
@@ -873,7 +891,7 @@ func _test_review_fixes() -> void:
 
 	# (6) 흐트러짐은 요청 범위 그대로 (바람 24 = 기계의 '단단함' 문턱 30 아래 / 빛 30)
 	_check(is_equal_approx(_player.gust_poise, 24.0) and is_equal_approx(_player.light_shot_poise, 30.0), "흐트러짐: 바람 24, 빛 30 (요청은 피해·크기·쿨만)")
-	_check(not ("꿰뚫" in _player.soul_desc("light")), "빛 설명에 '꿰뚫는다' 가 없다 (투사체는 첫 적에서 사라진다): '%s'" % _player.soul_desc("light"))
+	_check("꿰뚫" in _player.soul_desc("light"), "빛 설명이 레이저에 맞다 (늘어선 적을 모두 꿰뚫는다): '%s'" % _player.soul_desc("light"))
 
 	# (7) 앞으로 쏜 바람·빛은 등 뒤 60~90px 의 적을 맞히지 않고, 바로 앞(가운데 +60)의 적은 맞힌다
 	for soul in ["wind", "light"]:
@@ -915,18 +933,26 @@ func _test_review_fixes() -> void:
 		var back := _spawn_dummy_enemy(700.0 - 80.0)
 		_teleport(Vector2(700, FLOOR1_Y - 68.0), 1)
 		await _frames(3)
-		var before := get_tree().get_nodes_in_group("projectile").size()
 		await _cast_now(soul)
 		await get_tree().physics_frame
-		var p: Projectile = null
-		for n in get_tree().get_nodes_in_group("projectile"):
-			p = n
-		var spawn_x := p.global_position.x if p else -1.0
-		await _frames(3)
-		var gone := p == null or not is_instance_valid(p) or p._dead
-		await _frames(40)
-		print("[probe] %s 벽에 붙어 쏨(벽 +110): 투사체 생긴 x %+.0f, 3프레임 뒤 사라짐 %s, 사이 적 잃은 체력 %.0f (기대 %.0f), 등 뒤 적 %.0f" % [soul, spawn_x - 700.0, gone, mid.max_hp - mid.hp, dmg, back.max_hp - back.hp])
-		_check(spawn_x > 700.0 and spawn_x <= 700.0 + 110.0 and gone, "%s: 벽 앞에서 생겨(벽 속·너머 아님) 곧 사라진다" % soul)
+		if soul == "wind":
+			var p: Projectile = null
+			for n in get_tree().get_nodes_in_group("projectile"):
+				p = n
+			var spawn_x := p.global_position.x if p else -1.0
+			await _frames(3)
+			var gone := p == null or not is_instance_valid(p) or p._dead
+			await _frames(40)
+			print("[probe] %s 벽에 붙어 쏨(벽 +110): 투사체 생긴 x %+.0f, 3프레임 뒤 사라짐 %s, 사이 적 잃은 체력 %.0f (기대 %.0f), 등 뒤 적 %.0f" % [soul, spawn_x - 700.0, gone, mid.max_hp - mid.hp, dmg, back.max_hp - back.hp])
+			_check(spawn_x > 700.0 and spawn_x <= 700.0 + 110.0 and gone, "%s: 벽 앞에서 생겨(벽 속·너머 아님) 곧 사라진다" % soul)
+		else:
+			var l := _find_laser()
+			await _frames(10)
+			var end_x: float = l.end_point.x if l and is_instance_valid(l) else -1.0
+			var walled: bool = l.hit_wall if l and is_instance_valid(l) else false
+			await _frames(30)
+			print("[probe] light 벽에 붙어 쏨(벽 +110): 빛줄기 끝 x %+.0f, 벽에 닿음 %s, 사이 적 잃은 체력 %.0f (기대 %.0f), 등 뒤 적 %.0f" % [end_x - 700.0, walled, mid.max_hp - mid.hp, dmg, back.max_hp - back.hp])
+			_check(walled and absf(end_x - (700.0 + 110.0)) < 3.0, "light: 빛줄기가 벽 면에서 멈춘다")
 		_check(absf((mid.max_hp - mid.hp) - dmg) < 0.5 and back.hp == back.max_hp, "%s: 소녀와 벽 사이의 적은 딱 한 번 맞고, 등 뒤 적은 안 맞는다" % soul)
 		mid.queue_free()
 		back.queue_free()
@@ -1034,24 +1060,22 @@ func _test_shield_and_crescent_geometry() -> void:
 	_player._set_state(Player.State.GUARD)
 	await _frames(40)   # 보호막 알파와 자세가 자리 잡을 시간
 	var body := _part_bounds(visual, ["torso", "head", "leg_back", "leg_front"])
-	var top_y: float = visual.GUARD_CENTER.y + visual.GUARD_RY * sin(-visual.GUARD_SPAN)
-	var bot_y: float = visual.GUARD_CENTER.y + visual.GUARD_RY * sin(visual.GUARD_SPAN)
-	var above: float = body.position.y - top_y
-	var below: float = float(visual.FOOT_Y) - bot_y
-	print("[probe] 가드 자세 몸 y %.0f ~ %.0f (발바닥 %.0f) / 보호막 y %.0f ~ %.0f → 머리 위 여유 %.0f, 발 아래 여유 %.0f, 알파 %.2f" % [body.position.y, body.end.y, visual.FOOT_Y, top_y, bot_y, above, -below, visual._guard_a])
-	_check(visual._guard_a > 0.9, "가드 중 보호막 알파가 올라온다")
+	var sh: Rect2 = visual.shield_rect()
+	var above: float = body.position.y - sh.position.y
+	var below: float = float(visual.FOOT_Y) - sh.end.y
+	print("[probe] 가드 자세 몸 y %.0f ~ %.0f (발바닥 %.0f) / 보호막 그림 %s → 머리 위 여유 %.0f, 발 아래 여유 %.0f, 알파 %.2f" % [body.position.y, body.end.y, visual.FOOT_Y, sh, above, -below, visual._guard_a])
+	_check(visual._guard_a > 0.9 and visual.get_node("Shield").visible, "가드 중 보호막(유리 구 그림)이 나타난다")
 	_check(above >= 0.0 and above < 40.0 and below <= 0.0 and below > -40.0, "보호막이 머리 꼭대기부터 발바닥까지 '키만 하게' 덮는다")
 	_player._set_state(Player.State.IDLE)
+	await _frames(30)
+	_check(not visual.get_node("Shield").visible, "가드를 풀면 보호막이 사라진다")
 	_player.input_enabled = true
-	# 초승달 범위 vs 판정 상자 (어깨 기준 타원)
-	var o: Vector2 = visual._sword_origin()
-	var top: float = o.y - visual.SLASH_RY_UP
-	var bottom: float = o.y + visual.SLASH_RY_DOWN
-	var front: float = o.x + visual.SLASH_RX
+	# 씨앗 베기 초승달 그림의 범위 (소녀 가운데 기준, 오른쪽을 볼 때) vs 판정 상자
+	var art: Rect2 = visual.seed_slash_rect()
 	var box: Rect2 = _player.slash_box
-	print("[probe] 씨앗 베기 초승달: 위 %.0f, 아래 %.0f, 앞 %.0f / 판정 위 %.0f, 아래 %.0f, 앞 %.0f" % [top, bottom, front, box.position.y, box.end.y, box.end.x])
-	_check(top >= box.position.y and bottom <= box.end.y and front <= box.end.x, "초승달이 판정 상자 밖으로 나가지 않는다")
-	_check(front > box.end.x - 60.0 and bottom > box.end.y - 30.0, "초승달이 판정 상자에 거의 꽉 찬다")
+	print("[probe] 씨앗 베기 초승달 그림: 위 %.0f, 아래 %.0f, 앞 %.0f / 판정 위 %.0f, 아래 %.0f, 앞 %.0f" % [art.position.y, art.end.y, art.end.x, box.position.y, box.end.y, box.end.x])
+	_check(art.position.y >= box.position.y and art.end.y <= box.end.y and art.end.x <= box.end.x, "초승달이 판정 상자 밖으로 나가지 않는다")
+	_check(art.end.x > box.end.x - 60.0 and art.end.y > box.end.y - 40.0, "초승달이 판정 상자에 거의 꽉 찬다")
 	await _frames(10)
 
 

@@ -7,6 +7,8 @@ class_name SwordWave
 ## 한쪽 발판(one_way 가지)은 아래에서 뚫고 지나간다 (소녀가 아래에서 뛰어오르며 지나가는 것과 같다).
 ## 구르기(무적)로 지나가면 사라지지 않고 계속 날아간다 — 한 번 판정한 상대는 다시 맞추지 않는다.
 ## Projectile 과 달리 판정이 세로로 긴 초승달이라 서서 가드하거나 점프로 넘기게 된다(땅 검기는 낮게 깔린다).
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 물 초승달(art/fx/water_crescent_big)을 불꽃 팔레트로 칠한 것 +
+## 뒤따르는 옅은 그림자 한 겹 + 불씨 입자. 되받으면 금빛. 판정 상자는 그대로 (size 기준).
 
 signal reflected(wave: SwordWave)
 
@@ -27,6 +29,12 @@ var _dead := false
 var _targets: Array = []
 var _embers: CPUParticles2D
 var _trail: Array[Vector2] = []
+var _art: Sprite2D
+var _echo: Sprite2D
+## 그림: 물 초승달(볼록한 쪽이 앞) — 배율·자리 (판정 상자 75×110 을 덮는다)
+const ART := "water_crescent_big"
+const ART_SCALE := Vector2(0.6, 0.72)
+const ART_OFFSET := Vector2(-30.0, 0.0)
 
 
 func _ready() -> void:
@@ -60,6 +68,22 @@ func _ready() -> void:
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_embers.material = add
 	add_child(_embers)
+	_echo = _make_art(Color(1, 1, 1, 0.3))
+	_echo.position = ART_OFFSET + Vector2(-40.0, 0.0)
+	_echo.scale = ART_SCALE * 0.9
+	_art = _make_art(Color(1.05, 1.02, 1.0, 1.0))
+
+
+func _make_art(col: Color) -> Sprite2D:
+	var sp := Sprite2D.new()
+	sp.texture = Fx.texture(ART)
+	sp.material = Fx.shared_material("fire", false, 0.15)
+	sp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	sp.position = ART_OFFSET
+	sp.scale = ART_SCALE
+	sp.modulate = col
+	add_child(sp)
+	return sp
 
 
 ## 검기가 뚫고 지나가는 지형인가: 한쪽 발판(가지).
@@ -93,6 +117,10 @@ func _physics_process(delta: float) -> void:
 		return
 	global_position = to
 	rotation = direction.angle()
+	if _art:
+		# 살짝 일렁이고 그림자가 뒤에서 따라온다
+		_art.scale = ART_SCALE * Vector2(1.0, 1.0 + 0.05 * sin(_time * 28.0))
+		_echo.position = ART_OFFSET + Vector2(-40.0 - 12.0 * sin(_time * 16.0), 0.0)
 	if _time > lifetime:
 		_vanish()
 		return
@@ -135,6 +163,9 @@ func _reflect(_by: Node) -> void:
 	_time = 0.0
 	lifetime = 3.0
 	_targets.clear()
+	if _art:
+		_art.material = Fx.shared_material("gold", false, 0.2)
+		_echo.material = _art.material
 	if is_instance_valid(source):
 		direction = (source.global_position + Vector2(0, -150) - global_position).normalized()
 	else:
@@ -153,18 +184,12 @@ func _vanish() -> void:
 
 
 func _draw() -> void:
-	# 초승달: 앞으로 볼록한 호 세 겹 (바깥 흐린 빛 → 가운데 진한 빛 → 안쪽 흰 심). HDR 글로우 문턱(1.0)을 넘는 밝기로 발광한다.
+	if _art:
+		return   # 그림(Sprite2D)이 그린다
+	# (그림을 못 읽었을 때만) 예전 코드 그림: 앞으로 볼록한 호 세 겹
 	var r := size.y * 0.5
 	var c := Vector2(-size.x * 0.35, 0)
 	var span := 1.05
-	var glow := Color(color.r * 1.2, color.g * 1.1, color.b, 0.28)
-	draw_arc(c, r * 1.08, -span, span, 24, glow, size.x * 0.42, true)
+	draw_arc(c, r * 1.08, -span, span, 24, Color(color.r * 1.2, color.g * 1.1, color.b, 0.28), size.x * 0.42, true)
 	draw_arc(c, r, -span * 0.95, span * 0.95, 24, Color(color.r * 1.6, color.g * 1.4, color.b * 1.1, 0.95), size.x * 0.2, true)
 	draw_arc(c, r * 0.96, -span * 0.8, span * 0.8, 20, Color(2.2, 2.0, 1.6, 0.9), size.x * 0.07, true)
-	# 뒤로 길게 끌리는 잔광
-	for i in 3:
-		var k := float(i + 1)
-		draw_arc(c - Vector2(size.x * 0.22 * k, 0), r * (1.0 - 0.06 * k), -span * (0.9 - 0.15 * k), span * (0.9 - 0.15 * k), 16,
-			Color(color.r, color.g, color.b, 0.35 - 0.1 * k), size.x * (0.14 - 0.03 * k), true)
-	if from_player:
-		draw_circle(c + Vector2(r * 0.4, 0), r * 0.5, Color(1.0, 0.95, 0.8, 0.15))

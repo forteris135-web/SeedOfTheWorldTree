@@ -3,7 +3,8 @@ class_name SapWave
 ## 수액 물결 (수액의 여왕). 수면 위를 한 방향으로 밀려가는 물결. **점프로 넘긴다** (판정은 수면 위 HIT_H 만큼만).
 ## 가드는 된다 (소울류 원칙: 가드 불가는 붉은 예고뿐). 한 사람에게 한 번만 맞는다.
 ## 원점 = 수면 위 한 점 (y 가 수면). dir 로 launch 하면 그쪽으로 speed 로 간다. 방 끝(limit_x)에 닿으면 사라진다.
-## 그림: 솟은 물마루(호) + 부서지는 거품 + 뒤로 끌리는 거품 자국 + 발광. 스킨 자리.
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 물 이펙트 시트의 부서지는 물마루(art/fx/water_curl)를 수액 팔레트로 —
+## 앞으로 말리는 물마루가 수면을 따라 밀려간다 + 뒤로 끌리는 물줄기 한 겹 + 튀는 물보라 입자. 판정은 그대로 (수면 위 HIT_H).
 
 const HIT_H := 120.0     # 수면에서 이만큼 위까지 맞는다 (소녀 키 134 — 서 있으면 맞고, 점프하면 넘는다)
 const HIT_W := 90.0
@@ -21,6 +22,12 @@ var _shape: CollisionShape2D
 var _hit: Array = []
 var _dead := false
 var _spray: CPUParticles2D
+var _art: Sprite2D
+var _tail: Sprite2D
+const ART := "water_curl"
+const ART_SCALE := 0.86
+## 그림의 앞 끝(물마루)이 판정 앞보다 이만큼 앞에 온다
+const ART_FRONT := 60.0
 
 
 func _ready() -> void:
@@ -51,12 +58,45 @@ func _ready() -> void:
 	_spray.scale_amount_max = 4.5
 	_spray.color = Color(0.8, 1.0, 1.0, 0.8)
 	add_child(_spray)
+	var mat := Fx.shared_material("sap", false, 0.45)
+	_tail = Sprite2D.new()
+	_tail.texture = Fx.texture("water_strip")
+	_tail.material = mat
+	_tail.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_tail.centered = false
+	_tail.modulate = Color(1, 1, 1, 0.55)
+	add_child(_tail)
+	_art = Sprite2D.new()
+	_art.texture = Fx.texture(ART)
+	_art.material = mat
+	_art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_art.centered = false
+	add_child(_art)
 	Sfx.play("gust", -8.0, 0.1)
 
 
 func launch(dir: Vector2, src: Node2D, _player_owned := false) -> void:
 	direction = 1.0 if dir.x >= 0.0 else -1.0
 	source = src
+	_update_art()
+
+
+## 그림 자리: 밑이 수면(y=0)에 붙고, 앞 끝(물마루)이 판정 앞(HIT_W/2)보다 ART_FRONT 앞. 왼쪽으로 가면 좌우를 뒤집는다.
+func _update_art() -> void:
+	if _art == null or _art.texture == null:
+		return
+	var d := direction
+	var ts := _art.texture.get_size()
+	var bob := 1.0 + 0.06 * sin(_t * 16.0)
+	var sx := ART_SCALE * d
+	var sy := ART_SCALE * bob
+	_art.scale = Vector2(sx, sy)
+	_art.position = Vector2((HIT_W * 0.5 + ART_FRONT) * d - ts.x * sx, -ts.y * sy + 14.0)
+	if _tail and _tail.texture:
+		var tts := _tail.texture.get_size()
+		var tsx := 0.8 * d
+		_tail.scale = Vector2(tsx, 0.45)
+		_tail.position = _art.position + Vector2(ts.x * sx * 0.35 - tts.x * tsx, ts.y * sy - tts.y * 0.45 - 6.0)
 
 
 func _physics_process(delta: float) -> void:
@@ -73,7 +113,9 @@ func _physics_process(delta: float) -> void:
 			var hit := HitData.make(damage, 0.0, source if source else self, Vector2(380, -300))
 			hit.hitstop = 0.05
 			area.receive(hit)
-	queue_redraw()
+	_update_art()
+	if _art == null or _art.texture == null:
+		queue_redraw()
 
 
 func _vanish() -> void:
@@ -86,6 +128,8 @@ func _vanish() -> void:
 
 
 func _draw() -> void:
+	if _art and _art.texture:
+		return   # 그림(Sprite2D)이 그린다
 	var d := direction
 	var wob := sin(_t * 18.0) * 6.0
 	# 뒤로 끌리는 거품 자국

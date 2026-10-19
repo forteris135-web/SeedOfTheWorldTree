@@ -138,6 +138,7 @@ const BODY_OFFSET := Vector2(0.0, -150.0)
 
 func _ready() -> void:
 	add_to_group("boss")
+	add_child(preload("res://scripts/fx/bird_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	hp = max_hp
 	_home = global_position
 	set_collision_mask_value(1, false)
@@ -426,6 +427,7 @@ func _spawn_leaf() -> void:
 	p.glow = 0.7                           # 0.9 는 잿빛 몸이 희게 바랬다(스크린샷 확인) → 흰 테두리가 주역, 발광은 보조
 	p.trail_count = 4
 	p.fade_in = leaf_fade_in               # 화면 안에서 생겨도 툭 나타나지 않게
+	p.look = "bird_leaf"                   # 이펙트 리뉴얼 F2: 그림 (scripts/fx/fx_art.gd)
 	var dir := Vector2(randf_range(-0.25, 0.25), 1.0)
 	var pos: Vector2
 	if phase == 1:
@@ -459,6 +461,7 @@ func _spawn_feather(index: int, count: int) -> void:
 	p.core_color = Color(1.0, 0.25, 0.2, 1.0)        # 붉은 심
 	p.glow = 1.0
 	p.trail_count = 5
+	p.look = "bird_feather"                # 이펙트 리뉴얼 F2: 금빛 깃털 그림
 	get_parent().add_child(p)
 	var origin := muzzle_point()
 	p.global_position = origin

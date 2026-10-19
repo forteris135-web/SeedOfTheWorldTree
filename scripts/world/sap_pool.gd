@@ -57,6 +57,7 @@ func _ready() -> void:
 	_alive_target = 1.0 if _is_alive() else 0.0
 	_alive = _alive_target
 	Purity.region_changed.connect(_on_region_changed)
+	add_child(preload("res://scripts/fx/water_fx.gd").new())   # 이펙트 리뉴얼 F2: 물보라·잔물결·떨어지는 방울 (판정과 무관)
 	# 방(BossRoom)의 _ready 가 이 뒤에 지역 상태를 바꿀 수 있다 (회상에서 막 돌아와 잠깐 잿빛으로 돌림) → 한 번 더 맞춘다
 	_sync_start.call_deferred()
 

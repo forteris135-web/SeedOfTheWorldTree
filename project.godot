@@ -20,6 +20,7 @@ config/icon="res://icon.png"
 
 InputDevice="*res://scripts/autoload/input_device.gd"
 Juice="*res://scripts/autoload/juice.gd"
+Fx="*res://scripts/autoload/fx.gd"
 Purity="*res://scripts/autoload/purity.gd"
 Game="*res://scripts/autoload/game.gd"
 Progress="*res://scripts/autoload/progress.gd"

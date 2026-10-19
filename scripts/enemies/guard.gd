@@ -35,6 +35,7 @@ var _charge_timer := 0.0
 var _block_count := 0    # 연속으로 막은 횟수
 var _block_reset := 0.0  # 막은 횟수가 돌아가기까지 남은 시간
 var _block_open := 0.0   # 방패가 들려 있는 남은 시간
+var _fx_t := 0.0         # 이펙트 리뉴얼 F2: 돌진 흙먼지 간격
 
 
 func _begin_windup() -> void:
@@ -61,6 +62,7 @@ func _strike() -> void:
 		return
 	anim_hint = ""
 	super._strike()
+	Fx.spawn("shield_bash", global_position + Vector2(facing * 100.0, -hurt_height * 0.5), {"facing": facing})   # 이펙트: 방패 치기
 
 
 func _physics_process(delta: float) -> void:
@@ -74,6 +76,10 @@ func _physics_process(delta: float) -> void:
 		_tick_common(delta)
 		_charge_timer -= delta
 		velocity.x = facing * charge_speed
+		_fx_t -= delta
+		if _fx_t <= 0.0:
+			_fx_t = 0.06
+			Fx.spawn("charge_dust", global_position + Vector2(-facing * 30.0, -hurt_height * 0.45), {"facing": facing})   # 이펙트: 붉은 돌진 줄기
 		if not is_on_floor():
 			velocity.y += gravity * delta
 		move_and_slide()
@@ -88,6 +94,7 @@ func _physics_process(delta: float) -> void:
 			_timer = stuck_time
 			Juice.shake(5.0)
 			_visual_call("impact", [facing, 1.3 if blocked else 0.8])
+			Fx.spawn("slam_impact", global_position + Vector2(facing * 110.0, -hurt_height * 0.45), {"scale": 1.2 if blocked else 0.8})   # 이펙트: 방패가 박힘
 		return
 	if state == State.RECOVER and _mode == "stuck":
 		_tick_common(delta)

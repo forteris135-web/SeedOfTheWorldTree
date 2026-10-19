@@ -66,11 +66,13 @@ func _shoot() -> void:
 	p.reflectable = true
 	p.size = elite_seed_size
 	p.color = Color(0.8, 0.6, 0.28)
+	p.look = "elite_seed"   # 이펙트 리뉴얼 F2
 	get_parent().add_child(p)
 	var origin := global_position + Vector2(facing * 70.0 * EliteTraits.SIZE_MULT, -hurt_height * 0.55)
 	p.global_position = origin
 	var dir := (player.global_position + Vector2(0, -40) - origin).normalized()
 	p.launch(dir, self, false)
+	Fx.spawn("seed_muzzle", origin, {"rot": rad_to_deg(dir.angle()), "scale": 1.3})
 	_shot += 1
 	_visual_call("recoil", [1.3])
 	if _shot < shots_per_volley:

@@ -1,6 +1,9 @@
 extends Area2D
 class_name SporeCloud
 ## 빛나는 포자 구름. 안의 소녀는 느려지고 조금씩 체력이 깎인다. 등불을 든 소녀가 들어오면 타서 걷힌다.
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 꽃잎 섞인 둥근 안개(art/fx/spore_ring)를 포자 팔레트(연두)로
+## 네 겹 겹쳐 천천히 돌리고, 생길 때 빛나는 버섯 모양 포자가 피어오른다(Fx "spore_burst"). 등불에 타면 불꽃 고리(Fx "spore_burn").
+## 판정(원 반지름 radius)은 그대로.
 
 var radius := 150.0
 var lifetime := 6.0
@@ -12,6 +15,12 @@ var _burning := false
 var _particles: CPUParticles2D
 var _shape: CollisionShape2D
 var _tick := 0.0
+var _puffs: Array[Sprite2D] = []
+var _started := false
+var _burn_fx := false
+## 안개 겹: (자리 비율 x, y, 배율 비율, 도는 빠르기 rad/s, 투명도)
+const PUFFS := [[0.0, 0.0, 1.0, 0.25, 0.5], [-0.35, 0.12, 0.7, -0.4, 0.42], [0.36, -0.1, 0.72, 0.35, 0.42], [0.05, -0.32, 0.6, -0.3, 0.38]]
+const ART := "spore_ring"
 
 
 func _ready() -> void:
@@ -36,11 +45,43 @@ func _ready() -> void:
 	_particles.scale_amount_max = 5.0
 	_particles.color = Color(0.75, 1.0, 0.6, 0.6)
 	add_child(_particles)
-	material = preload("res://shaders/ash_purify_add.tres")
+	var tex := Fx.texture(ART)
+	if tex:
+		var mat := Fx.shared_material("spore", false, 0.3)
+		for pf in PUFFS:
+			var sp := Sprite2D.new()
+			sp.texture = tex
+			sp.material = mat
+			sp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			sp.position = Vector2(pf[0], pf[1]) * radius
+			var k: float = radius * 2.0 / tex.get_width() * float(pf[2])
+			sp.scale = Vector2(k, k)
+			sp.rotation = randf() * TAU
+			sp.modulate = Color(1, 1, 1, 0.0)
+			add_child(sp)
+			_puffs.append(sp)
+		# 입자는 포자 안개 앞에
+		move_child(_particles, get_child_count() - 1)
+	else:
+		material = preload("res://shaders/ash_purify_add.tres")
 
 
 func _process(delta: float) -> void:
 	_t += delta
+	if not _started:
+		_started = true
+		Fx.spawn("spore_burst", global_position + Vector2(0, radius * 0.4), {"scale": radius / 150.0})
+	if _burning and not _burn_fx and _t <= lifetime:
+		_burn_fx = true
+		Fx.spawn("spore_burn", global_position, {"scale": radius / 150.0})
+	var pulse := 0.92 + 0.08 * sin(_t * 2.0)
+	for i in _puffs.size():
+		var sp := _puffs[i]
+		var pf: Array = PUFFS[i]
+		sp.rotation += float(pf[3]) * delta
+		sp.modulate = Color(1, 1, 1, float(pf[4]) * _alpha)
+		var k: float = radius * 2.0 / sp.texture.get_width() * float(pf[2]) * pulse
+		sp.scale = Vector2(k, k)
 	if _burning:
 		_alpha = move_toward(_alpha, 0.0, delta * 2.5)
 		_particles.emitting = false
@@ -70,6 +111,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if not _puffs.is_empty():
+		return   # 안개 그림(Sprite2D)이 그린다
 	var pulse := 0.85 + 0.15 * sin(_t * 2.0)
 	draw_circle(Vector2.ZERO, radius * pulse, Color(0.6, 1.0, 0.5, 0.06 * _alpha))
 	draw_circle(Vector2.ZERO, radius * 0.6 * pulse, Color(0.7, 1.0, 0.6, 0.08 * _alpha))

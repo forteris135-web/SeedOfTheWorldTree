@@ -2,6 +2,8 @@ extends Area2D
 class_name SapSpurt
 ## 바닥에서 솟는 뜨거운 수액 기둥 (무쇠 펌프 2페이즈: 사방에서 수액이 샌다). 뿌리 가시(root_spike.gd)와 같은 꼴.
 ## 예고(TELE 초: 바닥의 수액 고리가 부풀며 거품이 인다) → 솟음(UP) → 머무름(HOLD) → 가라앉음(DOWN). 솟는 순간만 맞는다(가드 가능).
+## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 물기둥(art/fx/geyser)을 수액 팔레트로 — 위쪽부터 드러나며 솟는다.
+## 예고에는 바닥에 부글거리는 물결(Fx "sap_bubble")이 더해진다. 판정은 그대로.
 
 var damage := 14.0
 var source: Node2D
@@ -16,6 +18,13 @@ var _t := 0.0
 var _h := 0.0
 var _shape: CollisionShape2D
 var _hit_done := false
+var _art: Sprite2D
+var _bubbled := false
+var _burst := false
+const ART := "geyser"
+const ART_SCALE := 0.72
+## 그림 밑동(물보라 고리) 자리의 비율 (아래에서)
+const ART_BASE := 0.95
 
 
 func _ready() -> void:
@@ -28,6 +37,15 @@ func _ready() -> void:
 	_shape.shape = r
 	_shape.position = Vector2(0, -HEIGHT / 2.0)
 	add_child(_shape)
+	_art = Sprite2D.new()
+	_art.texture = Fx.texture(ART)
+	_art.material = Fx.shared_material("sap", false, 0.4)
+	_art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_art.centered = false
+	_art.region_enabled = true
+	_art.scale = Vector2(ART_SCALE, ART_SCALE)
+	_art.visible = false
+	add_child(_art)
 
 
 func launch(_dir: Vector2, src: Node2D, _player_owned: bool) -> void:
@@ -52,6 +70,13 @@ func _physics_process(delta: float) -> void:
 	if k > UP + HOLD + DOWN:
 		queue_free()
 		return
+	if not _bubbled:
+		_bubbled = true
+		Fx.spawn("sap_bubble", global_position, {"life": TELE})
+	if k >= 0.0 and not _burst:
+		_burst = true
+		Fx.spawn("sap_splash", global_position, {"scale": 0.7})
+	_update_art()
 	if k >= 0.0 and k < HIT_WINDOW and not _hit_done:
 		for area in get_overlapping_areas():
 			if area is Hurtbox:
@@ -61,6 +86,20 @@ func _physics_process(delta: float) -> void:
 				if res != "ignored":
 					_hit_done = true
 	queue_redraw()
+
+
+## 그림의 위쪽부터 _h 만큼 드러낸다 (밑동이 바닥에 붙는다)
+func _update_art() -> void:
+	if _art == null or _art.texture == null:
+		return
+	var ts := _art.texture.get_size()
+	var kk := clampf(_h / HEIGHT, 0.0, 1.0)
+	_art.visible = kk > 0.01
+	if not _art.visible:
+		return
+	var vis_h := minf(ts.y * ART_BASE * kk + ts.y * (1.0 - ART_BASE), ts.y)
+	_art.region_rect = Rect2(0, 0, ts.x, vis_h)
+	_art.position = Vector2(-ts.x * ART_SCALE * 0.5, -(vis_h - ts.y * (1.0 - ART_BASE)) * ART_SCALE)
 
 
 func _draw() -> void:
@@ -79,6 +118,8 @@ func _draw() -> void:
 		return
 	if _h <= 1.0:
 		return
+	if _art and _art.texture:
+		return   # 솟은 기둥은 그림(Sprite2D)이 그린다
 	# 솟은 수액 기둥: 가운데 밝고 가장자리 어두운 띠 + 끝의 방울
 	var w := 34.0 + 10.0 * sin(_t * 30.0)
 	draw_colored_polygon(PackedVector2Array([Vector2(-w, 0), Vector2(-w * 0.55, -_h), Vector2(w * 0.55, -_h), Vector2(w, 0)]), Color(0.2, 0.55, 0.62, 0.9))

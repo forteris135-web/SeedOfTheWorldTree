@@ -199,7 +199,8 @@ func _test_soul_button_and_notice() -> void:
 	print("[probe] 알림 투명도: 직후 %.2f → 0.23초 %.2f" % [a0, a1])
 	_check(a0 < 0.3 and a1 > 0.9, "알림은 떠오르며 나타난다 (처음 흐리고 0.15초 뒤 또렷)")
 	_check(_hud.soul_label() == "지금: 바람 (잿빛 잎새의 새)", "HUD 영혼 줄 '%s'" % _hud.soul_label())
-	_check(not ("꿰뚫" in _player.soul_desc("light")), "빛 설명에 '꿰뚫는다' 가 없다: '%s'" % _player.soul_desc("light"))
+	# 2026-10-19 이펙트 리뉴얼: 빛은 레이저가 되어 늘어선 적을 모두 꿰뚫는다 (예전 빛의 창은 첫 적에서 사라져 '꿰뚫는다' 가 없어야 했다)
+	_check("꿰뚫" in _player.soul_desc("light"), "빛 설명이 레이저에 맞다 (꿰뚫는다): '%s'" % _player.soul_desc("light"))
 	var y_normal: float = _hud.soul_notice_y_ratio()
 	var fake_boss: Node = load("res://scenes/ui/boss_hud.tscn").instantiate()
 	fake_boss.name = "BossHUD"

@@ -166,6 +166,7 @@ func _collect(player: Player) -> void:
 		hud.show_message(text, 3.0)
 	Sfx.play("soul", -4.0, 0.03)
 	Juice.rumble(0.2, 0.5, 0.2)
+	Fx.spawn("pickup_big", global_position)   # 이펙트 리뉴얼: 금빛 별 + 고리 + 알갱이
 	# 빛 터짐
 	var col: Color = COLORS.get(kind, Color.WHITE)
 	var burst := CPUParticles2D.new()

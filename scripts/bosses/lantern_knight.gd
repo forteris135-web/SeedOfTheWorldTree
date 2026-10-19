@@ -123,6 +123,7 @@ const COMBO_RECOVERY := [0.08, 0.08, 0.9]
 
 func _ready() -> void:
 	add_to_group("boss")
+	add_child(preload("res://scripts/fx/knight_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	hp = max_hp
 	_home = global_position
 	visible = false
@@ -568,6 +569,7 @@ func _spawn_flame_wave(dir: int) -> void:
 	p.size = Vector2(70, 48)
 	p.color = Color(1.0, 0.6, 0.25)
 	_flame_look(p, 1.6)
+	p.look = "knight_flame"   # 이펙트 리뉴얼 F2: 불꽃 초승달 그림
 	get_parent().add_child(p)
 	p.global_position = global_position + Vector2(dir * 120.0, -30.0)
 	p.launch(Vector2(dir, 0), self, false)
@@ -625,6 +627,7 @@ func _spawn_ring(i: int) -> void:
 		p.size = Vector2(84, 42)
 		p.color = Color(1.0, 0.55 + 0.1 * i, 0.2)
 		_flame_look(p, 1.6)
+		p.look = "knight_flame"
 		get_parent().add_child(p)
 		p.global_position = Vector2(global_position.x + dir * 90.0, ground_y - 28.0)
 		p.launch(Vector2(dir, 0), self, false)
@@ -644,6 +647,7 @@ func _throw_lantern() -> void:
 	p.size = Vector2(44, 44)
 	p.color = Color(1.0, 0.7, 0.3)
 	p.pass_one_way = true   # 가운데 가지에 걸리지 않고 소녀 발밑 바닥까지 떨어진다
+	p.look = "knight_lantern"   # 이펙트 리뉴얼 F2: 등불 그림
 	get_parent().add_child(p)
 	p.global_position = global_position + Vector2(facing * 80.0, -170.0)
 	# 가까우면 느리게 던진다 (속력이 일정한 투사체라 820 으로는 꼭대기에서 수평으로 멀리 미끄러져 300px 넘게 지나쳤다)
@@ -714,6 +718,7 @@ func _on_lantern_landed(pos: Vector2, normal: Vector2) -> void:
 	mark.add_to_group("knight_pillar_mark")
 	get_parent().add_child(mark)
 	mark.global_position = at
+	Fx.spawn("danger_ring", at, {"life": PILLAR_WARN + 0.1})   # 이펙트 리뉴얼 F2: 붉은 예고 고리
 	var tw := mark.create_tween()
 	tw.tween_property(mark, "color:a", 0.75, PILLAR_WARN * 0.6)
 	tw.parallel().tween_property(mark, "scale", Vector2(1.25, 1.25), PILLAR_WARN).from(Vector2(0.6, 0.6))
@@ -734,6 +739,8 @@ func _spawn_pillar(at: Vector2, mark: Node) -> void:
 	pillar.size = Vector2(90, 160)
 	pillar.color = Color(1.0, 0.55, 0.2)
 	_flame_look(pillar, 1.3)
+	pillar.look = "knight_pillar"   # 이펙트 리뉴얼 F2: 불기둥 그림
+	Fx.spawn("fire_pillar_burst", at)
 	get_parent().add_child(pillar)
 	pillar.global_position = at + Vector2(0, -70.0)
 	pillar.launch(Vector2.UP, self, false)
