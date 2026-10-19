@@ -336,15 +336,15 @@ const EFFECTS := {
 	"sap_bubble": {"tex": "ripple_drop", "blend": "mix", "life": 0.6, "scale": [0.18, 0.3], "ease": 2.0, "fade_in": 0.3, "fade_out": 0.7,
 		"scale_xy": Vector2(1.0, 0.6), "pivot": Vector2(0.5, 0.75), "palette": "sap", "keep": 0.4, "priority": 1},
 	# 소녀가 수액·물 위를 걷거나 내려앉을 때 (scripts/fx/water_fx.gd)
-	"water_ripple": {"tex": "ripple_drop", "blend": "mix", "life": 0.6, "scale": [0.16, 0.34], "ease": 2.0, "fade_out": 0.4, "scale_xy": Vector2(1.0, 0.5),
-		"pivot": Vector2(0.5, 0.72), "palette": "sap", "keep": 0.5, "color": Color(1, 1, 1, 0.7), "priority": 0},
-	"water_splash_in": {"tex": "water_splash", "blend": "mix", "life": 0.42, "scale": [0.3, 0.42], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.9),
+	"water_ripple": {"tex": "ripple_drop", "blend": "mix", "life": 0.65, "scale": [0.2, 0.46], "ease": 2.0, "fade_out": 0.4, "scale_xy": Vector2(1.0, 0.5),
+		"pivot": Vector2(0.5, 0.72), "palette": "sap", "keep": 0.5, "color": Color(1.1, 1.1, 1.1, 0.9), "priority": 0},
+	"water_splash_in": {"tex": "water_splash", "blend": "mix", "life": 0.45, "scale": [0.36, 0.5], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.9),
 		"palette": "sap", "keep": 0.45, "priority": 1,
 		"children": [["sap_droplet", 3, Vector2(30, 4), {"offset": Vector2(0, -16), "scale": 0.8}], ["water_ripple", 1, Vector2.ZERO, {"scale": 1.4}]]},
-	"water_jump": {"tex": "splash_crown", "blend": "mix", "life": 0.36, "scale": [0.24, 0.34], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.85),
+	"water_jump": {"tex": "splash_crown", "blend": "mix", "life": 0.4, "scale": [0.32, 0.46], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.85),
 		"palette": "sap", "keep": 0.45, "priority": 1, "children": [["sap_droplet", 2, Vector2(20, 4), {"offset": Vector2(0, -16), "scale": 0.7}]]},
 	# 위에서 떨어지는 물방울 (수액 웅덩이 위) — 수면에 닿는 자리에서 물결은 water_fx 가 따로 띄운다
-	"drip_fall": {"tex": "drop", "blend": "mix", "life": 0.6, "scale": [0.28, 0.32], "ease": 1.0, "fade_in": 0.15, "vel": Vector2(0, 80), "gravity": 1600.0,
+	"drip_fall": {"tex": "drop", "blend": "mix", "life": 0.6, "scale": [0.36, 0.42], "ease": 1.0, "fade_in": 0.15, "vel": Vector2(0, 80), "gravity": 1600.0,
 		"fade_out": 0.92, "palette": "sap", "keep": 0.5, "color": Color(1, 1, 1, 0.85), "priority": 0},
 	# 수액 어부의 낚싯줄 채찍: 줄을 따라 흩뿌려지는 수액
 	"whip_splash": {"tex": "water_strip", "blend": "mix", "life": 0.34, "scale": [0.75, 0.9], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.04, 0.55),

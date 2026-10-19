@@ -15,6 +15,8 @@ extends SceneTree
 ##  mode "strip": 덩어리 고르기 없이 상자 그대로 자르고 위아래 가장자리를 흐리게 (레이저 몸통처럼 가로로 늘려 쓰는 띠)
 ##  edge_fade: 창의 네 변에서 이 px 안쪽부터 알파를 줄인다 (다른 그림과 붙어 있는 조각을 억지로 떼어 낼 때)
 ##  erase: 결과 그림(UV) 안에서 지울 상자들 [[x0, y0, x1, y1], ...] — 가장자리 16px 은 부드럽게 (초승달 안쪽에 떠 있는 꽃잎 등)
+##  base_fade: 0~1 — 결과 그림 아래쪽(밑동)의 좌우 가장자리를 흐린다 (가운데에서 반폭의 이 비율부터 바깥으로 0, 아래로 갈수록 세게).
+##             밑동 빛이 창에 잘려 네모난 모서리가 남을 때 (F2: 뿌리 가시). 위쪽 끝(가시 끝)은 건드리지 않는다
 ## 결과 그림마다 mipmaps 를 켠 .import 를 같이 쓴다 (게임에서 줄여 그리므로).
 
 const SRC := "res://익스펜션/그림/이펙트/"
@@ -104,7 +106,7 @@ const PIECES := {
 	"seed_burst": [ROOTS, [517, 836, 730, 1063], 256, {"window": [500, 826, 745, 1076], "edge_fade": 8}],    # 씨앗이 땅에 닿아 터지는 빛
 	# ---- 41d289 (창 빛줄기·뿌리 가시·뿌리 덩어리) ----
 	"lance_streak": [MIX1, [217, 141, 484, 208], 320, {"window": [205, 128, 500, 218], "edge_fade": 8}],     # 창끝처럼 뾰족한 빛줄기 (찌르기 궤적)
-	"root_spike_art": [MIX1, [178, 745, 323, 976], 288, {"window": [162, 728, 355, 1004], "edge_fade": 24}],  # 땅에서 솟는 뿌리 가시 (밑동에 꽃)
+	"root_spike_art": [MIX1, [178, 745, 323, 976], 288, {"window": [162, 728, 355, 1004], "edge_fade": 24, "base_fade": 0.45}],  # 땅에서 솟는 뿌리 가시 (밑동에 꽃)
 	"root_surge": [MIX1, [182, 530, 493, 729], 352, {"window": [170, 520, 505, 740], "edge_fade": 10}],       # 앞으로 덮쳐 오는 뿌리 덩어리 (뿌리 벽)
 	"root_burst": [MIX1, [820, 849, 952, 1008], 192, {"window": [805, 835, 965, 1018], "edge_fade": 8}],     # 흙과 뿌리 가시가 터지는 작은 덩어리 (충격파)
 	# ---- 그림 모음 f9e7 (등불·버섯·구름) ----
@@ -136,6 +138,8 @@ func _init() -> void:
 		var out := cut_piece(sheets[sheet], def[1], def[3])
 		for r in def[3].get("erase", []):
 			_erase(out, r)
+		if def[3].has("base_fade"):
+			_base_fade(out, float(def[3]["base_fade"]))
 		var maxside: int = def[2]
 		var s := minf(1.0, float(maxside) / float(maxi(out.get_width(), out.get_height())))
 		if s < 1.0:
@@ -286,6 +290,25 @@ static func _erase(img: Image, r: Array) -> void:
 				continue
 			var c := img.get_pixel(x, y)
 			c.a *= k
+			img.set_pixel(x, y, c)
+
+
+## 밑동 좌우 흐림: 아래 45% 줄에서, 가운데에서 가로 거리(반폭 = 1)가 start 를 넘으면 알파를 부드럽게 줄인다 (아래로 갈수록 세게)
+static func _base_fade(img: Image, start: float) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	for y in h:
+		var wy := clampf((float(y) / h - 0.55) / 0.45, 0.0, 1.0)
+		if wy <= 0.0:
+			continue
+		for x in w:
+			var dx := absf((x + 0.5 - w * 0.5) / (w * 0.5))
+			if dx <= start:
+				continue
+			var k := clampf((dx - start) / maxf(1.0 - start, 0.001), 0.0, 1.0)
+			k = k * k * (3.0 - 2.0 * k)
+			var c := img.get_pixel(x, y)
+			c.a *= 1.0 - k * wy
 			img.set_pixel(x, y, c)
 
 
