@@ -16,7 +16,8 @@
 | `scripts/rig/rig_poses.gd` | `RigPoses` — 원형(archetype)별 자세 모음. 설계도의 `poses` 가 덮어쓴다 |
 | `scripts/enemies/enemy_rig_visual.gd` | `EnemyRigVisual` — 일반 몹의 Visual (EnemySpriteVisual 을 갈아 끼운다) |
 | `shaders/rig_flash.gdshader` | 부위 공용 재질: 피격 번쩍임, 흩어져 사라짐 |
-| `tools/probe_rigs.tscn` | 검사: 모든 뼈대가 읽히는지, 발이 땅에 붙는지, 땅에 파고들지 않는지, NaN·상자·비용 |
+| `tools/probe_rigs.tscn` | 검사: 모든 뼈대가 읽히는지, 발이 땅에 붙는지, 땅에 파고들지 않는지, 쓰러지면 정말 눕는지, 대롱 겨눔, NaN·상자·비용 |
+| `data/rigs/_archetypes/<이름>.json` | 새 원형(새·기계·기사·뿌리 …)의 자세 모음과 움직임 지도 (4장) — 코드의 `RigPoses.SETS` 는 고치지 않는다 |
 
 병렬 작업 폴더에서는 Godot 을 늘 래퍼 `/Users/wj/Projects/SeedWT/godot` 로, `perl -e 'alarm 300; exec @ARGV'` 로 감싸서 돌린다.
 아래 예의 `G` 는 그 래퍼다.
@@ -41,7 +42,7 @@
 4. **자르기**: `G --headless --path . --script tools/rig_cut.gd -- <id>` → `art/rigs/<id>/`. 그다음 **반드시**
    `GODOT=/Users/wj/Projects/SeedWT/godot tools/cloud_bootstrap.sh` (새 그림 가져오기·밉맵).
 5. **부위 확인** (창으로): `G --path . res://tools/rig_preview.tscn -- <id> --parts`
-   → `screenshots/rig_<id>_parts.png`: 부위마다 그림 + 빨강 = 관절(pivot), 파랑 = 축 끝(tip), 노랑 = 자식이 붙는 자리, 초록 = 발바닥.
+   → `screenshots/rig_<id>_parts.png`: 부위마다 같은 크기 칸에 맞춰 키운 그림(칸 아래 이름·z·배율) + 빨강 = 관절(pivot), 파랑 = 축 끝(tip), 노랑 = 자식이 붙는 자리, 초록 = 발바닥.
    자식의 노랑 점이 부모 그림의 관절 자리에 있어야 한다.
 6. **자세 확인** (창으로): `G --path . --resolution 1600x900 res://tools/rig_preview.tscn -- <id> --zoom 3.5 [--joints] [--poses idle,windup,strike,kneel]`
    → 자세마다 `screenshots/rig_<id>_<자세>.png` + 모아 보기 `rig_<id>_poses.png`. 발을 크게: `--zoom 9 --cam_y 0.12`.
@@ -49,7 +50,11 @@
 7. **실제 몹 동작 필름** (창으로, 씬의 Visual 을 바꾼 뒤):
    `G --path . --resolution 1600x900 res://tools/rig_preview.tscn -- --enemy res://scenes/enemies/<몹>.tscn --zoom 3 --seq idle,walk,attack,hit,broken,dead,dead_back,kneel --every 0.05 --crop 0.45`
    → `screenshots/rig_<몹>_<동작>.png` (0.05초 간격 칸). 예고 → 타격 → 되돌림이 세 박자로 읽히는지, 발이 미끄러지지 않는지.
+   동작은 몇 개든 된다 (바닥이 동작 수만큼 넓어진다). 대롱 몹은 `aim` (소녀가 몹 앞을 위→아래로 돌고 대롱이 따라온다).
+   한 칸을 크게 보려면 `--every` 를 그 시각으로 (예: `--every 0.5` → `_mid.png` 가 0.5초 장면).
 8. **검사**: `G --headless --path . res://tools/probe_rigs.tscn` (실패 0), 그리고 그 몹의 방 시험.
+   쓰러짐 검사는 가장 낮은 점(±6px)만이 아니라 **누운 몸통 가운데 ≤ 키의 30%, 머리 가운데 ≤ 35%, 무기 꼭대기 ≤ 45%** 도 본다
+   (천·치마가 몸을 받쳐 떠 있거나, 반쯤 선 채 칼끝이 하늘을 가리키면 실패).
 9. 4~7 을 **틈이 없고 움직임이 자연스러울 때까지** 되풀이한다. 스크린샷은 `screenshots/` 라 저장소에 올리지 않는다
    (예전 스크린샷 몇 장이 이미 git 에 들어 있어 방 시험이 그것을 고쳐 쓴다 — `git add` 는 `art/rigs data/rigs scripts …` 처럼 폴더를 집어서,
    커밋 전에 `git checkout -- screenshots/`).
@@ -68,7 +73,7 @@
   "segment": {"alpha": 0.5, "erode": 4, "min_pixels": 1500, "soft_alpha": 0.03, "min_small": 150},
   "out_scale": 0.5,             // 잘린 그림 크기 = 시트의 몇 배 (몹 0.5, 보스 0.8~1.0). 부위별 "scale" 로 더 곱할 수 있다
   "game_scale": 0.152,          // 시트 px → 게임 px (나무꾼: 키 1021 → 155). 크기 기준은 GAME_DESIGN 8장
-  "archetype": "humanoid",      // 자세 모음 (RigPoses.SETS). 새 원형은 4장
+  "archetype": "humanoid",      // 자세 모음 (RigPoses.SETS 또는 data/rigs/_archetypes/<이름>.json). 새 원형은 4장. 잘못 쓰면 경고 + 검사 실패
   "extra_sheets": {"face": {"path": "res://익스펜션/…"}},   // 다른 시트의 부위·변형을 쓸 때 (부위에 "sheet": "face")
   "chains": {                   // 사슬: 이름 → [위, 아래, 끝]. 팔다리 축의 기본값(다음 마디 관절 쪽)과 다리 IK·무기 땅 막기가 쓴다
     "leg_f": ["leg_f_up", "leg_f_lo", "foot_f"],
@@ -78,6 +83,7 @@
   "weapon_chain": "arm_f",      // 무기 팔 사슬 (땅 막기: 어깨 → 팔꿈치 → 손목 순으로 든다)
   "ground_guard": ["weapon", "arm_f_lo"],   // 땅 아래로 들어가면 안 되는 부위 (칼끝이 땅에 닿아 멈춘 것처럼)
   "ghost": ["torso", "arm_f_up", "arm_f_lo", "weapon"],   // 휘두를 때 잔상으로 남길 부위
+  "soft": ["hips"],             // 부드러운 부위 (치마처럼 늘어진 그림 — 아래 표). chain 부위는 저절로 부드럽다
   "sockets": {"eye": {"bone": "head", "at": [452, 128]}},  // 뼈에 붙는 자리 (구원형 눈빛 등). PartRig.bone_point/attach
   "poses": { "idle": {"arm_f_up": -46, "weapon": -16} },   // 원형 자세 고치기 (3장)
   "parts": { … }
@@ -109,6 +115,11 @@
 | `modulate` | 이 부위 색 `[r, g, b, a]` |
 | `hidden` | 그리지 않는 뼈 (자리만, 예: 무기 끝 소켓용) |
 
+**부드러운 부위** (설계도 맨 위 `"soft": [이름…]` + `chain` 부위 전부): 무릎 꿇기·엉덩방아·누움에서 땅에 닿아도 **몸을 받쳐 띄우지 않는다**
+(땅 닿기·내려놓기 잴 때 뺀다). 대신 땅 아래로 들어가는 만큼 늘어진 천은 먼저 관절을 돌려 땅 위에 눕히고, 남으면 그림을 관절 기준으로
+땅 쪽으로 눌러 접는다(`PartRig.squash_y`, 최대 0.35배, 옆으로 조금 퍼짐). 나무꾼의 골반(`hips`)은 무릎까지 오는 잎 치마라 `soft`.
+다리·팔처럼 단단한 부위는 넣지 않는다 (몸이 땅에 박힌다).
+
 ### 사람 모양 + 무기 팔 (humanoid) 뼈 이름 약속
 
 자세 모음(RigPoses.HUMANOID)이 이 이름을 쓴다. 같은 이름이면 정원사·약초꾼·경비병·오웬·어부도 **설계도만으로** 움직인다.
@@ -124,7 +135,9 @@ hips (뿌리, 골반·허리 띠)
  └ leg_b_up → leg_b_lo → foot_b   (뒷다리)
 ```
 '앞' = 인물이 보는 쪽(오른쪽을 보는 뼈대에서 화면에 가까운 쪽 팔). 방패(경비병)는 `arm_b_lo` 아래 `shield` 같은 부위로 두고
-자세에서 각도를 준다. 대롱(정원사)은 `weapon` 을 대롱으로.
+자세에서 각도를 준다. 대롱(정원사)은 `weapon` 을 대롱으로 — 씬의 Visual 에 `arm_kind = "gun"` 이면 쫓기·예고·쏘기·회복·물러남 동안
+위팔(`arm_f_up`)을 돌려 `aim_bone`(기본 `weapon`) 뼈의 축이 소녀 가슴을 겨눈다 (위 −0.7 ~ 아래 +0.6 라디안, 예고 땐 0.25 치켜듦 — 예전 그림과 같은 값).
+대롱 뼈의 **축(tip)이 대롱 끝을 향하게** 자른다. 팔꿈치·손목은 자세 값 그대로라 자세(`shoot` 등)에서 팔을 펴 두면 대롱이 곧게 나간다.
 
 ---
 
@@ -142,6 +155,15 @@ hips (뿌리, 골반·허리 띠)
 
 원형 자세 이름 (그림 쪽이 상태에 맞춰 고른다): `idle walk backstep alert air lunge windup strike ready hit broken kneel rescued
 dead_knees dead_lie dead_back dead_back_lie shoot scatter_a scatter_b charge stuck leap slam_fall land npc`.
+
+**쓰러짐 두 가지** (EnemyRigVisual, 길이는 EnemyBase 그대로):
+- 앞으로 (등 뒤에서 맞음·정화): `dead_knees`(한 무릎 꿇기) → `dead_lie`(꿇은 무릎을 축으로 `pitch` 1 + `lean` 78 로 엎어짐). 땅 닿기(올리기만)가 머리를 땅 위에.
+- 뒤로 (앞에서 맞아 밀림 — 흔한 경우): `dead_back`(엉덩방아) → `dead_back_lie`(골반째 `lean` −84 로 뒤로 굴러 등으로 눕기).
+  이때 그림 쪽이 **내려놓기**(`motion.ground_settle`)를 올린다: 다리·무기 사슬·부드러운 부위를 뺀 몸의 가장 낮은 점을 **정확히** 땅에 두고
+  (내리기도 한다) 다리는 IK 로 딛은 발에 맞춘다 → 닿는 점이 엉덩이·뒷손 → 등 → 뒤통수로 옮겨 가며 구르듯 눕는다.
+  누울 때 팔 각도는 몸통 틀 기준이라 0 = 발 쪽으로 몸을 따라 눕는다. 칼팔은 `+` 로 땅 쪽에 떨어뜨리면 땅 막기가 땅 위에 얹는다
+  (나무꾼: 위팔 +55, 아래팔 −45 → 칼이 다리 앞 땅에 눕는다). 발 자리(`foot_*`)가 다리 길이보다 멀면 엉덩이가 끌려 내려가 몸이 들리니 0.4~0.6 L 로.
+- 거대화 몹의 `tilt_scale`(몸 기울기 줄이기)은 서 있는 동안만 — 쓰러질 땐 1 로 돌아가 끝까지 눕는다.
 뼈대마다 다른 값은 설계도 `poses` 에 그 채널만 적는다 (나무꾼은 칼이 길어서 팔을 더 앞으로).
 어느 자세에도(base 포함) 나오지 않는 뼈는 늘 쉬는 각도에 있다 (다리는 IK, `chain` 부위는 흔들림이 움직인다) — 움직일 뼈는 `poses.base` 에 0 으로라도 적는다.
 
@@ -169,8 +191,24 @@ rig_id = "woodcutter"
 - `anim_hint` 별 자세: red(붉은 예고) / charge / stuck / shoot / scatter / leap / fall / land — 이름은 그대로, 자세는 RigPoses 에서.
 - 시험이 예전 그림의 속(`_sprite`, `_arm_bone`)을 읽으면 `vis is EnemyRigVisual` 로 갈라 뼈대 값을 읽는다 (tools/probe_enemies.gd 의 `_pose` 참고).
 
-**기계·여러 다리 몹**: 뼈 이름이 다르면 `RigPoses.SETS` 에 새 원형(예: `"mech"`)을 더하고 같은 자세 이름(idle/walk/windup/strike/…)으로
-그 원형의 뼈 각도를 적는다. 다리는 몇 개든 된다 (걸음은 번호 짝수/홀수가 번갈아). 한 뼈 다리는 사슬을 `["leg_x"]` 하나로.
+**기계·여러 다리 몹**: 뼈 이름이 다르면 새 원형 파일 `data/rigs/_archetypes/<이름>.json` 을 만들고(예: `mech.json`) 같은 자세 이름
+(idle/walk/windup/strike/…)으로 그 원형의 뼈 각도를 적는다. **`rig_poses.gd` 의 `SETS` 는 고치지 않는다** (여럿이 동시에 원형을 더하면 한 파일이 부딪힌다).
+```jsonc
+{
+  "extends": "humanoid",          // 선택: 다른 원형의 자세를 물려받고 아래 값이 자세별로 덮어쓴다
+  "base": {"wing_f": 0, "wing_b": 0},   // 움직일 뼈는 base 에 0 으로라도
+  "idle": {"wing_f": -20}, "windup": {…}, "strike": {…},
+  "_motion": {                    // 움직임 지도 (RigPoses.HUMANOID_MOTION 과 같은 키, 빠진 키는 사람 값)
+    "strike_lag": {"wing_f": 0.15},          // 타격에서 늦게 따라오는 몫 (채찍)
+    "early": ["torso", "lean"], "heavy": ["torso", "lean", "hip_y"],
+    "impact": {"torso": -1.0, "neck": -1.2},  // 맞았을 때 젖혀지는 채널·배수
+    "parry": {"wing_f": -1.0}, "recoil": {"neck": -0.6}, "parry_bounce": ["wing_f", "torso"],
+    "breath": {"torso": [1.3, 0.0]},          // [세기(도), 위상]
+    "swing": {"wing_b": -10}, "swing_abs": {}  // 걸음 팔 흔들기
+  }
+}
+```
+뼈 이름이 사람과 다르면 `_motion` 을 꼭 적는다 — 안 적으면 사람 팔 이름에만 충격·받아침·숨쉬기가 더해져 새·기계는 맞아도 움찔하지 않는다. 다리는 몇 개든 된다 (걸음은 번호 짝수/홀수가 번갈아). 한 뼈 다리는 사슬을 `["leg_x"]` 하나로.
 몸 전체가 통째로 넘어지는 쓰러짐(통나무·기계)은 그림 쪽에서 `motion.fall_angle`/`fall_pivot` 을 쓴다 (사람은 관절 자세로 쓰러진다).
 
 ## 5. 보스에 쓰기
@@ -195,7 +233,8 @@ func _process(delta: float) -> void:
 	rig.scale = Vector2(facing * 배율, 배율)   # 좌우를 뒤집은 프레임엔 motion.flip_feet()
 	rig.set_flash(boss.flash_amount() * 0.75)
 ```
-보스 자세는 `RigPoses.SETS` 에 원형을 더하거나(새·기사·뿌리지기) 설계도 `poses` 에 자세 이름을 새로 지어 넣는다 (`motion.pose("wing_beat")`).
+보스 자세는 원형 파일 `data/rigs/_archetypes/<이름>.json` 을 만들거나(새·기사·뿌리지기 — 4장) 설계도 `poses` 에 자세 이름을 새로 지어 넣는다 (`motion.pose("wing_beat")`).
+- 보스가 쓰러져 눕는 자세는 `motion.ground_lock = 1` (몸이 땅에 박히지 않게), 누워 쉬는 자세면 `motion.ground_settle` 도 (땅에 붙여 내려놓기, 4장 쓰러짐).
 - 여러 장면을 잇는 연속기(3연격·도약 내려찍기)는 `motion.sample_clip([[0.0, "windup"], [0.35, "strike_1", "strike"], [0.5, "windup_2", "out"], …], 지난 시간)`.
 - 날갯짓·등불 흔들림 같은 주기 움직임은 자세 사전을 `duplicate()` 해서 채널에 `sin(위상) * 세기` 를 더한 뒤 `set_target` 에 넘긴다
   (위상은 `_phase += rate * delta` 누적기로 — 빠르기가 바뀌어도 끊기지 않는다). 숨쉬기를 끄려면 `motion.breath = 0.0`.
@@ -218,4 +257,7 @@ func _process(delta: float) -> void:
 - **반쯤 꿇기 금지**: `kneel` 은 0 아니면 1. 0.5 는 무릎이 땅 위에 떠서 어색하다 (섞이는 동안만 중간값).
 - **뼈대는 오른쪽을 본다**: 그림 쪽은 `scale.x` 부호로 뒤집는다. 뒤집는 순간 `motion.flip_feet()` (딛은 발이 세상에 남게).
 - **익스펜션/ 은 읽기만**: 원본 시트를 고치거나 옮기지 않는다. 잘린 그림만 `art/rigs/` 에.
-- **probe_rigs**: 새 뼈대를 넣으면 저절로 검사된다. 발 ±4px, 몸·무기가 땅 아래 4px 넘게 들어가지 않기, NaN, 상자, 8개 비용.
+- **probe_rigs**: 새 뼈대를 넣으면 저절로 검사된다. 발 ±4px, 몸·무기가 땅 아래 4px 넘게 들어가지 않기, 원형 이름, soft 이름, NaN, 상자,
+  쓰러져 정말 눕는지(뼈대 몹 씬 앞·뒤), 대롱 겨눔, 8개 비용.
+- **치마·망토가 몸을 띄운다**: 무릎 꿇기·누움에서 몸이 떠 보이면 늘어진 그림을 `soft` 에 넣는다 (3장 부위 표 아래).
+- **발목이 네모로 잘려 보인다**: 발 `clip` 을 직사각형 대신 윗변이 둥근 돔으로 (발 관절 둘레까지 정강이와 겹치게). 나무꾼 설계도 참고.

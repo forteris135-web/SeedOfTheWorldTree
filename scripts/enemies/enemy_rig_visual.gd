@@ -92,6 +92,7 @@ var _thud_done := false
 var _ready_ok := false
 var _underlay_on := false
 var _aim_i := -1      # 대롱 뼈 번호
+var _overlay_sig := Vector3(-2, -2, -2)   # 머리 위 표시를 마지막으로 그린 값 (바뀔 때만 다시 그린다)
 var _aim_arm := -1    # 겨눌 때 돌리는 위팔 뼈 번호
 
 
@@ -228,7 +229,7 @@ func impact(dir: int, strength := 1.0) -> void:
 func parried(dir: int, strength := 1.0) -> void:
 	if motion == null:
 		return
-	motion.scale_velocity(["arm_f_up", "arm_f_lo", "weapon", "torso"], -0.35)
+	motion.scale_velocity(motion.parry_bounce, -0.35)   # 원형의 움직임 지도 (사람 모양: 무기 팔 + 몸통)
 	motion.kick("parry", 260.0 * strength)
 	kick(dir, strength)
 
@@ -544,7 +545,13 @@ func _process(delta: float) -> void:
 		# 얼굴 그림이 있으니 예전(한 장 그림)보다 작고 옅게 — 얼굴을 가리지 않는 눈가의 온기
 		_glow.modulate = Color(1.5, 1.3, 0.95, 0.55 * alpha) * gp
 		_glow.scale = Vector2(0.5, 0.5) * gp
-	_overlay.queue_redraw()
+	# 머리 위 표시는 값이 바뀔 때만 다시 그린다 (몹마다 매 프레임 그리지 않게). "!" 가 떠 있는 동안만 매 프레임.
+	var want_bar := show_overhead_bar and st != EnemyBase.State.DEAD and (_enemy.hp < _enemy.max_hp or _enemy.poise > 0.0 or st == EnemyBase.State.BROKEN)
+	var alert_on := _alert_t >= 0.0 and _alert_t < 0.6 and st != EnemyBase.State.DEAD
+	var sig := Vector3(_enemy.hp if want_bar else -1.0, _enemy.poise if want_bar else -1.0, 1.0 if alert_on else 0.0)
+	if alert_on or sig != _overlay_sig:
+		_overlay_sig = sig
+		_overlay.queue_redraw()
 	if st == EnemyBase.State.BROKEN or _underlay_on:
 		_underlay.queue_redraw()
 	_underlay_on = st == EnemyBase.State.BROKEN
@@ -648,9 +655,9 @@ func _draw_overlay() -> void:
 	var st := _enemy.state
 	if st == EnemyBase.State.DEAD:
 		return
-	var top := rig.highest_y() * rig.game_scale * art_scale + _floor_y
-	var top_y := minf(top, -_enemy.hurt_height * 0.5) - 10.0
 	if _alert_t >= 0.0 and _alert_t < 0.6:
+		var top := rig.highest_y() * rig.game_scale * art_scale + _floor_y
+		var top_y := minf(top, -_enemy.hurt_height * 0.5) - 10.0
 		var font := ThemeDB.fallback_font
 		var a := 1.0 - _alert_t / 0.6
 		_overlay.draw_string(font, Vector2(-8, top_y - 40.0 - _alert_t * 30.0), "!", HORIZONTAL_ALIGNMENT_CENTER, 16, 44, Color(1.0, 0.85, 0.5, a))

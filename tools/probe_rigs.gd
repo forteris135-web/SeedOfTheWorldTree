@@ -125,6 +125,11 @@ func _probe_rig(id: String) -> void:
 		if str(b["parent"]) == "":
 			root_count += 1
 	_check(root_count == 1, "%s: 뿌리 뼈 하나 (%d)" % [id, root_count])
+	# 원형 이름: 코드(RigPoses.SETS) 아니면 data/rigs/_archetypes/<이름>.json 에 있어야 한다 (잘못 쓰면 몰래 사람 자세로 움직였다)
+	var arch := str(data.get("archetype", "humanoid"))
+	_check(RigPoses.SETS.has(arch) or FileAccess.file_exists(RigPoses.ARCHETYPE_DIR + arch + ".json"), "%s: 원형 '%s' 이 있다" % [id, arch])
+	for sn in data.get("soft", []):
+		_check(seen.has(str(sn)), "%s: 부드러운 부위 이름 %s 가 실제 뼈다" % [id, sn])
 	# 변형 그림: 바꿔 끼우고 되돌릴 수 있는가
 	for b in bones:
 		for vn in b.get("variants", {}):

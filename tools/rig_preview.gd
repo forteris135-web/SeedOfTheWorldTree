@@ -4,8 +4,9 @@ extends Node2D
 ##
 ##   Godot --path . res://tools/rig_preview.tscn -- <id> [--poses idle,windup,strike] [--joints] [--hull]
 ##       자세마다 screenshots/rig_<id>_<자세>.png + 모아 보기 screenshots/rig_<id>_poses.png
-##   Godot --path . res://tools/rig_preview.tscn -- <id> --parts
-##       부위마다 그림 + 관절(빨강 pivot, 파랑 축 끝, 노랑 자식 관절, 초록 발바닥): screenshots/rig_<id>_parts.png
+##   Godot --path . res://tools/rig_preview.tscn -- <id> --parts [--cols 6]
+##       부위마다 같은 크기 칸에 맞춰 그림 + 관절(빨강 pivot, 파랑 축 끝, 노랑 자식 관절, 초록 발바닥) + 이름·z·칸 배율:
+##       screenshots/rig_<id>_parts.png
 ##   Godot --path . res://tools/rig_preview.tscn -- --enemy res://scenes/enemies/woodcutter.tscn [--seq idle,walk,attack,hit,broken,dead,kneel] [--joints]
 ##       동작: idle / walk / backstep / alert / attack / hit / broken / dead(뒤에서 맞아 앞으로) / dead_back(앞에서 맞아 뒤로) / kneel(구원형)
 ##             / slam (잿가지 거인 내려찍기) / aim (대롱 겨눔: arm_kind 를 gun 으로 바꾸고 소녀가 몹 앞을 위→아래로 돈다 — 정원사처럼 대롱 몹을 만들 때)
@@ -88,6 +89,8 @@ func _grab(crop := 1.0) -> Image:
 
 ## 바닥 선 (게임 px)
 func _draw() -> void:
+	if _floor_half <= 0.0:
+		return   # 부위 모드: 바닥 없음
 	draw_line(Vector2(-_floor_half, FLOOR_Y), Vector2(_floor_half, FLOOR_Y), Color(0.2, 0.25, 0.2), 3.0)
 	draw_rect(Rect2(-_floor_half, FLOOR_Y, _floor_half * 2.0, 400), Color(0.3, 0.33, 0.3))
 
@@ -192,64 +195,73 @@ func _add_marks(rig: PartRig, motion: RigMotion) -> Node2D:
 # ---------- 부위 ----------
 
 func _run_parts(id: String) -> void:
+	# 부위마다 같은 크기의 칸에 맞춰 키워(또는 줄여) 그린다 — 작은 부위(발·아래팔)의 관절 점도 읽히게. 칸 아래에 이름·z·배율.
 	var data := PartRig.load_data(id)
 	if data.is_empty():
 		get_tree().quit(1)
 		return
 	var bones: Array = data["bones"]
-	var x := -1300.0
-	var y := 0.0
-	var row_h := 0.0
 	var font := ThemeDB.fallback_font
+	_floor_half = 0.0
+	queue_redraw()
 	var holder := Node2D.new()
 	add_child(holder)
+	const CELL := 520.0
+	const LABEL_H := 70.0
+	var list: Array = []
 	for b in bones:
+		if b.has("tex"):
+			list.append(b)
+	var cols := mini(int(_args.get("cols", "6")), maxi(list.size(), 1))
+	var rows := ceili(float(list.size()) / cols)
+	for n in list.size():
+		var b: Dictionary = list[n]
 		var tex: Texture2D = load(b["tex"])
 		if tex == null:
 			continue
-		var k := 1.0
-		var sz := tex.get_size() * k
-		if x + sz.x > 1300.0:
-			x = -1300.0
-			y += row_h + 50.0
-			row_h = 0.0
+		var cell := Vector2((n % cols) * CELL, (n / cols) * (CELL + LABEL_H))
+		var sz := tex.get_size()
+		var k := minf((CELL - 40.0) / maxf(sz.x, 1.0), (CELL - 40.0) / maxf(sz.y, 1.0))
+		var org := cell + (Vector2(CELL, CELL) - sz * k) * 0.5
 		var spr := Sprite2D.new()
 		spr.texture = tex
 		spr.centered = false
 		spr.scale = Vector2(k, k)
-		spr.position = Vector2(x, y)
+		spr.position = org
 		holder.add_child(spr)
 		var pv := PartRig._v(b["pivot"]) * k
-		var info := {"pos": Vector2(x, y), "pv": pv, "name": str(b["name"]), "b": b, "k": k, "sz": sz}
+		var info := {"pos": org, "cell": cell, "pv": pv, "name": str(b["name"]), "b": b, "k": k, "sz": sz * k}
 		var mk := Node2D.new()
 		mk.z_index = 10
 		holder.add_child(mk)
 		mk.draw.connect(func():
 			var o: Vector2 = info["pos"] + info["pv"]
-			mk.draw_rect(Rect2(info["pos"], info["sz"]), Color(1, 1, 1, 0.25), false, 1.0)
-			mk.draw_circle(o, 5.0, Color(1, 0.2, 0.2))
+			mk.draw_rect(Rect2(info["cell"], Vector2(CELL, CELL)), Color(0, 0, 0, 0.18))
+			mk.draw_rect(Rect2(info["pos"], info["sz"]), Color(1, 1, 1, 0.3), false, 2.0)
 			var bb: Dictionary = info["b"]
 			var rot := deg_to_rad(float(bb["rot"]))
 			var ts := float(bb.get("tex_scale", 2.0))
-			# 뼈 틀 → 텍스처 px: 회전을 되돌리고 tex_scale 로 나눈다
+			# 뼈 틀 → 텍스처 px: 회전을 되돌리고 tex_scale 로 나눈다 (칸 배율 k 를 곱한다)
 			var to_tex := func(v: Vector2) -> Vector2: return o + v.rotated(-rot) / ts * float(info["k"])
 			if bb.has("len"):
-				mk.draw_line(o, to_tex.call(Vector2(0, float(bb["len"]))), Color(0.3, 0.6, 1), 2.0)
+				mk.draw_line(o, to_tex.call(Vector2(0, float(bb["len"]))), Color(0.3, 0.6, 1), 4.0)
 			if bb.has("sole"):
-				mk.draw_circle(to_tex.call(PartRig._v(bb["sole"])), 5.0, Color(0.2, 1, 0.3))
+				mk.draw_circle(to_tex.call(PartRig._v(bb["sole"])), 10.0, Color(0.2, 1, 0.3))
 			for c in bones:
 				if c["parent"] == bb["name"]:
-					mk.draw_circle(to_tex.call(PartRig._v(c["pos"])), 4.0, Color(1, 0.9, 0.2))
-			mk.draw_string(font, info["pos"] + Vector2(0, -6), "%s (z %d)" % [info["name"], int(bb.get("z", 0))], HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color.WHITE))
-		x += sz.x + 30.0
-		row_h = maxf(row_h, sz.y)
-	var total_h := y + row_h + 40.0
-	_cam.zoom = Vector2.ONE * minf(1920.0 / 2700.0, 1080.0 / total_h)
-	_cam.position = Vector2(0, total_h * 0.5 - 20.0)
+					mk.draw_circle(to_tex.call(PartRig._v(c["pos"])), 9.0, Color(1, 0.9, 0.2))
+			mk.draw_circle(o, 11.0, Color(1, 0.2, 0.2))
+			var label := "%s  z %d  ×%.2f" % [info["name"], int(bb.get("z", 0)), float(info["k"])]
+			mk.draw_string_outline(font, info["cell"] + Vector2(10, CELL + 48), label, HORIZONTAL_ALIGNMENT_LEFT, CELL - 20, 40, 8, Color(0, 0, 0, 0.8))
+			mk.draw_string(font, info["cell"] + Vector2(10, CELL + 48), label, HORIZONTAL_ALIGNMENT_LEFT, CELL - 20, 40, Color.WHITE))
+	var total := Vector2(cols * CELL, rows * (CELL + LABEL_H))
+	var vp := get_viewport().get_visible_rect().size
+	_cam.zoom = Vector2.ONE * minf(vp.x / (total.x + 40.0), vp.y / (total.y + 40.0))
+	_cam.position = total * 0.5
 	var img: Image = await _grab()
 	var path := "%s/rig_%s_parts.png" % [_out_dir(), id]
 	img.save_png(path)
-	print("[rig_preview] 부위 → ", path)
+	print("[rig_preview] 부위 → ", path, "  (빨강 관절 · 파랑 축 · 노랑 자식 관절 · 초록 발바닥, 칸마다 배율이 다르다)")
 	get_tree().quit()
 
 

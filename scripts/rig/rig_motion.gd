@@ -93,12 +93,9 @@ const GAIT_MIN_SPEED := 0.25
 ## 어깨로 모자라면 팔꿈치, 그다음 손목.
 const GUARD_MARGIN := 3.0
 const GUARD_LIMITS := [1.3, 0.45, 0.45]   # 어깨, 팔꿈치, 손목(무기) (라디안)
-## 휘두르기: 관절마다 늦게 따라오는 정도 (타격 진행도의 몫). 어깨가 끌고 팔꿈치·무기가 채찍처럼 따라온다.
-const STRIKE_LAG := {"arm_f_lo": 0.1, "weapon": 0.2, "head": 0.15, "arm_b_up": 0.05, "arm_b_lo": 0.12}
+## 휘두르기 채찍 늦음(strike_lag)·먼저 풀리는 채널(early)·무거운 채널(heavy)·충격/받아침/반동/숨쉬기/팔 흔들기가 더해지는 채널은
+## 원형의 '움직임 지도'(RigPoses.motion_map — 사람 모양은 HUMANOID_MOTION)에서 읽는다 → 뼈 이름이 다른 원형도 데이터로 고친다.
 ## 허리·몸통·무게중심은 예비동작 끝에서 먼저 풀리기 시작한다: 타격에 들어설 때 이미 EARLY_UNWIND 몫만큼 앞으로 와 있다.
-const EARLY_KEYS := ["torso", "lean", "hip_x"]
-## 타격 중에도 스프링으로 따라가는 무거운 채널 (몸통·허리·무게중심)
-const HEAVY_KEYS := ["torso", "lean", "hip_x", "hip_y"]
 const EARLY_UNWIND := 0.4
 ## 부드러운 부위가 땅에 눌려 접히는 한계 (세로 배율)
 const SOFT_MIN := 0.35
@@ -151,13 +148,26 @@ var _bone_keys: Array = []   # [채널 이름, 뼈 번호]
 var _lock_bones: PackedInt32Array = []   # 땅 닿기에 쓰는 뼈 (무기 사슬·부드러운 부위 빼고)
 var _settle_bones: PackedInt32Array = [] # 내려놓기에 쓰는 뼈 (땅 닿기 뼈에서 다리 빼고)
 var _soft_bones: PackedInt32Array = []   # 부드러운 부위 (땅에 눌려 접힌다)
+## 움직임 지도 (원형별, _init 에서 읽어 둔다 — 매 프레임 사전을 찾지 않게 [채널, 값] 배열로)
+var strike_lag := {}
+var early_keys: Array = []
+var heavy_keys: Array = []
+var parry_bounce: Array = []
+var _m_impact: Array = []
+var _m_parry: Array = []
+var _m_recoil: Array = []
+var _m_breath: Array = []   # [채널, 세기, 위상]
+var _m_swing: Array = []
+var _m_swing_abs: Array = []
 var _swing_bob := 0.0
 
 
 func _init(part_rig: PartRig) -> void:
 	rig = part_rig
 	var d := rig.data
-	poses = RigPoses.build(str(d.get("archetype", "humanoid")), d.get("poses", {}))
+	var arch := str(d.get("archetype", "humanoid"))
+	poses = RigPoses.build(arch, d.get("poses", {}))
+	_read_motion_map(RigPoses.motion_map(arch))
 	# 채널: base 의 모든 키 + 자세들에 나오는 뼈 이름
 	var base: Dictionary = poses["base"]
 	for k in base:
@@ -210,6 +220,31 @@ func _init(part_rig: PartRig) -> void:
 	fin = target.duplicate()
 	_place_feet_home()
 	update(0.0, {})
+
+
+func _read_motion_map(mm: Dictionary) -> void:
+	strike_lag = mm.get("strike_lag", {})
+	early_keys = mm.get("early", [])
+	heavy_keys = mm.get("heavy", [])
+	parry_bounce = mm.get("parry_bounce", [])
+	_m_impact = _pairs(mm.get("impact", {}))
+	_m_parry = _pairs(mm.get("parry", {}))
+	_m_recoil = _pairs(mm.get("recoil", {}))
+	_m_swing = _pairs(mm.get("swing", {}))
+	_m_swing_abs = _pairs(mm.get("swing_abs", {}))
+	_m_breath = []
+	var br: Dictionary = mm.get("breath", {})
+	for k in br:
+		var v = br[k]
+		if v is Array and v.size() >= 2:
+			_m_breath.append([str(k), float(v[0]), float(v[1])])
+
+
+static func _pairs(m: Dictionary) -> Array:
+	var out: Array = []
+	for k in m:
+		out.append([str(k), float(m[k])])
+	return out
 
 
 static func _is_foot_key(k: String) -> bool:
@@ -388,7 +423,7 @@ func three_beat(from: Dictionary, windup: Dictionary, strike: Dictionary, ready:
 			# 허리·몸통은 팔이 아직 뒤로 가는 동안(예비 끝 25%) 먼저 앞으로 풀리기 시작한다 (힘이 아래에서 위로 전해지는 휘두르기)
 			var early := smoothstep(0.75, 1.0, p) * EARLY_UNWIND
 			if early > 0.0:
-				for k in EARLY_KEYS:
+				for k in early_keys:
 					if out.has(k):
 						var w0 := float(windup.get(k, base.get(k, 0.0)))
 						out[k] = float(out[k]) + (float(strike.get(k, base.get(k, 0.0))) - w0) * early
@@ -396,12 +431,12 @@ func three_beat(from: Dictionary, windup: Dictionary, strike: Dictionary, ready:
 		"strike":
 			var out := {}
 			for k in keys:
-				var lag: float = STRIKE_LAG.get(k, 0.0)
+				var lag := float(strike_lag.get(k, 0.0))
 				var u := clampf((p - lag) / (1.0 - lag), 0.0, 1.0)
 				var s := strike_curve(u, over * (1.0 + lag * 2.0))
 				var a := float(windup.get(k, base.get(k, 0.0)))
 				var b := float(strike.get(k, base.get(k, 0.0)))
-				if EARLY_KEYS.has(k):
+				if early_keys.has(k):
 					a += (b - a) * EARLY_UNWIND   # 예비 끝에서 이미 이만큼 풀려 있다
 				out[k] = lerpf(a, b, s)
 			return out
@@ -490,30 +525,30 @@ func update(delta: float, ctx: Dictionary) -> void:
 	var imp: float = sp["impact"].v
 	var par: float = sp["parry"].v
 	var rec: float = sp["recoil"].v
-	_add("torso", -imp * 1.0 - rec * 0.3)
-	_add("head", -imp * 1.4)
-	_add("arm_b_up", imp * 0.9)
-	_add("arm_b_lo", imp * 0.5)
-	_add("arm_f_up", imp * 0.35 - par - rec)
-	_add("arm_f_lo", -par * 0.5)
-	_add("weapon", -par * 0.6)
+	# 충격·받아침·반동이 더해지는 채널과 배수는 움직임 지도에서 (사람 모양: 몸통·머리는 젖혀지고 뒷팔은 흔들리고 무기 팔이 튕긴다)
+	if imp != 0.0:
+		for e in _m_impact:
+			_add(e[0], imp * e[1])
+	if par != 0.0:
+		for e in _m_parry:
+			_add(e[0], par * e[1])
+	if rec != 0.0:
+		for e in _m_recoil:
+			_add(e[0], rec * e[1])
 	fin["hip_x"] = float(fin["hip_x"]) - imp * 0.004 + float(sp["shove"].v)
 	fin["hip_y"] = float(fin["hip_y"]) + float(sp["crouch"].v) + absf(float(sp["thud"].v)) * 0.01
 	if breath > 0.0:
-		var b := sin(time * 2.2)
-		_add("torso", b * 1.3 * breath)
-		_add("head", sin(time * 2.2 + 0.7) * 1.1 * breath)
-		_add("arm_b_up", sin(time * 2.2 + 0.3) * 1.6 * breath)
-		_add("arm_f_up", sin(time * 2.2 + 0.5) * 0.8 * breath)
-		fin["hip_y"] = float(fin["hip_y"]) + (b * 0.5 + 0.5) * 0.008 * breath
+		for e in _m_breath:
+			_add(e[0], sin(time * 2.2 + e[2]) * e[1] * breath)
+		fin["hip_y"] = float(fin["hip_y"]) + (sin(time * 2.2) * 0.5 + 0.5) * 0.008 * breath
 	# 걸음에 따른 팔 흔들기 (두 발의 앞뒤 차이로)
 	if legs.size() >= 2 and feet_mode == Feet.GAIT:
 		var swing := clampf((legs[0].x - legs[1].x) / maxf(L * 0.6, 1.0), -1.0, 1.0)
 		var amt := clampf(absf(speed) / L, 0.0, 1.0)
-		_add("arm_b_up", -swing * 22.0 * amt)
-		_add("arm_b_lo", -absf(swing) * 6.0 * amt)
-		_add("arm_f_up", swing * 6.0 * amt)
-		_add("torso", absf(swing) * 1.5 * amt)
+		for e in _m_swing:
+			_add(e[0], swing * e[1] * amt)
+		for e in _m_swing_abs:
+			_add(e[0], absf(swing) * e[1] * amt)
 
 	# 4) 몸 (뿌리·몸통·팔·머리)
 	_apply_body()
@@ -543,7 +578,7 @@ func _drive_chan(c: Chan, tgt: float, k: String, delta: float) -> void:
 			c.spring(tgt, 90.0 * slow, 17.0, delta)
 		Drive.FAST:
 			# 타격: 곡선이 시간 기반이라 팔은 바짝 따라간다. 몸통·허리는 무거워 조금 늦게 (팔보다 먼저 출발하므로 늦어도 같이 끝난다)
-			if HEAVY_KEYS.has(k):
+			if heavy_keys.has(k):
 				c.spring(tgt, 520.0, 44.0, delta)   # 스프링: 예비에서 쌓인 속도를 이어 받아 '툭' 하지 않는다
 			else:
 				c.damp(tgt, 40.0 if k == "head" else 90.0, delta)

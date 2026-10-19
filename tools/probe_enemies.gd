@@ -313,18 +313,13 @@ func _probe_parry_mid_strike() -> void:
 			t += STEP
 		if _is_rig(vis):
 			# 뼈대: 칼날 세상 각도(앞 수평 0, 아래 +). 받아친 뒤 칼날이 '휘두름 끝'(막히지 않았을 때 가장 깊은 각도)보다 더 내려가면 안 된다.
-			var at: float = _pose(vis)["arm"]
+			var at := _deep_angle(_pose(vis)["arm"])
 			e.on_just_guarded(null, 20.0)
 			var deepest_r := at
 			var trail_r := []
-			var cont := at      # 이어지는 각도 (±π 를 넘나들어도 끊기지 않게 프레임 차이를 쌓는다)
-			var prev_a := at
 			for i in 72:
 				_step(e, 1)
-				var raw_a: float = _pose(vis)["arm"]
-				cont += wrapf(raw_a - prev_a, -PI, PI)
-				prev_a = raw_a
-				var a := cont
+				var a := _deep_angle(_pose(vis)["arm"])
 				deepest_r = maxf(deepest_r, a)
 				if i % 6 == 0:
 					trail_r.append("%.2f" % a)
@@ -363,14 +358,19 @@ func _rig_strike_end() -> float:
 		if e.state == EnemyBase.State.STRIKE:
 			struck = true
 		if struck:
-			var a: float = _pose(vis)["arm"]
-			if a < -PI * 0.5:
-				a += TAU   # 머리 위 뒤쪽(−π 근처)은 '깊음'과 반대쪽이다
-			deepest = maxf(deepest, minf(a, PI))
+			deepest = maxf(deepest, _deep_angle(_pose(vis)["arm"]))
 		if struck and e.state in [EnemyBase.State.CHASE, EnemyBase.State.IDLE, EnemyBase.State.BACKSTEP]:
 			break
 	e.free()
 	return deepest
+
+
+## 칼날 세상 각도(앞 수평 0, 아래 +)를 '휘두름 깊이' 순서로 편다: 등 뒤 아래(약 150도)를 자르는 자리로 삼아
+## 머리 위 뒤(−2.5) < 머리 위(−1.57) < 앞 수평(0) < 앞 아래(+) 가 되게 (−3.68, 2.6] 로 옮긴다.
+## (예전엔 −π/2 아래에 2π 를 더한 뒤 π 로 잘라서 기준이 늘 3.14 가 되어 검사가 실패할 수 없었다 — 2026-10-20 검수)
+static func _deep_angle(a: float) -> float:
+	const CUT := 2.6
+	return fposmod(a - CUT, TAU) + CUT - TAU
 
 
 ## 그림의 발끝·머리 위치 (Visual 로컬 좌표). 땅은 y = hurt_height*0.5.

@@ -20,6 +20,7 @@
   "facing": -1,
   "texture": "res://art/enemies/enemy_woodcutter_savable.png",
   "art_scale": 0.17,
-  "art_faces_right": false
+  "art_faces_right": false,
+  "rig": "woodcutter_savable"
  }
 }
