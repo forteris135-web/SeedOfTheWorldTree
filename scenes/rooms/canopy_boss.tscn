@@ -246,7 +246,7 @@ position = Vector2(1950, -400)
 
 [node name="ToCanopy04" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(140, 1380)
-target_scene = "res://scenes/rooms/canopy_04.tscn"
+target_scene = "res://scenes/rooms/canopy_07.tscn"
 spawn_name = "FromBoss"
 
 [node name="ToVillage" parent="Exits" instance=ExtResource("40_portal")]

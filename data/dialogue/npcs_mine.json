@@ -1,50 +1,55 @@
 {
-  "_설명": "확장판 · 잠긴 채굴장 묶음의 추가 대사 (EXPANSION.md 8장). DialogueData 가 npcs.json 에 깊은 합치기로 이어 붙인다 (talks 배열은 뒤에 붙음 → priority 로 먼저 고르게 한다). 티아의 다섯 영혼(five_souls) 대사는 한 번만 하고, 1편의 한 번뿐인 대화(등불 건네기, 오웬과의 재회)가 남아 있으면 그쪽이 먼저 나오도록 조건을 둘로 나눴다(오웬을 아직 못 구함 / 재회를 마침). 말하면 깃발 tia_told_five_souls.",
-  "owen": {
-    "talks": [
-      {
-        "when": "boss_pump_defeated",
-        "priority": 5,
-        "lines": [
-          "그 펌프… 내 스승님들이 만든 거예요. 거꾸로 돌릴 수 있게 설계했다고 들었지만, 아무도 그러지 않았죠.",
-          "멈춰 줘서 고마워요. 스승님들도… 그걸 바랐을 거예요."
-        ]
-      }
+ "_설명": "확장판 · 잠긴 채굴장 묶음의 추가 대사 (EXPANSION.md 8장). DialogueData 가 npcs.json 에 깊은 합치기로 이어 붙인다 (talks 배열은 뒤에 붙음 → priority 로 먼저 고르게 한다). 티아의 다섯 영혼(five_souls) 대사는 한 번만 하고, 1편의 한 번뿐인 대화(등불 건네기, 오웬과의 재회)가 남아 있으면 그쪽이 먼저 나오도록 조건을 둘로 나눴다(오웬을 아직 못 구함 / 재회를 마침). 말하면 깃발 tia_told_five_souls.",
+ "owen": {
+  "talks": [
+   {
+    "when": "boss_pump_defeated",
+    "priority": 5,
+    "lines": [
+     "그 펌프… 내 스승님들이 만든 거예요. 거꾸로 돌릴 수 있게 설계했다고 들었지만, 아무도 그러지 않았죠.",
+     "멈춰 줘서 고마워요. 스승님들도… 그걸 바랐을 거예요."
     ]
-  },
-  "tia": {
-    "talks": [
-      {
-        "when": "five_souls,has_tia_lantern,!owen_rescued,!tia_told_five_souls",
-        "priority": 5,
-        "set": "tia_told_five_souls",
-        "lines": [
-          "언니, 등불 하나면 충분해. 아빠가 그랬어."
-        ]
-      },
-      {
-        "when": "five_souls,reunion_done,!tia_told_five_souls",
-        "priority": 5,
-        "set": "tia_told_five_souls",
-        "lines": [
-          "언니, 등불 하나면 충분해. 아빠가 그랬어."
-        ]
-      }
+   }
+  ]
+ },
+ "tia": {
+  "talks": [
+   {
+    "when": "five_souls,has_tia_lantern,!owen_rescued,!tia_told_five_souls",
+    "priority": 5,
+    "set": "tia_told_five_souls",
+    "lines": [
+     "언니, 등불 하나면 충분해. 아빠가 그랬어."
     ]
+   },
+   {
+    "when": "five_souls,reunion_done,!tia_told_five_souls",
+    "priority": 5,
+    "set": "tia_told_five_souls",
+    "lines": [
+     "언니, 등불 하나면 충분해. 아빠가 그랬어."
+    ]
+   }
+  ]
+ },
+ "miner_hidden": {
+  "name": "광부 하론",
+  "rescued_lines": [
+   "…여기, 묻힌 갱도예요. 벽이 무너져서 아무도 못 들어왔는데.",
+   "곡괭이를 놓은 지 얼마나 됐지. 손이… 다시 손이네요."
+  ],
+  "talk_lines": [
+   "펌프실 쪽은 수액에 잠겼어요. 거꾸로 돌릴 수 있다던데, 아무도 해 보지 않았죠.",
+   "마을로 돌아가면 등불을 하나만 켤 거예요. 하나면 충분하니까."
+  ],
+  "reward": {
+   "type": "max_hp",
+   "amount": 15
   },
-  "miner_hidden": {
-    "name": "광부 하론",
-    "rescued_lines": [
-      "…여기, 묻힌 갱도예요. 벽이 무너져서 아무도 못 들어왔는데.",
-      "곡괭이를 놓은 지 얼마나 됐지. 손이… 다시 손이네요."
-    ],
-    "talk_lines": [
-      "펌프실 쪽은 수액에 잠겼어요. 거꾸로 돌릴 수 있다던데, 아무도 해 보지 않았죠.",
-      "마을로 돌아가면 등불을 하나만 켤 거예요. 하나면 충분하니까."
-    ],
-    "reward": {
-      "type": "max_hp",
-      "amount": 15
-    }
-  }
+  "leave_line": "마을로 올라갈게요. 등불 하나만 들고요.",
+  "home_lines": [
+   "사당에서 기도하는 법은 잊었는데, 손을 모으니 저절로 되네요.",
+   "등불 하나면 충분해요. 갱도에서는 그 하나가 늘 모자랐는데, 이상하죠."
+  ]
+ }
 }

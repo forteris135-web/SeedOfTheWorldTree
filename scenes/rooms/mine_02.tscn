@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3 uid="uid://c1seedmine02"]
+[gd_scene load_steps=32 format=3 uid="uid://c1seedmine02"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -33,6 +33,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedherbalist" path="res://scenes/enemies/herbalist.tscn" id="36_herbalist"]
 [ext_resource type="PackedScene" uid="uid://c1seedherbalistsav" path="res://scenes/enemies/herbalist_savable.tscn" id="37_herbalist_sav"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="PackedScene" uid="uid://c1seedcrackedwall" path="res://scenes/world/cracked_wall.tscn" id="50_cracked_wall"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -202,6 +203,26 @@ label_text = "훼손된 경전"
 position = Vector2(4620, 720)
 size = Vector2(380, 40)
 
+[node name="ClosetFloor1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 870)
+size = Vector2(440, 40)
+decorate = false
+
+[node name="ClosetLedge1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(440, 870)
+size = Vector2(180, 40)
+one_way = true
+
+[node name="ClosetCeiling1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 510)
+size = Vector2(440, 40)
+decorate = false
+
+[node name="CrackedWall1" parent="Terrain" instance=ExtResource("50_cracked_wall")]
+position = Vector2(380, 550)
+size = Vector2(60, 320)
+secret_id = "cracked_mine_02_1"
+
 [node name="Hazards" type="Node2D" parent="."]
 
 [node name="Thorns1" parent="Hazards" instance=ExtResource("17_thorns")]
@@ -221,6 +242,9 @@ position = Vector2(4760, 652)
 
 [node name="FromMineMini" type="Marker2D" parent="Markers"]
 position = Vector2(1830, 1132)
+
+[node name="FromHidden1" type="Marker2D" parent="Markers"]
+position = Vector2(170, 802)
 
 [node name="Exits" type="Node2D" parent="."]
 
@@ -244,6 +268,12 @@ requires_ability = "lantern"
 position = Vector2(1700, 1200)
 target_scene = "res://scenes/rooms/mine_mini_1.tscn"
 spawn_name = "FromMine02"
+
+[node name="ToHidden1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(262, 870)
+target_scene = "res://scenes/rooms/mine_hidden_2.tscn"
+spawn_name = "FromMain"
+art_scale = 0.2
 
 [node name="Interactables" type="Node2D" parent="."]
 

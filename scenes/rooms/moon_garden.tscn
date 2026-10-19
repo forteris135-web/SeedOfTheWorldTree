@@ -73,7 +73,7 @@ bounds = Rect2(0, 0, 3000, 1300)
 region = "abyss"
 room_id = "moon_garden"
 display_name = "달빛 정원"
-map_offset = Vector2(47100, 300)
+map_offset = Vector2(48900, 300)
 terrain_color = Color(0.09, 0.1, 0.12, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]

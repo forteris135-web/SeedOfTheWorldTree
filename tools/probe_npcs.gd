@@ -23,7 +23,7 @@ extends Node
 ##  9) 집 항목이 없는 구원자(확장판 대비): 떠나지 않고 대사를 돌아가며 말하고, 집 깃발도 서지 않는다.
 ## 마지막에 "[probe] 끝: 실패 N" 을 찍고 그 수로 종료한다.
 
-const IDS := ["woodcutter_canopy", "gardener_canopy", "guard_village", "owen", "herbalist_abyss"]
+const IDS := ["woodcutter_canopy", "gardener_canopy", "guard_village", "owen", "herbalist_abyss", "fisher_lake", "miner_hidden"]
 const SAVE_PATH := "user://save.json"
 const TALK_BAND := 200.0     # 집 NPC 와 말하는 소녀가 설 수 있는 가로 범위 (± px)
 const SPACING := 250.0       # 같은 바닥의 다른 말 걸기 대상과 떨어져야 하는 거리

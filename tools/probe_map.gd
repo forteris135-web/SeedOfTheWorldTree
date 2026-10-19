@@ -48,6 +48,6 @@ func _ready() -> void:
 	print("[지도시험] d (달빛풀 피운 뒤): %d/%d → %s" % [d_after[0], d_after[1], "하늘색" if MapScreen.explore_fill(Progress.visited_rooms["d"]) == MapScreen.FILL_DONE else "연초록"])
 	if MapScreen.explore_fill(Progress.visited_rooms["d"]) != MapScreen.FILL_DONE: ok = false
 	if MapScreen.FILL_REMAIN == MapScreen.FILL_DONE: ok = false
-	if MapScreen.REGION_COLORS.size() != 4: ok = false
+	if MapScreen.REGION_COLORS.size() != 6: ok = false
 	print("[지도시험] 결과: %s" % ("통과" if ok else "실패"))
 	get_tree().quit(0 if ok else 1)

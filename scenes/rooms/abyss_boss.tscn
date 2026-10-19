@@ -58,7 +58,7 @@ bounds = Rect2(0, 0, 3700, 1800)
 region = "abyss"
 room_id = "abyss_boss"
 display_name = "뿌리의 심연 · 정원의 끝"
-map_offset = Vector2(50100, -200)
+map_offset = Vector2(51900, -200)
 is_boss_room = true
 boss_track = "boss_root"
 terrain_color = Color(0.09, 0.1, 0.12, 1)
@@ -247,7 +247,7 @@ choice = "return"
 label = "마력의 관을 끊는다"
 
 [node name="Pump" parent="Choices" instance=ExtResource("21_choice")]
-position = Vector2(1900, 1500)
+position = Vector2(3050, 1500)
 choice = "third"
 label = "심연의 거대한 펌프를 거꾸로 돌린다"
 

@@ -1,0 +1,25 @@
+{
+ "_설명": "확장판 구원자의 집 자리 (relocations.json 과 같은 형식, 함께 읽힌다). 사당은 적이 없어 대화 중에 안전하다.",
+ "fisher_lake": {
+  "scene": "village_shrine",
+  "position": [
+   1700,
+   1000
+  ],
+  "facing": -1,
+  "texture": "res://art/enemies/enemy_sap_fisher_savable.png",
+  "art_scale": 0.17,
+  "art_faces_right": false
+ },
+ "miner_hidden": {
+  "scene": "village_shrine",
+  "position": [
+   1950,
+   1000
+  ],
+  "facing": -1,
+  "texture": "res://art/enemies/enemy_woodcutter_savable.png",
+  "art_scale": 0.17,
+  "art_faces_right": false
+ }
+}

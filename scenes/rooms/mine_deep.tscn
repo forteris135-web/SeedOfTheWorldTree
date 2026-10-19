@@ -1,4 +1,4 @@
-[gd_scene load_steps=31 format=3 uid="uid://c1seedminedeep"]
+[gd_scene load_steps=34 format=3 uid="uid://c1seedminedeep"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -33,6 +33,9 @@
 [ext_resource type="PackedScene" uid="uid://c1seedherbalist" path="res://scenes/enemies/herbalist.tscn" id="36_herbalist"]
 [ext_resource type="PackedScene" uid="uid://c1seedherbalistsav" path="res://scenes/enemies/herbalist_savable.tscn" id="37_herbalist_sav"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="PackedScene" uid="uid://c1seedsappool" path="res://scenes/world/sap_pool.tscn" id="54_sap_pool"]
+[ext_resource type="Script" path="res://scripts/world/map_offset_fix.gd" id="56_map_fix"]
+[ext_resource type="PackedScene" uid="uid://c1seedcrackedwall" path="res://scenes/world/cracked_wall.tscn" id="50_cracked_wall"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -69,7 +72,7 @@ size = Vector2(80, 300)
 
 [node name="MineDeep" type="Node2D"]
 script = ExtResource("1_room")
-bounds = Rect2(0, 0, 3000, 1400)
+bounds = Rect2(0, 0, 4800, 1400)
 region = "mine"
 room_id = "mine_deep"
 display_name = "채굴장 · 책임자의 방"
@@ -142,13 +145,13 @@ size = Vector2(100, 1600)
 decorate = false
 
 [node name="WallRight" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(3000, -100)
+position = Vector2(4800, -100)
 size = Vector2(100, 1600)
 decorate = false
 
 [node name="Ceiling" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, -100)
-size = Vector2(3000, 100)
+size = Vector2(4800, 100)
 decorate = false
 
 [node name="P1" parent="Terrain" instance=ExtResource("3_platform")]
@@ -172,6 +175,48 @@ position = Vector2(2200, 850)
 size = Vector2(300, 40)
 one_way = true
 
+[node name="P1Flooded" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3000, 1100)
+size = Vector2(1800, 300)
+
+[node name="ClosetFloor1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 840)
+size = Vector2(440, 40)
+decorate = false
+
+[node name="ClosetLedge1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(440, 840)
+size = Vector2(180, 40)
+one_way = true
+
+[node name="ClosetCeiling1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 480)
+size = Vector2(440, 40)
+decorate = false
+
+[node name="CrackedWall1" parent="Terrain" instance=ExtResource("50_cracked_wall")]
+position = Vector2(380, 520)
+size = Vector2(60, 320)
+secret_id = "cracked_mine_deep_1"
+
+[node name="Hazards" type="Node2D" parent="."]
+
+[node name="SapPool1" parent="Hazards" instance=ExtResource("54_sap_pool")]
+position = Vector2(3060, 1020)
+size = Vector2(460, 100)
+
+[node name="SapPool2" parent="Hazards" instance=ExtResource("54_sap_pool")]
+position = Vector2(3600, 1020)
+size = Vector2(420, 100)
+
+[node name="SapPool3" parent="Hazards" instance=ExtResource("54_sap_pool")]
+position = Vector2(4080, 1020)
+size = Vector2(420, 100)
+
+[node name="MapFix" type="Node" parent="."]
+script = ExtResource("56_map_fix")
+moves = {"abyss_01": [Vector2(39300, 500), Vector2(41100, 500)], "abyss_02": [Vector2(43500, 100), Vector2(45300, 100)], "abyss_boss": [Vector2(50100, -200), Vector2(51900, -200)], "abyss_mini_1": [Vector2(43800, -1400), Vector2(45600, -1400)], "moon_garden": [Vector2(47100, 300), Vector2(48900, 300)]}
+
 [node name="Markers" type="Node2D" parent="."]
 
 [node name="FromMine02" type="Marker2D" parent="Markers"]
@@ -179,6 +224,12 @@ position = Vector2(120, 1032)
 
 [node name="ToAbyss" type="Marker2D" parent="Markers"]
 position = Vector2(2880, 1032)
+
+[node name="FromFlooded" type="Marker2D" parent="Markers"]
+position = Vector2(4700, 1032)
+
+[node name="FromHidden1" type="Marker2D" parent="Markers"]
+position = Vector2(170, 772)
 
 [node name="Exits" type="Node2D" parent="."]
 
@@ -191,6 +242,19 @@ spawn_name = "FromMineDeep"
 position = Vector2(2810, 1100)
 target_scene = "res://scenes/rooms/abyss_01.tscn"
 spawn_name = "FromMineDeep"
+
+[node name="ToFlooded" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(4610, 1100)
+target_scene = "res://scenes/rooms/flooded_mine_01.tscn"
+spawn_name = "FromMineDeep"
+requires_ability = "sap_walk"
+locked_message = "수액이 깊다. 수면 위를 걸을 힘이 필요하다."
+
+[node name="ToHidden1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(262, 840)
+target_scene = "res://scenes/rooms/mine_hidden_1.tscn"
+spawn_name = "FromMain"
+art_scale = 0.2
 
 [node name="Interactables" type="Node2D" parent="."]
 

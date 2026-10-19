@@ -1,4 +1,4 @@
-[gd_scene load_steps=33 format=3 uid="uid://c1seedcanopy04"]
+[gd_scene load_steps=34 format=3 uid="uid://c1seedcanopy04"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -35,6 +35,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 [ext_resource type="PackedScene" uid="uid://c1seedsecretwall" path="res://scenes/world/secret_wall.tscn" id="50_secret_wall"]
 [ext_resource type="PackedScene" uid="uid://c1seedpickup" path="res://scenes/world/pickup.tscn" id="52_pickup"]
+[ext_resource type="PackedScene" uid="uid://c1seedcrackedwall" path="res://scenes/world/cracked_wall.tscn" id="50_cracked_wall"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -207,6 +208,26 @@ position = Vector2(3200, 500)
 size = Vector2(60, 200)
 secret_id = "secret_canopy_04_1"
 
+[node name="ClosetFloor1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 1550)
+size = Vector2(440, 40)
+decorate = false
+
+[node name="ClosetLedge1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(440, 1550)
+size = Vector2(180, 40)
+one_way = true
+
+[node name="ClosetCeiling1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(0, 1190)
+size = Vector2(440, 40)
+decorate = false
+
+[node name="CrackedWall1" parent="Terrain" instance=ExtResource("50_cracked_wall")]
+position = Vector2(380, 1230)
+size = Vector2(60, 320)
+secret_id = "cracked_canopy_04_1"
+
 [node name="Markers" type="Node2D" parent="."]
 
 [node name="FromCanopy03" type="Marker2D" parent="Markers"]
@@ -217,6 +238,9 @@ position = Vector2(3080, 1932)
 
 [node name="FromCanopy05" type="Marker2D" parent="Markers"]
 position = Vector2(3080, 1932)
+
+[node name="FromHidden1" type="Marker2D" parent="Markers"]
+position = Vector2(170, 1482)
 
 [node name="Exits" type="Node2D" parent="."]
 
@@ -229,6 +253,12 @@ spawn_name = "FromCanopy04"
 position = Vector2(3010, 2000)
 target_scene = "res://scenes/rooms/canopy_05.tscn"
 spawn_name = "FromCanopy04"
+
+[node name="ToHidden1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(262, 1550)
+target_scene = "res://scenes/rooms/canopy_hidden_2.tscn"
+spawn_name = "FromMain"
+art_scale = 0.2
 
 [node name="Interactables" type="Node2D" parent="."]
 

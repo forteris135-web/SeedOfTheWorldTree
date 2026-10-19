@@ -1,4 +1,4 @@
-[gd_scene load_steps=33 format=3 uid="uid://c1seedvillage01"]
+[gd_scene load_steps=34 format=3 uid="uid://c1seedvillage01"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -35,6 +35,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 [ext_resource type="PackedScene" uid="uid://c1seedsecretceil" path="res://scenes/world/secret_ceiling.tscn" id="51_secret_ceiling"]
 [ext_resource type="PackedScene" uid="uid://c1seedpickup" path="res://scenes/world/pickup.tscn" id="52_pickup"]
+[ext_resource type="PackedScene" uid="uid://c1seedcrackedwall" path="res://scenes/world/cracked_wall.tscn" id="50_cracked_wall"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -190,6 +191,21 @@ position = Vector2(1000, 800)
 size = Vector2(180, 150)
 secret_id = "secret_village_01_1"
 
+[node name="ClosetFloor1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3660, 1020)
+size = Vector2(540, 40)
+decorate = false
+
+[node name="ClosetCeiling1" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(3760, 660)
+size = Vector2(440, 40)
+decorate = false
+
+[node name="CrackedWall1" parent="Terrain" instance=ExtResource("50_cracked_wall")]
+position = Vector2(3760, 700)
+size = Vector2(60, 320)
+secret_id = "cracked_village_01_1"
+
 [node name="Markers" type="Node2D" parent="."]
 
 [node name="FromCanopy" type="Marker2D" parent="Markers"]
@@ -197,6 +213,9 @@ position = Vector2(120, 1332)
 
 [node name="FromVillage02" type="Marker2D" parent="Markers"]
 position = Vector2(4080, 1332)
+
+[node name="FromHidden1" type="Marker2D" parent="Markers"]
+position = Vector2(4030, 952)
 
 [node name="Exits" type="Node2D" parent="."]
 
@@ -209,6 +228,12 @@ spawn_name = "FromVillage"
 position = Vector2(4010, 1400)
 target_scene = "res://scenes/rooms/village_02.tscn"
 spawn_name = "FromVillage01"
+
+[node name="ToHidden1" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(3938, 1020)
+target_scene = "res://scenes/rooms/village_hidden_1.tscn"
+spawn_name = "FromMain"
+art_scale = 0.2
 
 [node name="Interactables" type="Node2D" parent="."]
 
