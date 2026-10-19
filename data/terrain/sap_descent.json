@@ -16,7 +16,7 @@
     "slab": {"max_w": 200},
     "branch": {"thin_poly": 110},
     "thorn": {"tint": [0.86, 0.8, 0.76], "reach_min": 0.9, "reach_max": 1.35, "sink": 22},
-    "wall": {"width": 150, "out": 14, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.12, "v_hi": 0.86, "top_inset": 40}
+    "wall": {"width": 140, "out": 14, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.42, "v_hi": 0.8, "top_inset": 40}
   },
   "cut": {
     "sheet": "res://익스펜션/그림/지형/C082DF1A-939D-47FE-9DD7-9DA84BE5FB9C.PNG",
@@ -35,8 +35,6 @@
       {"name": "vine_e", "role": "hang", "src": [1251, 374, 49, 357], "keep": "largest"},
       {"name": "fall_a", "role": "hang", "src": [1118, 261, 69, 332], "keep": "largest"},
       {"name": "pillar_a", "role": "wall", "src": [1309, 603, 123, 453], "keep": "largest"},
-      {"name": "pillar_b", "role": "wall", "src": [1005, 794, 162, 275], "keep": "largest"},
-      {"name": "pillar_c", "role": "wall", "src": [1148, 766, 205, 303], "keep": "largest"},
       {"name": "body_src", "role": "source", "atlas": false, "src": [17, 843, 792, 227], "keep": "largest", "clip": [60, 905, 440, 160]},
       {"name": "pillar_src", "role": "source", "atlas": false, "src": [1309, 603, 123, 453], "keep": "largest", "clip": [1312, 640, 115, 390]},
       {"name": "thorn_a", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [187, 242, 127, 171], "scale": 0.8, "keep": "largest"},
