@@ -295,6 +295,10 @@ func _probe_enemy_fall(path: String, from_front: bool) -> void:
 	for i in 30:
 		e._physics_process(STEP)
 		vis._process(STEP)
+	# 몸통·머리 뼈가 없는 뼈대(기계·짐승): 뿌리 부위(몸) 가운데가 서 있을 때보다 내려앉았는지 본다 (다리가 꺾여 배가 땅에)
+	var rig0: PartRig = vis.rig
+	var no_torso := not rig0.has_bone("torso")
+	var root_h0 := -_center_y(rig0, rig0.names[0]) if no_torso else 0.0
 	e.hp = 1.0
 	var src: Node2D = null
 	if from_front:
@@ -325,7 +329,18 @@ func _probe_enemy_fall(path: String, from_front: bool) -> void:
 			torso_h = -_center_y(rig, "torso") * gs
 			head_h = -_center_y(rig, "head") * gs
 			weapon_hi = -_top_y(rig, "weapon") * gs
+			if no_torso:
+				torso_h = -_center_y(rig, rig.names[0]) * gs
+				head_h = -rig.lowest_y(PackedInt32Array([0])) * gs   # 몸통 없는 뼈대: 몸(뿌리 부위) 아랫면의 땅 위 높이
 	var side := "뒤로" if from_front else "앞으로"
+	if no_torso:
+		# 기계·짐승: 다리가 꺾여 몸(뿌리 부위)이 내려앉고 배(몸 아랫면)가 땅에 닿는다 — 몸 가운데가 낮아지고, 몸 아랫면이 땅 위 6px 안
+		var h0 := root_h0 * gs
+		print("[probe]   %s %s 쓰러짐 끝 (몸통 없는 뼈대): 몸(%s) 가운데 %+.0fpx ← 서 있을 때 %+.0fpx, 몸 아랫면 %+.1fpx" % [path.get_file(), side, rig.names[0], torso_h, h0, head_h])
+		_check(absf(low_end) <= 6.0, "%s: %s 쓰러진 몸의 가장 낮은 점이 땅 ±6px (%+.1fpx)" % [path.get_file(), side, low_end])
+		_check(torso_h < h0 - 4.0 and head_h <= 6.0 and head_h >= -SINK_TOL, "%s: %s 쓰러져 몸이 내려앉아 배가 땅에 닿았다 — 몸 가운데 %.0f%%, 몸 아랫면 %+.1fpx (≤ 6px)" % [path.get_file(), side, torso_h / maxf(h0, 0.001) * 100.0, head_h])
+		e.free()
+		return
 	print("[probe]   %s %s 쓰러짐 끝: 몸통 가운데 %+.0fpx, 머리 가운데 %+.0fpx, 무기 꼭대기 %+.0fpx (서 있는 키 %.0fpx, 땅 위 +)" % [path.get_file(), side, torso_h, head_h, weapon_hi, stand_h])
 	_check(absf(low_end) <= 6.0, "%s: %s 쓰러져 누운 몸의 가장 낮은 점이 땅 ±6px (%+.1fpx)" % [path.get_file(), side, low_end])
 	# 누웠는가: 가장 낮은 점만 보면 천·치마가 몸을 받쳐 떠 있어도 통과한다 → 몸통·머리 가운데가 낮아야 한다 (기울기 줄인 거대화 몹 포함)
