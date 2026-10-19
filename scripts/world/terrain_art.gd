@@ -75,6 +75,10 @@ var _layer_fill := false
 var pick := ""
 var pick_flip := false
 var pick_w := 0.0
+## 어두운 방의 작은 빛: 지역 설명에 params.glow 가 있고 어두운 방이면, 놓인 조각의 빛나는 자리(pieces.json 의 glow — 수정·버섯·등불)를 모은다.
+## 다 만든 뒤 옛 코드 지형의 '버섯 빛'과 같은 규칙(TerrainStyle.add_glow_light: 노드 하나에 하나, 방 하나에 8개까지)으로 빛을 단다.
+var _glow_on := false
+var _glow_spots := PackedVector2Array()
 
 
 func _init(s: TerrainSkin = null, h: Node2D = null) -> void:
@@ -191,6 +195,8 @@ func triangle_count() -> int:
 func _begin(seed_extra: int) -> void:
 	_rng.seed = int(host.global_position.x * 7.0 + host.global_position.y * 13.0) + seed_extra
 	_clip_phase = fmod(host.global_position.x * 0.013 + host.global_position.y * 0.007, TAU)
+	_glow_on = (skin.data.get("params", {}) as Dictionary).has("glow") and TerrainStyle.is_dark(host)
+	_glow_spots = PackedVector2Array()
 	var room := TerrainStyle.room_of(host)
 	_mod = skin.tint_for(room)
 	_has_room = room != null and "bounds" in room
@@ -203,6 +209,9 @@ func _begin(seed_extra: int) -> void:
 func _finish(t0: int) -> void:
 	_layer_fill = true
 	_make_fill_item()
+	if _glow_on and not _glow_spots.is_empty():
+		var gc: Array = skin.param("glow", "color", [1.0, 0.8, 0.55])
+		TerrainStyle.add_glow_light.call_deferred(host, Array(_glow_spots), {"mushroom_glow": Color(float(gc[0]), float(gc[1]), float(gc[2]))})
 	build_usec += Time.get_ticks_usec() - t0
 	build_count += 1
 	tri_count += triangle_count()
@@ -425,6 +434,8 @@ func piece(name: String, u0: float, u1: float, x0: float, x1: float, y_at: Calla
 			pts[k] = Vector2(x, y)
 			uvs[k] = Vector2(uvx, (r.position.y + v) / skin.atlas_size.y)
 			cols[k] = Color(mod.r, mod.g, mod.b, mod.a * a * al[ri])
+	if _glow_on and skin.pieces[name].has("glow"):
+		_collect_glow(name, u0, u1, x0, x1, kx, y_at, sy, flip, warp, hang, opts, walk_y, lift, clip_l, clip_r, fade_l, fade_r)
 	var idx := PackedInt32Array()
 	idx.resize((ncol - 1) * (nrow - 1) * 6)
 	var w := 0
@@ -436,6 +447,29 @@ func piece(name: String, u0: float, u1: float, x0: float, x1: float, y_at: Calla
 			idx[w + 3] = p + 1; idx[w + 4] = q + 1; idx[w + 5] = q
 			w += 6
 	_tris(BUF_ATLAS, pts, uvs, cols, idx)
+
+
+## 놓인 조각의 빛나는 자리(조각 px)를 노드 좌표로 옮겨 모은다 (어두운 방의 작은 빛). 잘리거나 사라지는 자리·band 아래는 뺀다.
+func _collect_glow(name: String, u0: float, u1: float, x0: float, x1: float, kx: float, y_at: Callable, sy: float, flip: bool, warp: bool, hang: bool, opts: Dictionary, walk_y: float, lift: float, clip_l: float, clip_r: float, fade_l: float, fade_r: float) -> void:
+	var band: float = opts.get("band", -1.0)
+	for g in skin.pieces[name]["glow"]:
+		var gu := float(g[0])
+		var gv := float(g[1])
+		if gu < u0 or gu > u1:
+			continue
+		var x := x0 + (gu - u0) * kx
+		if flip:
+			x = x1 - (gu - u0) * kx
+		if x < clip_l - 4.0 or x > clip_r + 4.0 or (fade_l > 0.0 and x - x0 < fade_l) or (fade_r > 0.0 and x1 - x < fade_r):
+			continue
+		var line := walk_y
+		if warp and not hang:
+			line = skin.top_at(name, gu)
+		if band >= 0.0 and gv > line + band:
+			continue
+		var by: float = y_at.call(x)
+		var y := (by + float(opts["y_off"]) + gv * sy) if hang else (by - lift + (gv - line) * sy)
+		_glow_spots.append(Vector2(x, y))
 
 
 ## band 아래로 서서히 사라지는 알파 (band 가 없으면 1)
@@ -557,6 +591,11 @@ func branch_run(xa: float, xb: float, y_at: Callable, left_free: bool, right_fre
 		role = "branch" if skin.has_role("branch") else "slab"
 		if not skin.has_role(role):
 			return
+	# log 역할(덧붙인 역할 — 지역에 있을 때만): 한쪽 방향이 아닌 얇은 발판(벽장 바닥·넓은 단)은 굵은 통나무로 —
+	# 한쪽 방향 발판은 가는 가지로 남아 '아래에서 뛰어 오를 수 있는 곳'과 구분된다. 없는 지역(수관 등)은 그대로.
+	var solid_log: bool = not one_way and skin.has_role("log")
+	if solid_log:
+		role = "log"
 	var avoid := _stacked_picks(w)
 	# 방 파일에서 이 발판의 조각을 정해 둘 수 있다 (노드 metadata "terrain_piece" = 조각 이름 — 예: 마을의 흔들다리).
 	# 한 조각으로 맞으면 그것, 아니면 그 조각으로 이어 붙인다. 충돌은 그대로 (그림만 고른다).
@@ -612,7 +651,7 @@ func branch_run(xa: float, xb: float, y_at: Callable, left_free: bool, right_fre
 			pick_flip = flip
 			pick_w = w
 			return
-	_chain(skin.list("branch") if skin.has_role("branch") else skin.list(role), xa, xb, y_at, left_free, right_free, thick, tuck_l, tuck_r, avoid)
+	_chain(skin.list(role) if solid_log or not skin.has_role("branch") else skin.list("branch"), xa, xb, y_at, left_free, right_free, thick, tuck_l, tuck_r, avoid)
 	pick_w = w
 
 
@@ -855,6 +894,9 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 			polys = next
 	for pp in polys:
 		fill_polygon(pp, vertical, shade)
+	# 1b) 기둥 그림 (덧붙인 역할 — 지역에 pillar 조각이 있을 때만; 수관 등은 그대로): 세로로 긴 장식 덩어리에 세로로 이어 입힌다
+	if decorate and vertical and skin.has_role("pillar"):
+		_pillar_run(poly, sides)
 	# 2) 윗면 띠
 	if decorate and skin.has_role("ground"):
 		for t in tops:
@@ -999,6 +1041,79 @@ func _vtile(name: String, x0: float, x1: float, y0: float, y1: float, v0: float,
 		y += seg
 	if not idx.is_empty():
 		_tris(BUF_ATLAS, pts, uvs, cols, idx)
+
+
+## 기둥 그림 (pillar 역할 — 매달린 뿌리 기둥처럼 세로로 긴 그림): 덩어리의 드러난 옆면 높이만큼 위에서 아래로 이어 붙인다.
+## 폭은 덩어리 폭의 params.pillar.wide 배(기본 1.25, 가운데 맞춤 — 몸통 결의 곧은 옆선을 덮는다), 이음매는 아래 토막의 윗부분이
+## overlap 비율만큼 서서히 나타나며 겹친다. 위끝은 덮인 쪽(천장 등) 속으로 조금 밀어 넣고, 아래끝이 드러났으면 그림의 가늘어지는
+## 끝이 tail 비율만큼 아래로 늘어진다. 아래끝이 덮였으면(바닥에 선 기둥) 거기서 끝난다.
+func _pillar_run(poly: PackedVector2Array, sides: Array) -> void:
+	if sides.is_empty():
+		return
+	var bb := Rect2(poly[0], Vector2.ZERO)
+	for p in poly:
+		bb = bb.expand(p)
+	var y0 := INF
+	var y1 := -INF
+	for sd in sides:
+		y0 = minf(y0, minf((sd[0] as Vector2).y, (sd[1] as Vector2).y))
+		y1 = maxf(y1, maxf((sd[0] as Vector2).y, (sd[1] as Vector2).y))
+	if y1 - y0 < 60.0:
+		return
+	var names := skin.list("pillar")
+	var name: String = names[_rng.randi_range(0, names.size() - 1)]
+	var sz := skin.size_of(name)
+	var r := skin.rect_of(name)
+	var wide := float(skin.param("pillar", "wide", 1.25))
+	var ov_k := float(skin.param("pillar", "overlap", 0.2))
+	var tail_k := float(skin.param("pillar", "tail", 0.22))
+	var w := bb.size.x * wide
+	var k := w / sz.x
+	var th := sz.y * k
+	var top_cov := _covered(Vector2(bb.get_center().x, y0 - OUT))
+	var bot_free := not _covered(Vector2(bb.get_center().x, y1 + OUT))
+	var a := y0 - (TUCK if top_cov else 0.0)
+	var b := y1 + (th * tail_k if bot_free else 0.0)
+	var ov := th * ov_k
+	var n := maxi(1, int(round((b - a - ov) / (th - ov))))
+	# 토막 높이를 맞춰 a..b 를 꼭 채운다 (세로 늘이기는 0.75~1.35 배 안 — 넘으면 토막 수가 바뀐다)
+	var tile := (b - a + (n - 1) * ov) / n
+	if tile > th * 1.35:
+		n += 1
+		tile = (b - a + (n - 1) * ov) / n
+	var x0 := bb.get_center().x - w * 0.5
+	var flip := _rng.randf() < 0.5
+	for i in n:
+		var ty := a + i * (tile - ov)
+		var fade_top := ov if i > 0 else 0.0
+		# 마지막 토막이 바닥에 선 기둥이면 끝에서 잘린다 (그림의 가는 끝이 바닥 속으로 들어가지 않게 끝 18px 동안 서서히)
+		var fade_bot := 18.0 if (i == n - 1 and not bot_free) else 0.0
+		_vtile_rect(r, x0, ty, w, tile, flip, fade_top, fade_bot)
+		flip = not flip
+
+
+## 세로 토막 하나 (atlas 상자 r 전체를 x0, y0, w × h 에 펴서): 위 fade_top px 동안 서서히 나타나고 아래 fade_bot px 동안 사라진다.
+func _vtile_rect(r: Rect2, x0: float, y0: float, w: float, h: float, flip: bool, fade_top: float, fade_bot: float) -> void:
+	var vs := PackedFloat32Array([0.0, clampf(fade_top / h, 0.0, 0.5), 1.0 - clampf(fade_bot / h, 0.0, 0.5), 1.0])
+	var al := PackedFloat32Array([0.0 if fade_top > 0.0 else 1.0, 1.0, 1.0, 0.0 if fade_bot > 0.0 else 1.0])
+	var cols_n := 3
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	var cols := PackedColorArray()
+	for ci in cols_n:
+		var t := float(ci) / (cols_n - 1)
+		var ut := 1.0 - t if flip else t
+		for ri in 4:
+			pts.append(Vector2(x0 + w * t, y0 + h * vs[ri]))
+			uvs.append(Vector2((r.position.x + r.size.x * ut) / skin.atlas_size.x, (r.position.y + r.size.y * vs[ri]) / skin.atlas_size.y))
+			cols.append(Color(_mod.r, _mod.g, _mod.b, _mod.a * al[ri]))
+	var idx := PackedInt32Array()
+	for ci in cols_n - 1:
+		for ri in 3:
+			var p := ci * 4 + ri
+			var q := p + 4
+			idx.append_array(PackedInt32Array([p, p + 1, q, p + 1, q + 1, q]))
+	_tris(BUF_ATLAS, pts, uvs, cols, idx)
 
 
 ## 드러난 옆변·아랫변을 나무껍질 혹처럼 살짝 울퉁불퉁하게 (그림만 — 충돌은 곧은 그대로). 바깥 +9 ~ 안 -3 px.
