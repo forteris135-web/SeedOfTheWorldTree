@@ -6,15 +6,25 @@ class_name Record
 const DATA_PATH := "res://data/dialogue/records.json"
 
 @export var record_id := ""
-## 모양: poster(벽보) / book(책) / stone(비석) / note(쪽지) / page(찢긴 경전 조각 — 확장판, 그림 object_scripture_page.png)
+## 모양: poster(벽보) / book(책) / stone(비석) / note(쪽지) / page(찢긴 경전 조각 — 확장판)
+## 비석(stone)이 아니면 기획자가 준 양피지 그림(art/objects/record_parchment.png, tools/terrain_cut.gd _objects)을
+## 모양마다 크기·기울기를 달리해 쓴다. 경전 조각(page)은 살짝 떠서 흔들린다.
 @export_enum("poster", "book", "stone", "note", "page") var kind := "poster"
 
-const PAGE_TEX := preload("res://art/objects/object_scripture_page.png")
+const PARCHMENT := preload("res://art/objects/record_parchment.png")
+## 모양별 양피지: [가운데 자리, 높이 px, 기울기(도)]
+const PARCHMENT_LOOK := {
+	"poster": [Vector2(0, -78), 112.0, -4.0],
+	"note": [Vector2(0, -44), 64.0, 9.0],
+	"book": [Vector2(0, -30), 70.0, -78.0],
+	"page": [Vector2(0, -72), 96.0, 6.0],
+}
 
 var _data := {}
 var _prompt: Label
 var _near: Player
 var _t := 0.0
+var _sheet: Sprite2D
 
 
 func _ready() -> void:
@@ -39,6 +49,16 @@ func _ready() -> void:
 	area.body_entered.connect(func(b): if b is Player: _near = b; b.register_interactable(self))
 	area.body_exited.connect(func(b): if b is Player: b.unregister_interactable(self); _near = null)
 	material = preload("res://shaders/ash_purify.tres")
+	if PARCHMENT_LOOK.has(kind):
+		var look: Array = PARCHMENT_LOOK[kind]
+		_sheet = Sprite2D.new()
+		_sheet.texture = PARCHMENT
+		_sheet.use_parent_material = true
+		_sheet.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		_sheet.position = look[0]
+		_sheet.scale = Vector2.ONE * (float(look[1]) / PARCHMENT.get_height())
+		_sheet.rotation_degrees = float(look[2])
+		add_child(_sheet)
 
 
 func _process(delta: float) -> void:
@@ -46,6 +66,9 @@ func _process(delta: float) -> void:
 	_prompt.visible = _near != null and not Dialogue.is_active()
 	if _prompt.visible:
 		_prompt.text = "%s  읽기" % InputDevice.prompt("interact")
+	if _sheet and kind == "page":
+		_sheet.position = (PARCHMENT_LOOK["page"][0] as Vector2) + Vector2(0, sin(_t * 1.4) * 4.0)
+		_sheet.rotation_degrees = 6.0 + sin(_t * 0.9) * 3.0
 	queue_redraw()
 
 
@@ -93,27 +116,11 @@ func _condition_ok(when: String) -> bool:
 
 func _draw() -> void:
 	var glow := 0.6 + 0.4 * sin(_t * 2.0)
-	match kind:
-		"poster":
-			draw_rect(Rect2(-34, -110, 68, 90), Color(0.86, 0.78, 0.6))
-			draw_rect(Rect2(-34, -110, 68, 90), Color(0.4, 0.3, 0.2), false, 2.0)
-			for i in 4:
-				draw_line(Vector2(-24, -94 + i * 18), Vector2(24 - (i % 2) * 10, -94 + i * 18), Color(0.35, 0.28, 0.2, 0.8), 2.0)
-		"book":
-			draw_rect(Rect2(-40, -30, 80, 20), Color(0.45, 0.3, 0.2))
-			draw_rect(Rect2(-38, -36, 76, 8), Color(0.92, 0.88, 0.78))
-			draw_circle(Vector2(0, -32), 26.0 * glow, Color(1.0, 0.85, 0.5, 0.08))
-		"stone":
-			draw_colored_polygon(PackedVector2Array([Vector2(-50, 0), Vector2(-44, -140), Vector2(0, -170), Vector2(44, -140), Vector2(50, 0)]), Color(0.3, 0.3, 0.34))
-			for i in 5:
-				draw_line(Vector2(-26, -120 + i * 20), Vector2(26, -120 + i * 20), Color(0.6, 0.62, 0.7, 0.7), 2.0)
-		"note":
-			draw_rect(Rect2(-26, -50, 52, 40), Color(0.9, 0.86, 0.74))
-			for i in 3:
-				draw_line(Vector2(-18, -40 + i * 10), Vector2(18, -40 + i * 10), Color(0.3, 0.25, 0.2, 0.8), 1.5)
-		"page":
-			# 찢긴 경전 조각: 임시 그림을 작게, 살짝 떠서 흔들린다
-			var sway := sin(_t * 1.4) * 4.0
-			draw_texture_rect(PAGE_TEX, Rect2(-44, -112 + sway, 88, 88), false, Color(1, 1, 1, 0.95))
-			draw_circle(Vector2(0, -68 + sway), 36.0 * glow, Color(1.0, 0.9, 0.6, 0.08))
+	if kind == "stone":
+		draw_colored_polygon(PackedVector2Array([Vector2(-50, 0), Vector2(-44, -140), Vector2(0, -170), Vector2(44, -140), Vector2(50, 0)]), Color(0.3, 0.3, 0.34))
+		for i in 5:
+			draw_line(Vector2(-26, -120 + i * 20), Vector2(26, -120 + i * 20), Color(0.6, 0.62, 0.7, 0.7), 2.0)
+	elif _sheet:
+		# 양피지 뒤의 은은한 빛 (읽을 수 있다는 표시)
+		draw_circle(_sheet.position, float(PARCHMENT_LOOK[kind][1]) * 0.55 * glow, Color(1.0, 0.88, 0.6, 0.07))
 	draw_circle(Vector2(0, -60), 8.0 + glow * 4.0, Color(1.0, 0.9, 0.6, 0.12 * glow))

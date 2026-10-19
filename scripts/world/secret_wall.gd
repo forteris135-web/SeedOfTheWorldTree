@@ -24,6 +24,8 @@ var _shake := 0.0
 var _dust: CPUParticles2D
 var _hurtbox: Hurtbox
 var _rng_seed := 0
+## 그림 조각 금 간 벽 (지역 그림 옷에 cracked 조각이 있으면). 있으면 옛 코드 그리기는 쓰지 않는다.
+var _crack: CrackedArt
 
 
 func _ready() -> void:
@@ -58,8 +60,25 @@ func _ready() -> void:
 	_dust.scale_amount_max = 2.6
 	_dust.color = Color(color.lightened(0.45), 0.55)
 	add_child(_dust)
+	if CrackedArt.can_build(_skin):
+		set_process(true)   # Platform 은 '수상한 지형'이 아니면 _process 를 끈다 — 금 간 그림은 숨 쉬고 흔들려야 한다
+		_crack = CrackedArt.new()
+		add_child(_crack)
+		move_child(_crack, 1)
+		_crack.setup(_skin, self, _art_polygon(), _art_flip())
+		_dust.color = Color(0.72, 0.62, 0.5, 0.55)
 	if secret_id != "" and Progress.is_collected(secret_id):
 		_set_broken_quietly()
+
+
+## 그림 조각 금 간 벽의 모양 (벽: 사각형). 천장은 덮어쓴다 (아래가 둥근 옹이).
+func _art_polygon() -> PackedVector2Array:
+	return PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size, Vector2(0, size.y)])
+
+
+## 그림을 위아래로 뒤집을지 (천장에 매달린 옹이는 넓은 밑동이 위)
+func _art_flip() -> bool:
+	return false
 
 
 ## 먼지가 생기는 자리 (벽: 윗부분, 천장: 아랫부분)
@@ -72,6 +91,12 @@ func _process(delta: float) -> void:
 		return
 	_t += delta
 	_shake = maxf(_shake - delta * 4.0, 0.0)
+	if _crack:
+		# 그림 조각: 흔들림·숨 쉬는 틈 빛·갈라진 정도만 바꾼다 (다시 그리지 않음)
+		_crack.position = Vector2(sin(_t * 90.0) * 3.0 * _shake, cos(_t * 70.0) * 1.5 * _shake)
+		var pulse := 0.5 + 0.5 * sin(_t * 1.6 + float(_rng_seed % 7))
+		_crack.set_state(pulse, float(_hits) / maxf(float(hits_to_break), 1.0), Color(1.0, 0.86, 0.6), _shake * 0.35)
+		return
 	_redraw_t += delta
 	if _redraw_t >= 0.1 or _shake > 0.0:
 		_redraw_t = 0.0
@@ -101,6 +126,8 @@ func _break() -> void:
 		return
 	_broken = true
 	_disable_collision()
+	if _crack:
+		_crack.burst(get_parent())
 	_spawn_debris()
 	Juice.shake(5.0)
 	Juice.rumble(0.3, 0.6, 0.15)
@@ -203,7 +230,7 @@ func _crack_points(rng: RandomNumberGenerator) -> PackedVector2Array:
 
 
 func _draw() -> void:
-	if _broken:
+	if _broken or _crack:
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _rng_seed

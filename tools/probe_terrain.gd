@@ -1,6 +1,8 @@
 extends Node
-## 지형 디테일 시험. 실행: godot --headless --path . res://tools/probe_terrain.tscn
+## 지형 시험. 실행: godot --headless --path . res://tools/probe_terrain.tscn
 ## (--headless 를 빼고 돌리면 실제 화면 렌더러로 비용을 잰다 — 창이 잠깐 뜬다.)
+## 지형은 두 가지 방식이 함께 있다: 그림 조각 지형(TerrainArt, 그림 옷이 있는 지역 — 지금은 수관)과
+## 코드로 그리는 옛 지형(TerrainStyle, 그림이 아직 없는 지역). 1)~8) 은 옛 방식 시험이라 TerrainSkin.enabled 를 끄고 돈다.
 ##  1) TerrainStyle 표: 여섯 지역 모두 필요한 키가 있고, 모르는 지역은 수관으로 떨어진다.
 ##  2) 지역 찾기·겹: 진짜 방(canopy_01)의 지형이 조상 Room 의 region 을 읽고, 발판·경사에 겹(윗면 빛/장식)이 있고
 ##     비밀 벽에는 없다. Room 이 없으면 수관, style_region 으로 강제. 기본 이끼 색은 지역 색, 따로 정한 색은 그대로.
@@ -15,6 +17,16 @@ extends Node
 ##     (보스 방 세 곳 입구 선반 EntryLedge 는 아랫면이 바닥에 묻혀 매달린 것이 0개), 얇은 경사 밑 뿌리는 짧고,
 ##     가시 끝은 옛 높이(1.05h) 안이다.
 ##  8) 어두운 방(심연 두 곳)에서는 버섯 몇 무리가 실제 빛(PointLight2D)을 낸다. 밝은 방에는 없다.
+##  9) 그림 조각 지형 (수관 방 전부):
+##     a) 그림 옷이 읽히고(조각·atlas·몸통 결), 수관 방의 모든 지형·가시·비밀 벽·금 간 벽이 그림 조각으로 그려진다.
+##     b) 발 딛는 자리: 드러난 모든 윗면(발판·경사, 장식을 끈 벽·천장·구덩이 바닥은 빼고)에서 충돌 윗면 8px 아래가 그림(조각)으로 덮여 있고(빈 곳 10% 미만),
+##        그림의 윗선(빽빽한 윗면: 불투명이 12px 이어지기 시작하는 곳)이 충돌 윗면과 ±10px 안 (잎이 발목까지 살짝 덮는 정도) — 소녀가 그림 위에 서 있고 떠 보이지 않는다.
+##        (그림 픽셀을 직접 찾아본다: 삼각형 → UV → atlas 알파)
+##     c) 충돌은 그대로: 발판 사각형·경사 다각형·가시 판정이 크기에서 계산한 값과 같다.
+##     d) 비용: 만들기는 방에 들어올 때 한 번(방 하나 평균 60ms 미만), 노드 하나에 그리기 호출 4번 이하,
+##        정화 연출 프레임(Room 이 테두리 색을 바꿈)에도 다시 만들지·그리지 않는다.
+##     e) 팔레트: 지역 잿빛 표(64×8)가 만들어지고, 무채색 줄이 밝기 순서를 지키며, 옛 셰이더보다 어둡지 않다.
+##     f) 금 간 벽: 맞을수록 열린 그림이 드러나고, 부서지면 그림 조각이 떨어진다. 기록물은 양피지 그림.
 ## 마지막에 "[probe] 끝: 실패 N" 을 찍고 그 수로 종료한다.
 
 const Legacy := preload("res://tools/terrain_legacy_draw.gd")
@@ -22,6 +34,8 @@ const REGIONS := ["canopy", "village", "mine", "abyss", "sap_lake", "flooded_min
 const NEED_KEYS := ["moss", "moss_light", "vine", "leaf", "leaf_light", "flower_px", "glint_px", "mushroom_px", "plate_px", "strap_px", "chain_px", "rust_px", "drip_px", "smear_px", "bead_px", "sheen", "root_px", "stone_px", "web_p", "thorn_tip", "thorn_glow", "moss_density", "beard_px", "grass_px", "sprig_px", "bark_lift", "bark_alpha", "ridge_px", "knot_px", "glow_depth"]
 const ROOMS := ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_hidden", "canopy_boss", "village_01", "village_02", "village_shrine", "mine_01", "mine_02", "mine_deep", "mine_boss", "abyss_01", "abyss_02", "moon_garden", "abyss_boss"]
 const COST_ROOMS := ["canopy_01", "mine_02", "village_02", "abyss_02", "canopy_boss"]
+## 그림 조각 지형 방 (수관)
+const ART_ROOMS := ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canopy_06", "canopy_07", "canopy_boss", "canopy_hidden", "canopy_hidden_1", "canopy_hidden_2", "canopy_mini_1", "canopy_mini_2"]
 const REPEAT := 5
 
 var _fail := 0
@@ -48,10 +62,21 @@ func _ready() -> void:
 		return
 	if "--cost" in args:
 		# 비용 비교만 (실제 렌더러로 잴 때 창이 오래 뜨지 않게): ... -- --cost
+		TerrainSkin.enabled = false
 		await _probe_cost()
+		TerrainSkin.enabled = true
+		await _probe_art_cost()
 		print("[probe] 끝: 실패 %d" % _fail)
 		get_tree().quit(1 if _fail > 0 else 0)
 		return
+	if "--art" in args:
+		# 그림 조각 지형만: ... -- --art
+		await _probe_art()
+		print("[probe] 끝: 실패 %d" % _fail)
+		get_tree().quit(1 if _fail > 0 else 0)
+		return
+	# 1)~8) 옛 방식 (그림 옷을 끄고)
+	TerrainSkin.enabled = false
 	_probe_table()
 	await _probe_region_lookup()
 	await _probe_region_decor()
@@ -60,6 +85,8 @@ func _ready() -> void:
 	await _probe_setters()
 	await _probe_geometry()
 	await _probe_glow_lights()
+	TerrainSkin.enabled = true
+	await _probe_art()
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
 
@@ -622,3 +649,353 @@ func _profile(id: String) -> void:
 	print("[probe]   detail0 %.2fms = 몸통 %.2f + 윗면 빛 %.2f + 장식 %.2f" % [r3[0] / 1000.0, r3[1] / 1000.0, r3[2] / 1000.0, r3[3] / 1000.0])
 	holder.queue_free()
 	await _free_room(room)
+
+
+# ---------- 9) 그림 조각 지형 ----------
+var _atlas_img: Image
+
+
+func _probe_art() -> void:
+	TerrainSkin.clear_cache()
+	var skin := TerrainSkin.for_region("canopy")
+	_check(skin != null, "수관 그림 옷이 읽힌다")
+	if skin == null:
+		return
+	_check(skin.has_role("branch") and skin.has_role("slab") and skin.has_role("ground") and skin.has_role("hang") and skin.has_role("thorn"), "역할별 조각: 가지 %d·판 %d·바닥 %d·매달림 %d·가시 %d" % [skin.list("branch").size(), skin.list("slab").size(), skin.list("ground").size(), skin.list("hang").size(), skin.list("thorn").size()])
+	_check(skin.atlas != null and skin.fill != null and skin.fill_v != null, "atlas·몸통 결(가로/세로) 그림이 있다")
+	_check(CrackedArt.can_build(skin), "금 간 벽 그림 세 장(닫힘·열림·틈 빛)이 있다")
+	var bad_walk := []
+	for n in skin.list("branch") + skin.list("slab") + skin.list("ground"):
+		var w := skin.walk_of(n)
+		if w.y - w.x < 60.0:
+			bad_walk.append(n)
+	_check(bad_walk.is_empty(), "걷는 조각마다 걷는 구간이 60px 넘게 있다 %s" % [bad_walk])
+	_check(TerrainSkin.for_region("mine") == null and TerrainSkin.for_region("nowhere") == null, "그림 옷이 없는 지역은 null (옛 방식으로 그린다)")
+	_atlas_img = Image.load_from_file(ProjectSettings.globalize_path("res://art/terrain/canopy/atlas.png"))
+	_atlas_img.convert(Image.FORMAT_RGBA8)
+	await _probe_art_rooms(skin)
+	await _probe_art_cost()
+	_probe_palette()
+	await _probe_cracked(skin)
+	await _probe_record()
+
+
+func _probe_art_rooms(skin: TerrainSkin) -> void:
+	var not_art := []
+	var collider_bad := []
+	var feet_bad := []
+	var top_bad := []
+	var tops_checked := 0
+	var tops_all: Array = []
+	var worst_cov := 1.0
+	var worst_name := ""
+	for id in ART_ROOMS:
+		var room := await _load_room(id)
+		var solids := _solids(room)
+		var bounds: Rect2 = room.get("bounds")
+		for t in room.get_node("Terrain").get_children():
+			if t is SecretWall or t is CrackedWall:
+				if t.get("_crack") == null and not (t.get("_broken") == true):
+					not_art.append("%s/%s" % [id, t.name])
+				continue
+			if (t is Platform or t is TerrainPolygon) and not t.is_art():
+				not_art.append("%s/%s" % [id, t.name])
+				continue
+			# c) 충돌 모양
+			if t is Platform:
+				var cs: CollisionShape2D = _first_shape(t)
+				var ok: bool = cs != null and cs.shape is RectangleShape2D and (cs.shape as RectangleShape2D).size == t.size and cs.position == t.size / 2.0 and cs.one_way_collision == bool(t.one_way)
+				if not ok:
+					collider_bad.append("%s/%s" % [id, t.name])
+			elif t is TerrainPolygon:
+				var cp: CollisionPolygon2D = null
+				for c in t.get_children():
+					if c is CollisionPolygon2D:
+						cp = c
+				if cp == null or cp.polygon != t.polygon:
+					collider_bad.append("%s/%s" % [id, t.name])
+			# b) 발 딛는 자리
+			for seg in _top_segments(t):
+				var r := _feet_check(t, seg[0], seg[1], solids, bounds)
+				if r.is_empty():
+					continue
+				tops_checked += 1
+				if float(r["cov"]) < worst_cov:
+					worst_cov = r["cov"]
+					worst_name = "%s/%s" % [id, t.name]
+				if float(r["cov"]) < 0.9:
+					feet_bad.append("%s/%s 덮임 %.0f%%" % [id, t.name, float(r["cov"]) * 100.0])
+				tops_all.append(float(r["top"]))
+				if absf(float(r["top"])) > 10.0:
+					top_bad.append("%s/%s 윗선 %+.0fpx" % [id, t.name, float(r["top"])])
+		var hz := room.get_node_or_null("Hazards")
+		if hz:
+			for th in hz.get_children():
+				if th is Thorns:
+					if th.get("_art") == null:
+						not_art.append("%s/%s" % [id, th.name])
+					var cs2: CollisionShape2D = _first_shape(th)
+					var want := Vector2(th.size.x - 8, th.size.y * 0.7)
+					if cs2 == null or (cs2.shape as RectangleShape2D).size != want or cs2.position != Vector2(th.size.x / 2.0, th.size.y * 0.65):
+						collider_bad.append("%s/%s(가시)" % [id, th.name])
+		await _free_room(room)
+	_check(not_art.is_empty(), "수관 %d곳: 지형·가시·비밀 벽이 모두 그림 조각 (아닌 것 %s)" % [ART_ROOMS.size(), not_art.slice(0, 8)])
+	_check(collider_bad.is_empty(), "수관 %d곳: 충돌 모양이 그대로 (다른 것 %s)" % [ART_ROOMS.size(), collider_bad.slice(0, 8)])
+	_check(feet_bad.is_empty(), "드러난 윗면 %d곳: 발밑(충돌 윗면 8px 아래)이 그림으로 90%% 넘게 덮임 (가장 낮은 %s %.0f%%) %s" % [tops_checked, worst_name, worst_cov * 100.0, feet_bad.slice(0, 6)])
+	tops_all.sort()
+	var med_all: float = tops_all[tops_all.size() / 2] if not tops_all.is_empty() else 0.0
+	_check(top_bad.is_empty(), "드러난 윗면 %d곳: 그림 윗선(빽빽한 윗면)이 충돌 윗면 ±10px 안 (전체 중앙값 %+.0fpx, 범위 %+.0f~%+.0f) %s" % [tops_checked, med_all, tops_all[0] if not tops_all.is_empty() else 0.0, tops_all[-1] if not tops_all.is_empty() else 0.0, top_bad.slice(0, 6)])
+
+
+func _first_shape(n: Node) -> CollisionShape2D:
+	for c in n.get_children():
+		if c is CollisionShape2D:
+			return c
+	return null
+
+
+## 지형의 윗면들 (노드 기준 [a, b], 왼→오). 장식을 끈 덩어리(벽·천장·가시 구덩이 바닥 — 서는 곳이 아님)는 뺀다.
+func _top_segments(t: Node) -> Array:
+	if t is Platform:
+		if not t.decorate and not t._is_thin():
+			return []
+		return [[Vector2.ZERO, Vector2(t.size.x, 0)]]
+	var out := []
+	var poly: PackedVector2Array = t.polygon
+	for i in poly.size():
+		var a := poly[i]
+		var b := poly[(i + 1) % poly.size()]
+		if TerrainArt._edge_kind(b - a) == 0:
+			out.append([a, b])
+	return out
+
+
+## 윗면 a→b 의 드러난 자리마다: 발밑(8px 아래)이 조각 그림으로 덮였는가, 그림 윗선이 충돌 윗면에서 얼마나 떨어졌나.
+## 돌려주는 값: {cov: 덮인 비율, top: 윗선 차이의 중앙값(px, 위가 −)} — 드러난 자리가 없으면 빈 사전.
+func _feet_check(t: Node2D, a: Vector2, b: Vector2, solids: Array, bounds: Rect2) -> Dictionary:
+	var art: TerrainArt = t.get("_art")
+	if art == null:
+		return {}
+	var tris := _atlas_tris(art)
+	var n := maxi(2, int((b.x - a.x) / 16.0))
+	var hits := 0
+	var total := 0
+	var diffs: Array = []
+	for i in n:
+		var x := lerpf(a.x, b.x, (i + 0.5) / n)
+		if x - a.x < 14.0 or b.x - x < 14.0:
+			continue   # 끝 14px 는 둥근 끝이라 뺀다
+		var y := lerpf(a.y, b.y, (x - a.x) / maxf(b.x - a.x, 0.001))
+		var gp := t.global_position + Vector2(x, y)
+		if not bounds.has_point(gp + Vector2(0, -8)) or _inside_other(solids, t, gp + Vector2(0, -10)) != "":
+			continue   # 다른 지형에 덮인 윗면 (서 있을 수 없는 곳)
+		total += 1
+		# 이 세로줄에 걸친 삼각형만 고른다
+		var col: Array = []
+		for tr in tris:
+			var bb: Rect2 = tr[3]
+			if x >= bb.position.x and x <= bb.end.x and bb.end.y >= y - 60.0 and bb.position.y <= y + 60.0:
+				col.append(tr)
+		if _alpha_at(col, Vector2(x, y + 8.0)) > 0.5:
+			hits += 1
+		elif "--verbose" in OS.get_cmdline_user_args():
+			print("[probe]   발밑 빔: %s x=%.0f/%.0f" % [t.name, x - a.x, b.x - a.x])
+		# 그림 윗선: 위 60px 에서 아래로 내려가며 처음으로 12px 이어서 불투명한 곳 (자르기 도구의 '빽빽한 윗면'과 같은 기준)
+		var run := 0
+		var yy := y - 60.0
+		var found := INF
+		while yy < y + 60.0:
+			if _alpha_at(col, Vector2(x, yy)) > 0.5:
+				run += 1
+				if run >= 6:
+					found = yy - 10.0 - y
+					break
+			else:
+				run = 0
+			yy += 2.0
+		if found < INF:
+			diffs.append(found)
+	if total == 0:
+		return {}
+	diffs.sort()
+	var med: float = diffs[diffs.size() / 2] if not diffs.is_empty() else 99.0
+	return {"cov": float(hits) / total, "top": med}
+
+
+## 조각(atlas) 삼각형 목록: [[p0,p1,p2],[uv0,uv1,uv2],[a0,a1,a2], 상자] (노드 기준)
+func _atlas_tris(art: TerrainArt) -> Array:
+	var b: Dictionary = art._bufs[TerrainArt.BUF_ATLAS]
+	var pts: PackedVector2Array = b["pts"]
+	var uvs: PackedVector2Array = b["uvs"]
+	var cols: PackedColorArray = b["cols"]
+	var idx: PackedInt32Array = b["idx"]
+	var out := []
+	var off := art.position
+	var i := 0
+	while i + 2 < idx.size():
+		var ia := idx[i]
+		var ib := idx[i + 1]
+		var ic := idx[i + 2]
+		var q := PackedVector2Array([pts[ia] + off, pts[ib] + off, pts[ic] + off])
+		var bb := Rect2(q[0], Vector2.ZERO).expand(q[1]).expand(q[2])
+		out.append([q, PackedVector2Array([uvs[ia], uvs[ib], uvs[ic]]), [cols[ia].a, cols[ib].a, cols[ic].a], bb])
+		i += 3
+	return out
+
+
+## 그 자리에 그려지는 조각 그림의 알파 (겹친 삼각형 중 가장 진한 것)
+func _alpha_at(tris: Array, p: Vector2) -> float:
+	var best := 0.0
+	var w := _atlas_img.get_width()
+	var h := _atlas_img.get_height()
+	for tr in tris:
+		var bb: Rect2 = tr[3]
+		if p.y < bb.position.y or p.y > bb.end.y:
+			continue
+		var q: PackedVector2Array = tr[0]
+		var bc := _bary(p, q[0], q[1], q[2])
+		if bc.x < -0.001 or bc.y < -0.001 or bc.z < -0.001:
+			continue
+		var uvp: PackedVector2Array = tr[1]
+		var uv := uvp[0] * bc.x + uvp[1] * bc.y + uvp[2] * bc.z
+		var va: Array = tr[2]
+		var vcol := float(va[0]) * bc.x + float(va[1]) * bc.y + float(va[2]) * bc.z
+		var px := clampi(int(uv.x * w), 0, w - 1)
+		var py := clampi(int(uv.y * h), 0, h - 1)
+		best = maxf(best, _atlas_img.get_pixel(px, py).a * vcol)
+		if best > 0.95:
+			break
+	return best
+
+
+static func _bary(p: Vector2, a: Vector2, b: Vector2, c: Vector2) -> Vector3:
+	var v0 := b - a
+	var v1 := c - a
+	var v2 := p - a
+	var den := v0.x * v1.y - v1.x * v0.y
+	if absf(den) < 0.000001:
+		return Vector3(-1, -1, -1)
+	var v := (v2.x * v1.y - v1.x * v2.y) / den
+	var w := (v0.x * v2.y - v2.x * v0.y) / den
+	return Vector3(1.0 - v - w, v, w)
+
+
+## d) 비용: 만들기 시간·삼각형·그리기 호출, 정화 프레임에 다시 안 만들기
+func _probe_art_cost() -> void:
+	var sum := 0.0
+	var worst := 0.0
+	var worst_id := ""
+	var tri_max := 0
+	var calls_bad := []
+	for id in ART_ROOMS:
+		TerrainArt.build_usec = 0
+		TerrainArt.tri_count = 0
+		var room := await _load_room(id)
+		var ms := TerrainArt.build_usec / 1000.0
+		sum += ms
+		if ms > worst:
+			worst = ms
+			worst_id = id
+		tri_max = maxi(tri_max, TerrainArt.tri_count)
+		for t in room.get_node("Terrain").get_children():
+			var art: TerrainArt = t.get_node_or_null("Art")
+			if art:
+				var bufs := 0
+				for bb in art._bufs:
+					if (bb["idx"] as PackedInt32Array).size() >= 3:
+						bufs += 1
+				if bufs > 4:
+					calls_bad.append("%s/%s" % [id, t.name])
+		if id == "canopy_01":
+			# 정화 연출 프레임: Room 이 테두리 색·몸통 색을 바꿔도 다시 만들지 않는다
+			var b0 := TerrainArt.build_count
+			var d0 := Platform.draw_calls
+			var l0 := Platform.layer_calls
+			for i in 6:
+				room._on_purity_progress(i / 5.0)
+				await _frames(1)
+			_check(TerrainArt.build_count == b0 and Platform.draw_calls == d0 and Platform.layer_calls == l0, "정화 연출 프레임: 그림 지형을 다시 만들지·그리지 않는다 (만들기 +%d, 옛 그리기 +%d/+%d)" % [TerrainArt.build_count - b0, Platform.draw_calls - d0, Platform.layer_calls - l0])
+		print("[probe] %s 그림 지형 만들기 %.1fms, 삼각형 %d" % [id, ms, TerrainArt.tri_count])
+		await _free_room(room)
+	var avg := sum / ART_ROOMS.size()
+	_check(avg < 60.0, "그림 지형 만들기: 방 하나 평균 %.1fms < 60ms (가장 긴 %s %.1fms)" % [avg, worst_id, worst])
+	_check(tri_max < 40000, "방 하나 삼각형 %d개 < 40000 (아이폰 11 Pro 에 넉넉함)" % tri_max)
+	_check(calls_bad.is_empty(), "노드 하나에 그리기 호출 4번 이하 %s" % [calls_bad])
+
+
+## e) 팔레트 (잿빛 표)
+func _probe_palette() -> void:
+	for r in REGIONS:
+		var tex: ImageTexture = Purity.ash_lut(r)
+		var ok := tex != null and tex.get_width() == Purity.LUT_W and tex.get_height() == Purity.LUT_ROWS
+		var img := tex.get_image() if tex else null
+		var mono := true
+		var not_dark := true
+		if img:
+			var prev := -1.0
+			for x in Purity.LUT_W:
+				var l := img.get_pixel(x, 0).get_luminance()
+				if l < prev - 0.01:
+					mono = false
+				prev = l
+			# 옛 셰이더: ((lum - 0.5) * 0.7 + 0.5) * 색조 * 0.82 — 가운데 밝기(0.5)에서 그보다 어둡지 않게
+			var t: Vector3 = Purity.ASH_TINTS.get(r, Vector3(0.66, 0.70, 0.78))
+			var old_mid := Color(t.x, t.y, t.z).get_luminance() * 0.5 * 0.82
+			not_dark = img.get_pixel(Purity.LUT_W / 2, 0).get_luminance() >= old_mid - 0.01
+		_check(ok and mono and not_dark, "%s 잿빛 표 64×8, 무채색 줄 밝기 순서 %s, 옛 셰이더보다 어둡지 않음 %s" % [r, mono, not_dark])
+	var spec := Purity.ash_spec("canopy")
+	_check(spec.has("hues") and (spec["hues"] as Dictionary).has("green"), "수관 잿빛 팔레트는 데이터 파일(data/terrain/canopy.json)에서 읽는다 (색상 띠 %d개)" % (spec.get("hues", {}) as Dictionary).size())
+	var mat: ShaderMaterial = preload("res://shaders/ash_purify.tres")
+	Purity.apply_region("canopy")
+	_check(mat.get_shader_parameter("ash_lut") == Purity.ash_lut("canopy"), "apply_region 이 공용 재질에 그 지역 잿빛 표를 넣는다")
+
+
+## f) 금 간 벽 (비밀 벽): 맞을수록 열림, 부서지면 조각이 떨어진다
+func _probe_cracked(skin: TerrainSkin) -> void:
+	var room := await _load_room("canopy_01")
+	var wall: SecretWall = room.get_node("Terrain/SecretWall1")
+	var crack: CrackedArt = wall.get("_crack")
+	_check(crack != null, "canopy_01 비밀 벽이 금 간 나무 그림을 쓴다")
+	if crack:
+		var a0: float = crack._open.modulate.a
+		var hit := HitData.new()
+		hit.from_player = true
+		wall.receive_hit(hit, null)
+		await _frames(2)
+		var a1: float = crack._open.modulate.a
+		_check(a1 > a0 + 0.2, "한 대 맞으면 갈라진 그림이 드러난다 (열림 %.2f → %.2f)" % [a0, a1])
+		wall.receive_hit(hit, null)
+		wall.receive_hit(hit, null)
+		await _frames(2)
+		var debris := 0
+		for c in wall.get_parent().get_children():
+			if c is CrackedArt.CrackDebris:
+				debris = c.get_child_count()
+		_check(wall._broken and not crack.visible and debris >= 4, "세 대 맞으면 부서지고 그림 조각 %d개가 떨어진다" % debris)
+	await _free_room(room)
+	var r3 := await _load_room("canopy_03")
+	var ceil: SecretCeiling = r3.get_node("Terrain/SecretCeiling1")
+	_check(ceil.get("_crack") != null and (ceil.get("_crack") as CrackedArt).flip_v, "비밀 천장(옹이)도 금 간 나무 그림 (위아래 뒤집어 밑동이 천장에)")
+	var cs := _first_shape(ceil)
+	_check(cs != null and cs.shape is ConvexPolygonShape2D, "비밀 천장 충돌은 옹이 모양 그대로")
+	await _free_room(r3)
+	var r2 := await _load_room("canopy_02")
+	var cw: CrackedWall = r2.get_node("Terrain/CrackedWall1")
+	_check(cw.get("_crack") != null and not cw._sprite.visible, "금 간 벽(확장판)도 수관에서는 금 간 나무 그림")
+	await _free_room(r2)
+
+
+func _probe_record() -> void:
+	var holder := Node2D.new()
+	add_child(holder)
+	var rec := Record.new()
+	rec.kind = "note"
+	holder.add_child(rec)
+	var st := Record.new()
+	st.kind = "stone"
+	holder.add_child(st)
+	await _frames(1)
+	_check(rec._sheet != null and rec._sheet.texture == Record.PARCHMENT, "기록물(쪽지)은 양피지 그림")
+	_check(st._sheet == null, "비석은 그대로 돌")
+	holder.queue_free()
+	await _frames(1)

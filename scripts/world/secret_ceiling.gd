@@ -31,6 +31,17 @@ func on_head_bump(_player: Node, speed: float) -> void:
 	_break()
 
 
+## 그림 조각: 충돌과 같은 옹이 모양에 금 간 나무 그림을 위아래 뒤집어 입힌다 (넓은 밑동이 천장에 붙는다).
+func _art_polygon() -> PackedVector2Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _rng_seed
+	return _body_polygon(rng)
+
+
+func _art_flip() -> bool:
+	return true
+
+
 ## 먼지는 아래쪽 가장자리에서 떨어진다.
 func _dust_origin() -> Vector2:
 	return Vector2(size.x / 2.0, size.y - 4.0)

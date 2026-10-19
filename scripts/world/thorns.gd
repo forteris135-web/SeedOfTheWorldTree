@@ -15,6 +15,8 @@ const DEFAULT_TIP := Color(0.72, 0.66, 0.5)
 @export var style_region := ""
 
 var _style: Dictionary = {}
+## 그림 조각 가시 (지역 그림 옷에 thorn 조각이 있으면). 있으면 옛 코드 그리기는 쓰지 않는다.
+var _art: TerrainArt
 
 
 func _ready() -> void:
@@ -28,6 +30,13 @@ func _ready() -> void:
 	add_child(shape)
 	body_entered.connect(_on_body_entered)
 	material = preload("res://shaders/ash_purify.tres")
+	var skin := TerrainSkin.for_node(self, style_region)
+	if skin != null and skin.has_role("thorn"):
+		_art = TerrainArt.new(skin, self)
+		_art.name = "Art"
+		add_child(_art)
+		_art.build_thorns(self, size, facing_dir)
+		return
 	_style = _pick_style()
 	queue_redraw()
 
@@ -53,6 +62,8 @@ func _on_body_entered(body: Node) -> void:
 
 
 func _draw() -> void:
+	if _art:
+		return
 	var t0 := Time.get_ticks_usec()
 	TerrainStyle.trace_node = self
 	if _style.is_empty():

@@ -13,6 +13,8 @@ class_name TerrainPolygon
 		if v == color:
 			return
 		color = v
+		if _art:
+			return
 		queue_redraw()
 		if _decor_layer:
 			_decor_layer.queue_redraw()
@@ -21,6 +23,8 @@ class_name TerrainPolygon
 		if v == edge_color:
 			return
 		edge_color = v
+		if _art:
+			return
 		if _edge_layer:
 			_edge_layer.queue_redraw()
 		else:
@@ -54,6 +58,8 @@ var _shapes: Array = []
 var _covers := {}          # 변 번호 → 덮인 자리 표
 var _cover_ready := false
 var _glow_done := false
+## 그림 조각 지형 (지역에 그림 옷이 있으면). 있으면 옛 코드 그리기는 쓰지 않는다.
+var _art: TerrainArt
 
 
 func _ready() -> void:
@@ -61,6 +67,14 @@ func _ready() -> void:
 	shape.polygon = polygon
 	add_child(shape)
 	material = preload("res://shaders/ash_purify.tres")
+	var skin := TerrainSkin.for_node(self, style_region)
+	if skin != null:
+		_art = TerrainArt.new(skin, self)
+		_art.name = "Art"
+		add_child(_art)
+		_art.build_polygon(self, polygon, suspicious)
+		_sync_suspicious()
+		return
 	_style = TerrainStyle.style_for(self, style_region)
 	if moss_color == Platform.DEFAULT_MOSS:
 		moss_color = _style["moss"]
@@ -76,6 +90,8 @@ func _ready() -> void:
 
 
 func _redraw_all() -> void:
+	if _art:
+		return
 	queue_redraw()
 	if _edge_layer:
 		_edge_layer.queue_redraw()
@@ -102,6 +118,11 @@ func _clear_suspicious() -> void:
 	if _motes:
 		_motes.queue_free()
 		_motes = null
+
+
+## 그림 조각 지형인가 (시험용)
+func is_art() -> bool:
+	return _art != null
 
 
 ## 위를 향한 변: 시계 방향 다각형에서 왼쪽→오른쪽으로 가는 변.
@@ -201,7 +222,7 @@ func _ensure_cover() -> void:
 
 ## 몸통: 다각형 + 위 변 안쪽의 결·홈·옹이 + 채굴장 녹물·리벳 (양 끝이 다각형 안일 때만).
 func _draw() -> void:
-	if polygon.size() < 3:
+	if polygon.size() < 3 or _art:
 		return
 	var t0 := Time.get_ticks_usec()
 	TerrainStyle.trace_node = self
@@ -268,7 +289,7 @@ func _draw() -> void:
 
 ## 겹 그리기 (TerrainStyle.Layer 가 부른다).
 func _draw_layer(ci: CanvasItem, kind: int) -> void:
-	if polygon.size() < 3:
+	if polygon.size() < 3 or _art:
 		return
 	var t0 := Time.get_ticks_usec()
 	TerrainStyle.trace_node = self
