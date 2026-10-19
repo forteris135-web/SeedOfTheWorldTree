@@ -19,7 +19,7 @@ var _rng := RandomNumberGenerator.new()
 
 func _init() -> void:
 	var t0 := Time.get_ticks_msec()
-	_make("res://art/bosses/boss_sap_queen_now.png", true, _queen_now)
+	# 여왕(지금)은 부위 뼈대로 바뀌어 임시 그림을 만들지 않는다 — boss_sap_queen_now.png 는 tools/queen_film.tscn -- --render 의 조립 그림 (2026-10-20)
 	_make("res://art/bosses/boss_sap_queen_past.png", false, _queen_past)
 	_make("res://art/enemies/enemy_sap_fisher.png", true, func(u: float, v: float) -> Color: return _fisher(u, v, false))
 	_make("res://art/enemies/enemy_sap_fisher_savable.png", true, func(u: float, v: float) -> Color: return _fisher(u, v, true))
@@ -29,7 +29,7 @@ func _init() -> void:
 	_make("res://art/memories/memory_queen_1.png", false, _memory_1)
 	_make("res://art/memories/memory_queen_2.png", false, _memory_2)
 	_make("res://art/memories/memory_queen_3.png", false, _memory_3)
-	print("임시 그림 10장 생성 완료 (%.1f초)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+	print("임시 그림 9장 생성 완료 (%.1f초)" % ((Time.get_ticks_msec() - t0) / 1000.0))
 	quit()
 
 

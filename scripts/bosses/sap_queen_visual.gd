@@ -42,14 +42,16 @@ const BEAT_DIP_DOWN := 0.9
 const BEAT_DIP_UP := 0.45
 ## 휘두름: 셋째 박보다 먼저 출발하는 시간(초)과 공격 한 박 중 휘두름이 끝나는 몫 (히트 순간에 팔이 가장 빠르게)
 const STRIKE_LEAD := 0.1
-const STRIKE_PART := 0.4
+const STRIKE_PART := 0.5
 ## 쓰러짐: 땅에 닿은 뒤 무릎 풀림 → 옆으로 앉음 → (잠깐) → 짚은 팔 쪽으로 기울어 → 누움 시각 (초)
 ## (다리는 옆으로 모은 쪽에 그대로 두고 몸만 반대쪽으로 넘어간다 — 다리가 땅을 짚어 몸을 들어 올리지 않게)
 const FALL_CLIP := [0.0, 0.2, 0.55, 0.8, 1.0, 1.25]
 ## 무너짐: 땅에 닿은 뒤 무릎 풀림 → 옆으로 앉음 (초)
 const BROKEN_CLIP := [0.0, 0.2, 0.6]
 ## 돌아설 때 몸통이 가장 좁아지는 폭 (날개는 0 까지 접혔다 펴진다 — 몸은 둥근 몸이라 종이처럼 납작해지지 않게)
-const TURN_BODY_MIN := 0.42
+const TURN_BODY_MIN := 0.3
+## 돌아서기 빠르기 (스프링 강성 — 클수록 빨리 돈다. 260 ≈ 0.3초)
+const TURN_STIFF := 260.0
 ## 박자 고리 반지름(px)과 두께
 const RING_R := 150.0
 const RING_W := 3.0
@@ -384,7 +386,9 @@ func _process(delta: float) -> void:
 	if _boss.facing != _face_target and _face_hold >= 0.1:
 		_face_target = _boss.facing
 		_face_hold = 0.0
-	_mir.damp(1.0 if _face_target > 0 else -1.0, 14.0, delta)
+	# 임계 감쇠 스프링: 천천히 출발해 가속하고 끝에서 부드럽게 선다 (지수 감쇠는 첫 프레임에 확 튄다)
+	_mir.spring(1.0 if _face_target > 0 else -1.0, TURN_STIFF, 2.0 * sqrt(TURN_STIFF), delta)
+	_mir.v = clampf(_mir.v, -1.0, 1.0)
 	var fvis := 1.0 if _mir.v >= 0.0 else -1.0
 
 	# ---- 일회성 사건 ----
@@ -492,6 +496,14 @@ func _process(delta: float) -> void:
 			p = motion.sample_clip([[0.0, "dive"], [0.1, "land_impact", "out"], [0.65, "landed", "smooth"]], lt)
 			if lt > 0.5:
 				p = _waltz_rest(p, smoothstep(0.5, 1.2, lt))
+				# 박마다 무릎을 살짝 굽혔다 편다 (땅에 서 있으면 몸 높이 강세가 발끝에 막히므로 무릎으로 — 첫 박이 깊게)
+				var pl := clampf(motion.spring_value("crouch") * 260.0, -6.0, 14.0)
+				p["leg_f_up"] = float(p["leg_f_up"]) - pl
+				p["leg_f_lo"] = float(p["leg_f_lo"]) + pl * 1.8
+				p["pointe_f"] = float(p["pointe_f"]) - pl * 0.6
+				p["leg_b_up"] = float(p["leg_b_up"]) + pl
+				p["leg_b_lo"] = float(p["leg_b_lo"]) - pl * 1.8
+				p["pointe_b"] = float(p["pointe_b"]) + pl * 0.6
 			drive = RigMotion.Drive.QUICK if lt < 0.15 else RigMotion.Drive.SOFT
 			rate = FLAP_LANDED
 			frot = 5.0

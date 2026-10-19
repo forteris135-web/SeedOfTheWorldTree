@@ -11,6 +11,10 @@ extends Node2D
 ##   Godot --path . res://tools/queen_film.tscn -- --render
 ##       떠 있는 자세의 조립 그림 한 장을 투명 배경으로: art/bosses/boss_sap_queen_now.png (1536×1024, 발끝 = 아래 가운데에서 60px 위)
 ##       (뼈대를 못 읽을 때 보스가 대신 띄우는 그림이자 ART_PROMPTS·확장판 문서의 '여왕 지금' 자리)
+##   Godot --headless --path . res://tools/probe_queen.tscn   (이 스크립트를 mode = "probe" 로 쓰는 검사 — 전체 회귀가 저절로 돌린다)
+##       위 동작들을 화면 없이 돌리며 잰다: 내려앉음·무너짐·쓰러짐에서 가장 낮은 몸 점이 땅 ±4px, 누운 끝에 몸통·머리가 낮다(키의 30%·35%),
+##       날 때 발끝이 원점 아래로 처지지 않는다, 프레임 사이 튐(머리·손·발끝·날개 끝)이 한도 안, NaN 없음, 정화하면 다 흩어진다,
+##       뼈대를 못 읽으면 한 장 그림으로 대신 뜬다, 한 프레임 비용. 끝줄 "[probe] 끝: 실패 N".
 ## 결과 그림은 screenshots/ 에 쓴다 (저장소에 올리지 않는다). 바닥 선 = 보스 원점(발이 닿는 땅).
 
 const FLOOR_Y := 600.0
@@ -18,6 +22,17 @@ const BEAT := 60.0 / 138.0
 const RENDER_SIZE := Vector2i(1536, 1024)
 const RENDER_ZOOM := 2.4
 const RENDER_FOOT_MARGIN := 60
+## 검사 한도 (게임 px)
+const GROUND_TOL := 4.0
+const LIE_TORSO := 0.3
+const LIE_HEAD := 0.35
+## 프레임 사이 튐 한도 (보스 기준 자리, 게임 px): 속도가 한 프레임에 바뀌는 양 / 한 프레임 이동 (휘두름·돌아서기 포함)
+const POP_JERK := 12.0
+const POP_JERK_FAST := 30.0
+const POP_FAST := 48.0
+
+## "probe" 이면 화면 없는 검사 (tools/probe_queen.tscn)
+@export var mode := ""
 
 var _args := {}
 var _cam: Camera2D
@@ -41,7 +56,9 @@ func _ready() -> void:
 				_args[key] = "true"
 		i += 1
 	RenderingServer.set_default_clear_color(Color(0.36, 0.42, 0.46))
-	if _args.has("render"):
+	if mode == "probe":
+		_probe.call_deferred()
+	elif _args.has("render"):
 		_render.call_deferred()
 	elif _args.has("game"):
 		_game.call_deferred()
@@ -50,7 +67,7 @@ func _ready() -> void:
 
 
 func _draw() -> void:
-	if _args.has("render"):
+	if _args.has("render") or mode == "probe":
 		return
 	draw_rect(Rect2(-20000, FLOOR_Y, 40000, 600), Color(0.22, 0.27, 0.27))
 	draw_line(Vector2(-20000, FLOOR_Y), Vector2(20000, FLOOR_Y), Color(0.75, 0.95, 1.0, 0.6), 2.0)
@@ -373,6 +390,8 @@ func _game() -> void:
 	var stage := 0      # 0 1페이즈 구경, 1 2페이즈, 2 무너뜨림, 3 쓰러뜨림, 4 정화
 	var seen := {}
 	var only: String = str(_args.get("only", ""))
+	var crops: Array = []
+	var crop_names: Array = []
 	while t < 95.0:
 		await tree.physics_frame
 		var dt := get_physics_process_delta_time()
@@ -430,6 +449,19 @@ func _game() -> void:
 			var path := _out("queen_game_%s.png" % want)
 			img.save_png(path)
 			print("[queen_film] 장면 → ", path)
+			# 여왕 둘레만 잘라 모아 보기용으로 (화면 좌표: 캔버스 변환 × 보스 자리)
+			var vp_size := Vector2(img.get_width(), img.get_height())
+			var win := Vector2(get_viewport().get_visible_rect().size)
+			var sc := vp_size / win
+			var bp: Vector2 = (get_viewport().get_canvas_transform() * (boss.global_position + Vector2(0, -130))) * sc
+			var cw := int(460 * sc.x)
+			var ch := int(360 * sc.y)
+			var r := Rect2i(int(bp.x) - cw / 2, int(bp.y) - ch / 2, cw, ch).intersection(Rect2i(0, 0, img.get_width(), img.get_height()))
+			if r.size.x > 10 and r.size.y > 10:
+				var c := img.get_region(r)
+				c.resize(460, 360, Image.INTERPOLATE_BILINEAR)
+				crops.append(c)
+				crop_names.append(want)
 		# 진행: 1페이즈 패턴을 다 보면 2페이즈로
 		if stage == 0 and seen.has("dust") and seen.has("wave") and seen.has("butterflies") and shots.has("landed_rest_p1") and boss.state == SapQueen.State.HOVER:
 			stage = 1
@@ -455,4 +487,171 @@ func _game() -> void:
 			seen = {"dust": true, "wave": true, "butterflies": true}
 			shots["landed_rest_p1"] = true
 	print("[queen_film] 게임 장면 끝 (%.1f초, %d장)" % [t, shots.size()])
+	_save_sheet(crops, _out("queen_game_sheet.png"), 6, 1.0)
+	print("[queen_film] 모아 보기 순서: ", ", ".join(crop_names))
 	tree.quit()
+
+
+# ---------- 화면 없는 검사 ----------
+
+var _fail := 0
+
+
+func _check(ok: bool, text: String) -> void:
+	print("[probe] %s %s" % ["OK " if ok else "FAIL", text])
+	if not ok:
+		_fail += 1
+
+
+## 뼈 껍질 점들의 가운데 (뼈대 단위, body_xf 포함)
+func _bone_center(rig: PartRig, bone: String) -> Vector2:
+	var i := rig.bone_index(bone)
+	if i < 0 or rig.hulls[i].is_empty():
+		return Vector2.ZERO
+	var t := rig.body_xf * rig.xf[i]
+	var sum := Vector2.ZERO
+	for q in rig.hulls[i]:
+		sum += t * q
+	return sum / rig.hulls[i].size()
+
+
+## 보스 기준 자리(게임 px)로: 뼈대 단위 점 → 그림 노드 → 보스
+func _to_boss(rig: PartRig, p_rig: Vector2) -> Vector2:
+	return rig.transform * rig.to_rig_local(p_rig)
+
+
+func _probe() -> void:
+	print("[probe] 시작: 수액의 여왕 그림 검사")
+	var dt := 1.0 / 60.0
+	var keys := ["head", "hand_f", "hand_b", "pointe_f", "pointe_b", "wing_uf", "wing_lb"]
+	var stats := {}
+	var cost_us := 0.0
+	var cost_n := 0
+	for seq in ["hover", "turn", "hit", "dust", "wave", "butterflies", "land", "crack", "broken", "fallen"]:
+		_spawn(self, Vector2(0, FLOOR_Y - 260.0))
+		var rig: PartRig = _vis.rig
+		var motion: RigMotion = _vis.motion
+		if rig == null or motion == null:
+			_check(false, "%s: 뼈대를 읽었다" % seq)
+			_boss.free()
+			continue
+		var h := float(rig.data.get("height", 1000.0)) * rig.game_scale
+		for k in 40:
+			_boss.global_position = Vector2(0, FLOOR_Y - 260.0 + sin(k * dt * 2.0) * 16.0)
+			_tick(dt)
+		var plan := _plan(seq)
+		var events: Array = plan["events"]
+		var ev_i := 0
+		var t := 0.0
+		var prev := {}
+		var prev_v := {}
+		var jerk_f := 0.0
+		var pop_n := 0.0
+		var pop_f := 0.0
+		var pop_at := ""
+		var nan := false
+		var ground_dev := 0.0     # 땅에 있는 동안 가장 낮은 몸 점의 어긋남 (최대)
+		var ground_n := 0
+		var hover_low := -INF     # 날 때 가장 낮은 몸 점 (원점 아래 +)
+		var lie := Vector3.ZERO   # 누운 끝: 몸통, 머리 높이, 가장 낮은 점
+		var down_t := -1.0
+		var dissolve_end := 0.0
+		var toe_rng := {}
+		while t < float(plan["dur"]):
+			while ev_i < events.size() and t >= float(events[ev_i][0]):
+				(events[ev_i][1] as Callable).call()
+				ev_i += 1
+			(plan["each"] as Callable).call(t, dt)
+			var t0 := Time.get_ticks_usec()
+			_tick(dt)
+			cost_us += Time.get_ticks_usec() - t0
+			cost_n += 1
+			t += dt
+			var st := _boss.state
+			# NaN
+			for x in rig.xf:
+				if is_nan(x.origin.x) or is_nan(x.origin.y):
+					nan = true
+			# 튐: 보스 기준 자리의 프레임 사이 이동
+			# 일부러 빠른 순간: 휘두르는 타격(채찍처럼 확 가속한다), 내리꽂기·받음, 돌아서며 좌우가 바뀌는 순간
+			var mir: RigMotion.Chan = _vis.get("_mir")
+			var fast: bool = bool(_vis.get("_striking")) or (st == SapQueen.State.LAND and _boss.dive_amount > 0.0) \
+				or (st == SapQueen.State.LANDED and float(_vis.get("_land_t")) < 0.25) or absf(mir.v) < 0.6
+			for k in keys:
+				var pt := _to_boss(rig, _bone_center(rig, k))
+				if prev.has(k):
+					var v: Vector2 = pt - (prev[k] as Vector2)
+					# 튐 = 속도가 한 프레임 사이에 갑자기 바뀜 (빠르지만 매끈한 휘두름은 괜찮다): 이동의 변화량
+					if prev_v.has(k):
+						var jerk: float = (v - (prev_v[k] as Vector2)).length()
+						if fast:
+							jerk_f = maxf(jerk_f, jerk)
+						elif jerk > pop_n:
+							pop_n = jerk
+							pop_at = "%s %.2f초 %s" % [k, t, _boss.state_name()]
+					pop_f = maxf(pop_f, v.length())
+					prev_v[k] = v
+				prev[k] = pt
+			# 땅: 내려앉음(받은 뒤 0.35초~), 무너짐·쓰러짐(땅에 닿고 0.9초~)
+			var low := rig.lowest_y(motion._settle_bones) * rig.game_scale
+			var grounded: bool = st == SapQueen.State.LANDED and float(_vis.get("_land_t")) > 0.35
+			if st in [SapQueen.State.BROKEN, SapQueen.State.FALLEN] and _boss.is_ground():
+				if down_t < 0.0:
+					down_t = 0.0
+				down_t += dt
+				grounded = down_t > 0.9 and (st == SapQueen.State.BROKEN or down_t > 1.7)
+			if grounded:
+				ground_dev = maxf(ground_dev, absf(low))
+				ground_n += 1
+			# 서 있는 동안 발끝이 미끄러지지 않는가 (받은 뒤 0.7초부터, 발끝 = 발 뼈 축 끝)
+			if st == SapQueen.State.LANDED and float(_vis.get("_land_t")) > 0.7:
+				for fb in ["pointe_f", "pointe_b"]:
+					var fi := rig.bone_index(fb)
+					var tip := _to_boss(rig, rig.xf[fi] * Vector2(0, rig.bone_len[fi]))
+					if not toe_rng.has(fb):
+						toe_rng[fb] = Vector2(tip.x, tip.x)
+					toe_rng[fb] = Vector2(minf(toe_rng[fb].x, tip.x), maxf(toe_rng[fb].y, tip.x))
+			if st in [SapQueen.State.HOVER, SapQueen.State.DUST, SapQueen.State.BUTTERFLIES] and t > 0.3:
+				hover_low = maxf(hover_low, low)
+			if st == SapQueen.State.FALLEN and down_t > 1.9:
+				lie = Vector3(-_bone_center(rig, "torso").y * rig.game_scale, -_bone_center(rig, "head").y * rig.game_scale, low)
+			if st == SapQueen.State.PURIFIED:
+				dissolve_end = rig.dissolve_amount()
+		var s_name := "%-11s" % seq
+		print("[probe]   %s 튐(속도 변화) 보통 %.1fpx (%s) / 빠른 순간 %.1fpx, 가장 빠른 이동 %.1fpx/프레임, 땅 어긋남 %.1fpx(%d프레임), 날 때 가장 낮은 점 %+.1fpx" % [s_name, pop_n, pop_at, jerk_f, pop_f, ground_dev, ground_n, hover_low])
+		stats[seq] = true
+		_check(not nan, "%s: NaN 없음" % seq)
+		_check(pop_n <= POP_JERK, "%s: 자세가 툭 튀지 않는다 (프레임 사이 속도 변화 %.1fpx ≤ %.0f)" % [seq, pop_n, POP_JERK])
+		_check(jerk_f <= POP_JERK_FAST, "%s: 휘두름·돌아서기도 한 프레임에 확 꺾이지 않는다 (%.1fpx ≤ %.0f)" % [seq, jerk_f, POP_JERK_FAST])
+		_check(pop_f <= POP_FAST, "%s: 빠른 동작도 한 프레임에 %.0fpx 넘게 건너뛰지 않는다 (%.1fpx)" % [seq, POP_FAST, pop_f])
+		if seq == "land":
+			var slide := 0.0
+			for fb in toe_rng:
+				slide = maxf(slide, (toe_rng[fb] as Vector2).y - (toe_rng[fb] as Vector2).x)
+			print("[probe]   내려앉아 춤추듯 쉬는 동안 발끝이 옆으로 움직인 폭 %.1fpx" % slide)
+			_check(toe_rng.size() == 2 and slide <= 10.0, "land: 서 있는 동안 발끝이 미끄러지지 않는다 (옆으로 %.1fpx ≤ 10)" % slide)
+		if seq in ["land", "broken", "fallen"]:
+			_check(ground_n > 0 and ground_dev <= GROUND_TOL, "%s: 땅에 있는 동안 가장 낮은 몸 점이 땅 ±%.0fpx (%.1fpx)" % [seq, GROUND_TOL, ground_dev])
+		if seq in ["hover", "dust", "butterflies"]:
+			_check(hover_low <= 8.0, "%s: 날 때 발끝·몸이 보스 원점 아래로 처지지 않는다 (%+.1fpx)" % [seq, hover_low])
+		if seq == "fallen":
+			print("[probe]   누운 끝: 몸통 가운데 %+.0fpx, 머리 가운데 %+.0fpx, 가장 낮은 점 %+.1fpx (키 %.0fpx)" % [lie.x, lie.y, lie.z, h])
+			_check(lie.x <= h * LIE_TORSO and lie.y <= h * LIE_HEAD and absf(lie.z) <= GROUND_TOL,
+				"fallen: 쓰러져 땅에 누웠다 — 몸통 %.0f%% ≤ %d%%, 머리 %.0f%% ≤ %d%%" % [lie.x / h * 100.0, int(LIE_TORSO * 100), lie.y / h * 100.0, int(LIE_HEAD * 100)])
+			_check(dissolve_end >= 0.99, "fallen: 정화되면 빛으로 다 흩어진다 (%.2f)" % dissolve_end)
+		_boss.free()
+	# 뼈대를 못 읽었을 때: 한 장 그림(조립 그림)이 제자리에 뜬다
+	print("[probe] (아래 '뼈대 파일이 없다' 오류는 대신 그림 시험을 위해 일부러 낸 것)")
+	_args["fallback"] = "true"
+	_spawn(self, Vector2(0, FLOOR_Y))
+	for k in 10:
+		_tick(dt)
+	var spr: Sprite2D = _vis
+	_check(_vis.get("rig") == null and spr.texture != null and spr.position.y < -150.0, "뼈대를 못 읽으면 조립 그림 한 장으로 대신 뜬다 (그림 %s, 높이 %.0f)" % [spr.texture != null, spr.position.y])
+	_boss.free()
+	_args.erase("fallback")
+	var per := cost_us / maxf(cost_n, 1)
+	print("[probe] 여왕 그림 한 프레임 비용 %.0f µs (이 맥 기준 — 아이폰 11 Pro 는 약 2~3배)" % per)
+	_check(per < 1500.0, "여왕 그림 한 프레임 비용이 1.5ms 미만 (%.0f µs)" % per)
+	print("[probe] 끝: 실패 %d" % _fail)
+	get_tree().quit(1 if _fail > 0 else 0)
