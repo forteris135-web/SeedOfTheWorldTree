@@ -36,11 +36,12 @@ shape = SubResource("CapsuleShape2D_body")
 
 [node name="Visual" type="Node2D" parent="."]
 script = ExtResource("2_visual")
-texture = ExtResource("3_tex")
-art_faces_right = true
-art_scale = 0.22
-foot_offset = 72.0
+rig_id = "sap_fisher_savable"
 warm_eye = true
+npc_rig = "sap_fisher_savable"
+texture = ExtResource("3_tex")
+npc_art_scale = 0.22
+npc_faces_right = true
 
 [node name="Hurtbox" type="Area2D" parent="."]
 position = Vector2(0, -5)

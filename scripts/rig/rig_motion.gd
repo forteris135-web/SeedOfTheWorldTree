@@ -306,7 +306,8 @@ func _setup_legs() -> void:
 		var need := 0.0
 		if leg.lo >= 0:
 			var r := (leg.a + leg.b) * 0.985
-			var dx := home - (leg.sole.rotated(leg.foot_rest_world) * -1.0).x - j0.x
+			# 발목 x = 발바닥 자리 − 발바닥 오프셋 (예전엔 부호가 반대라 발바닥이 발목 앞뒤로 떨어진 다리에서 서 있는 높이가 크게 낮아졌다)
+			var dx := home - leg.sole.rotated(leg.foot_rest_world).x - j0.x
 			need = -leg.ankle_h - sqrt(maxf(r * r - dx * dx, 1.0)) - j0.y
 		else:
 			var r1 := leg.sole.length()
