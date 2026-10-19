@@ -29,10 +29,15 @@ signal purified
 signal telegraph(kind: String)
 
 @export var max_hp := 1650.0
-@export var max_poise := 180.0
+## 흐트러짐 한도·무너짐 길이 (2026-10-19 검수: 180 / 4.5초면 공격 버튼만 눌러도 싸움 시간 절반 넘게 무너져 있었다 — '샌드백')
+@export var max_poise := 300.0
 @export var poise_decay := 8.0
-@export var broken_time := 4.5
+@export var broken_time := 3.0
 @export var broken_damage_multiplier := 1.6
+## 예비동작·타격 중에 받는 흐트러짐 배수 (슈퍼아머: 공격 도중에 두들겨 끊기 어렵게)
+@export var attack_poise_multiplier := 0.5
+## 무너졌다 일어선 뒤 이 시간(초) 동안은 흐트러짐이 쌓이지 않는다 (저스트 가드는 예외 — 기술의 보상은 그대로)
+@export var poise_immune_after_broken := 2.5
 @export var march_speed := 170.0
 @export var gravity := 2600.0
 @export var thrust_damage := 22.0
@@ -91,6 +96,7 @@ var _face_hold := 0.0
 var _timer := 0.0
 var _phase_timer := 0.0
 var _poise_hold := 0.0
+var _poise_immune := 0.0
 var _flash := 0.0
 var _registered := false
 var _home := Vector2.ZERO
@@ -137,6 +143,9 @@ func reset_fight() -> void:
 	_unregister()
 	hp = max_hp
 	poise = 0.0
+	_poise_immune = 0.0
+	for m in get_tree().get_nodes_in_group("knight_pillar_mark"):
+		m.queue_free()
 	phase = 1
 	visible = false
 	velocity = Vector2.ZERO
@@ -155,6 +164,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_flash = maxf(_flash - delta * 6.0, 0.0)
 	_poise_hold = maxf(_poise_hold - delta, 0.0)
+	_poise_immune = maxf(_poise_immune - delta, 0.0)
 	if _poise_hold <= 0.0 and poise > 0.0 and state != State.BROKEN and state != State.FALLEN:
 		poise = maxf(poise - poise_decay * delta, 0.0)
 		poise_changed.emit(poise, max_poise)
@@ -188,7 +198,8 @@ func _physics_process(delta: float) -> void:
 		State.THRUST:
 			_phase_step(delta, 0.55 * fast, 0.18, 0.7 * fast, func() -> void:
 				var hit := HitData.make(thrust_damage, 0.0, self, Vector2(520, -160))
-				hitbox.set_box(Rect2(60, -150, 390, 110), facing)   # 앞 60~450 (그림의 창끝 자리와 맞춤)
+				# 앞 450 은 그림의 창끝 자리. 뒤끝은 몸 안쪽(-20)까지 — 몸에 바짝 붙으면 안전하던 자리를 없앤다 (2026-10-19 검수)
+				hitbox.set_box(Rect2(-20, -150, 470, 110), facing)
 				hitbox.activate(hit, 0.18)
 				velocity.x = facing * 380.0
 				Sfx.play("spear_whoosh", -4.0, 0.08),
@@ -323,6 +334,7 @@ func _physics_process(delta: float) -> void:
 			if _timer <= 0.0:
 				poise = 0.0
 				poise_changed.emit(poise, max_poise)
+				_poise_immune = poise_immune_after_broken
 				_set_state(State.MARCH)
 				_timer = 0.4
 		State.FALLEN:
@@ -395,6 +407,12 @@ func _choose_attack(dist: float) -> void:
 	_combo += 1
 	var pool := {}
 	_wave_aim_up = false
+	# 공격을 고르는 순간에는 데드존 없이 소녀 쪽으로 돌아선다 (등 뒤·몸 안에 붙어 있으면 영영 돌지 않아 안전지대가 됐다)
+	if player and absf(player.global_position.x - global_position.x) > 4.0:
+		var want := 1 if player.global_position.x > global_position.x else -1
+		if want != facing:
+			facing = want
+			_face_hold = face_hold
 	if _high_time > high_time:
 		# 소녀가 높은 가지 위에서 버틴다: 검기를 소녀 쪽으로 올려 쏜다 (2페이즈는 등불 던지기도)
 		# (같은 패턴 연속 금지보다 우선 — 버티는 동안은 검기가 이어질 수 있다)
@@ -491,7 +509,7 @@ func _combo_hit() -> void:
 	match combo_step:
 		0:
 			var hit := HitData.make(dmg, 0.0, self, Vector2(420, -140))
-			hitbox.set_box(Rect2(60, -150, 390, 110), facing)
+			hitbox.set_box(Rect2(-20, -150, 470, 110), facing)
 			hitbox.activate(hit, COMBO_ACTIVE[0])
 			velocity.x = facing * 320.0
 			Sfx.play("spear_whoosh", -5.0, 0.1)
@@ -549,6 +567,7 @@ func _spawn_flame_wave(dir: int) -> void:
 	p.lifetime = 2.2
 	p.size = Vector2(70, 48)
 	p.color = Color(1.0, 0.6, 0.25)
+	_flame_look(p, 1.6)
 	get_parent().add_child(p)
 	p.global_position = global_position + Vector2(dir * 120.0, -30.0)
 	p.launch(Vector2(dir, 0), self, false)
@@ -605,6 +624,7 @@ func _spawn_ring(i: int) -> void:
 		p.lifetime = 2.2
 		p.size = Vector2(84, 42)
 		p.color = Color(1.0, 0.55 + 0.1 * i, 0.2)
+		_flame_look(p, 1.6)
 		get_parent().add_child(p)
 		p.global_position = Vector2(global_position.x + dir * 90.0, ground_y - 28.0)
 		p.launch(Vector2(dir, 0), self, false)
@@ -623,28 +643,101 @@ func _throw_lantern() -> void:
 	p.fall_gravity = 1400.0
 	p.size = Vector2(44, 44)
 	p.color = Color(1.0, 0.7, 0.3)
+	p.pass_one_way = true   # 가운데 가지에 걸리지 않고 소녀 발밑 바닥까지 떨어진다
 	get_parent().add_child(p)
 	p.global_position = global_position + Vector2(facing * 80.0, -170.0)
-	var dx := player.global_position.x - global_position.x
-	var dir := Vector2(dx, -600.0).normalized()
-	p.launch(dir, self, false)
+	# 가까우면 느리게 던진다 (속력이 일정한 투사체라 820 으로는 꼭대기에서 수평으로 멀리 미끄러져 300px 넘게 지나쳤다)
+	var aim := _aim_lantern(p.global_position, player.global_position.x, p.fall_gravity, p.lifetime)
+	p.speed = aim[1]
+	p.launch(aim[0], self, false)
 	Sfx.play("spear_whoosh", -5.0, 0.1)
-	# 떨어진 자리에 불기둥 (짧은 지연 뒤)
-	get_tree().create_timer(0.9).timeout.connect(func() -> void:
-		if not is_instance_valid(p) or state == State.FALLEN or state == State.PURIFIED:
-			return
-		var pillar: Projectile = PROJECTILE.instantiate()
-		pillar.kind = Projectile.Kind.GUST
-		pillar.speed = 0.0
-		pillar.damage = throw_damage
-		pillar.poise = 0.0
-		pillar.lifetime = 0.8
-		pillar.size = Vector2(90, 160)
-		pillar.color = Color(1.0, 0.55, 0.2)
-		get_parent().add_child(pillar)
-		pillar.global_position = Vector2(p.global_position.x, ground_y - 70.0)
-		pillar.launch(Vector2.UP, self, false)
-		p.queue_free())
+	# 등불이 땅·가지에 떨어진 바로 그 자리에 불기둥 (붉은 예고 PILLAR_WARN 초 뒤).
+	# 예전엔 0.9초 고정 타이머가 '그 순간 공중의 등불 아래'에 세웠고, 그 전에 떨어지면 아예 안 생겼다 (2026-10-19 검수).
+	p.landed.connect(_on_lantern_landed)
+
+
+## 불꽃(파도·고리·불기둥) 그림: 기사 몸과 같은 주황이라 바닥을 달리는 작은 초승달이 몸에 섞여 안 보였다 (2026-10-19 검수)
+## → 그림만 키우고(판정 그대로) 밝은 노란 테두리와 발광.
+func _flame_look(p: Projectile, scale_k: float) -> void:
+	p.draw_scale = scale_k
+	p.outline_color = Color(1.0, 0.95, 0.6, 1.0)
+	p.glow = 1.2
+
+
+## 등불을 던질 방향: 투사체는 속력이 일정하고 방향만 아래로 휘므로(포물선이 아니다) 예전처럼 (dx, -600) 으로 던지면
+## 가까운 소녀 너머 1000px 까지 날아갔다 → 몇 가지 각도로 날아가는 길을 미리 그려 보고 바닥(ground_y)에 떨어지는 자리가
+## 소녀와 가장 가까운 각도를 고른다 (같으면 높은 포물선).
+## 돌려주는 값: [방향, 속력]. 속력은 820 → 640 → 500 차례로 보고 충분히 가까우면(80px) 빠른 쪽을 쓴다.
+func _aim_lantern(from: Vector2, target_x: float, grav: float, life: float) -> Array:
+	var side := 1.0 if target_x >= from.x else -1.0
+	var best := [Vector2(side * 0.38, -0.92), 820.0]
+	var best_err := INF
+	var dt := 1.0 / 30.0
+	for speed in [820.0, 640.0, 500.0]:
+		for i in 15:
+			var up := deg_to_rad(84.0 - i * 4.5)   # 84° ~ 21° (수평에서 위로)
+			var d := Vector2(cos(up) * side, -sin(up))
+			var pos := from
+			var dirv := d
+			var t := 0.0
+			while t < life and pos.y < ground_y:
+				dirv = (dirv * speed + Vector2(0, grav * dt)).normalized()
+				pos += dirv * speed * dt
+				t += dt
+			var err := absf(pos.x - target_x)
+			if err < best_err - 1.0:
+				best_err = err
+				best = [d, speed]
+		if best_err < 80.0:
+			break
+	return best
+
+
+## 불기둥 붉은 예고 길이(초)
+const PILLAR_WARN := 0.3
+
+
+## 던진 등불이 지형에 닿았다: 바닥 같은 면이면 그 자리, 벽에 부딪혔으면 그 아래 바닥(싸움터 안)에 예고 → 불기둥.
+func _on_lantern_landed(pos: Vector2, normal: Vector2) -> void:
+	if state == State.FALLEN or state == State.PURIFIED or state == State.WAIT:
+		return
+	var at := pos
+	if normal.y > -0.5:
+		at = Vector2(clampf(pos.x, arena.position.x + 60.0, arena.end.x - 60.0), ground_y)
+	var mark := Polygon2D.new()
+	var pts := PackedVector2Array()
+	for i in 20:
+		var a := TAU * i / 20.0
+		pts.append(Vector2(cos(a) * 62.0, sin(a) * 14.0))
+	mark.polygon = pts
+	mark.color = Color(1.0, 0.25, 0.12, 0.0)
+	mark.add_to_group("knight_pillar_mark")
+	get_parent().add_child(mark)
+	mark.global_position = at
+	var tw := mark.create_tween()
+	tw.tween_property(mark, "color:a", 0.75, PILLAR_WARN * 0.6)
+	tw.parallel().tween_property(mark, "scale", Vector2(1.25, 1.25), PILLAR_WARN).from(Vector2(0.6, 0.6))
+	get_tree().create_timer(PILLAR_WARN, false).timeout.connect(_spawn_pillar.bind(at, mark))
+
+
+func _spawn_pillar(at: Vector2, mark: Node) -> void:
+	if is_instance_valid(mark):
+		mark.queue_free()
+	if state == State.FALLEN or state == State.PURIFIED or state == State.WAIT:
+		return
+	var pillar: Projectile = PROJECTILE.instantiate()
+	pillar.kind = Projectile.Kind.GUST
+	pillar.speed = 0.0
+	pillar.damage = throw_damage
+	pillar.poise = 0.0
+	pillar.lifetime = 0.8
+	pillar.size = Vector2(90, 160)
+	pillar.color = Color(1.0, 0.55, 0.2)
+	_flame_look(pillar, 1.3)
+	get_parent().add_child(pillar)
+	pillar.global_position = at + Vector2(0, -70.0)
+	pillar.launch(Vector2.UP, self, false)
+	Juice.shake(4.0)
 
 
 func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
@@ -658,9 +751,13 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 	elif state == State.STUCK:
 		mult = stuck_damage_multiplier
 		poise_mult = stuck_poise_multiplier
+	# 슈퍼아머·무너짐 뒤 면역은 보통 공격에만 (저스트 가드로 되받은 검기·불꽃은 기술의 보상이라 그대로 들어간다)
+	if not hit.reflected and state in ATTACK_STATES and attack_phase in ["startup", "active"]:
+		poise_mult *= attack_poise_multiplier
 	hp = maxf(hp - hit.damage * mult, 0.0)
 	hp_changed.emit(hp, max_hp)
-	_add_poise(hit.poise * poise_mult)
+	if _poise_immune <= 0.0 or hit.reflected:
+		_add_poise(hit.poise * poise_mult)
 	if hp <= 0.0:
 		_fall()
 		return "hit"
@@ -669,6 +766,10 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		phase_changed.emit(2)
 		Juice.shake(10.0)
 		hitbox.deactivate()
+		# 흐트러짐을 비운다: 무너진 채 절반을 넘기면 휘청 뒤 곧바로 무너짐 4.5초가 새로 시작돼 공짜 시간이 9초 가까이 됐다
+		poise = 0.0
+		_poise_hold = 0.0
+		poise_changed.emit(poise, max_poise)
 		# 공격 자세에서 곧바로 행진으로 '툭' 바뀌지 않게, 짧은 휘청을 거친다
 		_set_state(State.STAGGER)
 		anim_hint = "stagger"
@@ -749,6 +850,8 @@ func _fall() -> void:
 			continue
 		if p.has_method("_vanish"):
 			p._vanish()
+	for m in get_tree().get_nodes_in_group("knight_pillar_mark"):
+		m.queue_free()
 	Juice.hitstop(0.15, 0.03)
 	Juice.shake(12.0)
 	fallen.emit()

@@ -260,6 +260,9 @@ var _plunge_lock := 0.0        # 튕긴 뒤 다시 낙하 공격을 받기까지
 var _plunge_buffered := false  # 잠금 중에 누른 ↓+약공격 (풀리면 바로 낙하 공격)
 var _plunge_btn_buffered := false  # 잠금 중에 누른 낙하 공격 버튼 (↓ 없이도 풀리면 바로 낙하 공격)
 var _plunge_hits := 0          # 바닥에 닿기 전에 낙하 공격으로 맞힌 횟수 (두 번째부터 피해 감쇠)
+## 낙하 공격으로 튕긴 뒤 적의 몸통 부딪힘을 받지 않는 남은 시간. 튕겨 오른 동안은 계속 차 있고, 착지한 뒤 이만큼 더 간다.
+const CONTACT_GRACE_AFTER_LAND := 0.5
+var _contact_grace := 0.0
 var _light: PointLight2D
 ## 포자 구름 등으로 느려진 비율 (1 = 정상). 매 프레임 되돌아온다.
 var slow_factor := 1.0
@@ -343,7 +346,12 @@ func _apply_abilities() -> void:
 	if max_hp != old_max:
 		hp = minf(hp + (max_hp - old_max), max_hp)
 	attack_multiplier = 1.0 + Progress.upgrades.get("attack", 0.0)
+	# 이슬도 체력처럼 늘어난 만큼 채운다. 방에 들어오면 소녀가 새로 만들어져 _ready 가 기본값 3개만 채우므로,
+	# 여기서 더해 주지 않으면 산 이슬·주운 이슬이 방을 옮길 때마다 빈 칸이 됐다 (2026-10-19 검수).
+	var old_max_dews := max_dews
 	max_dews = 3 + int(Progress.upgrades.get("dews", 0))
+	if max_dews > old_max_dews:
+		dews += max_dews - old_max_dews
 	dews = mini(dews, max_dews)
 	heal_amount = 45.0 + Progress.upgrades.get("heal", 0.0)   # 회복량 아이템(맑은 샘물)
 	hp_changed.emit(hp, max_hp)
@@ -441,6 +449,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _tick_timers(delta: float, on_floor: bool) -> void:
+	if not on_floor and _plunge_hits > 0:
+		_contact_grace = maxf(_contact_grace, CONTACT_GRACE_AFTER_LAND)
+	else:
+		_contact_grace = maxf(_contact_grace - delta, 0.0)
 	if on_floor:
 		_coyote_timer = coyote_time
 		_jumps_left = max_jumps
@@ -724,6 +736,7 @@ func _plunge_bounce() -> void:
 	_jumps_left = maxi(_jumps_left, max_jumps - 1)
 	_plunge_lock = plunge_relock
 	_plunge_hits += 1
+	_contact_grace = maxf(_contact_grace, CONTACT_GRACE_AFTER_LAND)
 	_set_state(State.FALL)   # 바로 다음 프레임 _resolve_locomotion_state 가 JUMP/FALL 로 정리한다
 	Juice.rumble(0.3, 0.6, 0.1)
 
@@ -901,6 +914,10 @@ func _cast_projectile() -> void:
 		p.lifetime = light_shot_time
 		p.size = light_shot_size
 		p.color = Color(1.0, 0.85, 0.5)
+		# 깃털 그림의 '심'(가운데 줄과 점)은 정하지 않으면 몸 색을 어둡힌 색이라, 금빛 잎 한가운데 진한 갈색 원이 찍혀
+		# 빛이 아니라 눈알처럼 보였다 (2026-10-19 검수) → 빛의 창은 밝은 흰금빛 심과 테두리
+		p.core_color = Color(1.0, 1.0, 0.92, 1.0)
+		p.outline_color = Color(1.0, 0.97, 0.82, 1.0)
 	else:
 		_soul_cooldowns["wind"] = gust_cooldown
 		p.kind = Projectile.Kind.GUST
@@ -1119,7 +1136,7 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	var from_front := from_dir == facing
 
 	if state == State.GUARD and hit.guardable and from_front:
-		if _now() - _guard_pressed_at <= just_guard_window:
+		if hit.parryable and _now() - _guard_pressed_at <= just_guard_window:
 			_guard_pressed_at = -1000.0
 			Juice.hitstop(0.1, 0.03)
 			Juice.rumble(0.4, 1.0, 0.18)
@@ -1183,6 +1200,11 @@ func _on_hit_landed(result: String, _target: Node) -> void:
 		blocked.emit()
 		if state == State.PLUNGE and attack_phase == "dive":
 			_plunge_bounce()
+
+
+## 적의 몸통 부딪힘을 지금 받지 않는가 (낙하 공격으로 튕긴 직후). EnemyBase._tick_contact 가 묻는다.
+func has_contact_grace() -> bool:
+	return _contact_grace > 0.0
 
 
 func _die() -> void:

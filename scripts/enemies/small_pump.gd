@@ -29,6 +29,8 @@ var _armor_timer := 0.0
 func _in_range() -> bool:
 	if player == null or not is_instance_valid(player) or player.state == Player.State.DEAD:
 		return false
+	if arrival_grace_active() and state in [State.IDLE, State.PATROL]:
+		return false   # 방에 막 들어선 소녀는 아직 겨누지 않는다 (도착 매복 없애기, EnemyBase._sees_player 와 같은 규칙)
 	var d := player.global_position - global_position
 	return absf(d.x) <= shoot_range and absf(d.y) <= 520.0
 

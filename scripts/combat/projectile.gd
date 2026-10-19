@@ -17,6 +17,11 @@ class_name Projectile
 enum Kind { FEATHER, LEAF, GUST, ORB }
 
 signal reflected(projectile: Projectile)
+## 지형(땅·가지·벽)에 닿아 사라질 때 한 번: 닿은 자리와 그 면의 방향(위를 보는 바닥이면 normal.y ≈ -1).
+## 등불 기사의 등불 던지기가 '떨어진 자리'에 불기둥을 세우는 데 쓴다.
+signal landed(pos: Vector2, normal: Vector2)
+## 한쪽 방향 가지(one_way 발판)는 막지 않고 지나간다 (등불 던지기 등)
+var pass_one_way := false
 
 @export var kind: Kind = Kind.FEATHER
 @export var speed := 900.0
@@ -70,6 +75,8 @@ var direction := Vector2.RIGHT
 var source: Node2D
 ## true 면 소녀 쪽 공격 (적을 맞춘다)
 var from_player := false
+## 저스트 가드로 되받아 방향이 뒤집혔는가
+var was_reflected := false
 var _time := 0.0
 var _wobble := randf() * TAU
 var _dead := false
@@ -211,6 +218,16 @@ func _physics_process(delta: float) -> void:
 	# 지형에 막힌다 (빠른 투사체가 얇은 발판을 건너뛰지 않게 선으로 검사)
 	var ray := PhysicsRayQueryParameters2D.create(from, to, 1)
 	var hit_terrain := get_world_2d().direct_space_state.intersect_ray(ray)
+	# pass_one_way: 한쪽 방향 가지(one_way Platform)는 지나친다 (등불 던지기가 가운데 가지에 걸려 엉뚱한 곳에 불기둥이 서던 것 — 2026-10-19 검수)
+	var guard_n := 0
+	while pass_one_way and not hit_terrain.is_empty() and guard_n < 4:
+		var c = hit_terrain.get("collider")
+		if c is Platform and c.one_way:
+			ray.exclude = ray.exclude + [hit_terrain["rid"]]
+			hit_terrain = get_world_2d().direct_space_state.intersect_ray(ray)
+			guard_n += 1
+		else:
+			break
 	if not hit_terrain.is_empty():
 		global_position = hit_terrain["position"]
 		# 소녀의 바람·빛이 '때리면 부서지는 벽' 같은 지형에 닿으면 한 대로 친다
@@ -219,6 +236,7 @@ func _physics_process(delta: float) -> void:
 			var h := HitData.make(damage, poise, source if source else self, Vector2(200, -60))
 			h.from_player = true
 			col.receive_hit(h, null)
+		landed.emit(global_position, hit_terrain.get("normal", Vector2.UP))
 		_vanish()
 		return
 	global_position = to
@@ -258,6 +276,7 @@ func _hit(area: Hurtbox) -> void:
 	var hit := HitData.make(damage, poise, source if source else self, Vector2(260, -100))
 	hit.guardable = guardable
 	hit.from_player = from_player
+	hit.reflected = was_reflected
 	hit.hitstop = 0.04
 	var result: String = area.receive(hit)
 	if result == "just_guard" and reflectable and not from_player:
@@ -270,6 +289,7 @@ func _hit(area: Hurtbox) -> void:
 
 func _reflect(by: Node) -> void:
 	from_player = true
+	was_reflected = true
 	_update_mask()
 	speed *= 1.5
 	damage *= 1.6
@@ -536,16 +556,21 @@ func _draw_gust(ol: Color) -> void:
 		draw_circle(Vector2(size.x * 0.05, 0), size.y * 0.35 * _gust_k, Color(color, color.a * 0.12))
 
 
+## 바람 호 그림 배율: 적의 불꽃·바람은 draw_scale 을 따른다 (판정은 그대로). 소녀의 바람은 판정 사각형 안에 맞추므로 1.
+func _gust_scale() -> float:
+	return 1.0 if from_player else draw_scale
+
+
 func _gust_center(i: int) -> Vector2:
-	return Vector2(size.x * (0.28 - i * 0.3), 0)
+	return Vector2(size.x * (0.28 - i * 0.3) * _gust_scale(), 0)
 
 
 func _gust_radius(i: int) -> float:
-	return size.y * (0.26 + i * 0.11) * _gust_k
+	return size.y * (0.26 + i * 0.11) * _gust_k * _gust_scale()
 
 
 func _gust_width(i: int) -> float:
-	return 2.5 + 1.5 * (2 - i)
+	return (2.5 + 1.5 * (2 - i)) * _gust_scale()
 
 
 ## 호 세 겹(선 굵기 + extra 포함)의 실제 범위. 호 끝(±GUST_ANGLE)이 가장 위·아래, 각 0 이 가장 앞.

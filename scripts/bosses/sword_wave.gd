@@ -111,6 +111,7 @@ func _hit(area: Hurtbox) -> void:
 	var hit := HitData.make(damage, reflect_poise if from_player else 0.0, self, Vector2(420, -160))
 	hit.guardable = true
 	hit.from_player = from_player
+	hit.reflected = from_player   # 검기는 기사만 쏜다: 소녀 쪽이면 되받은 것
 	hit.hitstop = 0.05
 	var result: String = area.receive(hit)
 	match result:

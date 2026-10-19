@@ -105,6 +105,16 @@ func _on_player_died() -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	respawn_enemies()
+	if _boss_is_down():
+		# 보스는 이미 쓰러져 정화를 기다린다: 승리를 되돌리지 않는다. 문만 열고 마지막 자리에서 일어나 다시 손을 얹으러 온다.
+		gate_in.open()
+		gate_out.open()
+		_clear_hostile_projectiles()
+		player.revive(rest_point)
+		var cam0 := player.get_node_or_null("Camera2D")
+		if cam0:
+			cam0.reset_smoothing()
+		return
 	if is_instance_valid(boss):
 		boss.reset_fight()
 	fight_started = false
@@ -137,7 +147,25 @@ func _set_battle_camera(on: bool) -> void:
 		cam.restore_bounds()
 
 
+## 보스가 쓰러져(FALLEN) 정화를 기다리는 중인가
+func _boss_is_down() -> bool:
+	return is_instance_valid(boss) and boss.has_method("state_name") and boss.state_name() == "FALLEN"
+
+
+## 날아가던 보스 쪽 투사체(잎·깃털·불꽃·수액 등)를 모두 거둔다. 소녀 것은 그대로.
+func _clear_hostile_projectiles() -> void:
+	for p in get_tree().get_nodes_in_group("projectile"):
+		if not is_instance_valid(p) or p.get("from_player") == true or p.get("_dead") == true:
+			continue
+		if p.has_method("_vanish"):
+			p._vanish()
+		else:
+			p.queue_free()
+
+
 func _on_boss_fallen() -> void:
+	# 쓰러뜨린 뒤 남은 잎·깃털에 소녀가 쓰러지면 싸움이 처음으로 돌아가 승리가 사라졌다 (2026-10-19 검수: 새·펌프·여왕) → 모두 거둔다
+	_clear_hostile_projectiles()
 	Sfx.play("boss_fall", 0.0, 0.0)
 	Music.stop(0.4)   # 보스곡이 끊기고 정적
 	boss_hud.hide_bar()   # 막대만 사라지고 띠는 정화의 손길까지 남는다
@@ -225,7 +253,9 @@ func _bosstest() -> void:
 	var tree := get_tree()
 	boss.debug_log = true
 	await tree.create_timer(0.6).timeout
-	player.global_position = $Markers/HoverCenter.position + Vector2(0, 700)
+	# 머무는 자리 700 아래, 단 바닥선(GroundLine)보다 깊지 않게 (머무는 자리를 낮춰도 바닥 속에 묻히지 않게)
+	var hc: Vector2 = $Markers/HoverCenter.position
+	player.global_position = Vector2(hc.x, minf(hc.y + 700.0, $Markers/GroundLine.position.y - 4.0))
 	player._invuln_timer = 9999.0
 	await tree.create_timer(1.0).timeout
 	print("[보스시험] 싸움 시작: %s, 문 닫힘: %s" % [fight_started, gate_in.closed])

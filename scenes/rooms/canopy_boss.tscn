@@ -192,13 +192,13 @@ position = Vector2(3460, 1432)
 position = Vector2(1800, 1500)
 
 [node name="HoverLeft" type="Marker2D" parent="Markers"]
-position = Vector2(1200, 1000)
+position = Vector2(1200, 1140)
 
 [node name="HoverCenter" type="Marker2D" parent="Markers"]
-position = Vector2(1950, 920)
+position = Vector2(1950, 1050)
 
 [node name="HoverRight" type="Marker2D" parent="Markers"]
-position = Vector2(2800, 1000)
+position = Vector2(2800, 1140)
 
 [node name="LeafPiles" type="Node2D" parent="."]
 

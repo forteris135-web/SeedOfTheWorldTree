@@ -73,12 +73,15 @@ func _has_player() -> bool:
 	return _player != null and is_instance_valid(_player)
 
 
-## 상황 버튼의 글자: 쉬는 중 '이동', 포탈 앞 '들어가기', 그 밖엔 '손길'.
+## 상황 버튼의 글자: 쉬는 중 '이동·성장'(달빛풀 메뉴: 이동 / 성장 탭), 포탈 앞 '들어가기', 그 밖엔 '손길'.
 func _interact_label() -> String:
 	if _player.state == Player.State.REST:
-		return "이동"
+		return "이동·성장"
 	for n in _player.interactables:
 		if n is Portal:
+			# 아직 드러나지 않은 숨은 입구는 '손길' 그대로 (틈의 정체를 버튼 글자가 먼저 알려 주지 않게)
+			if n is HiddenPortal and not n.is_revealed():
+				return "손길"
 			return "들어가기"
 	return "손길"
 
@@ -93,7 +96,9 @@ func soul_button_text() -> String:
 ## 버튼이 지금 눌러서 뜻이 있는가. 낙하 공격은 공중에서만 (땅에서는 어둡게 그리고, 눌러도 소녀가 무시한다).
 func button_enabled(name: String) -> bool:
 	if name == "plunge":
-		return _has_player() and not _player.is_on_floor() and _player.state in Player.LOCOMOTION
+		# 공중 공격·공중 씨앗 베기 중에도 켜짐: 누르면 기억했다가 휘두름이 끝나는 순간 낙하 공격으로 잇는다 (player.gd)
+		return _has_player() and not _player.is_on_floor() and (_player.state in Player.LOCOMOTION \
+			or _player.state == Player.State.ATTACK or _player.state == Player.State.SOUL_SLASH)
 	if name == "soul":
 		return not _has_player() or _player.soul_cooldown_left() <= 0.0
 	return true

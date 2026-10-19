@@ -28,7 +28,9 @@ var _map: MapScreen
 var player: Player
 var rest_point := Vector2.ZERO
 var _spawn := Vector2.ZERO
-var _enemy_spawns: Array = []   # [{scene: String, position: Vector2, parent: Node}]
+var _enemy_spawns: Array = []   # [{scene: String, position: Vector2, parent: Node, props: Dictionary}]
+## 포탈·달빛풀로 들어선 뒤 적이 소녀를 알아채지 않는 시간(초). 화면이 밝아지는 1.2초 + 둘러볼 틈.
+const ARRIVAL_GRACE := 2.8
 ## 지도용 탐사 요소의 id 목록 (방에 들어올 때 한 번 모은다): pickups / rescues / records / grasses
 var _explore_ids := {}
 var _explore_timer := 0.0
@@ -36,9 +38,12 @@ var _explore_timer := 0.0
 
 func _ready() -> void:
 	player = get_tree().get_first_node_in_group("player") as Player
+	EnemyBase.arrival_grace_until = 0.0
 	if player:
 		# 다른 방에서 넘어왔다면 그 출구에 맞는 자리에 선다
 		if Progress.next_spawn != "":
+			# 게임 시간(물리 틱)으로 잰다: 방을 띄우며 기기가 1~2초 멈춰도 유예가 미리 지나가지 않게 (2026-10-19 검수)
+			EnemyBase.arrival_grace_until = float(Engine.get_physics_frames()) + ARRIVAL_GRACE * Engine.physics_ticks_per_second
 			if Progress.next_spawn.begins_with("Grass:"):
 				var gid := Progress.next_spawn.trim_prefix("Grass:")
 				for g in get_tree().get_nodes_in_group("moonlight_grass"):
@@ -66,9 +71,11 @@ func _ready() -> void:
 			cam.set_room_bounds(bounds)
 		player.died.connect(_on_player_died)
 		player.rest_started.connect(_on_player_rested)
+	var overrides := _scene_overrides()
 	for e in get_tree().get_nodes_in_group("enemy"):
 		if e is Node2D and e.scene_file_path != "":
-			_enemy_spawns.append({"scene": e.scene_file_path, "position": e.position, "parent": e.get_parent()})
+			_enemy_spawns.append({"scene": e.scene_file_path, "position": e.position, "parent": e.get_parent(),
+				"props": overrides.get(_rel_path(e), {})})
 	Purity.progress.connect(_on_purity_progress)
 	Purity.apply_region(region)
 	_register_on_map()
@@ -311,7 +318,45 @@ func respawn_enemies() -> void:
 			continue
 		var e := scene.instantiate()
 		e.position = info["position"]
+		# 방 파일이 이 적에게 덮어쓴 값(rescue_id, patrol_range …)을 다시 넣는다. 씬 기본값으로 깨어나면
+		# 광부 하론이 '나무꾼 베릴'로 바뀌거나(구원 id 가 기본값으로) 사라졌다 (2026-10-19 검수)
+		var props: Dictionary = info.get("props", {})
+		for k in props:
+			e.set(k, props[k])
 		(info["parent"] as Node).add_child(e)
+
+
+## 방 파일(.tscn)이 인스턴스 노드에 덮어쓴 속성들: { "Enemies/MinerSavable": {"rescue_id": "miner_hidden", …} }.
+## 자리(position)는 따로 적으므로 뺀다. 다시 깨울 때(respawn_enemies) 같은 값을 넣어 준다.
+func _scene_overrides() -> Dictionary:
+	var out := {}
+	if scene_file_path == "":
+		return out
+	var ps := load(scene_file_path) as PackedScene
+	if ps == null:
+		return out
+	var st := ps.get_state()
+	for i in st.get_node_count():
+		if st.get_node_instance(i) == null:
+			continue
+		var path := _clean_path(str(st.get_node_path(i)))
+		var props := {}
+		for j in st.get_node_property_count(i):
+			var pname := st.get_node_property_name(i, j)
+			if pname in ["position", "rotation", "scale", "transform"]:
+				continue
+			props[pname] = st.get_node_property_value(i, j)
+		if not props.is_empty():
+			out[path] = props
+	return out
+
+
+func _rel_path(n: Node) -> String:
+	return _clean_path(str(get_path_to(n)))
+
+
+static func _clean_path(p: String) -> String:
+	return p.trim_prefix("./")
 
 
 func _on_player_rested(grass: Node2D) -> void:

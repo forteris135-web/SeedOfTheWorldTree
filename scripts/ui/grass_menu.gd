@@ -131,11 +131,15 @@ func _room_node(node_name: String) -> Node:
 	return n
 
 
-## 터치 버튼(방의 TouchControls)을 숨기거나 보인다.
+## 터치 버튼(방의 TouchControls)과 전투 HUD 를 숨기거나 보인다.
+## (HUD 의 이슬·빛 가루 줄이 메뉴의 탭 머리 밑에 흐리게 비쳐 지저분했다 — 2026-10-19 검수. 빛 가루 수는 성장 탭이 따로 보여 준다)
 func _show_touch(on: bool) -> void:
 	var touch := _room_node("TouchControls")
 	if touch:
 		touch.visible = on
+	var hud := _room_node("CombatHUD")
+	if hud and "visible" in hud:
+		hud.visible = on
 
 
 ## 쉬기 시작 때 뜬 HUD 가운데 안내('달빛풀에서 쉰다…')와 '저장되었다'는 멈춤 동안 함께 멈춰서 메뉴 줄 위에 겹친다 → 지운다.

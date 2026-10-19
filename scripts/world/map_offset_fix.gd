@@ -8,9 +8,30 @@ class_name MapOffsetFix
 
 @export var moves := {}
 
+## 저장 파일을 읽을 때 한 번에 고치는 표 (SaveGame.load_game 이 부른다). 위 노드는 mine_deep 에 들어설 때만 고쳐서,
+## 심연 달빛풀에서 이어하면 책임자의 방에 다시 가기 전까지 지도에서 심연 방 둘이 겹쳤다 (2026-10-19 검수).
+## hidden_descent: 입구를 HUD 밑에서 빼느라 오른쪽으로 옮기며 지도 자리도 맞춰 밀었다 (마을 숨은 틈 바로 아래).
+const SAVE_MOVES := {
+	"abyss_01": [Vector2(39300, 500), Vector2(41100, 500)],
+	"abyss_02": [Vector2(43500, 100), Vector2(45300, 100)],
+	"abyss_boss": [Vector2(50100, -200), Vector2(51900, -200)],
+	"abyss_mini_1": [Vector2(43800, -1400), Vector2(45600, -1400)],
+	"moon_garden": [Vector2(47100, 300), Vector2(48900, 300)],
+	"hidden_descent": [Vector2(24320, -923), Vector2(23540, -923)],
+}
+
 
 func _ready() -> void:
 	fix(Progress.visited_rooms)
+
+
+## 저장 파일에서 읽은 지도 기록을 새 자리로 고친다. 고친 방 수를 돌려준다.
+static func fix_saved(rooms: Dictionary) -> int:
+	var f := MapOffsetFix.new()
+	f.moves = SAVE_MOVES
+	var n := f.fix(rooms)
+	f.free()
+	return n
 
 
 func fix(rooms: Dictionary) -> int:

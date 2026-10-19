@@ -100,6 +100,7 @@ func _prep_boss(bx: float, ph := 1) -> void:
 	_boss._chain = -1
 	_boss._last_attack = -1
 	_boss.poise = 0.0
+	_boss._poise_immune = 0.0   # 앞 시험의 무너짐 뒤 흐트러짐 면역(2.5초)이 남지 않게
 	_boss.hitbox.deactivate()
 	_boss._set_state(RootKeeper.State.STANCE)
 	_boss._timer = 99.0

@@ -26,6 +26,12 @@ const SPEED_MULT := 0.9
 const RAGE_HP := 0.5
 ## 무너질 수 있는(정화의 손길을 받을 수 있는) 체력 비율. 이보다 많으면 흐트러짐이 차도 휘청만 한다.
 const PURIFY_HP := 0.5
+## 거대화 몹의 타격 끝 팔 각도 (일반 1.1 라디안). 팔이 1.8배 길어 같은 각도면 검·방패·앞발 끝이 바닥 아래 60~90px 까지 들어갔다.
+const ELITE_ARM_FRONT := 0.05
+## 모든 자세에서 앞으로 내리는 팔의 최대 각도 (되돌림·착지·무너짐 자세도 0.55~1.0 이라 같은 문제가 있었다)
+const ELITE_ARM_LIMIT := 0.0
+## 몸 기울기 배수 (돌진하는 채굴 괴수의 앞발·머리가 바닥 아래로 들어갔다)
+const ELITE_TILT_SCALE := 0.45
 ## 크게 휘청이는 시간(초). 그동안은 공격하지 않고, 맞아도 휘청임이 끊기지 않는다.
 const STAGGER_TIME := 1.3
 ## 휘청인 뒤 받는 피해가 커지는 시간(초, 휘청임 포함)과 배수
@@ -87,6 +93,12 @@ static func apply(e: EnemyBase, hp_mult := HP_MULT, size_mult := SIZE_MULT, dmg_
 			vis.stride_scale = size_mult        # 큰 몸은 보폭도 크다 (작은 발걸음으로 종종거리지 않게)
 		if "show_overhead_bar" in vis:
 			vis.show_overhead_bar = false       # 화면 아래 보스 막대가 있으니 머리 위 작은 막대는 끈다
+		if "arm_front" in vis and str(vis.get("arm_kind")) != "gun":
+			# 대롱(gun) 팔은 소녀를 겨누므로 상한을 두지 않는다 (정원사 장로가 아래 소녀를 겨누지 못하던 것 — 2026-10-19 검수)
+			vis.arm_front = ELITE_ARM_FRONT     # 1.8배 긴 팔이 내려칠 때 무기 끝이 땅속으로 들어가지 않게
+			vis.arm_front_limit = ELITE_ARM_LIMIT
+		if "tilt_scale" in vis:
+			vis.tilt_scale = ELITE_TILT_SCALE   # 큰 몸이 앞으로 기울 때 앞머리가 땅속으로 들어가지 않게
 
 
 ## EnemyBase._ready() 뒤에 부른다: 그림 쪽의 고정 자리 값을 큰 몸에 맞춘다 ('정화의 손길' 글자가 가슴팍에 걸리지 않게).

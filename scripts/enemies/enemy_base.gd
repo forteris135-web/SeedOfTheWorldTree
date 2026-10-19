@@ -168,15 +168,30 @@ func _make_contact_area() -> void:
 ## 매 틱: 겹친 소녀에게 부딪힘 피해 (쓰러짐·무너짐·피격 경직·구원 중에는 없음)
 func _tick_contact(delta: float) -> void:
 	_contact_cd = maxf(_contact_cd - delta, 0.0)
-	if _contact == null or _contact_cd > 0.0:
+	if _contact == null:
 		return
 	if state in [State.DEAD, State.BROKEN, State.HIT]:
 		return
 	for area in _contact.get_overlapping_areas():
 		if area is Hurtbox and area.owner_node is Player:
+			var pl := area.owner_node as Player
+			# 낙하 공격으로 적을 맞히고 튕긴 직후(공중 + 착지 뒤 잠깐)는 부딪힘 없음: 튕겨 오른 소녀가 같은 적 몸으로 떨어져
+			# '맞히고도 맞는' 일이 흔했다 (2026-10-19 검수). 그동안 몸 위에 내려선 소녀는 몸 바깥으로 살며시 밀어내
+			# 유예가 끝났을 때 겹친 채로 남지 않게 한다 (손을 떼고 있어도). 스틱을 누르고 있으면 소녀 쪽 움직임이 이긴다.
+			if pl.has_method("has_contact_grace") and pl.has_contact_grace():
+				if pl.is_on_floor() and pl.state in Player.LOCOMOTION and absf(Input.get_axis("move_left", "move_right")) < 0.05:
+					var dir := signf(pl.global_position.x - global_position.x)
+					if dir == 0.0:
+						dir = -float(facing)
+					pl.velocity.x = dir * 320.0
+				return
+			if _contact_cd > 0.0:
+				return
 			var dmg := contact_damage * float(get("elite_damage_mult") if get("elite_damage_mult") != null else 1.0)
-			var hit := HitData.make(dmg, 0.0, self, Vector2(340, -180))
+			# 밀림 520: 피격 감속(1600) 아래에서도 약 85px 밀려 겹침(약 46px)을 확실히 벗어난다 (340 은 36px 라 1초 뒤 또 맞았다)
+			var hit := HitData.make(dmg, 0.0, self, Vector2(520, -180))
 			hit.hitstop = 0.03
+			hit.parryable = false
 			var result: String = area.receive(hit)
 			if result != "ignored":
 				_contact_cd = contact_interval
@@ -331,8 +346,19 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
+## 방에 막 들어선 소녀를 알아채지 않는 시각 (Time.get_ticks_msec 초). Room 이 포탈·달빛풀로 들어설 때 정한다.
+## 화면이 어둠에서 밝아지는 동안 길목 적이 먼저 달려와 때리던 '도착 매복'을 없앤다 (2026-10-19 검수).
+static var arrival_grace_until := 0.0
+
+
+static func arrival_grace_active() -> bool:
+	return float(Engine.get_physics_frames()) < arrival_grace_until   # 단위: 물리 틱 번호 (Room 이 정한다)
+
+
 func _sees_player(range_px := -1.0) -> bool:
 	if player == null or player.state == Player.State.DEAD:
+		return false
+	if arrival_grace_active() and state in [State.IDLE, State.PATROL]:
 		return false
 	var r := notice_range if range_px < 0.0 else range_px
 	var d := player.global_position - global_position

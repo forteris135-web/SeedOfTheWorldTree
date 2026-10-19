@@ -231,6 +231,24 @@ func _on_draw() -> void:
 	if _title > 0.0:
 		var font := ThemeDB.fallback_font
 		var t := clampf(_title / 0.6, 0.0, 1.0) if _title < 0.6 else clampf((3.0 - _title) / 0.6, 0.0, 1.0)
-		_canvas.draw_string_outline(font, Vector2(size.x / 2.0 - 600, size.y * 0.22), _name, HORIZONTAL_ALIGNMENT_CENTER, 1200, 72, 8, Color(0, 0, 0, 0.6 * t))
-		_canvas.draw_string(font, Vector2(size.x / 2.0 - 600, size.y * 0.22), _name, HORIZONTAL_ALIGNMENT_CENTER, 1200, 72, Color(0.95, 0.9, 0.8, t))
-		_canvas.draw_string(font, Vector2(size.x / 2.0 - 600, size.y * 0.22 + 44), _subtitle, HORIZONTAL_ALIGNMENT_CENTER, 1200, 24, Color(0.8, 0.8, 0.8, t * 0.8))
+		var ty := title_y()
+		_canvas.draw_string_outline(font, Vector2(size.x / 2.0 - 600, ty), _name, HORIZONTAL_ALIGNMENT_CENTER, 1200, 72, 8, Color(0, 0, 0, 0.6 * t))
+		_canvas.draw_string(font, Vector2(size.x / 2.0 - 600, ty), _name, HORIZONTAL_ALIGNMENT_CENTER, 1200, 72, Color(0.95, 0.9, 0.8, t))
+		_canvas.draw_string(font, Vector2(size.x / 2.0 - 600, ty + 44), _subtitle, HORIZONTAL_ALIGNMENT_CENTER, 1200, 24, Color(0.8, 0.8, 0.8, t * 0.8))
+
+
+## 등장 이름의 글자 기준선 높이 (화면 px). 보통은 화면 높이 0.22. 소녀 HUD(이슬·성장·빛 가루 줄)가 길어져
+## 이름 자리까지 뻗으면 HUD 아래로 내린다 (2026-10-19 검수: 이슬 9개·성장 아이콘에서 이름이 빛 가루 숫자를 가렸다).
+func title_y() -> float:
+	var size := _canvas.size if _canvas else Vector2(1920, 1080)
+	var y := size.y * 0.22
+	var hud := get_parent().get_node_or_null("CombatHUD") if get_parent() else null
+	if hud == null or not hud.has_method("hud_right_x") or hud.get("_player") == null:
+		return y
+	var font := ThemeDB.fallback_font
+	var w := maxf(font.get_string_size(_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 72).x, font.get_string_size(_subtitle, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x)
+	var left := size.x / 2.0 - w / 2.0
+	# 이름 글자(기준선 위 ~62px)부터 부제(기준선 아래 ~52px)까지의 높이에 걸친 HUD 만 본다
+	if float(hud.hud_right_x(y - 62.0, y + 52.0)) + 24.0 > left:
+		y = maxf(y, float(hud.hud_bottom_y()) + 72.0)
+	return y

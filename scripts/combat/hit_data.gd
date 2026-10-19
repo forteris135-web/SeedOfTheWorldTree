@@ -12,8 +12,13 @@ var knockback := Vector2(300, -120)
 var source: Node2D
 ## 가드로 막을 수 있는가 (붉은 예고 공격은 false)
 var guardable := true
+## 저스트 가드로 받아칠 수 있는가. 몸통 부딪힘은 false — 몸이 닿은 것을 '받아친' 것으로 치면
+## 적 몸에 겹친 채 박자 맞춰 가드만 눌러도 적이 무너졌다 (2026-10-19 검수). false 면 일반 가드로 막는다.
+var parryable := true
 ## 소녀의 공격인가
 var from_player := false
+## 저스트 가드로 되받은 투사체인가 (보스의 슈퍼아머·무너짐 뒤 흐트러짐 면역을 지나간다 — 기술의 보상은 그대로)
+var reflected := false
 ## 맞았을 때 히트스톱 길이 (초)
 var hitstop := 0.05
 

@@ -114,13 +114,13 @@ scroll_scale = Vector2(0.9, 0.9)
 
 [node name="Particles" type="CPUParticles2D" parent="Backdrop/Motes"]
 modulate = Color(1.7, 1.5, 1.1, 1)
-position = Vector2(1200, 600)
-amount = 60
+position = Vector2(1600, 600)
+amount = 76
 lifetime = 9.0
 preprocess = 9.0
 texture = SubResource("GradientTexture2D_mote")
 emission_shape = 3
-emission_rect_extents = Vector2(1500, 900)
+emission_rect_extents = Vector2(1900, 900)
 direction = Vector2(0, -1)
 spread = 180.0
 gravity = Vector2(0, -6)

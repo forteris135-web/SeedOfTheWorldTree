@@ -48,7 +48,7 @@ bounds = Rect2(0, 0, 1600, 3000)
 region = "sap_lake"
 room_id = "hidden_descent"
 display_name = "수액의 호수 · 숨은 내리막"
-map_offset = Vector2(24320, -923)
+map_offset = Vector2(23540, -923)
 dark = true
 dark_color = Color(0.26, 0.26, 0.32, 1)
 terrain_color = Color(0.09, 0.08, 0.07, 1)
@@ -130,11 +130,11 @@ decorate = false
 
 [node name="TopLedge" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, 300)
-size = Vector2(600, 100)
+size = Vector2(1100, 100)
 label_text = "마을에서 내려온 자리"
 
 [node name="B1" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(900, 560)
+position = Vector2(1150, 560)
 size = Vector2(400, 50)
 one_way = true
 
@@ -177,7 +177,7 @@ size = Vector2(160, 60)
 [node name="Markers" type="Node2D" parent="."]
 
 [node name="FromVillage" type="Marker2D" parent="Markers"]
-position = Vector2(200, 232)
+position = Vector2(980, 232)
 
 [node name="FromLake" type="Marker2D" parent="Markers"]
 position = Vector2(1250, 2632)
@@ -185,7 +185,7 @@ position = Vector2(1250, 2632)
 [node name="Exits" type="Node2D" parent="."]
 
 [node name="ToVillage" parent="Exits" instance=ExtResource("40_portal")]
-position = Vector2(190, 300)
+position = Vector2(970, 300)
 target_scene = "res://scenes/rooms/village_02.tscn"
 spawn_name = "FromHiddenDescent"
 
@@ -202,7 +202,7 @@ spawn_name = "FromDescent"
 position = Vector2(700, 2632)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
-position = Vector2(200, 232)
+position = Vector2(980, 232)
 
 [node name="FogNear" type="Parallax2D" parent="."]
 scroll_scale = Vector2(1.15, 1.15)

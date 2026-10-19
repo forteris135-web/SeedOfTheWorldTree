@@ -106,9 +106,16 @@ func _apply_hidden() -> void:
 	queue_redraw()
 
 
+## 틈이 드러나 포탈이 되었는가 (터치 상황 버튼 글자가 묻는다)
+func is_revealed() -> bool:
+	return _revealed
+
+
 func _process(delta: float) -> void:
 	super(delta)
 	if not _revealed:
+		# 드러나기 전에는 머리 위 '잠긴 길' 글자를 띄우지 않는다 (그냥 어두운 틈 — 손길을 내밀면 안내만 뜬다)
+		_prompt.visible = false
 		# 등불을 가진 소녀가 다가오면 틈 안쪽이 밝아지다가, 충분히 가까우면 드러난다
 		var want := 0.0
 		var p: Player = get_tree().get_first_node_in_group("player") as Player

@@ -48,6 +48,14 @@ const STRIDE := 95.0
 ## 예비동작 끝 팔 각도(그림 기준, 뒤로 당김)와 타격 끝 각도(앞으로). 예고의 끝 = 타격의 시작이라 이음새가 없다.
 const ARM_BACK := -1.5
 const ARM_FRONT := 1.1
+## 타격 끝 팔 각도 (기본 ARM_FRONT)와, 앞으로 내리는 팔의 최대 각도(모든 자세 공통; INF = 제한 없음).
+## 거대화 중간 보스는 팔이 1.8배 길어 같은 각도면 무기 끝이 땅속으로 파고들어 EliteTraits.apply 가 줄인다 (2026-10-19 검수).
+## 최대 각도에 닿으면 팔은 거기서 멈춘다 (무기가 땅에 닿아 멈춘 것처럼).
+var arm_front := ARM_FRONT
+var arm_front_limit := INF
+## 몸 기울기 배수 (발끝 축으로 넘어지는 무너짐·쓰러짐은 빼고). 1.8배 큰 몸이 돌진·휘두르기로 0.42 라디안 기울면
+## 앞머리가 바닥 아래로 60px 가까이 내려가 EliteTraits 가 줄인다.
+var tilt_scale := 1.0
 ## 예비동작 끝 몸 기울기(뒤) / 타격 끝 기울기(앞)
 const ROT_BACK := -0.3
 const ROT_FRONT := 0.42
@@ -464,7 +472,7 @@ func _process(delta: float) -> void:
 						sx = lerpf(0.95, 1.14, s)
 						sy = lerpf(1.08, 0.92, s)
 						dy = lerpf(-10.0, 5.0, s)
-						arm = lerpf(ARM_BACK, ARM_FRONT, s) * forward
+						arm = lerpf(ARM_BACK, arm_front, s) * forward
 						arm_set = true
 						ghost = true
 						drive = Drive.FAST
@@ -552,9 +560,11 @@ func _process(delta: float) -> void:
 	_recoil = maxf(_recoil - delta * 6.0, 0.0)
 	_strike_flash = maxf(_strike_flash - delta * 12.0, 0.0)
 	_block_flash = maxf(_block_flash - delta * 9.0, 0.0)
-	var rot_show := _rot.v + sin(_t * 45.0) * 0.02 * _tremor - 0.05 * f * _recoil
+	var rot_show := _rot.v * lerpf(tilt_scale, 1.0, _pivot.v) + sin(_t * 45.0) * 0.02 * _tremor - 0.05 * f * _recoil
 	var sx_show := _sx.v + sin(_t * 45.0) * 0.012 * _tremor
 	var arm_show := _arm.v + sin(_t * 40.0) * 0.03 * _tremor - 0.35 * forward * _recoil
+	if arm_front_limit < INF and arm_show * forward > arm_front_limit:
+		arm_show = arm_front_limit * forward
 
 	# 회전축: 보통은 그림 가운데, 무너짐·쓰러짐은 발끝. 섞임(_pivot)도 보간이라 전환에서 발이 '툭' 옮겨 가지 않는다.
 	# 그림은 가운데를 축으로 도니까, 발끝(가운데에서 foot_d 아래)이 제자리에 남도록 그만큼 위치를 되돌린다.

@@ -389,6 +389,55 @@ func _boss_title_showing() -> bool:
 	return t != null and float(t) > 0.0
 
 
+## HUD 덩어리(체력·가드 막대, 이슬, 성장 표시, 빛 가루)의 오른쪽 끝 x (화면 px).
+## 영혼 전환 알림·보스 등장 이름이 이 오른쪽에 서서 HUD 를 덮지 않게 한다 (2026-10-19 검수: 체력 180·이슬 9 에서 겹쳤다).
+## y0~y1 을 주면 그 높이에 걸친 것만 센다 (예: 화면 위 끝의 체력 막대는 그 아래 높이의 글자와 겹치지 않는다).
+func hud_right_x(y0 := -INF, y1 := INF) -> float:
+	var font := ThemeDB.fallback_font
+	var rects: Array[Rect2] = []
+	for piece in hp_frame_pieces(maxf(_hp_scale_shown, hp_bar_scale())):
+		rects.append(piece["dst"])
+	# 가드 막대 그림(185px)의 아래쪽은 투명이라 보이는 높이(약 120px)만 센다
+	rects.append(Rect2(_s(GUARD_TRACK_POS), Vector2(BAR_GUARD.get_width(), 120.0) * SHEET_SCALE))
+	var slots := dew_slots()
+	for i in slots.size():
+		rects.append(Rect2(slots[i], dew_size(i)))
+	var d := dust_origin()
+	var dust_w := DUST_ICON * 2.0 + 5.0 + font.get_string_size(dust_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, DUST_FONT_SIZE).x
+	rects.append(Rect2(d.x - DUST_ICON * 1.4, d.y - DUST_ICON * 1.6, dust_w + DUST_ICON * 1.4, DUST_ICON * 3.2))
+	if _player:
+		var o := soul_origin()
+		var label := soul_label()
+		var lx := o.x + SOUL_DOT_R_SEL * 2.0 + SOUL_DOT_GAP * maxi(soul_list().size() - 1, 0) + 8.0
+		var lw := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, SOUL_FONT_SIZE).x + 12.0 + font.get_string_size("7", HORIZONTAL_ALIGNMENT_LEFT, -1, SOUL_CD_FONT_SIZE).x
+		rects.append(Rect2(o.x, o.y - SOUL_CD_FONT_SIZE, lx - o.x + lw, SOUL_CD_FONT_SIZE + 8.0))
+	var right := 0.0
+	for r in rects:
+		if r.end.y >= y0 and r.position.y <= y1:
+			right = maxf(right, r.end.x)
+	return right
+
+
+## HUD 덩어리의 아래 끝 y (화면 px): 영혼 줄 글자 기준선 아래.
+func hud_bottom_y() -> float:
+	return soul_origin().y + 12.0
+
+
+## 영혼 전환 알림의 띠 (화면 좌표). 글자 폭에 맞춘 띠를 HUD 오른쪽 끝보다 오른쪽에 둔다 (화면이 넓으면 가운데).
+func soul_notice_rect() -> Rect2:
+	var font := ThemeDB.fallback_font
+	var size := _canvas.size if _canvas else Vector2(1920, 1080)
+	var tw := font.get_string_size(soul_notice_title(), HORIZONTAL_ALIGNMENT_LEFT, -1, SOUL_NOTICE_TITLE_SIZE).x
+	var dw := font.get_string_size(soul_notice_desc(), HORIZONTAL_ALIGNMENT_LEFT, -1, SOUL_NOTICE_DESC_SIZE).x
+	var w := maxf(maxf(tw, dw) + 120.0, 420.0)
+	var y := size.y * soul_notice_y_ratio()
+	var top := y - SOUL_NOTICE_TITLE_SIZE * 0.95
+	var h := SOUL_NOTICE_TITLE_SIZE * 1.25 + (SOUL_NOTICE_DESC_SIZE * 1.9 if soul_notice_desc() != "" else 0.0)
+	var cx := maxf(size.x / 2.0, hud_right_x(top, top + h) + 40.0 + w / 2.0)
+	cx = minf(cx, size.x - 130.0 - w / 2.0)   # 오른쪽 위 '지도' 터치 버튼 자리는 비운다
+	return Rect2(cx - w / 2.0, top, w, h)
+
+
 ## 알림 글자의 투명도 (0~1): 빠르게 떠올라 머물다 사라진다
 func soul_notice_alpha() -> float:
 	if _soul_notice_timer <= 0.0:
@@ -585,10 +634,11 @@ func _draw_soul_notice(font: Font) -> void:
 	var elapsed := SOUL_NOTICE_TIME - _soul_notice_timer
 	var rise := 14.0 * (1.0 - clampf(elapsed / 0.25, 0.0, 1.0))   # 처음 0.25초 살짝 떠오른다
 	var y := size.y * soul_notice_y_ratio() + rise
-	var w := 1200.0
-	var x := size.x / 2.0 - w / 2.0
+	var box := soul_notice_rect()
+	var w := box.size.x
+	var x := box.position.x
 	# 뒤에 영혼 색 빛 띠
-	_canvas.draw_rect(Rect2(x + 200.0, y - SOUL_NOTICE_TITLE_SIZE * 0.95, w - 400.0, SOUL_NOTICE_TITLE_SIZE * 1.25), Color(col.r, col.g, col.b, 0.1 * a))
+	_canvas.draw_rect(Rect2(x, y - SOUL_NOTICE_TITLE_SIZE * 0.95, w, SOUL_NOTICE_TITLE_SIZE * 1.25), Color(col.r, col.g, col.b, 0.1 * a))
 	_canvas.draw_string_outline(font, Vector2(x, y), title, HORIZONTAL_ALIGNMENT_CENTER, w, SOUL_NOTICE_TITLE_SIZE, 6, Color(0.05, 0.04, 0.03, 0.8 * a))
 	_canvas.draw_string(font, Vector2(x, y), title, HORIZONTAL_ALIGNMENT_CENTER, w, SOUL_NOTICE_TITLE_SIZE, Color(col.r, col.g, col.b, a))
 	if desc != "":
@@ -681,4 +731,6 @@ func _on_draw() -> void:
 		_canvas.draw_string(font, Vector2(size.x / 2.0 - 500, size.y * 0.3), _message, HORIZONTAL_ALIGNMENT_CENTER, 1000, 40, Color(1, 1, 1, a))
 	if _flash_timer > 0.0:
 		var a2 := clampf(_flash_timer / 0.3, 0.0, 1.0)
+		# 어두운 테두리: 붉게 빛나는 보스 몸 위에 겹쳐도 읽히게 (2026-10-19 검수)
+		_canvas.draw_string_outline(font, Vector2(size.x / 2.0 - 300, size.y * 0.42), _flash_text, HORIZONTAL_ALIGNMENT_CENTER, 600, 34, 6, Color(0.08, 0.04, 0.02, 0.85 * a2))
 		_canvas.draw_string(font, Vector2(size.x / 2.0 - 300, size.y * 0.42), _flash_text, HORIZONTAL_ALIGNMENT_CENTER, 600, 34, Color("ffd46a", a2))

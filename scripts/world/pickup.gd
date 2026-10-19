@@ -152,7 +152,7 @@ func _collect(player: Player) -> void:
 	var text := ""
 	match kind:
 		"dews":
-			player.dews = mini(player.dews + int(amount), player.max_dews)
+			# 늘어난 칸은 소녀 _apply_abilities 가 이미 채웠다 (여기서 또 더하면 하나가 아니라 둘이 찼다)
 			player.dews_changed.emit(player.dews)
 			text = "달빛 이슬이 하나 늘었다 (이제 %d개)" % player.max_dews
 		"max_hp":

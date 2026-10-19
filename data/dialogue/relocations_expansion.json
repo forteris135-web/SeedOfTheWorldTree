@@ -8,8 +8,8 @@
   ],
   "facing": -1,
   "texture": "res://art/enemies/enemy_sap_fisher_savable.png",
-  "art_scale": 0.17,
-  "art_faces_right": false
+  "art_scale": 0.22,
+  "art_faces_right": true
  },
  "miner_hidden": {
   "scene": "village_shrine",

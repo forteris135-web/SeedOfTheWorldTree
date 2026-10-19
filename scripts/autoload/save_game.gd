@@ -71,6 +71,7 @@ func load_game() -> String:
 	Progress.grasses = data.get("grasses", {})
 	Progress.rescued = data.get("rescued", {})
 	Progress.visited_rooms = _rooms_from_json(data.get("visited_rooms", {}))
+	MapOffsetFix.fix_saved(Progress.visited_rooms)   # 확장판이 옮긴 방들의 옛 지도 자리 바로잡기
 	Progress.ending = data.get("ending", "")
 	Progress.collected = data.get("collected", {})   # 옛 저장 파일에는 없다 → 빈 사전
 	Progress.dust = int(data.get("dust", 0))

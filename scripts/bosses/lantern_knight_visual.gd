@@ -28,6 +28,8 @@ const A_DOWN := 2.26         # 똑바로 아래
 const TRAIL_MIN_SPEED := 900.0
 const TRAIL_FULL_SPEED := 3200.0
 const TRAIL_LIFE := 0.16
+## 손이 창 밀기를 따라가는 비율 (1 = 창과 똑같이)
+const HANDS_FOLLOW := 0.75
 
 @export var spear_texture: Texture2D
 @export var hands_texture: Texture2D
@@ -435,8 +437,9 @@ func _process(delta: float) -> void:
 			follow = 6.0
 			wfollow = 6.0
 		LanternKnight.State.FALLEN, LanternKnight.State.PURIFIED:
-			target = Vector4(0.85 * f, 1.0, 1.0, 110.0)
-			wtarget = Vector3(1.35, 0.0, 100.0)
+			# 세로 110 · 창 1.35 는 다리·등불이 바닥선 아래로 130px 파묻혀 그려졌다 (2026-10-19 검수) → 덜 내리고 창은 덜 숙인다
+			target = Vector4(0.32 * f, 1.04, 0.88, -6.0)
+			wtarget = Vector3(0.35, 0.0, 20.0)
 			follow = 5.0
 			wfollow = 5.0
 	# 창 수평 맞춤: 앞으로 겨누는 자세(찌르기·3연격 첫 타·돌진·박힘)에서만
@@ -490,7 +493,10 @@ func _process(delta: float) -> void:
 	# 밀기도 같은 만큼 되돌려 화면에서 수평으로 민다 (몸이 크게 앞으로 기운 돌진에서 창이 아래로 밀려 땅에 박히지 않게)
 	var lean := tilt * (1.0 if fx >= 0.0 else -1.0)
 	_weapon_bone.rotation = _wpose.x + _wkick * 0.12 - lean * _level
-	_weapon_bone.position = (grip - _half()) + Vector2(_wpose.y, _wpose.z).rotated(-lean * _level)
+	var push := Vector2(_wpose.y, _wpose.z).rotated(-lean * _level)
+	_weapon_bone.position = (grip - _half()) + push
+	# 손도 창을 밀어낸 만큼 대부분 따라간다 (전엔 몸에 고정이라 창을 270px 내지르면 빈 주먹만 남았다 — 2026-10-19 검수)
+	_hands.position = (hands_origin - _half()) + push * HANDS_FOLLOW
 	_update_trail(delta)
 	_update_ghosts(delta, ghost)
 	_update_light(delta)
@@ -641,6 +647,7 @@ func _update_ghosts(delta: float, active: bool) -> void:
 			g.visible = true
 			g.global_transform = global_transform
 			(g.get_child(1) as Sprite2D).transform = _weapon_bone.transform * _weapon.transform
+			(g.get_child(2) as Sprite2D).position = _hands.position
 			g.modulate = Color(1.0, 0.85, 0.6, 0.32)
 			_ghosts.append(g)
 	else:

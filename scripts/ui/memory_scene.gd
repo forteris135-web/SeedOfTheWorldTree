@@ -38,11 +38,9 @@ func _ready() -> void:
 	# '지금까지 정화한 보스 수'로 정한다 (EXPANSION.md 5장): 1 A파트 / 2 A+B 앞 / 3 A+B 대부분 / 4 마지막 마디 전까지 / 뿌리지기 전체.
 	var pick := theme_for(_memory_id, purified_boss_count())
 	Music.play(pick[0], 2.5, true)
-	if pick[1] > 0.0:
-		# 길이 제한: 그 시간이 지나면 곡을 멈춘다 (실제 회상은 훨씬 짧아 보통 닿지 않는다)
-		get_tree().create_timer(pick[1]).timeout.connect(func() -> void:
-			if is_inside_tree() and not _done:
-				Music.stop(1.5))
+	# 정해진 길이(0 이면 곡 끝)까지 곡을 붙잡는다: 회상(27초 남짓)이 먼저 끝나도 곡은 방으로 돌아간 뒤에도 그 길이까지 이어지고,
+	# 그다음 지역곡으로 넘어간다 (2026-10-19 검수: 전엔 회상 끝에 곡을 꺼서 다섯 단계 모두 '첫 27초'만 들렸다)
+	Music.hold(pick[0], pick[1])
 	var tw := create_tween()
 	tw.tween_property(title, "modulate:a", 1.0, 1.2)
 	tw.tween_interval(1.2)
@@ -56,6 +54,8 @@ func _ready() -> void:
 
 ## 주제곡 전체(theme_full, 62bpm 80박)에서 마지막 마디(4박)를 뺀 길이(초).
 const FULL_BEFORE_LAST_BAR := (80.0 - 4.0) * 60.0 / 62.0
+## "A + B 앞": A(32박) 뒤 B 의 첫 세 마디(12박)까지 (theme_ab 54초 가운데 약 42.6초).
+const AB_FRONT := (32.0 + 12.0) * 60.0 / 62.0
 
 
 ## 정화한 보스 수: 깃발 boss_<이름>_defeated 가 선 것을 센다 (중간 보스 miniboss_* 는 아님). 지금 정화한 보스도 포함된다
@@ -76,8 +76,8 @@ static func theme_for(memory_id: String, bosses: int) -> Array:
 		return ["theme_full", 0.0]
 	match bosses:
 		0, 1: return ["theme_a", 0.0]
-		2: return ["theme_ab", 0.0]
-		3: return ["theme_ab", 0.0]   # "A + B 대부분" — 그 길이의 파일이 없어 theme_ab 로 (기획자 곡이 오면 theme_abx 를 둔다)
+		2: return ["theme_ab", AB_FRONT]   # "A + B 앞"
+		3: return ["theme_ab", 0.0]        # "A + B 대부분" — theme_ab 끝까지 (기획자 곡이 오면 theme_abx 를 둔다)
 		_: return ["theme_full", FULL_BEFORE_LAST_BAR]
 
 
@@ -140,5 +140,5 @@ func _finish() -> void:
 		tw.tween_interval(2.2)
 	tw.tween_callback(func() -> void:
 		Progress.pending_memory = ""
-		Music.stop(1.5)
+		# 곡은 끄지 않는다 — Music.hold 가 정해진 길이에서 지역곡으로 넘긴다
 		Game.go_to(Progress.memory_return_scene if Progress.memory_return_scene != "" else Game.FIRST_ROOM, 1.2, 1.4))

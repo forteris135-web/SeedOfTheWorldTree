@@ -11,6 +11,15 @@ var _active := 0
 var _current := ""
 var _tween: Tween
 var _latency := -1.0
+## 회상 주제곡 붙잡기 (hold): 이 곡이 이 재생 위치(초)에 닿을 때까지는 play_region 이 곡을 바꾸지 않고 기다린다.
+## 회상 장면은 27초 남짓이라, 정화한 보스 수에 따라 31 / 43 / 54 / 73.5 / 77초로 늘어나는 주제곡이 그 전에 끊겼다
+## (2026-10-19 검수) → 곡은 회상이 끝난 뒤 방에서도 정해진 길이까지 이어지고, 그다음 지역곡으로 넘어간다.
+var _hold_name := ""
+var _hold_until := 0.0
+var _pending_region := ""
+var _hold_t0 := 0.0       # 붙잡기 시작한 시각 (Time 초)
+var _hold_pos0 := 0.0     # 그때의 재생 위치
+const HOLD_FADE := 1.5
 
 
 func _ready() -> void:
@@ -60,8 +69,47 @@ func _apply_volume() -> void:
 	_players[_active].volume_db = _target_db() if _current != "" else -80.0
 
 
+## 지금 곡(name)을 재생 위치 until_sec 까지 붙잡는다. 그사이 play_region 은 미뤄졌다가 끝날 때 이어서 튼다.
+## (다른 곡을 play 하거나 stop 하면 붙잡기는 풀린다.)
+func hold(name: String, until_sec: float) -> void:
+	if name == "" or name != _current:
+		return
+	var length := current_length()
+	_hold_name = name
+	_hold_until = minf(until_sec, length) if (until_sec > 0.0 and length > 0.0) else (until_sec if until_sec > 0.0 else length)
+	_pending_region = ""
+	_hold_t0 = Time.get_ticks_msec() / 1000.0
+	_hold_pos0 = maxf(playback_time(name), 0.0)
+
+
+## 붙잡은 곡이 남았는가 (시험용)
+func is_holding() -> bool:
+	return _hold_name != ""
+
+
+func _process(_delta: float) -> void:
+	if _hold_name == "":
+		return
+	if _current != _hold_name:
+		_hold_name = ""
+		return
+	# 재생 위치 (소리 장치가 없는 화면 없는 시험에서는 위치가 멈춰 있을 수 있어 흐른 시간으로도 잰다)
+	var t := maxf(playback_time(_hold_name), _hold_pos0 + Time.get_ticks_msec() / 1000.0 - _hold_t0)
+	if t >= _hold_until - HOLD_FADE:
+		var next := _pending_region
+		_hold_name = ""
+		_pending_region = ""
+		if next != "":
+			_play_region_now(next, HOLD_FADE)
+		else:
+			play("", HOLD_FADE)
+
+
 ## 곡을 튼다. 같은 곡이면 그대로 둔다. fade 는 초.
 func play(name: String, fade := 1.5, from_start := false) -> void:
+	# 다른 곳에서 곡을 직접 고르면(보스곡·타이틀·엔딩·정적) 회상 곡 붙잡기는 끝난다
+	_hold_name = ""
+	_pending_region = ""
 	if name == _current and not from_start:
 		return
 	var stream: AudioStream = load(DIR + name + ".wav") if name != "" else null
@@ -92,10 +140,17 @@ func stop(fade := 1.0) -> void:
 	play("", fade)
 
 
-## 지역 배경음악
+## 지역 배경음악. 회상 주제곡을 붙잡고 있으면 그 곡이 끝날 때까지 미룬다.
 func play_region(region: String) -> void:
+	if _hold_name != "" and _hold_name == _current:
+		_pending_region = region
+		return
+	_play_region_now(region, 2.0)
+
+
+func _play_region_now(region: String, fade: float) -> void:
 	var name := "ambient_" + region
 	if not ResourceLoader.exists(DIR + name + ".wav"):
 		# 확장 지역의 곡이 아직 없으면 가까운 지역곡으로 (수액의 호수 → 심연, 잠긴 채굴장 → 채굴장)
 		name = "ambient_" + {"sap_lake": "abyss", "flooded_mine": "mine"}.get(region, "canopy")
-	play(name, 2.0)
+	play(name, fade)

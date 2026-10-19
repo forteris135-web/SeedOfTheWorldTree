@@ -363,13 +363,16 @@ func _probe_stat_logic() -> void:
 	_check(StatMenu.can_buy(by["heal"]) == "no_dust", "can_buy 도 'no_dust'")
 	Progress.add_dust(10000)
 	var dews0 := _player.max_dews
+	var cur_dews0 := _player.dews
 	var spent := 0
 	for i in 3:
 		spent += StatMenu.cost_of(by["dews"], i)
 		r = StatMenu.buy(by["dews"], _player)
 		_check(r == "", "이슬 %d단계 구매" % (i + 1))
 	_check(spent == 600 and Progress.dust == 10000 - 600, "이슬 3단계 비용 합 600 (쓴 %d, 남은 %d)" % [spent, Progress.dust])
-	_check(_player.max_dews == dews0 + 3, "소녀 이슬 최대 %d → %d (지금 %d — 쉬는 중이 아니라 채우지 않는다, 상태 %s)" % [dews0, _player.max_dews, _player.dews, _player.state_name()])
+	_check(_player.max_dews == dews0 + 3, "소녀 이슬 최대 %d → %d (상태 %s)" % [dews0, _player.max_dews, _player.state_name()])
+	# 늘어난 칸은 찬 채로 생긴다 (체력처럼; 방을 옮겨 소녀가 새로 만들어져도 같다 — 2026-10-19 검수: 산 이슬이 빈 칸이 됐다)
+	_check(_player.dews == cur_dews0 + 3, "늘어난 이슬 칸은 차 있다: %d → %d" % [cur_dews0, _player.dews])
 	r = StatMenu.buy(by["dews"], _player)
 	_check(r == "maxed" and StatMenu.level_of("dews") == 3, "최대 단계면 거절 'maxed' (%s)" % r)
 	var before := Progress.dust

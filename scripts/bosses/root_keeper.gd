@@ -35,11 +35,17 @@ signal fallen
 signal purified
 signal telegraph(kind: String)
 
-@export var max_hp := 1400.0
-@export var max_poise := 200.0
+## 체력: 최종 보스라 새(1800)·기사(1650)보다 많게 (2026-10-19 검수: 1400 으로 남아 가장 빨리 쓰러졌다 — 기사와 같은 ×1.5)
+@export var max_hp := 2100.0
+## 흐트러짐 한도·무너짐 길이 (200 / 4.0초면 공격 버튼만 눌러도 무너짐이 이어졌다 — '샌드백')
+@export var max_poise := 320.0
 @export var poise_decay := 7.0
-@export var broken_time := 4.0
+@export var broken_time := 3.0
 @export var broken_damage_multiplier := 1.6
+## 예비동작·타격 중에 받는 흐트러짐 배수 (슈퍼아머)
+@export var attack_poise_multiplier := 0.5
+## 무너졌다 일어선 뒤 이 시간(초) 동안은 흐트러짐이 쌓이지 않는다 (저스트 가드는 예외)
+@export var poise_immune_after_broken := 2.5
 @export var walk_speed := 140.0
 @export var gravity := 2600.0
 ## 공격 피해 (기획서: 14~32)
@@ -57,7 +63,7 @@ signal telegraph(kind: String)
 @export var hand_hold := 0.7
 
 var state: State = State.WAIT
-var hp := 1400.0
+var hp := 2100.0
 var poise := 0.0
 var phase := 1
 var facing := -1
@@ -95,6 +101,7 @@ var _events: Array = []
 var _clock := 0.0
 var _timer := 0.0
 var _poise_hold := 0.0
+var _poise_immune := 0.0
 var _flash := 0.0
 var _registered := false
 var _home := Vector2.ZERO
@@ -131,6 +138,7 @@ func reset_fight() -> void:
 	_unregister()
 	hp = max_hp
 	poise = 0.0
+	_poise_immune = 0.0
 	phase = 1
 	visible = false
 	velocity = Vector2.ZERO
@@ -152,6 +160,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_flash = maxf(_flash - delta * 6.0, 0.0)
 	_poise_hold = maxf(_poise_hold - delta, 0.0)
+	_poise_immune = maxf(_poise_immune - delta, 0.0)
 	if _poise_hold <= 0.0 and poise > 0.0 and state not in [State.BROKEN, State.FALLEN, State.RISE]:
 		poise = maxf(poise - poise_decay * delta, 0.0)
 		poise_changed.emit(poise, max_poise)
@@ -313,6 +322,7 @@ func _physics_process(delta: float) -> void:
 			if _timer <= 0.0:
 				poise = 0.0
 				poise_changed.emit(poise, max_poise)
+				_poise_immune = poise_immune_after_broken
 				_set_state(State.STANCE)
 				_timer = 0.5
 		State.FALLEN:
@@ -413,6 +423,12 @@ func _tick_events() -> void:
 ## 거리별 후보에서 직전 패턴을 빼고 무게로 하나 고른 뒤, 확률로 연계를 예약한다.
 func _choose(dist: float) -> void:
 	var cands: Array = []   # [State, weight]
+	# 공격을 고르는 순간에는 데드존 없이 소녀 쪽으로 돌아선다 (몸 안·등 뒤에 붙어 있으면 돌지 않아 안전지대가 됐다)
+	if player and absf(player.global_position.x - global_position.x) > 4.0:
+		var want_face := 1 if player.global_position.x > global_position.x else -1
+		if want_face != facing:
+			facing = want_face
+			_face_hold = face_hold
 	if dist < 330.0:
 		cands = [[State.SWEEP, 50], [State.HAND, 20], [State.RING, 15], [State.SPIKES, 10]]
 		if phase == 2:
@@ -662,7 +678,10 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 	var dmg := hit.damage * (broken_damage_multiplier if state == State.BROKEN else 1.0)
 	hp = maxf(hp - dmg, 0.0)
 	hp_changed.emit(hp, max_hp)
-	_add_poise(hit.poise)
+	# 슈퍼아머·무너짐 뒤 면역은 보통 공격에만 (저스트 가드로 되받은 구슬 등은 기술의 보상이라 그대로)
+	if _poise_immune <= 0.0 or hit.reflected:
+		var pm := attack_poise_multiplier if (not hit.reflected and state in ATTACK_STATES and attack_phase in ["startup", "active"]) else 1.0
+		_add_poise(hit.poise * pm)
 	if hp <= 0.0:
 		_fall()
 		return "hit"
