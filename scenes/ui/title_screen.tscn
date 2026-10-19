@@ -172,6 +172,22 @@ text = "새로 시작"
 flat = true
 alignment = 2
 
+[node name="BossRush" type="Button" parent="Layout/Menu"]
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 32
+text = "보스 러시"
+flat = true
+alignment = 2
+
+[node name="MusicRoom" type="Button" parent="Layout/Menu"]
+layout_mode = 2
+focus_mode = 0
+theme_override_font_sizes/font_size = 32
+text = "음악 감상"
+flat = true
+alignment = 2
+
 [node name="Settings" type="Button" parent="Layout/Menu"]
 layout_mode = 2
 focus_mode = 0

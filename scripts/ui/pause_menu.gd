@@ -3,6 +3,7 @@ class_name PauseMenu
 ## 일시정지와 설정. 메뉴 버튼(Esc / P / 옵션)으로 연다.
 ## 타이틀 화면의 '설정'도 이 화면을 쓴다: open(true) = 설정만 (계속하기·저장·불러오기·타이틀로 없이, 게임을 멈추지 않음).
 ## 음량 세 가지(음악·효과음·전체)는 각자 자기 소리 버스만 바꾼다 (Settings → AudioBuses). 0 은 끔.
+## 보스 러시 중에는 저장·불러오기·타이틀로 대신 '포기하기' 하나 (BossRush.give_up → 결과 화면 → 타이틀).
 
 ## 좌우로 값을 바꾸는 줄 (터치: 값 칸의 왼쪽 반 = 줄이기, 오른쪽 반 = 키우기)
 const SLIDER_KEYS := ["music_volume", "sfx_volume", "master_volume", "touch_scale"]
@@ -45,6 +46,8 @@ func open(settings_only := false) -> void:
 	]
 	if settings_only:
 		_items = settings + [{"key": "resume", "label": "돌아가기"}]
+	elif BossRush.active:
+		_items = [{"key": "resume", "label": "계속하기"}] + settings + [{"key": "give_up", "label": BossRush.text("give_up")}]
 	else:
 		_items = [{"key": "resume", "label": "계속하기"}] + settings + [
 			{"key": "save", "label": "지금 저장하기"},
@@ -72,7 +75,7 @@ func _set_hud_visible(on: bool) -> void:
 	var scene := get_tree().current_scene
 	if scene == null:
 		return
-	for n in ["CombatHUD", "TouchControls", "BossHUD"]:
+	for n in ["CombatHUD", "TouchControls", "BossHUD", "BossRushHUD"]:
 		var h := scene.get_node_or_null(n)
 		if h:
 			h.visible = on
@@ -144,6 +147,9 @@ func _activate() -> void:
 		"title":
 			close()
 			Game.go_to(Game.TITLE_SCENE, 0.6, 0.8)
+		"give_up":
+			close()
+			BossRush.give_up()
 		"save":
 			var where := SaveGame.save_now()
 			Sfx.play("select")
@@ -205,6 +211,8 @@ func _value_text(key: String) -> String:
 		"load":
 			var at := SaveGame.saved_at_text()
 			return ("저장: " + at) if at != "" else "저장 없음"
+		"give_up":
+			return BossRush.text("give_up_value")
 	return ""
 
 

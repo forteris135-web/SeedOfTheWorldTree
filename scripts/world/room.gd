@@ -179,8 +179,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			add_child(_pause)
 		if not _pause.is_open():
 			_pause.open()
-	elif event.is_action_pressed("map"):
-		open_map()
+	elif event.is_action_pressed("map") and not BossRush.active:
+		open_map()   # 보스 러시 중에는 지도를 열지 않는다
 
 
 func _apply_room_settings() -> void:

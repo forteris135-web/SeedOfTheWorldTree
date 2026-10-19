@@ -1,7 +1,9 @@
 extends Control
+class_name TitleScreen
 ## 타이틀 화면. 타이틀 일러스트 위로 천천히 움직이는 카메라, 떠다니는 빛, 제목과 메뉴.
 ## 음악: 클리어 전 title, 엔딩을 본 뒤 selenia_humming (Music.title_track). 클리어 후에는 그림·부제가 마지막으로 본 엔딩에 따라 바뀐다
 ## (ENDINGS.md 5장: 희생 → title_after_sacrifice, 되돌림 → title_after_return, 제3의 길 → title_after_true).
+## 엔딩을 본 뒤에만 메뉴에 '보스 러시'(BossRush)와 '음악 감상'(MusicRoom)이 생긴다 (2026-10-20 기획자 요청).
 
 ## 클리어 전 타이틀 그림
 const DEFAULT_ART := "res://art/characters/title_selenia.png"
@@ -18,11 +20,26 @@ var _time := 0.0
 var _started := false
 ## 설정 화면 (일시정지 메뉴의 설정 부분을 그대로 쓴다: 음량·터치 크기·키 바꾸기 등)
 var _settings: PauseMenu
+## 음악 감상 (엔딩을 본 뒤)
+var _music_room: MusicRoom
+var _cleared := false
 
 
 func _ready() -> void:
+	if BossRush.active:
+		BossRush.restore()   # 혹시 러시가 끝나지 않은 채 왔으면 떼어 둔 진행부터 되돌린다
+	var seen := cleared_state()
+	_cleared = seen["cleared"]
+	var gone := false
 	if not SaveGame.has_save():
 		menu.get_node("Continue").queue_free()
+		gone = true
+	if not _cleared:
+		# 보스 러시·음악 감상은 엔딩을 본 뒤에만 (허밍은 엔딩 전에는 들리지 않는다)
+		menu.get_node("BossRush").queue_free()
+		menu.get_node("MusicRoom").queue_free()
+		gone = true
+	if gone:
 		await get_tree().process_frame
 	for c in menu.get_children():
 		if c is Button:
@@ -30,7 +47,6 @@ func _ready() -> void:
 			c.pressed.connect(_on_item_pressed.bind(c))
 			c.mouse_entered.connect(func() -> void: _select(_items.find(c)))
 	_select(0)
-	var seen := cleared_state()
 	if seen["cleared"]:
 		# 클리어 후: 마지막으로 본 엔딩의 타이틀 그림과 부제 (ENDINGS.md 5장 — 그림·부제는 endings*.json 의 title_image / title_subtitle)
 		var look := title_look(seen)
@@ -38,7 +54,7 @@ func _ready() -> void:
 		if look["subtitle"] != "":
 			subtitle.text = look["subtitle"]
 	# 타이틀 곡: 클리어 전 title, 엔딩을 본 뒤 셀레니아의 허밍(엔딩에선 한 번만 흐르는 곡을 여기선 반복) — ENDINGS.md 5장
-	Music.play(Music.title_track(seen["cleared"]), {"fade": 2.0, "loop": true})
+	_play_title_music(2.0)
 	InputDevice.device_changed.connect(func(_k): _refresh_hint())
 	_refresh_hint()
 	# 느리게 다가가는 카메라
@@ -104,6 +120,11 @@ static func title_look(seen: Dictionary) -> Dictionary:
 	return {"image": img, "subtitle": str(e.get("title_subtitle", ""))}
 
 
+## 타이틀 곡을 튼다 (처음, 그리고 음악 감상에서 돌아올 때)
+func _play_title_music(fade: float) -> void:
+	Music.play(Music.title_track(_cleared), {"fade": fade, "loop": true})
+
+
 func _process(delta: float) -> void:
 	_time += delta
 	# 선택된 항목이 은은하게 숨 쉰다
@@ -119,7 +140,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _started or settings_open():
+	if _started or settings_open() or music_room_open():
 		return
 	if event.is_action_pressed("move_down") or event.is_action_pressed("ui_down"):
 		_select((_index + 1) % _items.size())
@@ -140,13 +161,18 @@ func _on_item_pressed(b: Button) -> void:
 
 
 func _activate(i: int) -> void:
-	if _started or i < 0 or settings_open():
+	if _started or i < 0 or settings_open() or music_room_open():
 		return
 	var b := _items[i]
 	Sfx.play("select")
 	match b.name:
 		"Settings":
 			open_settings()
+		"BossRush":
+			_started = true
+			BossRush.start()
+		"MusicRoom":
+			open_music_room()
 		"Continue":
 			_started = true
 			var scene := SaveGame.load_game()
@@ -171,6 +197,36 @@ func open_settings() -> PauseMenu:
 
 func settings_open() -> bool:
 	return _settings != null and is_instance_valid(_settings) and _settings.is_open()
+
+
+## 음악 감상을 연다 (시험도 부른다). 닫으면 타이틀 곡으로 돌아간다.
+func open_music_room() -> MusicRoom:
+	if _music_room == null or not is_instance_valid(_music_room):
+		_music_room = MusicRoom.new()
+		add_child(_music_room)
+		_music_room.closed.connect(_play_title_music.bind(1.5))
+	_music_room.open()
+	return _music_room
+
+
+func music_room_open() -> bool:
+	return _music_room != null and is_instance_valid(_music_room) and _music_room.is_open()
+
+
+## 메뉴에 그 항목이 있는가 (시험용: "BossRush", "MusicRoom" …)
+func has_item(item_name: String) -> bool:
+	for b in _items:
+		if is_instance_valid(b) and b.name == item_name:
+			return true
+	return false
+
+
+## 메뉴 항목을 이름으로 고른다 (시험용)
+func activate_item(item_name: String) -> void:
+	for i in _items.size():
+		if _items[i].name == item_name:
+			_activate(i)
+			return
 
 
 func _refresh_hint() -> void:

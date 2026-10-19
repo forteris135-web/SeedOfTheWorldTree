@@ -36,8 +36,8 @@ func _ready() -> void:
 ## 정화의 손길: 펌프가 빛으로 흩어지는 그 자리에 멈춘 펌프가 나타나고 싹이 튼다 (BossRoom 이 1.8초 뒤 회상으로 넘어간다).
 func _on_pump_stopped() -> void:
 	var remains := get_node_or_null("PumpRemains")
-	if remains == null:
-		return
+	if remains == null or _rush:
+		return   # 보스 러시: 멈춘 펌프도 남기지 않는다 (Progress 메타를 쓰지 않게)
 	var flip := 1.0 if int(boss.facing) <= 0 else -1.0   # 그림 원본은 왼쪽을 본다
 	remains.global_position = Vector2(boss.global_position.x, remains.global_position.y)
 	remains.scale.x = flip
