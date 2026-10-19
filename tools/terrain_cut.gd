@@ -15,7 +15,10 @@ extends SceneTree
 ##            walk 를 주면 자동으로 잰 '걷는 구간' 대신 그 값(조각 안 x, 원래 크기 px)을 쓴다.
 ##            clip 을 주면 고른 덩어리의 상자를 그 사각형(시트 px) 안으로 줄인다 (붙은 옆 그림을 곧게 잘라 낼 때 — 다각형 자르기는 없다).
 ##            atlas: false 면 atlas 에 넣지 않는다 (몸통 결 재료로만 쓰는 큰 그림).
-##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright}
+##            top_line 을 주면 자동으로 잰 '발 딛는 선' 대신 그 꺾은선을 쓴다: [[x, y], …] (시트 px — 격자 미리보기에서 읽은 값).
+##              난간·기둥·매단 등불처럼 발판 위로 솟은 것이 빽빽한 윗면으로 잡히는 조각(다리·발코니)에 쓴다.
+##              걷는 구간은 walk 를 주지 않으면 꺾은선의 처음~끝 x. (가운데가 처진 흔들다리도 이 선을 펴서 평평한 발판에 맞춘다)
+##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright, contrast?}
 ##            from 조각들에서 나무껍질 색(hue·sat·val 범위)만 있는 작은 네모(patch)를 찾아 이어 붙여 size×size 무늬를 만든다.
 ##   exports: [{name, src, sheet?, out:"res://...png", max:긴 변 px}] — 지형 밖에서 쓰는 단독 그림 (기록물 양피지 등)
 ##   extras : 금 간 벽처럼 조각을 가공한 그림 (cracked: 틈 빛을 끈 그림 / 틈 빛만 / 원래 그림)
@@ -40,6 +43,8 @@ var _spec := {}
 var _sheets := {}        # 경로 → {img, lab, w, h}
 var _pieces := {}        # 이름 → {img: Image, meta: Dictionary}
 var _order: Array = []
+var _last_origin := Vector2.ZERO   # 마지막으로 자른 조각의 왼쪽 위 (시트 px — top_line 을 조각 px 로 옮길 때)
+var _last_scale := 1.0
 
 
 func _init() -> void:
@@ -259,8 +264,11 @@ func _cut(p: Dictionary, cut: Dictionary) -> Image:
 				var o := (y * cw + x) * 4
 				out[o] = src[q * 4]; out[o + 1] = src[q * 4 + 1]; out[o + 2] = src[q * 4 + 2]; out[o + 3] = src[q * 4 + 3]
 	var piece := Image.create_from_data(cw, ch, false, Image.FORMAT_RGBA8, out)
+	var used := piece.get_used_rect()
 	piece = _trim(piece)
 	var s := float(p.get("scale", 1.0))
+	_last_origin = Vector2(minx + maxi(used.position.x, 0), miny + maxi(used.position.y, 0))
+	_last_scale = s
 	if s < 0.999:
 		piece = _resize(piece, maxi(1, roundi(piece.get_width() * s)), maxi(1, roundi(piece.get_height() * s)))
 	return piece
@@ -373,6 +381,8 @@ func _measure(img: Image, p: Dictionary) -> Dictionary:
 				c += 1
 		top.append(roundi(s / c))
 	var meta := {"role": p.get("role", ""), "size": [w, h], "top": top}
+	if p.has("top_line"):
+		return _measure_line(p, meta, d, w, h, n)
 	if not (str(p.get("role", "")) in WALK_ROLES) and not p.has("walk"):
 		return meta
 	var mid: Array = []
@@ -444,6 +454,57 @@ func _measure(img: Image, p: Dictionary) -> Dictionary:
 			th.append(thick[x])
 	th.sort()
 	meta["depth"] = th[th.size() / 2] if not th.is_empty() else 0
+	return meta
+
+
+## top_line(시트 px 꺾은선)으로 발 딛는 선을 정한다 — 난간·등불이 솟은 조각용. 조각 px 로 옮겨 STEP 마다 이어 칠하고,
+## 걷는 구간(walk, 없으면 꺾은선 처음~끝)·발 선 높이(walk_y)·흔들림·두께(depth: 선 아래로 이어진 불투명 높이의 중앙값)를 적는다.
+func _measure_line(p: Dictionary, meta: Dictionary, d: PackedByteArray, w: int, h: int, n: int) -> Dictionary:
+	var pts: Array = []
+	for q in p["top_line"]:
+		pts.append(Vector2((float(q[0]) - _last_origin.x) * _last_scale, (float(q[1]) - _last_origin.y) * _last_scale))
+	pts.sort_custom(func(a, b): return a.x < b.x)
+	if pts.is_empty():
+		return meta
+	var top: Array = []
+	for i in n:
+		var cx := float(mini(i * STEP, w - 1))
+		var y: float = pts[0].y
+		if cx >= pts[-1].x:
+			y = pts[-1].y
+		else:
+			for k in range(1, pts.size()):
+				if cx <= pts[k].x:
+					var a: Vector2 = pts[k - 1]
+					var b: Vector2 = pts[k]
+					y = lerpf(a.y, b.y, clampf((cx - a.x) / maxf(b.x - a.x, 0.001), 0.0, 1.0))
+					break
+		top.append(clampi(roundi(y), 0, h - 1))
+	meta["top"] = top
+	var walk := [clampi(roundi(pts[0].x), 0, w - 1), clampi(roundi(pts[-1].x), 0, w - 1)]
+	if p.has("walk"):
+		walk = [int(p["walk"][0]), int(p["walk"][1])]
+	var span: Array = []
+	var th: Array = []
+	for i in range(int(walk[0] / STEP), int(walk[1] / STEP) + 1):
+		if i >= n:
+			break
+		span.append(top[i])
+		var x := mini(i * STEP, w - 1)
+		var cnt := 0
+		for y in range(int(top[i]), h):
+			if d[(y * w + x) * 4 + 3] > 127:
+				cnt += 1
+			elif cnt > 0:
+				break
+		th.append(cnt)
+	span.sort()
+	th.sort()
+	meta["walk"] = walk
+	meta["walk_y"] = span[span.size() / 2] if not span.is_empty() else 0
+	meta["wobble"] = (span[-1] - span[0]) if not span.is_empty() else 0
+	meta["depth"] = th[th.size() / 2] if not th.is_empty() else 0
+	meta["line"] = true
 	return meta
 
 
@@ -623,7 +684,27 @@ func _make_fill(f: Dictionary) -> Image:
 			for ch in 3:
 				od[q * 4 + ch] = mini(255, int(od[q * 4 + ch] * br))
 	out.set_data(size, size, false, Image.FORMAT_RGBA8, od)
+	# 대비 (contrast): 덮어 붙이며 흐려진 결을 또렷하게 — 평균 밝기는 그대로 두고 밝기 차이를 그만큼 키운다 (없으면 그대로)
+	if f.has("contrast"):
+		_contrast(out, float(f["contrast"]))
 	return out
+
+
+## 평균 밝기 둘레로 밝기 차이를 k 배 (색 비율은 유지).
+static func _contrast(img: Image, k: float) -> void:
+	var m := _lum_stats([img]).x
+	var d := img.get_data()
+	for q in d.size() / 4:
+		var r := d[q * 4] / 255.0
+		var g := d[q * 4 + 1] / 255.0
+		var b := d[q * 4 + 2] / 255.0
+		var l := 0.299 * r + 0.587 * g + 0.114 * b
+		var nl := clampf(m + (l - m) * k, 0.0, 1.0)
+		var s := nl / maxf(l, 0.004)
+		d[q * 4] = int(clampf(r * s, 0.0, 1.0) * 255.0)
+		d[q * 4 + 1] = int(clampf(g * s, 0.0, 1.0) * 255.0)
+		d[q * 4 + 2] = int(clampf(b * s, 0.0, 1.0) * 255.0)
+	img.set_data(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8, d)
 
 
 static func _pick_patch(cands: Array, rng: RandomNumberGenerator) -> PackedByteArray:

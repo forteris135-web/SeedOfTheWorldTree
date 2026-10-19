@@ -11,6 +11,7 @@ extends RefCounted
 ##   ground : 큰 바닥·덩어리 윗면에 이어 까는 띠 (윗면에서 band px 아래까지만 그리고 fade px 동안 몸통 결로 녹아든다).
 ##   hang   : 천장·덩어리 아랫면·드러난 옆면에 매다는 장식 (덩굴·꽃).
 ##   bush   : 윗면에 가끔 얹는 작은 덤불.
+##   prop   : 윗면에 띄엄띄엄 세우는 장식 (마을의 난간·등불 줄 토막 — 있는 지역만).
 ##   thorn  : 가시 (Thorns). cracked : 금 간 벽 (SecretWall·SecretCeiling·CrackedWall).
 
 const DATA_DIR := "res://data/terrain/"
@@ -106,6 +107,18 @@ func _load(r: String, d: Dictionary) -> bool:
 				list.append(n)
 		roles[role] = list
 	return true
+
+
+## 방마다 다른 정화 후 기준 색 (data 의 "room_tint": {방 id: [r, g, b]} — 배경이 밤처럼 어두운 방은 지형을 조금 밝게,
+## 낮처럼 환한 방은 조금 어둡게 해 앞 지형이 배경과 갈라져 읽히게). 없으면 tint.
+func tint_for(room: Node) -> Color:
+	var rt: Dictionary = data.get("room_tint", {})
+	if room != null and not rt.is_empty() and "room_id" in room:
+		var id := str(room.get("room_id"))
+		if rt.has(id):
+			var t: Array = rt[id]
+			return Color(float(t[0]), float(t[1]), float(t[2]))
+	return tint
 
 
 func has_role(role: String) -> bool:

@@ -191,8 +191,8 @@ func triangle_count() -> int:
 func _begin(seed_extra: int) -> void:
 	_rng.seed = int(host.global_position.x * 7.0 + host.global_position.y * 13.0) + seed_extra
 	_clip_phase = fmod(host.global_position.x * 0.013 + host.global_position.y * 0.007, TAU)
-	_mod = skin.tint
 	var room := TerrainStyle.room_of(host)
+	_mod = skin.tint_for(room)
 	_has_room = room != null and "bounds" in room
 	if _has_room:
 		var b: Rect2 = room.get("bounds")
@@ -558,7 +558,34 @@ func branch_run(xa: float, xb: float, y_at: Callable, left_free: bool, right_fre
 		if not skin.has_role(role):
 			return
 	var avoid := _stacked_picks(w)
-	if left_free and right_free:
+	# 방 파일에서 이 발판의 조각을 정해 둘 수 있다 (노드 metadata "terrain_piece" = 조각 이름 — 예: 마을의 흔들다리).
+	# 한 조각으로 맞으면 그것, 아니면 그 조각으로 이어 붙인다. 충돌은 그대로 (그림만 고른다).
+	var forced := str(host.get_meta("terrain_piece", "")) if host != null and host.has_meta("terrain_piece") else ""
+	if forced != "" and skin.pieces.has(forced):
+		if left_free and right_free:
+			var ff := _fit_single([forced], w, thick, [])
+			if not ff.is_empty():
+				var fk: float = ff["k"]
+				var fwalk := skin.walk_of(forced)
+				var fsize := skin.size_of(forced)
+				var fflip: bool = ff["flip"]
+				var fx0 := xa - fwalk.x * fk
+				var fx1 := xa + (fsize.x - fwalk.x) * fk
+				if fflip:
+					fx0 = xb - (fsize.x - fwalk.x) * fk
+					fx1 = xb + fwalk.x * fk
+				piece(forced, 0.0, fsize.x, fx0, fx1, y_at, ff["u"] * skin.scale, fflip, {"clip_l": xa, "clip_r": xb})
+				pick = forced
+				pick_flip = fflip
+				pick_w = w
+				return
+		_chain([forced], xa, xb, y_at, left_free, right_free, thick, tuck_l, tuck_r, [])
+		pick_w = w
+		return
+	# 끝이 이웃에 덮인 발판도 한 조각으로 맞출지 (params.<역할>.fit_tucked — 기본 false: 이어 붙이기).
+	# 켜면 덮인 끝 밖의 그림(둥근 끝·기둥)은 이웃 속에서 서서히 사라진다 (흔들다리처럼 이어 붙이면 어색한 조각용).
+	var fit_tucked: bool = (not left_free or not right_free) and bool(skin.param(role, "fit_tucked", false))
+	if (left_free and right_free) or fit_tucked:
 		var fit := _fit_single(skin.list(role), w, thick, avoid)
 		if not fit.is_empty():
 			var name: String = fit["name"]
@@ -571,7 +598,16 @@ func branch_run(xa: float, xb: float, y_at: Callable, left_free: bool, right_fre
 			if flip:
 				x0 = xb - (size.x - walk.x) * k
 				x1 = xb + walk.x * k
-			piece(name, 0.0, size.x, x0, x1, y_at, fit["u"] * skin.scale, flip, {"clip_l": xa, "clip_r": xb})
+			var opts := {}
+			if left_free:
+				opts["clip_l"] = xa
+			else:
+				opts["fade_l"] = maxf(xa - x0, 0.0) + TUCK
+			if right_free:
+				opts["clip_r"] = xb
+			else:
+				opts["fade_r"] = maxf(x1 - xb, 0.0) + TUCK
+			piece(name, 0.0, size.x, x0, x1, y_at, fit["u"] * skin.scale, flip, opts)
 			pick = name
 			pick_flip = flip
 			pick_w = w
@@ -982,6 +1018,9 @@ func _ground_run(a: Vector2, b: Vector2, cap_l: bool, cap_r: bool, cont_l: bool,
 				pn = cand
 				u0 = _rng.randf_range(cw.x + 10.0, cw.y - 10.0 - len_u)
 		piece(pn, u0, u0 + len_u, x0, x1, y_at, k, _rng.randf() < 0.5, opts)
+	# 세워 두는 장식(난간·등불 줄 기둥 — prop 역할이 있는 지역만): 띠 위에 세우고 밑동은 이끼 속으로 서서히 사라진다
+	if skin.has_role("prop"):
+		_props(a, b, y_at, cap_l, cap_r)
 	# 가끔 작은 덤불
 	if skin.has_role("bush"):
 		var bushes := skin.list("bush")
@@ -994,6 +1033,74 @@ func _ground_run(a: Vector2, b: Vector2, cap_l: bool, cap_r: bool, cont_l: bool,
 				var y: float = y_at.call(bx) - bsz.y * bk * 0.62
 				piece(bn, 0.0, bsz.x, bx - bsz.x * bk * 0.5, bx + bsz.x * bk * 0.5, func(_x): return y, bk, _rng.randf() < 0.5, {"y_off": 0.0})
 			bx += _rng.randf_range(260.0, 620.0)
+
+
+## 드러난 윗면 a→b 에 세워 두는 장식(prop 역할: 난간 토막·등불 줄 기둥 등)을 띄엄띄엄 세운다. 그림만 — 소녀 뒤에 그려진다.
+## params.prop: gap_min / gap_max (장식 사이 빈 길이), edge (절벽 끝에서 떨어질 거리), sink (밑동을 발 선 아래로 묻는 px — 그 둘레에서 서서히 사라진다),
+##              min_len (이보다 짧은 윗면에는 안 세움), clear (포탈·달빛풀·기록물·NPC 자리 둘레 비울 반폭), size ([최소, 최대] 배율)
+## 방의 Exits·Interactables·Markers 자리 둘레는 비운다 (상호작용 물체가 장식에 묻히지 않게).
+func _props(a: Vector2, b: Vector2, y_at: Callable, cap_l: bool, cap_r: bool) -> void:
+	var names := skin.list("prop")
+	if names.is_empty() or b.x - a.x < float(skin.param("prop", "min_len", 600.0)):
+		return
+	var gap_min := float(skin.param("prop", "gap_min", 520.0))
+	var gap_max := float(skin.param("prop", "gap_max", 1000.0))
+	var edge := float(skin.param("prop", "edge", 160.0))
+	var sink := float(skin.param("prop", "sink", 12.0))
+	var clear := float(skin.param("prop", "clear", 150.0))
+	var sz: Array = skin.param("prop", "size", [0.9, 1.05])
+	var busy := _busy_spots(a.y, clear)
+	var lo := a.x + (edge if cap_l else 70.0)
+	var hi := b.x - (edge if cap_r else 70.0)
+	var x := lo + _rng.randf_range(0.0, gap_min * 0.7)
+	var last := ""
+	var guard := 0
+	while x < hi and guard < 64:
+		guard += 1
+		var n: String = names[_rng.randi_range(0, names.size() - 1)]
+		if n == last and names.size() > 1:
+			n = names[(names.find(n) + 1) % names.size()]
+		var ps := skin.size_of(n)
+		var k := skin.scale * _rng.randf_range(float(sz[0]), float(sz[1]))
+		var w := ps.x * k
+		var x0 := x
+		var x1 := x + w
+		if x1 > hi:
+			break
+		var blocked := false
+		for r in busy:
+			if x1 > r.x and x0 < r.y:
+				blocked = true
+				x = r.y + 10.0
+				break
+		if blocked:
+			continue
+		var cx := (x0 + x1) * 0.5
+		var y_top: float = y_at.call(cx) - ps.y * k + sink
+		# 밑동(잘린 아랫선)은 발 선 둘레에서 서서히 사라져 이끼에 묻힌 것처럼 (band: 조각 px)
+		var fade_px := sink * 1.6 / k
+		piece(n, 0.0, ps.x, x0, x1, func(_x): return y_top, k, _rng.randf() < 0.5, {"y_off": 0.0, "band": maxf(ps.y - fade_px, 1.0), "band_fade": fade_px})
+		last = n
+		x = x1 + _rng.randf_range(gap_min, gap_max)
+
+
+## 상호작용 물체 자리(노드 기준 가로 구간 [x0, x1] 배열): 방의 Exits·Interactables·Markers 자식 중 윗면 y 근처(위 260·아래 60)에 있는 것.
+func _busy_spots(top_y: float, half: float) -> Array:
+	var out := []
+	var room := TerrainStyle.room_of(host)
+	if room == null:
+		return out
+	for group in ["Exits", "Interactables", "Markers"]:
+		var g := room.get_node_or_null(group)
+		if g == null:
+			continue
+		for c in g.get_children():
+			if not (c is Node2D):
+				continue
+			var lp: Vector2 = (c as Node2D).global_position - host.global_position
+			if lp.y > top_y - 260.0 and lp.y < top_y + 60.0:
+				out.append(Vector2(lp.x - half, lp.x + half))
+	return out
 
 
 ## 드러난 아랫면(왼→오)에 매단 장식을 늘어놓는다.
