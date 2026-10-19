@@ -7,8 +7,9 @@ extends Node2D
 ##         --seq idle,walk,ram,slam,hit,broken,dead,dead_back,purify [--every 0.08] [--zoom 2.5] [--crop 0.55] [--dist 190]
 ##   동작: idle / walk / ram(소녀 190px) / slam(90px) / shoot(420px) / whip(280px) / attack(소녀 dist px, 기본 150) /
 ##         hit / broken / dead(뒤에서 맞아 앞으로) / dead_back(앞에서 맞아 뒤로) / purify(무너진 뒤 정화 — 구원형이면 구원) / kneel(구원형 무릎)
+##   --cam_dx 80: 카메라를 몹에서 이만큼 앞에 (기본: 소녀와의 가운데)
 ##   결과: screenshots/film_<씬>_<동작>.png (칸 위 글자 없음, 왼→오 시간 순서) + _mid.png (가운데 칸 크게)
-##         --at 0.6 이면 그 시각 한 장을 screenshots/film_<씬>_<동작>_at.png 로도.
+##         --at 0.6 이면 그 시각 한 장을 screenshots/film_<씬>_<동작>_at.png 로도. --from 1.5 면 그 시각부터만 찍는다 (--dur 로 길이).
 
 const FLOOR_Y := 600.0
 const SEQ_GAP := 2600.0
@@ -144,7 +145,8 @@ func _run(scene_path: String) -> void:
 			_sim(e, 1.0 / 60.0, 0.0)
 		var vis: Node = e.get_node("Visual")
 		var k := float(vis.get("art_scale") if vis.get("art_scale") != null else 1.0)
-		_cam.position = Vector2(x0 + (dist * 0.5 if dist > 0.0 else 40.0), FLOOR_Y - 100.0 * k)
+		var cam_dx := float(_args.get("cam_dx", str(dist * 0.5 if dist > 0.0 else 40.0)))
+		_cam.position = Vector2(x0 + cam_dx, FLOOR_Y - 100.0 * k)
 		var tiles: Array = []
 		var t := 0.0
 		var next := 0.0
@@ -191,6 +193,8 @@ func _run(scene_path: String) -> void:
 				e.poise = e.max_poise - 1.0
 				e.receive_hit(HitData.make(1.0, 30.0, null), null)
 				dur = 1.9 if seq == "purify" else 1.2
+		if _args.has("dur"):
+			dur = float(_args["dur"])
 		var purified := false
 		while t < dur and is_instance_valid(e) and not e.is_queued_for_deletion():
 			await get_tree().physics_frame
@@ -211,7 +215,9 @@ func _run(scene_path: String) -> void:
 			if seq in ["walk", "ram", "slam", "attack", "whip"]:
 				_cam.position.x = lerpf(_cam.position.x, e.global_position.x + (dist * 0.4 if dist > 0.0 else 40.0), 0.1)
 			t += 1.0 / 60.0
-			if t >= next:
+			if t < float(_args.get("from", "0")):
+				next = t
+			elif t >= next:
 				next += every
 				var img: Image = await _grab(float(_args.get("crop", "0.55")))
 				tiles.append(img)

@@ -29,6 +29,8 @@ class_name EnemyMechVisual
 @export var spark_socket := ""
 ## 대롱: 대기·순찰·발견 중에도 소녀가 이 거리(px) 안이면 겨눈다 (0 이면 EnemyRigVisual 과 같이 쫓기·공격 중에만)
 @export var aim_always_range := 0.0
+## 쏠 때만 잠깐 보이는 부위 (대롱 끝 분사 그림). 평소엔 숨긴다.
+@export var muzzle_bone := ""
 
 ## 상태별 드릴 빠르기 (초당 띠가 지나가는 수)
 const SPIN_IDLE := 1.2
@@ -54,6 +56,8 @@ var _spark_burst: CPUParticles2D  # 한 번에 터지는 불꽃 (내려찍기·�
 var _steam_timer := 1.0
 var _slam_sparked := false
 var _mt := 0.0
+var _muzzle: Sprite2D
+var _muzzle_t := 0.0
 
 
 func _ready() -> void:
@@ -104,6 +108,10 @@ func _ready() -> void:
 		var s := rig.sprite_of(pn)
 		if s:
 			_glow_part_sprites.append(s)
+	if muzzle_bone != "":
+		_muzzle = rig.sprite_of(muzzle_bone)
+		if _muzzle:
+			_muzzle.visible = false
 	if steam_socket != "" and socks.has(steam_socket):
 		_steam = _make_puffs(Color(0.92, 0.9, 0.86, 0.38), 10, 0.9)
 		var sd2: Dictionary = socks[steam_socket]
@@ -158,10 +166,11 @@ func impact(dir: int, strength := 1.0) -> void:
 	_burst_sparks(int(10 * strength))
 
 
-## 쏘았다: 김이 칙.
+## 쏘았다: 김이 칙, 대롱 끝에서 수액이 확 뿜어진다(분사 그림이 잠깐 보였다 사라진다).
 func recoil(strength := 1.0) -> void:
 	super.recoil(strength)
 	_puff_steam(8)
+	_muzzle_t = 1.0
 
 
 ## 관절이 움직이기 직전 (HookedRigMotion 이 부른다): 상태 자세 위에 기계다운 떨림·겨눔을 얹는다.
@@ -178,7 +187,7 @@ func _pre_motion(delta: float) -> void:
 			motion.target[k] = float(motion.target[k]) + (sin(_mt * 57.0) * 1.3 + sin(_mt * 91.0) * 0.6) * s
 		motion.target["lean"] = float(motion.target["lean"]) + sin(_mt * 43.0) * 0.5 * s
 	# 들이받기 예고: 몸을 낮추고 앞발로 땅을 긁듯 버틴다 (내려치기 예고는 원형 자세대로 몸을 뒤로 젖혀 치켜든다)
-	if st == EnemyBase.State.WINDUP and bool(_enemy.get("_ramming")):
+	if st == EnemyBase.State.WINDUP and _enemy.get("_ramming") == true:
 		var w := Motion.ease_out(clampf(_enemy.windup_progress * 1.4, 0.0, 1.0), 2.0)
 		motion.target["hip_y"] = lerpf(float(motion.target["hip_y"]), 0.2, w)
 		motion.target["lean"] = lerpf(float(motion.target["lean"]), 6.0, w) + sin(_mt * 30.0) * 1.2 * w
@@ -268,6 +277,15 @@ func _process(delta: float) -> void:
 	var pk := 1.0 + 0.28 * clampf(_glow_level - 0.6, -0.6, 1.2)
 	for s in _glow_part_sprites:
 		s.self_modulate = Color(pk, pk * 0.97, pk * 0.92, 1.0)
+	# ---- 분사 (쏜 순간 확 커졌다가 줄어들며 사라진다) ----
+	if _muzzle:
+		_muzzle_t = maxf(_muzzle_t - delta * 4.0, 0.0)
+		var on := _muzzle_t > 0.0 and st != EnemyBase.State.DEAD
+		_muzzle.visible = on
+		if on:
+			var grow := 0.55 + 0.45 * Motion.ease_out(1.0 - _muzzle_t, 2.0)
+			_muzzle.scale = _muzzle.scale * Vector2(grow, 0.7 + 0.3 * grow)
+			_muzzle.modulate = Color(1.25, 1.2, 1.1, minf(_muzzle_t * 1.6, 1.0))
 	# ---- 김 ----
 	if _steam:
 		_steam_timer -= delta
@@ -317,7 +335,28 @@ func _make_puffs(col: Color, n: int, life: float) -> CPUParticles2D:
 	ramp.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
 	ramp.colors = PackedColorArray([Color(col, 0.0), col, Color(col, 0.0)])
 	p.color_ramp = ramp
+	p.texture = _soft_dot()
+	p.scale_amount_min *= 0.12   # 점 그림이 32px 라 크기 값을 그만큼 줄인다
+	p.scale_amount_max *= 0.12
 	return p
+
+
+## 김·불꽃 입자용 부드러운 둥근 점 (모든 기계 그림이 함께 쓴다)
+static var _dot_tex: GradientTexture2D
+
+static func _soft_dot() -> GradientTexture2D:
+	if _dot_tex == null:
+		var g := Gradient.new()
+		g.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+		g.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.55), Color(1, 1, 1, 0)])
+		_dot_tex = GradientTexture2D.new()
+		_dot_tex.gradient = g
+		_dot_tex.width = 32
+		_dot_tex.height = 32
+		_dot_tex.fill = GradientTexture2D.FILL_RADIAL
+		_dot_tex.fill_from = Vector2(0.5, 0.5)
+		_dot_tex.fill_to = Vector2(1.0, 0.5)
+	return _dot_tex
 
 
 ## 불꽃 입자: burst 면 한 번에 터지는 묶음, 아니면 계속 뿜는 묶음. 방향은 뼈대 틀(오른쪽을 봄)의 뒤 위 —
@@ -341,6 +380,9 @@ func _make_sparks(burst: bool) -> CPUParticles2D:
 	ramp.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
 	ramp.colors = PackedColorArray([Color(2.4, 1.9, 1.0, 1.0), Color(2.0, 1.1, 0.4, 0.9), Color(1.2, 0.4, 0.1, 0.0)])
 	p.color_ramp = ramp
+	p.texture = _soft_dot()
+	p.scale_amount_min = 0.12
+	p.scale_amount_max = 0.24
 	return p
 
 
