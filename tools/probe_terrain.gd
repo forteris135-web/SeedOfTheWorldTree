@@ -1,0 +1,621 @@
+extends Node
+## 지형 디테일 시험. 실행: godot --headless --path . res://tools/probe_terrain.tscn
+## (--headless 를 빼고 돌리면 실제 화면 렌더러로 비용을 잰다 — 창이 잠깐 뜬다.)
+##  1) TerrainStyle 표: 여섯 지역 모두 필요한 키가 있고, 모르는 지역은 수관으로 떨어진다.
+##  2) 지역 찾기·겹: 진짜 방(canopy_01)의 지형이 조상 Room 의 region 을 읽고, 발판·경사에 겹(윗면 빛/장식)이 있고
+##     비밀 벽에는 없다. Room 이 없으면 수관, style_region 으로 강제. 기본 이끼 색은 지역 색, 따로 정한 색은 그대로.
+##  3) 지역별 장식: 지역마다 가지·덩어리·경사·가시를 그려 그 지역 장식만 나오는지 센다.
+##     채굴장 이끼가 수관보다 크게 줄지 않는다. detail=0 이면 옛 수준만. decorate=false 벽은 장식이 없다.
+##  4) 상한: 아주 긴 발판(40000px)도 장식 수가 CAP 안이다.
+##  5) 비용: 같은 방을 '옛 코드(tools/terrain_legacy_draw.gd, 기준 커밋 그대로)'와 새 코드로 각각 여러 번 다시 그려
+##     가장 빠른 값을 비교한다 (방 5곳 합 2배 이내). 정화 연출 한 프레임(테두리 색만 바뀜)은 윗면 빛 겹만 다시 그리고,
+##     그 비용이 옛 코드의 '방 전체 다시 그리기'보다 훨씬 작다.
+##  6) 색 setter: 같은 값은 안 그림, 테두리 색은 윗면 빛 겹만, 몸통 색은 몸통+장식만.
+##  7) 모양 (방 17곳 전부): 몸통 안 장식(결·홈·옹이·녹물·볼트·금속판)은 실루엣 안, 매달린 것은 다른 지형 속에 없고
+##     (보스 방 세 곳 입구 선반 EntryLedge 는 아랫면이 바닥에 묻혀 매달린 것이 0개), 얇은 경사 밑 뿌리는 짧고,
+##     가시 끝은 옛 높이(1.05h) 안이다.
+##  8) 어두운 방(심연 두 곳)에서는 버섯 몇 무리가 실제 빛(PointLight2D)을 낸다. 밝은 방에는 없다.
+## 마지막에 "[probe] 끝: 실패 N" 을 찍고 그 수로 종료한다.
+
+const Legacy := preload("res://tools/terrain_legacy_draw.gd")
+const REGIONS := ["canopy", "village", "mine", "abyss", "sap_lake", "flooded_mine"]
+const NEED_KEYS := ["moss", "moss_light", "vine", "leaf", "leaf_light", "flower_px", "glint_px", "mushroom_px", "plate_px", "strap_px", "chain_px", "rust_px", "drip_px", "smear_px", "bead_px", "sheen", "root_px", "stone_px", "web_p", "thorn_tip", "thorn_glow", "moss_density", "beard_px", "grass_px", "sprig_px", "bark_lift", "bark_alpha", "ridge_px", "knot_px", "glow_depth"]
+const ROOMS := ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_hidden", "canopy_boss", "village_01", "village_02", "village_shrine", "mine_01", "mine_02", "mine_deep", "mine_boss", "abyss_01", "abyss_02", "moon_garden", "abyss_boss"]
+const COST_ROOMS := ["canopy_01", "mine_02", "village_02", "abyss_02", "canopy_boss"]
+const REPEAT := 5
+
+var _fail := 0
+var _room: Node
+
+
+class FakeRoom extends Node2D:
+	var region := "canopy"
+
+
+func _check(ok: bool, text: String) -> void:
+	print("[probe] %s %s" % ["OK " if ok else "FAIL", text])
+	if not ok:
+		_fail += 1
+
+
+func _ready() -> void:
+	print("[probe] 지형 디테일 시험 시작 (%s)" % ("화면 없이" if DisplayServer.get_name() == "headless" else "실제 렌더러"))
+	var args := OS.get_cmdline_user_args()
+	if "--profile" in args:
+		# 비용 나눠 보기만: godot --headless --path . res://tools/probe_terrain.tscn -- --profile
+		await _profile("canopy_01")
+		get_tree().quit(0)
+		return
+	if "--cost" in args:
+		# 비용 비교만 (실제 렌더러로 잴 때 창이 오래 뜨지 않게): ... -- --cost
+		await _probe_cost()
+		print("[probe] 끝: 실패 %d" % _fail)
+		get_tree().quit(1 if _fail > 0 else 0)
+		return
+	_probe_table()
+	await _probe_region_lookup()
+	await _probe_region_decor()
+	await _probe_caps()
+	await _probe_cost()
+	await _probe_setters()
+	await _probe_geometry()
+	await _probe_glow_lights()
+	print("[probe] 끝: 실패 %d" % _fail)
+	get_tree().quit(1 if _fail > 0 else 0)
+
+
+func _frames(n: int) -> void:
+	for i in n:
+		await get_tree().process_frame
+
+
+func _load_room(id: String) -> Node:
+	var room: Node = load("res://scenes/rooms/%s.tscn" % id).instantiate()
+	add_child(room)
+	await _frames(3)
+	return room
+
+
+func _free_room(room: Node) -> void:
+	room.queue_free()
+	await _frames(2)
+
+
+# ---------- 1) 표 ----------
+func _probe_table() -> void:
+	for r in REGIONS:
+		var st := TerrainStyle.get_style(r)
+		var missing := []
+		for k in NEED_KEYS:
+			if not st.has(k):
+				missing.append(k)
+		_check(missing.is_empty() and st["region"] == r, "%s 팔레트에 필요한 키가 다 있다 (빠진 것 %s)" % [r, missing])
+	_check(TerrainStyle.get_style("nowhere")["region"] == "canopy", "모르는 지역은 수관 팔레트로")
+	_check(TerrainStyle.get_style("abyss")["moss"] != TerrainStyle.get_style("canopy")["moss"], "심연 이끼 색이 수관과 다르다")
+	_check(TerrainStyle.n_of(1000.0, 0.0, "flower") == 0 and TerrainStyle.n_of(1000.0, 70.0, "flower") == 14 and TerrainStyle.n_of(100000.0, 70.0, "flower") == TerrainStyle.CAP["flower"], "n_of: 0px 는 없음, 1000/70 = 14, 상한에서 멈춤")
+	_check(TerrainStyle.CIRCLE_T.size() > 0 and TerrainStyle.STAR_T.size() > 0 and TerrainStyle.CIRCLE_T.size() % 3 == 0, "단위 도형(삼각형 목록)이 준비됨 (원 %d점)" % TerrainStyle.CIRCLE_T.size())
+
+
+# ---------- 2) 지역 찾기·겹 ----------
+func _probe_region_lookup() -> void:
+	var room := await _load_room("canopy_01")
+	var floor1: Platform = room.get_node("Terrain/Floor1")
+	_check(floor1._style["region"] == "canopy", "canopy_01 의 발판이 조상 Room 에서 지역 'canopy' 를 읽음")
+	_check(floor1.moss_color == TerrainStyle.get_style("canopy")["moss"], "기본 이끼 색이 지역 색으로 바뀜")
+	var thorns: Thorns = room.get_node("Hazards/PitThorns")
+	_check(thorns._style["region"] == "canopy", "가시도 지역을 읽음")
+	var slope: TerrainPolygon = room.get_node("Terrain/Slope1")
+	_check(slope._style["region"] == "canopy", "경사도 지역을 읽음")
+	_check(floor1.get_node_or_null("EdgeLayer") is TerrainStyle.Layer and floor1.get_node_or_null("DecorLayer") is TerrainStyle.Layer, "발판에 윗면 빛 겹·장식 겹이 있다")
+	_check(slope.get_node_or_null("EdgeLayer") != null and slope.get_node_or_null("DecorLayer") != null, "경사에도 두 겹이 있다")
+	# 경사 아래 변의 두께: Slope2(얇은 경사, 외곽 상자 높이는 210)는 60, Slope1(두꺼운 언덕)은 두껍다
+	var slope2: TerrainPolygon = room.get_node("Terrain/Slope2")
+	var th2 := _bottom_thickness(slope2)
+	var th1 := _bottom_thickness(slope)
+	_check(absf(th2 - 60.0) < 1.5 and th1 >= TerrainPolygon.THICK_MIN, "경사 두께는 실제 두께로 잰다 (Slope2 %.0f → 얇음, Slope1 %.0f → 두꺼움)" % [th2, th1])
+	var sw: Node = room.get_node("Terrain/SecretWall1")
+	_check(sw.get_node_or_null("EdgeLayer") == null and sw.get_node_or_null("DecorLayer") == null, "비밀 벽은 자기 그림을 써서 겹이 없다")
+	var edge_layer: CanvasItem = floor1.get_node("EdgeLayer")
+	_check(edge_layer.use_parent_material, "겹은 부모의 잿빛 재질을 쓴다")
+	_check(Platform.draw_calls > 0 and Platform.layer_calls > 0, "headless 에서도 그리기가 돈다 (몸통 %d번, 겹 %d번)" % [Platform.draw_calls, Platform.layer_calls])
+	await _free_room(room)
+	# Room 없이
+	var holder := Node2D.new()
+	add_child(holder)
+	var p := Platform.new()
+	p.size = Vector2(300, 40)
+	holder.add_child(p)
+	var q := Platform.new()
+	q.size = Vector2(300, 40)
+	q.style_region = "abyss"
+	q.moss_color = Color(0.9, 0.1, 0.1)
+	holder.add_child(q)
+	await _frames(1)
+	_check(p._style["region"] == "canopy", "Room 이 없으면 수관 팔레트")
+	_check(q._style["region"] == "abyss", "style_region 으로 강제하면 그 지역 팔레트")
+	_check(q.moss_color == Color(0.9, 0.1, 0.1), "따로 정한 이끼 색은 그대로")
+	_check(q.vine_color == TerrainStyle.get_style("abyss")["vine"], "정하지 않은 덩굴 색은 지역 색")
+	var fake := FakeRoom.new()
+	fake.region = "mine"
+	add_child(fake)
+	var sub := Node2D.new()
+	fake.add_child(sub)
+	var t := Thorns.new()
+	sub.add_child(t)
+	await _frames(1)
+	_check(t._style["region"] == "mine", "region 속성이 있는 조상(손자여도)에서 지역을 읽음")
+	holder.queue_free()
+	fake.queue_free()
+	await _frames(1)
+
+
+## 경사의 가장 긴 아래 변의 두께
+func _bottom_thickness(poly: TerrainPolygon) -> float:
+	var best := 0.0
+	var best_len := 0.0
+	for i in poly.polygon.size():
+		var a := poly.polygon[i]
+		var b := poly.polygon[(i + 1) % poly.polygon.size()]
+		if TerrainPolygon._is_bottom(b - a) and (b - a).length() > best_len:
+			best_len = (b - a).length()
+			best = poly._thickness_above(a, b)
+	return best
+
+
+# ---------- 3) 지역별 장식 ----------
+## 지역 하나의 지형 세트를 가짜 Room 아래에 만들고 trace 로 센다.
+func _draw_set(region: String, detail: int, with_wall := false) -> Dictionary:
+	var fake := FakeRoom.new()
+	fake.region = region
+	add_child(fake)
+	var branch := Platform.new()
+	branch.size = Vector2(600, 40)
+	branch.one_way = true
+	branch.position = Vector2(100, 100)
+	fake.add_child(branch)
+	var block := Platform.new()
+	block.size = Vector2(1500, 300)
+	block.position = Vector2(100, 400)
+	fake.add_child(block)
+	if with_wall:
+		var wall := Platform.new()
+		wall.size = Vector2(100, 1000)
+		wall.decorate = false
+		wall.position = Vector2(-200, 0)
+		fake.add_child(wall)
+	var slope := TerrainPolygon.new()
+	slope.polygon = PackedVector2Array([Vector2(0, 0), Vector2(500, -150), Vector2(1000, -150), Vector2(1000, 300), Vector2(0, 300)])
+	slope.position = Vector2(1800, 400)
+	fake.add_child(slope)
+	var thorns := Thorns.new()
+	thorns.size = Vector2(320, 60)
+	thorns.position = Vector2(900, 340)
+	fake.add_child(thorns)
+	await _frames(1)
+	TerrainStyle.detail = detail
+	TerrainStyle.trace_counts = {}
+	TerrainStyle.trace_points = []
+	TerrainStyle.trace = true
+	for n in [branch, block, slope]:
+		n._redraw_all()
+	thorns.queue_redraw()
+	await _frames(2)
+	TerrainStyle.trace = false
+	var counts: Dictionary = TerrainStyle.trace_counts.duplicate()
+	fake.queue_free()
+	await _frames(1)
+	TerrainStyle.detail = 1
+	return counts
+
+
+func _has(c: Dictionary, k: String) -> bool:
+	return int(c.get(k, 0)) > 0
+
+
+func _probe_region_decor() -> void:
+	var expect := {
+		"canopy": {"yes": ["꽃", "풀", "새싹", "잎묶음", "수염", "뿌리", "옹이", "홈", "결", "윗면빛", "덩굴", "가시", "점선", "돌", "모서리이끼", "옆혹"], "no": ["버섯", "금속판", "띠쇠", "반사빛", "방울", "녹물", "윤기"]},
+		"village": {"yes": ["반사빛", "꽃", "풀", "수염", "옹이"], "no": ["버섯", "금속판", "방울", "녹물"]},
+		"mine": {"yes": ["금속판", "띠쇠", "볼트", "사슬", "녹물", "옹이", "풀"], "no": ["꽃", "버섯", "방울", "반사빛", "수염", "새싹"]},
+		"abyss": {"yes": ["버섯", "뿌리", "수염", "옹이"], "no": ["꽃", "금속판", "방울", "반사빛"]},
+		"sap_lake": {"yes": ["방울", "구슬", "윤기", "번짐"], "no": ["꽃", "버섯", "금속판", "녹물"]},
+		"flooded_mine": {"yes": ["녹물", "번짐", "금속판", "방울"], "no": ["꽃", "버섯", "반사빛", "윤기", "수염"]},
+	}
+	var moss := {}
+	for r in REGIONS:
+		var c := await _draw_set(r, 1)
+		moss[r] = int(c.get("이끼", 0))
+		var bad := []
+		for k in expect[r]["yes"]:
+			if not _has(c, k):
+				bad.append("없음:" + k)
+		for k in expect[r]["no"]:
+			if _has(c, k):
+				bad.append("있으면 안 됨:" + k)
+		var total := 0
+		for k in c:
+			total += int(c[k])
+		_check(bad.is_empty(), "%s 장식: 조각 %d개 %s %s" % [r, total, c, bad])
+		_check(int(c.get("잎묶음", 0)) == 2, "%s 가지 양 끝에 잎 묶음 2개 (%d)" % [r, int(c.get("잎묶음", 0))])
+	_check(moss["mine"] >= int(moss["canopy"] * 0.8), "채굴장 이끼가 수관만큼 있다 (수관 %d / 채굴장 %d)" % [moss["canopy"], moss["mine"]])
+	var mine := TerrainStyle.get_style("mine")
+	var mine_moss: Color = mine["moss"]
+	_check(mine_moss.get_luminance() > 0.4, "채굴장 이끼가 검은 몸통에서 보이는 밝기 (%.2f)" % mine_moss.get_luminance())
+	# 옛 수준
+	var c0 := await _draw_set("abyss", 0)
+	var extras := ["꽃", "풀", "새싹", "버섯", "옹이", "홈", "뿌리", "돌", "거미줄", "잎묶음", "윗면빛", "수염", "모서리이끼", "옆혹"]
+	var leaked := []
+	for k in extras:
+		if _has(c0, k):
+			leaked.append(k)
+	_check(leaked.is_empty() and _has(c0, "결") and _has(c0, "이끼") and _has(c0, "점선") and _has(c0, "가시") and _has(c0, "덩굴"), "detail=0: 옛 수준만 (결·이끼·점선·가시·덩굴 있음, 새 장식 없음 %s)" % [leaked])
+	# 벽(decorate=false)은 장식이 없다: 떨어진 벽 하나를 더해도 수가 같다
+	var with_wall := await _draw_set("canopy", 1, true)
+	var without := await _draw_set("canopy", 1, false)
+	var same := with_wall.size() == without.size()
+	for k in with_wall:
+		if int(with_wall[k]) != int(without.get(k, 0)):
+			same = false
+	_check(same, "decorate=false 벽은 아무 장식도 더하지 않는다")
+
+
+# ---------- 4) 상한 ----------
+func _probe_caps() -> void:
+	var fake := FakeRoom.new()
+	fake.region = "mine"
+	add_child(fake)
+	var huge := Platform.new()
+	huge.size = Vector2(40000, 400)
+	fake.add_child(huge)
+	await _frames(1)
+	TerrainStyle.trace_counts = {}
+	TerrainStyle.trace = true
+	huge._redraw_all()
+	await _frames(2)
+	TerrainStyle.trace = false
+	var c: Dictionary = TerrainStyle.trace_counts.duplicate()
+	var total := 0
+	for k in c:
+		total += int(c[k])
+	var over := []
+	for k in [["이끼", "moss"], ["잎", "leaf"], ["결", "streak"], ["홈", "ridge"], ["옹이", "knot"], ["뿌리", "root"], ["돌", "stone"], ["금속판", "plate"], ["띠쇠", "strap"], ["사슬", "chain"], ["풀", "grass"]]:
+		if int(c.get(k[0], 0)) > int(TerrainStyle.CAP[k[1]]):
+			over.append(k[0])
+	# 녹물은 몸통 녹물(상한 rust) + 금속판마다 2줄 + 띠쇠마다 1줄까지
+	if int(c.get("녹물", 0)) > int(TerrainStyle.CAP["rust"]) + 2 * int(TerrainStyle.CAP["plate"]) + int(TerrainStyle.CAP["strap"]):
+		over.append("녹물")
+	_check(over.is_empty() and total <= 1600, "40000px 덩어리: 장식 %d개, 상한 넘은 것 %s" % [total, over])
+	var huge_branch := Platform.new()
+	huge_branch.size = Vector2(40000, 40)
+	huge_branch.position = Vector2(0, 800)
+	fake.add_child(huge_branch)
+	await _frames(1)
+	TerrainStyle.trace_counts = {}
+	TerrainStyle.trace = true
+	huge_branch._redraw_all()
+	await _frames(2)
+	TerrainStyle.trace = false
+	total = 0
+	for k in TerrainStyle.trace_counts:
+		if k != "점선":
+			total += int(TerrainStyle.trace_counts[k])
+	_check(total <= 1600, "40000px 가지: 점선 빼고 장식 %d개 (1600 이하)" % total)
+	fake.queue_free()
+	await _frames(1)
+
+
+# ---------- 5) 비용 ----------
+## 방의 그림 지형(발판·경사·가시; 자기 그림을 쓰는 비밀 벽은 뺀다)
+func _terrain_nodes(room: Node) -> Array:
+	var out := []
+	for t in room.get_node("Terrain").get_children():
+		if (t is Platform and not (t is SecretWall)) or t is TerrainPolygon:
+			out.append(t)
+	var hz := room.get_node_or_null("Hazards")
+	if hz:
+		for t in hz.get_children():
+			if t is Thorns:
+				out.append(t)
+	return out
+
+
+func _redraw_new(nodes: Array) -> int:
+	Platform.draw_usec = 0
+	for n in nodes:
+		if n is Thorns:
+			n.queue_redraw()
+		else:
+			n._redraw_all()
+	await _frames(2)
+	return Platform.draw_usec
+
+
+func _redraw_legacy(stand_ins: Array) -> int:
+	Legacy.draw_usec = 0
+	for s in stand_ins:
+		s.queue_redraw()
+	await _frames(2)
+	return Legacy.draw_usec
+
+
+func _probe_cost() -> void:
+	var sum_old := 0.0
+	var sum_new := 0.0
+	var worst := 0.0
+	for id in COST_ROOMS:
+		var room := await _load_room(id)
+		var nodes := _terrain_nodes(room)
+		var holder := Node2D.new()
+		add_child(holder)
+		var stand_ins := []
+		for n in nodes:
+			var s: Node2D = Legacy.new()
+			s.copy_from(n)
+			holder.add_child(s)
+			stand_ins.append(s)
+		await _frames(2)
+		# 옛 코드를 연달아 REPEAT 번, 새 코드를 연달아 REPEAT 번 (가장 빠른 값)
+		var best_old := INF
+		for i in REPEAT:
+			best_old = minf(best_old, float(await _redraw_legacy(stand_ins)))
+		var best_new := INF
+		for i in REPEAT:
+			best_new = minf(best_new, float(await _redraw_new(nodes)))
+		var ratio := best_new / maxf(best_old, 1.0)
+		worst = maxf(worst, ratio)
+		sum_old += best_old
+		sum_new += best_new
+		print("[probe] %s 지형 %d개 다시 그리기: 옛 코드 %.2fms → 새 코드 %.2fms (%.2f배)" % [id, nodes.size(), best_old / 1000.0, best_new / 1000.0, ratio])
+		if id == "canopy_01":
+			await _probe_purify_frame(room, nodes, best_old)
+		holder.queue_free()
+		await _free_room(room)
+	var total := sum_new / maxf(sum_old, 1.0)
+	print("[probe] 방 %d곳 합: 옛 코드 %.2fms → 새 코드 %.2fms (%.2f배, 가장 큰 방 %.2f배)" % [COST_ROOMS.size(), sum_old / 1000.0, sum_new / 1000.0, total, worst])
+	if DisplayServer.get_name() == "headless":
+		# 화면 없이 돌면 GPU 쪽 일(옛 코드가 도형마다 만들던 정점 버퍼)이 빠져서 옛 코드가 실제보다 약 9배 싸게 나온다
+		# (맥 실측: 옛 코드 canopy_01 화면 없이 0.9ms / 실제 렌더러 8.5ms). 그래서 여기서는 스크립트 쪽 비용만 넉넉한 상한으로 지키고,
+		# '2배 이내' 판정은 실제 렌더러로 돌 때 한다:  godot --path . res://tools/probe_terrain.tscn -- --cost
+		print("[probe] (화면 없이: 스크립트 비용만. 실제 렌더러 비교는 --headless 없이 -- --cost 로)")
+		_check(total <= 3.5, "화면 없이 잰 스크립트 비용이 옛 코드의 3.5배 이내 (%.2f배)" % total)
+	else:
+		_check(total <= 2.0, "실제 렌더러: 새 그림의 다시 그리기 비용이 옛 코드의 2배 이내 (%.2f배)" % total)
+	_check(sum_new / 1000.0 / COST_ROOMS.size() < 30.0, "방 하나 평균 %.1fms < 30ms" % (sum_new / 1000.0 / COST_ROOMS.size()))
+
+
+## 정화 연출 한 프레임: Room 처럼 모든 지형의 테두리 색만 바꾼다 → 윗면 빛 겹만 다시 그려야 한다.
+func _probe_purify_frame(room: Node, nodes: Array, legacy_full: float) -> void:
+	await _frames(2)
+	var body0 := Platform.draw_calls
+	var layer0 := Platform.layer_calls
+	var edge0 := Platform.edge_calls
+	var best := INF
+	for i in REPEAT:
+		Platform.draw_usec = 0
+		var col := Color(0.62, 0.70, 0.80, 0.55).lerp(Color(1.0, 0.89, 0.62, 0.8), 0.1 + 0.15 * i)
+		for t in room.get_node("Terrain").get_children():
+			if "edge_color" in t and not (t is SecretWall):
+				t.edge_color = col
+		await _frames(2)
+		best = minf(best, float(Platform.draw_usec))
+	var layered := 0
+	for n in nodes:
+		if not (n is Thorns):
+			layered += 1
+	var body_redraws := Platform.draw_calls - body0
+	var decor_redraws := (Platform.layer_calls - layer0) - (Platform.edge_calls - edge0)
+	_check(body_redraws == 0 and decor_redraws == 0, "정화 프레임: 몸통·장식은 다시 안 그린다 (몸통 %d번, 장식 %d번)" % [body_redraws, decor_redraws])
+	_check(Platform.edge_calls - edge0 == layered * REPEAT, "정화 프레임: 윗면 빛 겹만 매번 다시 그린다 (%d번 = 지형 %d × %d)" % [Platform.edge_calls - edge0, layered, REPEAT])
+	print("[probe] 정화 한 프레임(테두리 색만): 새 코드 %.2fms / 옛 코드는 방 전체를 다시 그렸음 %.2fms" % [best / 1000.0, legacy_full / 1000.0])
+	_check(best <= legacy_full * 0.35, "정화 프레임 비용이 옛 코드의 35%% 이하 (%.0f%%)" % (best / maxf(legacy_full, 1.0) * 100.0))
+
+
+# ---------- 6) setter ----------
+func _probe_setters() -> void:
+	var room := await _load_room("canopy_01")
+	var p: Platform = room.get_node("Terrain/Floor1")
+	await _frames(2)
+	var b0 := Platform.draw_calls
+	var l0 := Platform.layer_calls
+	var e0 := Platform.edge_calls
+	p.color = p.color
+	p.edge_color = p.edge_color
+	await _frames(2)
+	_check(Platform.draw_calls == b0 and Platform.layer_calls == l0, "같은 색을 다시 넣으면 안 그린다 (몸통 %d→%d, 겹 %d→%d)" % [b0, Platform.draw_calls, l0, Platform.layer_calls])
+	p.edge_color = Color(0.1, 0.2, 0.3, 0.5)
+	await _frames(2)
+	_check(Platform.draw_calls == b0 and Platform.edge_calls == e0 + 1 and Platform.layer_calls == l0 + 1, "테두리 색이 바뀌면 윗면 빛 겹만 한 번 그린다 (몸통 +%d, 윗면 빛 +%d, 겹 전체 +%d)" % [Platform.draw_calls - b0, Platform.edge_calls - e0, Platform.layer_calls - l0])
+	_check(p.edge_color == Color(0.1, 0.2, 0.3, 0.5), "마지막 값이 남아 있다")
+	b0 = Platform.draw_calls
+	l0 = Platform.layer_calls
+	e0 = Platform.edge_calls
+	p.color = Color(0.12, 0.1, 0.08)
+	await _frames(2)
+	_check(Platform.draw_calls == b0 + 1 and Platform.layer_calls - l0 == 1 and Platform.edge_calls == e0, "몸통 색이 바뀌면 몸통 + 장식 겹만 그린다 (몸통 +%d, 겹 +%d, 윗면 빛 +%d)" % [Platform.draw_calls - b0, Platform.layer_calls - l0, Platform.edge_calls - e0])
+	await _free_room(room)
+
+
+# ---------- 7) 모양 ----------
+func _silhouette(n: Node) -> PackedVector2Array:
+	if n is Platform:
+		var body: PackedVector2Array = n._geo.get("body", PackedVector2Array())
+		if body.is_empty():
+			var s: Vector2 = n.size
+			return PackedVector2Array([Vector2.ZERO, Vector2(s.x, 0), s, Vector2(0, s.y)])
+		return body
+	if n is TerrainPolygon:
+		return n.polygon
+	return PackedVector2Array()
+
+
+## 방의 Terrain 아래 모든 단단한 지형(전역 좌표): 발판 사각형, 경사 다각형 — 프로브가 따로 계산한다.
+func _solids(room: Node) -> Array:
+	var out := []
+	for t in room.get_node("Terrain").get_children():
+		if t is Platform:
+			out.append([t, Rect2(t.global_position, t.size)])
+		elif t is TerrainPolygon:
+			out.append([t, Transform2D(0.0, t.global_position) * (t.polygon as PackedVector2Array)])
+	return out
+
+
+func _inside_other(solids: Array, me: Node, gp: Vector2) -> String:
+	for s in solids:
+		if s[0] == me:
+			continue
+		if s[1] is Rect2:
+			if (s[1] as Rect2).has_point(gp):
+				return s[0].name
+		elif Geometry2D.is_point_in_polygon(gp, s[1]):
+			return s[0].name
+	return ""
+
+
+func _probe_geometry() -> void:
+	var outside := []
+	var buried := []
+	var entry_hanging := {}
+	var slope_roots := []
+	var thorn_bad := []
+	var inner_total := 0
+	var hang_total := 0
+	for id in ROOMS:
+		var room := await _load_room(id)
+		var nodes := _terrain_nodes(room)
+		TerrainStyle.trace_points = []
+		TerrainStyle.trace = true
+		for n in nodes:
+			if n is Thorns:
+				n.queue_redraw()
+			else:
+				n._redraw_all()
+		await _frames(2)
+		TerrainStyle.trace = false
+		var solids := _solids(room)
+		for rec in TerrainStyle.trace_points:
+			var kind: String = rec[0]
+			var node: Node = rec[1]
+			var p: Vector2 = rec[2]
+			if node == null or not is_instance_valid(node):
+				continue
+			if kind.begins_with("안:"):
+				inner_total += 1
+				var sil := _silhouette(node)
+				if sil.size() >= 3 and not Geometry2D.is_point_in_polygon(p, sil):
+					# 경계 위(0.75px 안)는 안으로 친다
+					var closest := INF
+					for i in sil.size():
+						var cp := Geometry2D.get_closest_point_to_segment(p, sil[i], sil[(i + 1) % sil.size()])
+						closest = minf(closest, cp.distance_to(p))
+					if closest > 0.75:
+						outside.append("%s/%s %s (%.0f,%.0f) %.1fpx 밖" % [id, node.name, kind, p.x, p.y, closest])
+			elif kind.begins_with("밑:"):
+				hang_total += 1
+				var gp: Vector2 = (node as Node2D).global_position + p + Vector2(0, 8)
+				var other := _inside_other(solids, node, gp)
+				if other != "":
+					buried.append("%s/%s %s → %s 속" % [id, node.name, kind, other])
+				if node.name == "EntryLedge":
+					entry_hanging[id] = int(entry_hanging.get(id, 0)) + 1
+			elif kind == "뿌리길이" and id == "canopy_01" and node.name == "Slope2":
+				slope_roots.append(p)
+			elif kind == "가시끝":
+				var h: float = (node as Thorns).size.y
+				if p.y < h * 0.6 - h * 1.05 - 0.5:
+					thorn_bad.append("%s/%s 끝 y=%.1f (h=%.0f)" % [id, node.name, p.y, h])
+		await _free_room(room)
+	_check(outside.is_empty(), "방 17곳: 몸통 안 장식 %d개가 모두 실루엣 안 (밖 %d개 %s)" % [inner_total, outside.size(), outside.slice(0, 6)])
+	_check(buried.is_empty(), "방 17곳: 매달린 것 %d개 중 다른 지형 속에 그린 것 없음 (%d개 %s)" % [hang_total, buried.size(), buried.slice(0, 6)])
+	_check(entry_hanging.is_empty(), "보스 방 입구 선반(아랫면이 바닥에 묻힘)에는 매달린 것이 없다 %s" % [entry_hanging])
+	var long_root := false
+	var thick_flag := false
+	for v in slope_roots:
+		long_root = long_root or v.x > 64.5
+		thick_flag = thick_flag or v.y > 0.5
+	_check(not long_root and not thick_flag, "canopy_01 Slope2(두께 60) 밑 뿌리는 얇은 가지 규칙 (뿌리 %d개, 가장 긴 것 %.0fpx)" % [slope_roots.size(), _max_x(slope_roots)])
+	_check(thorn_bad.is_empty(), "가시 끝이 옛 높이(1.05h) 안 %s" % [thorn_bad.slice(0, 4)])
+
+
+func _max_x(arr: Array) -> float:
+	var m := 0.0
+	for v in arr:
+		m = maxf(m, v.x)
+	return m
+
+
+# ---------- 8) 어두운 방의 버섯 빛 ----------
+func _count_glow(room: Node) -> int:
+	var n := 0
+	for l in get_tree().get_nodes_in_group("terrain_glow_light"):
+		if room.is_ancestor_of(l):
+			n += 1
+	return n
+
+
+func _probe_glow_lights() -> void:
+	for id in ["abyss_01", "abyss_02", "abyss_boss", "canopy_01"]:
+		var room := await _load_room(id)
+		await _frames(3)
+		var n := _count_glow(room)
+		var dark := bool(room.get("dark"))
+		if dark:
+			_check(n >= 1 and n <= TerrainStyle.GLOW_LIGHTS_PER_ROOM, "%s(어두운 방): 버섯 빛 %d개 (1~%d)" % [id, n, TerrainStyle.GLOW_LIGHTS_PER_ROOM])
+		else:
+			_check(n == 0, "%s(밝은 방): 버섯 빛 없음 (%d)" % [id, n])
+		await _free_room(room)
+
+
+# ---------- 비용 나눠 보기 (--profile) ----------
+func _measure_parts(nodes: Array) -> Array:
+	var best := [INF, INF, INF, INF]
+	for r in REPEAT:
+		Platform.body_usec = 0
+		Platform.edge_usec = 0
+		Platform.decor_usec = 0
+		var total := float(await _redraw_new(nodes))
+		best[0] = minf(best[0], total)
+		best[1] = minf(best[1], Platform.body_usec)
+		best[2] = minf(best[2], Platform.edge_usec)
+		best[3] = minf(best[3], Platform.decor_usec)
+	return best
+
+
+func _profile(id: String) -> void:
+	var room := await _load_room(id)
+	var nodes := _terrain_nodes(room)
+	var holder := Node2D.new()
+	add_child(holder)
+	var stand_ins := []
+	for n in nodes:
+		var s: Node2D = Legacy.new()
+		s.copy_from(n)
+		holder.add_child(s)
+		stand_ins.append(s)
+	await _frames(2)
+	var best_old := INF
+	for i in REPEAT:
+		best_old = minf(best_old, float(await _redraw_legacy(stand_ins)))
+	var b := await _measure_parts(nodes)
+	print("[probe] %s 옛 코드 %.2fms / 새 코드 %.2fms = 몸통(가시 포함) %.2f + 윗면 빛 %.2f + 장식 %.2f" % [id, best_old / 1000.0, b[0] / 1000.0, b[1] / 1000.0, b[2] / 1000.0, b[3] / 1000.0])
+	var st: Dictionary = TerrainStyle.get_style(TerrainStyle.region_of(nodes[0]))
+	for key in ["grass_px", "flower_px", "sprig_px", "beard_px", "root_px", "stone_px", "knot_px", "ridge_px", "glow_depth"]:
+		if not st.has(key):
+			continue
+		var keep = st[key]
+		var base := await _measure_parts(nodes)
+		st[key] = 0.0
+		var r := await _measure_parts(nodes)
+		st[key] = keep
+		print("[probe]   %s 끄면 %.2fms (−%.2f)" % [key, r[0] / 1000.0, (base[0] - r[0]) / 1000.0])
+	var d0 = st["moss_density"]
+	var base2 := await _measure_parts(nodes)
+	st["moss_density"] = 0.0
+	var r2 := await _measure_parts(nodes)
+	st["moss_density"] = d0
+	print("[probe]   이끼·잎 끄면 %.2fms (−%.2f)" % [r2[0] / 1000.0, (base2[0] - r2[0]) / 1000.0])
+	TerrainStyle.detail = 0
+	var r3 := await _measure_parts(nodes)
+	TerrainStyle.detail = 1
+	print("[probe]   detail0 %.2fms = 몸통 %.2f + 윗면 빛 %.2f + 장식 %.2f" % [r3[0] / 1000.0, r3[1] / 1000.0, r3[2] / 1000.0, r3[3] / 1000.0])
+	holder.queue_free()
+	await _free_room(room)
