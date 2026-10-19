@@ -34,9 +34,7 @@ const GUARD_BLUE := Color("8fd3ff")
 ## (처음 값 (24,-62)/92 는 머리 위로 98px 떠 있고 무릎 아래를 안 덮었다 — 2026-10-18 검토)
 const GUARD_CENTER := Vector2(24, 12)
 const GUARD_RY := 80.0
-const GUARD_RX_RATIO := 0.55
 const GUARD_SPAN := 1.25
-const GUARD_LINE := 2.5
 ## 씨앗 베기 흔적: 큰 초승달 그림(fx_table 의 seed_slash)이 판정 상자(slash_box: 앞 340, 위 250, 아래 180) 안을 거의 채우도록
 ## SLASH_FX_OFFSET["seed_slash"] 와 표의 scale_xy 를 맞췄다 (seed_slash_rect, probe_player 가 확인).
 ## 칼질 이펙트가 소녀 몸 가운데에서 떨어진 자리 (오른쪽을 볼 때, 게임 px). 그림의 호 중심(표의 pivot)이 여기 온다.
@@ -868,7 +866,7 @@ func _make_tip_glow() -> void:
 ## 매 프레임: 보호막과 칼끝 빛
 func _update_effects(delta: float, st: Player.State) -> void:
 	# 보호막: 가드 중 나타나고(일렁임), 저스트 가드 때 하얗게 번쩍
-	_shield.visible = _guard_a > 0.02
+	_shield.visible = _guard_a > 0.02 and _shield.texture != null
 	if _shield.visible:
 		var wob := 1.0 + 0.02 * sin(_time * 6.0)
 		var want_h := GUARD_RY * sin(GUARD_SPAN) * 2.0

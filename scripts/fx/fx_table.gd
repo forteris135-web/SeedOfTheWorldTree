@@ -153,7 +153,8 @@ const EFFECTS := {
 		"children": [["dust_puff", 1, Vector2(10, 4), {"vel": Vector2(-110, -40), "offset": Vector2(-30, 10), "palette": "ash"}],
 			["dust_puff", 1, Vector2(10, 4), {"vel": Vector2(110, -40), "offset": Vector2(30, 10), "palette": "ash"}]]},
 	# 빛 가루·이슬·성장 구슬을 주웠을 때
-	"pickup_sparkle": {"tex": "glint", "life": 0.22, "scale": [0.2, 0.45], "ease": 3.0, "fade_out": 0.3, "spin": 120.0, "rot_rand": 90.0, "palette": "gold",
+	# 프레임 묶음의 예: 반짝임(glint) → 고리(ring) 두 장을 수명 동안 넘긴다
+	"pickup_sparkle": {"tex": ["glint", "ring"], "life": 0.24, "scale": [0.2, 0.45], "ease": 3.0, "fade_out": 0.3, "spin": 120.0, "rot_rand": 90.0, "palette": "gold",
 		"energy": 1.2, "priority": 0},
 	"pickup_big": {"tex": "star_burst", "life": 0.45, "scale": [0.25, 0.5], "ease": 3.0, "fade_out": 0.35, "palette": "gold", "keep": 0.3,
 		"energy": 1.1, "priority": 1, "children": [["ring_pop", 1, Vector2.ZERO, {"scale": 1.6, "palette": "gold"}], ["mote", 6, Vector2(30, 20), {"palette": "gold"}]]},

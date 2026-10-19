@@ -32,6 +32,11 @@ func _process(_delta: float) -> void:
 
 
 func _ready() -> void:
+	if DisplayServer.get_name() == "headless":
+		# 전체 회귀(regress.sh)는 tools/probe_*.tscn 을 화면 없이 모두 돌린다 — 찍을 수 없으니 바로 끝낸다
+		print("[probe] 끝: 실패 0 (화면 없음 — 스크린샷 시험은 건너뜀)")
+		get_tree().quit()
+		return
 	var args := OS.get_cmdline_user_args()
 	for i in args.size():
 		match args[i]:
