@@ -109,7 +109,9 @@ func prompt(action: String) -> String:
 		Kind.XBOX, Kind.OTHER_PAD:
 			return _first(Keymap.label_for(action, "xb"))
 		Kind.TOUCH:
-			return {"interact": "손길 버튼", "guard": "가드", "heal": "회복", "soul_ability": "영혼", "soul_next": "전환 버튼", "jump": "점프", "map": "지도", "pause": "메뉴"}.get(action, action)
+			# 터치 버튼 이름 (2026-10-19: 약공격 → '공격', 낙하 공격 버튼 '낙하', 영혼 버튼은 고른 영혼 이름이 적혀 있어 '영혼 버튼')
+			return {"interact": "손길 버튼", "guard": "가드", "heal": "회복", "soul_ability": "영혼 버튼", "soul_next": "전환 버튼", "jump": "점프", "map": "지도", "pause": "메뉴",
+				"attack_light": "공격", "plunge": "낙하", "dodge": "회피"}.get(action, action)
 		_:
 			return _first(Keymap.label_for(action, "kb"))
 

@@ -8,9 +8,16 @@ extends CanvasLayer
 ## - 체력 막대: max_hp 에 비례해 길어진다 (100 기준 1.0, 최대 1.6배). 틀 그림은 세 조각(왼쪽 / 늘림 조각 / 오른쪽 끝)으로 그려
 ##   끝 장식이 깨지지 않는다. 늘어나는 순간 0.5초에 걸쳐 자라며 한 번 번쩍.
 ## - 공격 배수·회복량 성장: 이슬 오른쪽에 작은 검 / 물방울 아이콘 + "+10%" / "+15" (성장이 없으면 아무것도 없음).
-## - 영혼: 가진 영혼마다 작은 원, 고른 것은 밝고 크게 + 이름. 전환 순간 0.3초 번쩍.
+## - 영혼: 가진 영혼마다 작은 원, 고른 것은 밝고 크게 + "지금: 바람 (잿빛 잎새의 새)" 이름. 전환 순간 0.3초 번쩍.
+##   쿨다운 중엔 고른 원 둘레에 차오르는 호(지난 비율)와 남은 초 숫자("7, 6, … 1") — 키보드·패드로 놀 때도 터치 버튼과 같은 정보.
+## - 영혼 전환 알림 (2026-10-19 기획자 요청 "지금 어느 영혼인지 모른다"): 전환 순간 화면 가운데 위에 1.2초 동안 큰 글자("바람의 영혼", 영혼 색)와
+##   작은 설명 한 줄("커다란 돌풍 — … / 쿨 5초", SOUL_NOTICE_SHOW_DESC 로 끌 수 있음)이 떠올랐다 사라진다.
+##   보스 등장 이름이 떠 있는 3초 동안은 그 위(높이 0.105)로 올라간다.
+## - 빛 가루 (재화, Progress.dust): 이슬 줄 오른쪽(성장 아이콘 뒤)에 반짝이는 점 아이콘 + 개수. 늘어나면 "+N" 이 떠올라 사라진다
+##   (장면 전환 중 — 메뉴의 '불러오기' 등 — 에는 띄우지 않는다).
 ## - 성장이 생긴 순간 가운데에 "이슬 +1" 같은 짧은 글자(flash). 아이템·구원 보상이 같은 때 가운데 안내(show_message)를 띄우면 그것 하나만 보인다.
-## 시험: tools/probe_hud.tscn (그리기와 같은 계산 함수 dew_slots / hp_bar_width / hp_frame_pieces / growth_labels / soul_dots 를 검사)
+## 시험: tools/probe_hud.tscn (그리기와 같은 계산 함수 dew_slots / hp_bar_width / hp_frame_pieces / growth_labels / soul_dots 를 검사),
+##       tools/probe_ui.tscn (dust_text / soul_notice_title / soul_cooldown 표시)
 
 const SHEET_SCALE := 0.36
 const ORIGIN := Vector2(10, 4)
@@ -55,11 +62,25 @@ const SOUL_DOT_R_SEL := 9.0          # 고른 영혼은 조금 크게
 const SOUL_DOT_GAP := 24.0           # 원 사이 간격 (화면 px)
 const SOUL_FLASH_TIME := 0.3
 const SOUL_FONT_SIZE := 18
-const SOUL_COLORS := {
-	"seed": Color(0.85, 1.0, 0.75),   # 연둣빛
-	"wind": Color(0.85, 1.0, 0.9),    # 민트
-	"light": Color(1.0, 0.9, 0.7),    # 금빛
-}
+## (영혼 색은 Player.SOUL_INFO 에 한 곳만 둔다: 씨앗 연둣빛 / 바람 민트 / 빛 금빛)
+const SOUL_CD_FONT_SIZE := 26       # 영혼 이름 옆 남은 초 숫자 (아이폰에서도 읽히게 영혼 이름 18 보다 크게)
+## 영혼 전환 알림
+const SOUL_NOTICE_TIME := 1.2
+const SOUL_NOTICE_FADE_IN := 0.15
+const SOUL_NOTICE_FADE_OUT := 0.35
+const SOUL_NOTICE_Y := 0.17         # 화면 높이 비율 (큰 글자 기준선)
+const SOUL_NOTICE_Y_BOSS := 0.105   # 보스 등장 이름(높이 0.22, 72pt)이 떠 있는 3초 동안은 그 위로 올려 겹치지 않게
+## 설명 줄("커다란 돌풍 — … / 쿨 5초")을 보일지. 기획자가 '큰 이름만' 을 고르면 false 로.
+const SOUL_NOTICE_SHOW_DESC := true
+const SOUL_NOTICE_TITLE_SIZE := 46
+const SOUL_NOTICE_DESC_SIZE := 20
+## 빛 가루 표시
+const DUST_GAP := 18.0              # 성장 표시(또는 이슬) 와의 간격 (화면 px)
+const DUST_ICON := 9.0              # 아이콘 반 크기 (화면 px)
+const DUST_FONT_SIZE := 17
+const DUST_POP_TIME := 1.1          # "+N" 이 떠올라 사라지는 시간
+const DUST_POP_RISE := 26.0         # 떠오르는 거리 (화면 px)
+const DUST_COLOR := Color(1.0, 0.95, 0.72)
 
 var _player: Player
 var _canvas: Control
@@ -82,6 +103,12 @@ var _hp_grow_flash := 0.0
 var _soul_flash := 0.0
 var _pending_flash := ""    # Progress.upgraded 로 받은 짧은 글자. 같은 때 가운데 안내가 뜨면 버린다
 var _pending_flash_frames := 0
+## 영혼 전환 알림: 남은 시간과 어떤 영혼인지
+var _soul_notice_timer := 0.0
+var _soul_notice_soul := ""
+## 빛 가루: 늘어난 양이 떠오르는 글자들 [{"amount": int, "t": 남은 시간}]
+var _dust_pops: Array = []
+var _dust_glow := 0.0       # 늘어난 순간 아이콘이 밝아졌다 가라앉음
 
 
 func _ready() -> void:
@@ -92,6 +119,8 @@ func _ready() -> void:
 	_canvas.draw.connect(_on_draw)
 	add_child(_canvas)
 	Progress.upgraded.connect(_on_upgraded)
+	Progress.dust_changed.connect(_on_dust_changed)
+	_last_dust = Progress.dust
 
 
 func _process(delta: float) -> void:
@@ -108,7 +137,7 @@ func _process(delta: float) -> void:
 			_player.purify_started.connect(func(_t): flash("정화의 손길"))
 			_player.died.connect(func(): show_message("쓰러졌다…", 2.5))
 			_player.rest_started.connect(func(_g): show_message("달빛풀에서 쉰다. 적들이 다시 깨어난다.", 2.5))
-			_player.soul_changed.connect(func(_s): _soul_flash = 1.0)
+			_player.soul_changed.connect(_on_soul_changed)
 	else:
 		var target := _player.hp / _player.max_hp
 		_hp_shown = move_toward(_hp_shown, target, delta * (2.5 if target < _hp_shown else 4.0))
@@ -118,6 +147,16 @@ func _process(delta: float) -> void:
 	_guard_flash = maxf(_guard_flash - delta * 2.0, 0.0)
 	_soul_flash = maxf(_soul_flash - delta / SOUL_FLASH_TIME, 0.0)
 	_hp_grow_flash = maxf(_hp_grow_flash - delta / HP_GROW_TIME, 0.0)
+	_soul_notice_timer = maxf(_soul_notice_timer - delta, 0.0)
+	_dust_glow = maxf(_dust_glow - delta / DUST_POP_TIME, 0.0)
+	if _scene_changing() and not _dust_pops.is_empty():
+		# 메뉴의 '불러오기'는 빛 가루를 넣고(dust_changed) 같은 호출에서 장면 전환을 시작한다 → 번 것이 아니니 떠오르는 글자를 지운다
+		_dust_pops.clear()
+		_dust_glow = 0.0
+	for i in range(_dust_pops.size() - 1, -1, -1):
+		_dust_pops[i]["t"] -= delta
+		if _dust_pops[i]["t"] <= 0.0:
+			_dust_pops.remove_at(i)
 	if _pending_flash != "":
 		_pending_flash_frames -= 1
 		if _pending_flash_frames <= 0:
@@ -165,6 +204,28 @@ func _on_upgraded(kind: String, amount: float) -> void:
 		return
 	_pending_flash = text
 	_pending_flash_frames = 2
+
+
+## 영혼을 바꿨다: 번쩍 + 가운데 위 알림 1.2초
+func _on_soul_changed(s: String) -> void:
+	_soul_flash = 1.0
+	_soul_notice_soul = s
+	_soul_notice_timer = SOUL_NOTICE_TIME
+
+
+var _last_dust := 0
+## 장면 전환(Game.go_to 의 검은 화면) 중인가
+func _scene_changing() -> bool:
+	return bool(Game.get("_busy"))
+
+
+## 빛 가루가 바뀌었다: 늘어난 만큼 "+N" 이 떠오른다 (줄어든 것은 조용히)
+func _on_dust_changed(amount: int) -> void:
+	var diff := amount - _last_dust
+	_last_dust = amount
+	if diff > 0:
+		_dust_pops.append({"amount": diff, "t": DUST_POP_TIME})
+		_dust_glow = 1.0
 
 
 func show_message(text: String, seconds := 2.0) -> void:
@@ -290,7 +351,72 @@ func soul_list() -> Array:
 
 
 func soul_color(s: String) -> Color:
-	return SOUL_COLORS.get(s, Color.WHITE)
+	return Player.soul_color_of(s)
+
+
+## 영혼 이름 줄의 글자: "지금: 바람 (잿빛 잎새의 새)". 영혼이 없으면 "".
+func soul_label() -> String:
+	if _player == null or _player.soul == "":
+		return ""
+	return "지금: %s" % _player.soul_name()
+
+
+## 전환 알림의 큰 글자 ("바람의 영혼"). 알림이 꺼져 있으면 "".
+func soul_notice_title() -> String:
+	if _soul_notice_timer <= 0.0 or _player == null:
+		return ""
+	return _player.soul_title(_soul_notice_soul)
+
+
+func soul_notice_desc() -> String:
+	if _soul_notice_timer <= 0.0 or _player == null or not SOUL_NOTICE_SHOW_DESC:
+		return ""
+	return _player.soul_desc(_soul_notice_soul)
+
+
+## 알림 큰 글자 기준선의 높이 비율. 보스 등장 이름이 떠 있으면 그 위로 올린다.
+func soul_notice_y_ratio() -> float:
+	return SOUL_NOTICE_Y_BOSS if _boss_title_showing() else SOUL_NOTICE_Y
+
+
+## 보스 등장 이름(BossHUD, 3초)이 화면에 떠 있는가
+func _boss_title_showing() -> bool:
+	var room := get_parent()
+	var bhud: Node = room.get_node_or_null("BossHUD") if room else null   # 보스 방에서 CombatHUD 와 BossHUD 는 형제
+	if bhud == null:
+		return false
+	var t = bhud.get("_title")
+	return t != null and float(t) > 0.0
+
+
+## 알림 글자의 투명도 (0~1): 빠르게 떠올라 머물다 사라진다
+func soul_notice_alpha() -> float:
+	if _soul_notice_timer <= 0.0:
+		return 0.0
+	var elapsed := SOUL_NOTICE_TIME - _soul_notice_timer
+	return clampf(minf(elapsed / SOUL_NOTICE_FADE_IN, _soul_notice_timer / SOUL_NOTICE_FADE_OUT), 0.0, 1.0)
+
+
+## 빛 가루 개수 글자
+func dust_text() -> String:
+	return str(Progress.dust)
+
+
+## 빛 가루 아이콘의 가운데 (화면 좌표): 성장 표시 줄 끝 (성장이 없으면 이슬 줄 바로 오른쪽)
+func dust_origin() -> Vector2:
+	var o := growth_origin()
+	return Vector2(growth_end_x() + DUST_GAP + DUST_ICON, o.y)
+
+
+## 성장 표시 줄이 끝나는 x (화면 좌표). 성장이 없으면 시작점 그대로.
+func growth_end_x() -> float:
+	var font := ThemeDB.fallback_font
+	var origin := growth_origin()
+	var x := origin.x
+	for it in growth_items():
+		var tx := x + GROWTH_ICON * 1.6 + 4.0
+		x = tx + font.get_string_size(it["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, GROWTH_FONT_SIZE).x + 16.0
+	return x
 
 
 ## 영혼 줄의 시작점 (화면 좌표, 글자 기준선). 이슬이 두 줄이면 한 줄만큼 아래
@@ -417,10 +543,65 @@ func _draw_dews() -> void:
 		_canvas.draw_texture_rect(tex, Rect2(pos, size), false, tint)
 
 
+## 빛 가루: 네 갈래 반짝이 + 가운데 점, 그 오른쪽에 개수. 늘어난 순간 "+N" 이 위로 떠오르며 사라진다.
+func _draw_dust(font: Font) -> void:
+	var c := dust_origin()
+	var pulse := 0.5 + 0.5 * sin(_time * 3.0)
+	var glow := 0.25 + 0.2 * pulse + 0.6 * _dust_glow
+	_canvas.draw_circle(c, DUST_ICON * (1.3 + 0.6 * _dust_glow), Color(DUST_COLOR.r, DUST_COLOR.g, DUST_COLOR.b, 0.18 * glow))
+	var long := DUST_ICON * (1.0 + 0.15 * pulse + 0.4 * _dust_glow)
+	var short := DUST_ICON * 0.45
+	var outline := Color(0.08, 0.06, 0.03, 0.7)
+	for k in 4:
+		var a := k * PI * 0.5
+		var tip := c + Vector2(cos(a), sin(a)) * long
+		var l := c + Vector2(cos(a + PI * 0.5), sin(a + PI * 0.5)) * short * 0.55
+		var r := c + Vector2(cos(a - PI * 0.5), sin(a - PI * 0.5)) * short * 0.55
+		var tri := PackedVector2Array([tip, l, r])
+		_canvas.draw_colored_polygon(tri, Color(1.0, 0.98, 0.85, 0.95))
+		_canvas.draw_polyline(tri + PackedVector2Array([tip]), outline, 1.0)
+	for k in 4:
+		var a := k * PI * 0.5 + PI * 0.25
+		_canvas.draw_line(c, c + Vector2(cos(a), sin(a)) * short * (1.0 + 0.6 * _dust_glow), Color(1.0, 0.95, 0.75, 0.6), 1.2)
+	_canvas.draw_circle(c, DUST_ICON * 0.32, Color(1, 1, 1, 0.95))
+	var tx := c.x + DUST_ICON + 5.0
+	_draw_outlined(font, Vector2(tx, c.y + DUST_FONT_SIZE * 0.36), dust_text(), DUST_FONT_SIZE, Color(DUST_COLOR.r, DUST_COLOR.g, DUST_COLOR.b, 0.95))
+	for pop in _dust_pops:
+		var t: float = 1.0 - pop["t"] / DUST_POP_TIME   # 0 → 1
+		var a := clampf(minf(t / 0.12, (1.0 - t) / 0.4), 0.0, 1.0)
+		var y := c.y - DUST_POP_RISE * (1.0 - (1.0 - t) * (1.0 - t))
+		_draw_outlined(font, Vector2(tx, y + DUST_FONT_SIZE * 0.36 - 4.0), "+%d" % int(pop["amount"]), DUST_FONT_SIZE + 2, Color(1.0, 1.0, 0.85, a))
+
+
+## 영혼 전환 알림: 화면 가운데 위, 큰 영혼 이름 + 작은 설명. 떠올랐다 사라진다.
+func _draw_soul_notice(font: Font) -> void:
+	var a := soul_notice_alpha()
+	if a <= 0.0:
+		return
+	var size := _canvas.size
+	var col := soul_color(_soul_notice_soul)
+	var title := soul_notice_title()
+	var desc := soul_notice_desc()
+	var elapsed := SOUL_NOTICE_TIME - _soul_notice_timer
+	var rise := 14.0 * (1.0 - clampf(elapsed / 0.25, 0.0, 1.0))   # 처음 0.25초 살짝 떠오른다
+	var y := size.y * soul_notice_y_ratio() + rise
+	var w := 1200.0
+	var x := size.x / 2.0 - w / 2.0
+	# 뒤에 영혼 색 빛 띠
+	_canvas.draw_rect(Rect2(x + 200.0, y - SOUL_NOTICE_TITLE_SIZE * 0.95, w - 400.0, SOUL_NOTICE_TITLE_SIZE * 1.25), Color(col.r, col.g, col.b, 0.1 * a))
+	_canvas.draw_string_outline(font, Vector2(x, y), title, HORIZONTAL_ALIGNMENT_CENTER, w, SOUL_NOTICE_TITLE_SIZE, 6, Color(0.05, 0.04, 0.03, 0.8 * a))
+	_canvas.draw_string(font, Vector2(x, y), title, HORIZONTAL_ALIGNMENT_CENTER, w, SOUL_NOTICE_TITLE_SIZE, Color(col.r, col.g, col.b, a))
+	if desc != "":
+		var dy := y + SOUL_NOTICE_DESC_SIZE * 1.9
+		_canvas.draw_string_outline(font, Vector2(x, dy), desc, HORIZONTAL_ALIGNMENT_CENTER, w, SOUL_NOTICE_DESC_SIZE, 4, Color(0.05, 0.04, 0.03, 0.75 * a))
+		_canvas.draw_string(font, Vector2(x, dy), desc, HORIZONTAL_ALIGNMENT_CENTER, w, SOUL_NOTICE_DESC_SIZE, Color(1, 1, 1, 0.9 * a))
+
+
 func _draw_souls(font: Font) -> void:
 	var dots := soul_dots()
 	if dots.is_empty():
 		return
+	var ratio := _player.soul_cooldown_ratio()
 	for d in dots:
 		var c: Vector2 = d["center"]
 		var r: float = d["radius"]
@@ -428,15 +609,22 @@ func _draw_souls(font: Font) -> void:
 		if d["selected"]:
 			_canvas.draw_circle(c, r * (1.9 + 0.8 * _soul_flash), Color(col.r, col.g, col.b, 0.18 + 0.45 * _soul_flash))
 			_canvas.draw_circle(c, r + 1.5, Color(0.05, 0.04, 0.03, 0.7))
-			_canvas.draw_circle(c, r, Color(col.r + 0.3 * _soul_flash, col.g + 0.3 * _soul_flash, col.b + 0.3 * _soul_flash, 1.0))
-			_canvas.draw_circle(c + Vector2(-r * 0.3, -r * 0.3), r * 0.3, Color(1, 1, 1, 0.7))
+			var body := Color(col.r + 0.3 * _soul_flash, col.g + 0.3 * _soul_flash, col.b + 0.3 * _soul_flash, 1.0)
+			if ratio > 0.0:
+				body = body.darkened(0.45)   # 쿨다운 중엔 원이 어둡다
+			_canvas.draw_circle(c, r, body)
+			_canvas.draw_circle(c + Vector2(-r * 0.3, -r * 0.3), r * 0.3, Color(1, 1, 1, 0.7 if ratio <= 0.0 else 0.35))
+			if ratio > 0.0:
+				# 쿨다운 호: 위에서 시계 방향으로 차오른다 (밝은 호 = 지난 비율, 어두운 호 = 남은 비율)
+				_canvas.draw_arc(c, r + 4.0, -PI / 2.0, -PI / 2.0 + TAU, 40, Color(col.r, col.g, col.b, 0.25), 2.5, true)
+				var done := TAU * (1.0 - ratio)
+				if done > 0.02:
+					_canvas.draw_arc(c, r + 4.0, -PI / 2.0, -PI / 2.0 + done, 40, Color(col.r, col.g, col.b, 0.95), 3.0, true)
 		else:
 			_canvas.draw_circle(c, r + 1.5, Color(0.05, 0.04, 0.03, 0.5))
 			_canvas.draw_circle(c, r, Color(col.r, col.g, col.b, 0.42))
 	var o := soul_origin()
-	var label := ""
-	if _player.soul != "":
-		label = _player.soul_name()
+	var label := soul_label()
 	if label == "":
 		return
 	if bool(Settings.get_value("debug_hud")):
@@ -449,7 +637,13 @@ func _draw_souls(font: Font) -> void:
 	var col := soul_color(_player.soul)
 	col.a = 0.9
 	col = col.lerp(Color(1, 1, 1, 1), 0.5 * _soul_flash)
-	_draw_outlined(font, Vector2(o.x + SOUL_DOT_R_SEL * 2.0 + SOUL_DOT_GAP * (dots.size() - 1) + 8.0, o.y), label, SOUL_FONT_SIZE, col)
+	var lx := o.x + SOUL_DOT_R_SEL * 2.0 + SOUL_DOT_GAP * (dots.size() - 1) + 8.0
+	_draw_outlined(font, Vector2(lx, o.y), label, SOUL_FONT_SIZE, col)
+	# 쿨다운 남은 초: 이름 뒤에 큼직하게 ("7", "6", … "1")
+	var cd := _player.soul_cooldown_text()
+	if cd != "":
+		var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, SOUL_FONT_SIZE).x
+		_draw_outlined(font, Vector2(lx + w + 12.0, o.y + 1.0), cd, SOUL_CD_FONT_SIZE, Color(1, 1, 1, 0.9))
 
 
 func _on_draw() -> void:
@@ -474,10 +668,12 @@ func _on_draw() -> void:
 	var pulse := 0.75 + 0.25 * sin(_time * (7.0 if low else 2.2))
 	var glow_color := Color(2.2, 0.9, 0.6, 0.16 * pulse) if low else Color(2.0, 1.7, 1.0, 0.1 * pulse)
 	_canvas.draw_circle(_s(SEED_CENTER), 40.0 * SHEET_SCALE * (1.2 + 0.4 * pulse), glow_color)
-	# 이슬 방울 · 성장 표시 · 영혼
+	# 이슬 방울 · 성장 표시 · 빛 가루 · 영혼
 	_draw_dews()
 	_draw_growth(font)
+	_draw_dust(font)
 	_draw_souls(font)
+	_draw_soul_notice(font)
 	# 메시지
 	var size := _canvas.size
 	if _message_timer > 0.0:

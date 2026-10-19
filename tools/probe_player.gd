@@ -2,6 +2,10 @@ extends Node
 ## 플레이어 묶음 시험 (화면 없이 돈다). 2026-10-18 기획자 요청분: 씨앗 베기 / 낙하 공격 / 하단 점프 / 가드 보호막 신호 / 투사체 사거리 / 입력 맵.
 ## 검토 지적분(같은 날): 터치 스틱 세기 문턱 / 이단 점프 없을 때 튕김 / 튕김 뒤 잠금·기억 / 고른 영혼이 방·세이브를 건너 남음 /
 ##   착지 신호 한 번만 / 옛 키맵 파일 살리기 / 3연타 → 베기 연계 / 끊긴 베기는 쿨다운 없음 / 보호막·초승달 크기.
+## 2026-10-19 기획자 요청분: 바람·빛 파격 상향(피해 ×4, 크기, 사거리, 쿨 5/7초), 낙하 공격 버튼(동작 plunge: 공중에서만), '공격' 이름.
+## 같은 날 검토 지적분: 영혼마다 따로 세는 쿨다운(빛 뒤 씨앗 베기 바로 가능, 호가 멈추지 않음) / 쿨다운 글자 '0' 없음 /
+##   땅에서 낙하+공격 같은 프레임 → 공격 / 공중 공격 중 낙하 버튼 기억 / 맞으면 기억 버림 / 흐트러짐 그대로(기계 35%) /
+##   투사체가 등 뒤 적을 안 맞힘 / 벽에 붙어 쏘면 사이에 낀 적을 한 번만 맞힘.
 ## 실행: godot --headless --path . res://tools/probe_player.tscn
 ## 첫 방(canopy_01)을 통째로 띄워 진짜 소녀를 Input.action_press 로 조종한다. 마지막 줄 "[probe] 끝: 실패 N".
 
@@ -43,6 +47,7 @@ func _teleport(pos: Vector2, facing: int) -> void:
 	_player._end_drop_through()
 	_player._plunge_lock = 0.0
 	_player._plunge_buffered = false
+	_player._plunge_btn_buffered = false
 	_player._plunge_hits = 0
 	_player._set_state(Player.State.IDLE)
 
@@ -85,12 +90,14 @@ func _run() -> void:
 	await _test_slash_after_combo()
 	await _test_slash_cooldown_on_interrupt()
 	await _test_plunge()
+	await _test_plunge_button()
 	await _test_bounce_without_double_jump()
 	await _test_plunge_relock()
 	await _test_landed_once()
 	await _test_drop_through()
 	await _test_touch_threshold()
 	await _test_projectiles()
+	await _test_review_fixes()
 	await _test_soul_persist()
 	await _test_keymap_old_file()
 	await _test_shield_and_crescent_geometry()
@@ -116,7 +123,11 @@ func _test_input_map() -> void:
 	_check(not Keymap.ACTIONS.has("attack_heavy") and Keymap.NAMES["soul_ability"] == "영혼 기술", "키맵 목록에서 강공격이 빠지고 영혼 기술 이름표")
 	var font := ThemeDB.fallback_font
 	var w := font.get_string_size("▸ " + Keymap.NAMES["attack_light"], HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
-	_check(w < 360.0, "약공격 이름표가 키 바꾸기 화면의 동작 칸(360px) 안에 든다 (%.0fpx: '%s')" % [w, Keymap.NAMES["attack_light"]])
+	_check(w < 360.0, "공격 이름표가 키 바꾸기 화면의 동작 칸(360px) 안에 든다 (%.0fpx: '%s')" % [w, Keymap.NAMES["attack_light"]])
+	# 2026-10-19: '약공격' → '공격', 낙하 공격 버튼 동작 plunge
+	_check(Keymap.NAMES["attack_light"].begins_with("공격") and not ("약공격" in Keymap.NAMES["attack_light"]), "키맵 이름표가 '공격 …' (약공격 아님): '%s'" % Keymap.NAMES["attack_light"])
+	_check(InputMap.has_action("plunge") and InputMap.action_get_events("plunge").is_empty(), "입력 맵에 plunge 동작이 있고 기본 키·버튼은 비어 있다 (터치 전용)")
+	_check(Keymap.ACTIONS.has("plunge") and Keymap.NAMES.get("plunge", "") == "낙하 공격 (터치 버튼)", "키맵 목록에 plunge '낙하 공격 (터치 버튼)'")
 
 
 # ---------- (8) 영혼 목록 ----------
@@ -323,6 +334,71 @@ func _test_plunge() -> void:
 	await get_tree().physics_frame
 	_check(_player.state == Player.State.ATTACK, "↓ 없이 공중 약공격은 PLUNGE 가 아니라 ATTACK (%s)" % _player.state_name())
 	await _frames(60)
+
+
+# ---------- 낙하 공격 버튼 (동작 plunge): 공중에서 ↓ 없이도, 땅에서는 아무 일 없음 ----------
+func _test_plunge_button() -> void:
+	# 땅에서 누르면 아무 일도 없다
+	_teleport(Vector2(400, 2200 - 67 - 1), 1)
+	await _frames(4)
+	_check(_player.is_on_floor(), "바닥에 섰다")
+	var starts := {"n": 0}
+	var cb := func(): starts["n"] += 1
+	_player.plunge_started.connect(cb)
+	await _tap("plunge")
+	await _frames(3)
+	_check(starts["n"] == 0 and _player.state in Player.LOCOMOTION, "땅에서 낙하 공격 버튼은 무시된다 (%s)" % _player.state_name())
+	# 공중에서 ↓ 없이 버튼만: 낙하 공격
+	_teleport(Vector2(400, 2200 - 67 - 360), 1)
+	await _frames(3)
+	_check(not _player.is_on_floor() and not _player._down_held(), "공중, ↓ 안 누름")
+	await _tap("plunge")
+	await get_tree().physics_frame
+	var st := _player.state_name()
+	var phases := []
+	for i in 120:
+		await get_tree().physics_frame
+		if _player.state == Player.State.PLUNGE and (phases.is_empty() or phases[-1] != _player.attack_phase):
+			phases.append(_player.attack_phase)
+		elif not phases.is_empty() and _player.state != Player.State.PLUNGE:
+			break
+	print("[probe] 낙하 공격 버튼(공중): 누른 직후 '%s', 국면 %s, 시작 신호 %d" % [st, phases, starts["n"]])
+	_check(st == "낙하 공격" and phases == ["pause", "dive", "land", "recovery"] and starts["n"] == 1, "공중에서 plunge 버튼만으로 낙하 공격이 나간다 (↓ 없이)")
+	# 튕긴 뒤 잠금 중에 누른 버튼은 기억되어 ↓ 없이도 저절로 나간다
+	var wc := _enemy("Woodcutter1")
+	if wc != null and is_instance_valid(wc):
+		var saved := [wc.max_hp, wc.max_poise]
+		wc.max_hp = 100000.0
+		wc.max_poise = 100000.0
+		_reset_enemy(wc)
+		var pin := wc.global_position
+		_teleport(pin + Vector2(0, -320), 1)
+		await _frames(3)
+		starts["n"] = 0
+		var hits := 0
+		var last_hp := wc.hp
+		var buffered := false
+		await _tap("plunge")
+		for i in 240:
+			await get_tree().physics_frame
+			wc.global_position = pin
+			wc.velocity = Vector2.ZERO
+			if wc.hp < last_hp:
+				hits += 1
+				last_hp = wc.hp
+				if hits == 1:
+					await _tap("plunge")   # 튕긴 직후 (잠금 중) 다시 버튼
+					await get_tree().physics_frame
+					buffered = _player._plunge_btn_buffered
+			if hits >= 2:
+				break
+		print("[probe] 낙하 공격 버튼 잠금 중 다시 누름: 기억 %s, 시작 신호 %d, 맞힌 수 %d" % [buffered, starts["n"], hits])
+		_check(buffered and starts["n"] >= 2 and hits >= 2, "잠금 중 누른 낙하 버튼은 기억되어 풀리면 저절로 나간다")
+		wc.max_hp = saved[0]
+		wc.max_poise = saved[1]
+		_reset_enemy(wc)
+	_player.plunge_started.disconnect(cb)
+	await _frames(40)
 
 
 # ---------- 이단 점프 없이 튕기면 공중 점프가 생기지 않는다 ----------
@@ -643,13 +719,223 @@ func _test_projectiles() -> void:
 		var expect: float = (_player.gust_speed * _player.gust_range_time) if soul == "wind" else (_player.light_shot_speed * _player.light_shot_time)
 		print("[probe] %s 투사체: 그림 크기 %s, 판정 %s, 피해 %.0f, 사거리 %.0f px (%.2f초, 기대 %.0f)" % [soul, p.size if is_instance_valid(p) else "-", shape_desc, p.damage if is_instance_valid(p) else -1.0, far, frames / 60.0, expect])
 		_check(far > expect * 0.9 and far < expect * 1.1, "%s 사거리가 속도×수명(%.0f)에 맞는다" % [soul, expect])
+		# 2026-10-19 파격 상향: 피해 ×4, 크기 240×130 / 280×90, 쿨 5 / 7초 (씨앗 베기는 1.4 그대로)
 		if soul == "wind":
-			_check(is_instance_valid(p) and p.size == Vector2(110, 60) and absf(p.damage - 24.0 * _player.attack_multiplier) < 0.01, "바람: 크기 110×60, 피해 24")
+			_check(is_instance_valid(p) and p.size == Vector2(240, 130) and absf(p.damage - 96.0 * _player.attack_multiplier) < 0.01, "바람: 크기 240×130, 피해 96 (24×4)")
+			_check(is_equal_approx(_player.gust_cooldown, 5.0) and is_equal_approx(_player.gust_range_time, 1.3) and rect_size == Vector2(240, 130) * 0.9, "바람: 쿨다운 5초, 사거리 1.3초, 판정 = 크기×0.9 (%s)" % rect_size)
 		else:
-			_check(is_instance_valid(p) and p.size == Vector2(120, 40) and absf(p.damage - 34.0 * _player.attack_multiplier) < 0.01, "빛: 크기 120×40, 피해 34")
+			_check(is_instance_valid(p) and p.size == Vector2(280, 90) and absf(p.damage - 136.0 * _player.attack_multiplier) < 0.01, "빛: 크기 280×90, 피해 136 (34×4)")
+			_check(is_equal_approx(_player.light_shot_cooldown, 7.0) and is_equal_approx(_player.light_shot_time, 1.4) and rect_size == Vector2(280, 90) * 0.9, "빛: 쿨다운 7초, 사거리 1.4초, 판정 = 크기×0.9 (%s)" % rect_size)
 		await _frames(10)
+	_check(is_equal_approx(_player.slash_cooldown, 1.4), "씨앗 베기 쿨다운은 1.4초 그대로")
+	# 쏜 직후 쿨다운이 걸리고, 쿨다운 글자가 7 → 1 로 내려간다 (HUD·터치 버튼이 같은 함수를 쓴다)
+	_player.soul = "light"
+	_player._soul_cooldown = 0.0
+	_teleport(Vector2(150, 2200 - 67 - 1), 1)
+	await _frames(3)
+	await _tap("soul_ability")
+	await get_tree().physics_frame
+	var cd_after := _player.soul_cooldown_left()
+	var ratio := _player.soul_cooldown_ratio()
+	var texts := []
+	for v in [7.0, 6.5, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.5, 0.0]:
+		_player._soul_cooldown = v
+		texts.append(_player.soul_cooldown_text())
+	print("[probe] 빛을 쏜 직후 쿨다운 %.2f (비율 %.2f), 글자 7.0→0: %s" % [cd_after, ratio, texts])
+	_check(cd_after > 6.9 and ratio > 0.98, "빛을 쏘면 7초 쿨다운이 걸린다")
+	_check(texts == ["7", "7", "6", "5", "4", "3", "2", "1", "1", ""], "쿨다운 글자가 7 → 1 로 내려가고 끝나면 빈 글자")
+	_check(_player.soul_short_name("wind") == "바람" and _player.soul_title("light") == "빛의 영혼" and _player.soul_desc("wind").ends_with("/ 쿨 5초") and _player.soul_desc("seed").ends_with("/ 쿨 1.4초"), "영혼 이름·알림 글자: 바람 / 빛의 영혼 / '… / 쿨 5초' / '… / 쿨 1.4초' (%s)" % _player.soul_desc("wind"))
+	_check(_player.soul_color("seed").is_equal_approx(Color(0.85, 1.0, 0.75)) and Player.soul_color_of("light").is_equal_approx(Color(1.0, 0.9, 0.7)), "영혼 색: 씨앗 연둣빛, 빛 금빛")
+	_player._soul_cooldown = 0.0
+	await _frames(100)   # 빛 투사체가 사라질 때까지
 	_player.soul = "seed"
 	Progress.soul = "seed"
+
+
+# ---------- 2026-10-19 검토 지적 수정 ----------
+const FLOOR1_Y := 2200.0   # 첫 방 시작 바닥(x 0~1600) 윗면
+
+
+func _spawn_dummy_enemy(x: float, hp := 99999.0) -> EnemyBase:
+	var e: EnemyBase = load("res://scenes/enemies/woodcutter.tscn").instantiate()
+	e.position = Vector2(x, FLOOR1_Y - 66.0)
+	_room.add_child(e)
+	e.max_hp = hp
+	e.hp = hp
+	e.max_poise = 100000.0
+	e.set_physics_process(false)   # 움직이지 않는 과녁
+	return e
+
+
+func _cast_now(soul: String) -> void:
+	_player.soul = soul
+	Progress.soul = soul
+	_player._soul_cooldowns.clear()
+	await _tap("soul_ability")
+
+
+func _test_review_fixes() -> void:
+	# (1) 쿨다운은 영혼마다: 빛(7초)을 쏜 뒤 씨앗으로 바꾸면 씨앗 베기를 바로 쓸 수 있고, 빛의 호는 제 길이로 차오른다
+	_teleport(Vector2(400, FLOOR1_Y - 68.0), 1)
+	await _frames(3)
+	await _cast_now("light")
+	await get_tree().physics_frame
+	var light_cd := _player.soul_cooldown_left("light")
+	await _tap("soul_next")   # 빛 → 씨앗 (목록 seed, wind, light)
+	await get_tree().physics_frame
+	var seed_left := _player.soul_cooldown_left()
+	var seed_text := _player.soul_cooldown_text()
+	await _tap("soul_ability")
+	await get_tree().physics_frame
+	var slash_state := _player.state_name()
+	print("[probe] 빛을 쏜 뒤(쿨 %.2f) 씨앗으로 전환: 영혼 %s, 씨앗 남은 쿨 %.2f, 글자 '%s', 베기 시도 → '%s'" % [light_cd, _player.soul, seed_left, seed_text, slash_state])
+	_check(light_cd > 6.9 and _player.soul == "seed" and seed_left == 0.0 and seed_text == "" and slash_state == "씨앗 베기", "빛을 쏜 뒤 씨앗으로 바꾸면 씨앗 베기를 바로 쓴다 (쿨다운은 영혼마다)")
+	await _frames(60)
+	var r1 := _player.soul_cooldown_ratio("light")
+	var seed_cd := _player.soul_cooldown_left("seed")
+	await _frames(30)
+	var r2 := _player.soul_cooldown_ratio("light")
+	print("[probe] 베기 뒤: 씨앗 남은 쿨 %.2f, 빛 남은 쿨 %.2f, 빛 비율 %.3f → 0.5초 뒤 %.3f, 바람 %.2f" % [seed_cd, _player.soul_cooldown_left("light"), r1, r2, _player.soul_cooldown_left("wind")])
+	_check(seed_cd > 0.0 and seed_cd <= 1.4 and r1 < 1.0 and r2 < r1 - 0.05 and _player.soul_cooldown_left("wind") == 0.0, "씨앗은 제 쿨(1.4초), 빛의 비율은 멈추지 않고 줄고, 바람은 0")
+	await _tap("soul_next")   # 씨앗 → 바람
+	await get_tree().physics_frame
+	_check(_player.soul == "wind" and _player.soul_cooldown_text() == "" and _player.soul_cooldown_text("light") != "", "바람으로 바꾸면 바람은 준비됨, 빛은 따로 남은 초 '%s'" % _player.soul_cooldown_text("light"))
+	await _frames(60)
+
+	# (2) 쿨다운 글자에 '0' 이 끼지 않는다 (1/60 씩 줄어 생기는 부동소수 찌꺼기), 글자가 비면 정말 0
+	_player._soul_cooldowns["wind"] = 5.0
+	var seen := []
+	var zero_frames := 0
+	var mismatch := 0
+	for i in 330:
+		await get_tree().physics_frame
+		var t := _player.soul_cooldown_text("wind")
+		if seen.is_empty() or seen[-1] != t:
+			seen.append(t)
+		if t == "0":
+			zero_frames += 1
+		if (t == "") != (_player.soul_cooldown_left("wind") <= 0.0):
+			mismatch += 1
+	_player._soul_cooldowns["wind"] = 0.0005
+	var tiny := _player.soul_cooldown_text("wind")
+	_player._soul_cooldowns["wind"] = 0.0
+	print("[probe] 바람 5초가 저절로 줄며 본 글자 %s, '0' 프레임 %d, 글자·남은 값 어긋남 %d, 0.0005초 → '%s'" % [seen, zero_frames, mismatch, tiny])
+	_check(seen == ["5", "4", "3", "2", "1", ""] and zero_frames == 0 and mismatch == 0 and tiny == "1", "쿨다운 글자 5 → 1 → 빈 글자, '0' 은 한 번도 안 보인다")
+
+	# (3) 땅에서 낙하 버튼과 공격을 같은 프레임에 누르면 공격이 나간다
+	_player.soul = "seed"
+	Progress.soul = "seed"
+	_teleport(Vector2(400, FLOOR1_Y - 68.0), 1)
+	await _frames(4)
+	Input.action_press("plunge")
+	Input.action_press("attack_light")
+	await get_tree().physics_frame
+	Input.action_release("plunge")
+	Input.action_release("attack_light")
+	await get_tree().physics_frame
+	_check(_player.state == Player.State.ATTACK, "땅에서 낙하+공격 같은 프레임 → 공격 (%s)" % _player.state_name())
+	await _frames(40)
+
+	# (4) 공중 공격 중에 누른 낙하 버튼은 기억되어, 휘두름이 끝나면 낙하 공격으로 이어진다
+	var starts := {"n": 0}
+	var cb := func(): starts["n"] += 1
+	_player.plunge_started.connect(cb)
+	_teleport(Vector2(400, FLOOR1_Y - 68.0 - 700.0), 1)
+	await _frames(2)
+	await _tap("attack_light")
+	await _frames(2)
+	var in_attack := _player.state == Player.State.ATTACK and _player.attack_phase != "recovery"
+	await _tap("plunge")
+	await get_tree().physics_frame   # 누른 입력은 다음 물리 프레임에 처리된다
+	var buffered := _player._plunge_btn_buffered and _player.state == Player.State.ATTACK
+	var plunged_in_air := false
+	for i in 60:
+		await get_tree().physics_frame
+		if _player.state == Player.State.PLUNGE:
+			plunged_in_air = true
+			break
+	print("[probe] 공중 공격 중 낙하 버튼: 공격 중 %s, 기억 %s, 낙하 공격 나감 %s, 시작 신호 %d" % [in_attack, buffered, plunged_in_air, starts["n"]])
+	_check(in_attack and buffered and plunged_in_air and starts["n"] == 1, "공중 공격 중 누른 낙하 버튼은 기억되어 휘두름 뒤 낙하 공격으로 나간다")
+	await _frames(90)
+	# (5) 기억해 둔 낙하 버튼은 맞으면(흐름이 끊기면) 버린다
+	_teleport(Vector2(400, FLOOR1_Y - 68.0 - 700.0), 1)
+	await _frames(2)
+	await _tap("attack_light")
+	await _frames(2)
+	await _tap("plunge")
+	await get_tree().physics_frame
+	var had := _player._plunge_btn_buffered
+	_player._set_state(Player.State.HIT)
+	_check(had and not _player._plunge_btn_buffered, "공중 공격 중 기억한 낙하 버튼은 맞는 순간 버린다 (맞고 난 뒤 저절로 내리꽂지 않게)")
+	_player._set_state(Player.State.FALL)
+	await _frames(90)
+	_player.plunge_started.disconnect(cb)
+
+	# (6) 흐트러짐은 요청 범위 그대로 (바람 24 = 기계의 '단단함' 문턱 30 아래 / 빛 30)
+	_check(is_equal_approx(_player.gust_poise, 24.0) and is_equal_approx(_player.light_shot_poise, 30.0), "흐트러짐: 바람 24, 빛 30 (요청은 피해·크기·쿨만)")
+	_check(not ("꿰뚫" in _player.soul_desc("light")), "빛 설명에 '꿰뚫는다' 가 없다 (투사체는 첫 적에서 사라진다): '%s'" % _player.soul_desc("light"))
+
+	# (7) 앞으로 쏜 바람·빛은 등 뒤 60~90px 의 적을 맞히지 않고, 바로 앞(가운데 +60)의 적은 맞힌다
+	for soul in ["wind", "light"]:
+		var dmg: float = (_player.gust_damage if soul == "wind" else _player.light_shot_damage) * _player.attack_multiplier
+		for d in [60.0, 75.0, 90.0]:
+			var e := _spawn_dummy_enemy(700.0 - d)
+			_teleport(Vector2(700, FLOOR1_Y - 68.0), 1)
+			await _frames(3)
+			await _cast_now(soul)
+			await _frames(40)
+			var lost := e.max_hp - e.hp
+			_check(lost == 0.0, "%s: 앞으로 쏘면 등 뒤 %.0fpx 적은 안 맞는다 (잃은 체력 %.0f)" % [soul, d, lost])
+			e.queue_free()
+			await _frames(30)
+		var f := _spawn_dummy_enemy(760.0)
+		_teleport(Vector2(700, FLOOR1_Y - 68.0), 1)
+		await _frames(3)
+		await _cast_now(soul)
+		await _frames(40)
+		_check(absf((f.max_hp - f.hp) - dmg) < 0.5, "%s: 바로 앞(+60px) 적은 맞는다 (잃은 체력 %.0f, 기대 %.0f)" % [soul, f.max_hp - f.hp, dmg])
+		f.queue_free()
+		await _frames(60)
+
+	# (8) 벽에 붙어 쏘면: 투사체는 벽 앞에서 생겨 곧 사라지고, 소녀와 벽 사이에 낀 적은 한 번만 맞는다. 등 뒤 적은 안 맞는다.
+	var wall := StaticBody2D.new()
+	wall.collision_layer = 1
+	wall.collision_mask = 0
+	var cs := CollisionShape2D.new()
+	var rs := RectangleShape2D.new()
+	rs.size = Vector2(40, 400)
+	cs.shape = rs
+	wall.add_child(cs)
+	wall.position = Vector2(700 + 110 + 20, FLOOR1_Y - 200.0)   # 벽 왼쪽 면 = 소녀 가운데 +110
+	_room.add_child(wall)
+	await _frames(2)
+	for soul in ["wind", "light"]:
+		var dmg: float = (_player.gust_damage if soul == "wind" else _player.light_shot_damage) * _player.attack_multiplier
+		var mid := _spawn_dummy_enemy(700.0 + 62.0)
+		var back := _spawn_dummy_enemy(700.0 - 80.0)
+		_teleport(Vector2(700, FLOOR1_Y - 68.0), 1)
+		await _frames(3)
+		var before := get_tree().get_nodes_in_group("projectile").size()
+		await _cast_now(soul)
+		await get_tree().physics_frame
+		var p: Projectile = null
+		for n in get_tree().get_nodes_in_group("projectile"):
+			p = n
+		var spawn_x := p.global_position.x if p else -1.0
+		await _frames(3)
+		var gone := p == null or not is_instance_valid(p) or p._dead
+		await _frames(40)
+		print("[probe] %s 벽에 붙어 쏨(벽 +110): 투사체 생긴 x %+.0f, 3프레임 뒤 사라짐 %s, 사이 적 잃은 체력 %.0f (기대 %.0f), 등 뒤 적 %.0f" % [soul, spawn_x - 700.0, gone, mid.max_hp - mid.hp, dmg, back.max_hp - back.hp])
+		_check(spawn_x > 700.0 and spawn_x <= 700.0 + 110.0 and gone, "%s: 벽 앞에서 생겨(벽 속·너머 아님) 곧 사라진다" % soul)
+		_check(absf((mid.max_hp - mid.hp) - dmg) < 0.5 and back.hp == back.max_hp, "%s: 소녀와 벽 사이의 적은 딱 한 번 맞고, 등 뒤 적은 안 맞는다" % soul)
+		mid.queue_free()
+		back.queue_free()
+		await _frames(30)
+	wall.queue_free()
+	_player._soul_cooldowns.clear()
+	_player.soul = "seed"
+	Progress.soul = "seed"
+	await _frames(5)
 
 
 # ---------- 고른 영혼이 방(새 소녀)·세이브를 건너 남는다 ----------

@@ -6,10 +6,11 @@ const PATH := "user://keymap.json"
 ## 저장 파일의 배치 판. 기본 배치가 크게 바뀌면 올린다. 옛 판 파일은 _load 가 맞춰 읽고 새 판으로 다시 저장한다.
 ## 2: 강공격 삭제, 그 입력(K, R2/RT)이 영혼 기술로 (2026-10-18) — 옛 파일의 강공격 배치는 영혼 기술에 합친다
 const VERSION := 2
-const ACTIONS := ["move_left", "move_right", "move_up", "move_down", "jump", "dodge", "attack_light", "guard", "soul_ability", "heal", "interact", "soul_prev", "soul_next", "map", "pause", "run_toggle"]
+## plunge: 낙하 공격 버튼 (2026-10-19, 터치 전용 — 기본 키·버튼 배치는 비어 있고, 원하면 여기서 키를 붙일 수 있다)
+const ACTIONS := ["move_left", "move_right", "move_up", "move_down", "jump", "dodge", "attack_light", "plunge", "guard", "soul_ability", "heal", "interact", "soul_prev", "soul_next", "map", "pause", "run_toggle"]
 const NAMES := {
 	"move_left": "이동 ←", "move_right": "이동 →", "move_up": "위", "move_down": "아래", "jump": "점프", "dodge": "회피 / 달리기",
-	"attack_light": "약공격 (공중 ↓ = 낙하 공격)", "guard": "가드 / 저스트 가드", "soul_ability": "영혼 기술", "heal": "회복 (이슬 방울)",
+	"attack_light": "공격 (공중 ↓ = 낙하 공격)", "plunge": "낙하 공격 (터치 버튼)", "guard": "가드 / 저스트 가드", "soul_ability": "영혼 기술", "heal": "회복 (이슬 방울)",
 	"interact": "상호작용 / 정화의 손길", "soul_prev": "영혼 전환 ←", "soul_next": "영혼 전환 →", "map": "지도", "pause": "메뉴", "run_toggle": "걷기 고정",
 }
 ## 듀얼센스 / 엑스박스 버튼 이름

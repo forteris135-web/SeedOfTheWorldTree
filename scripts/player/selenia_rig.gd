@@ -248,7 +248,7 @@ func _ready() -> void:
 	_player.hit_taken.connect(func(_d): _hurt = 1.0; _impact_pending = true; _kick("squash", 2.4))
 	_player.purified.connect(func(_t): _purify_ring = 0.0; _flash = 1.0)
 	_player.healed.connect(func(): _flash = 0.5)
-	_player.gust_cast.connect(func(): _gust_t = 0.0; _kick("recoil", 5.0))
+	_player.gust_cast.connect(func(): _gust_t = 0.0; _kick("recoil", 9.0))   # 커진 투사체(2026-10-19)에 맞춰 반동도 더 크게
 	_player.blocked.connect(func(): _kick("recoil", 21.0); _kick("impact", 6.0))
 	_player.plunge_started.connect(func(): _kick("squash", -2.5))
 	_player.plunge_landed.connect(_on_plunge_landed)
@@ -790,7 +790,11 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, 20.0 + _air_ring * 70.0, 0, TAU, 32, Color(0.8, 1.0, 0.85, 1.0 - _air_ring), 3.0, true)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _gust_t >= 0.0:
-		draw_arc(Vector2(44, -18), 14.0 + _gust_t * 20.0, -0.9, 0.9, 10, Color(0.8, 1.0, 0.85, 1.0 - _gust_t), 2.5, true)
+		# 투사체 발사 연출: 영혼 색의 호 두 겹이 손끝에서 앞으로 크게 퍼진다 (투사체가 커진 만큼, 2026-10-19)
+		var gc := _player.soul_color()
+		var fade := 1.0 - _gust_t
+		draw_arc(Vector2(44, -18), 18.0 + _gust_t * 70.0, -1.0, 1.0, 14, Color(gc.r, gc.g, gc.b, fade), 4.5 - 2.5 * _gust_t, true)
+		draw_arc(Vector2(30, -18), 10.0 + _gust_t * 40.0, -0.8, 0.8, 10, Color(gc.r, gc.g, gc.b, 0.6 * fade), 2.5, true)
 	if _guard_a > 0.02:
 		_draw_guard_shield()
 	if _guard_ring >= 0.0:

@@ -3,12 +3,17 @@ class_name Player
 ## 셀레니아. 이동·점프·구르기(3단계) + 전투(5단계).
 ## 손맛에 관한 숫자는 모두 아래 @export 에 모여 있다. 느낌 피드백이 오면 여기만 고친다.
 ## 2026-10-18 기획자 요청: 강공격을 없애고 그 자리(R2/RT, K)에 영혼 기술. 처음부터 '씨앗' 영혼(넓은 베기)이 있다.
-##   낙하 공격(공중에서 ↓ + 약공격), 하단 점프(한쪽 방향 발판 위에서 ↓ + 점프), 가드 보호막·막기 소리.
+##   낙하 공격(공중에서 ↓ + 약공격, 또는 터치 '낙하' 버튼 = 동작 plunge), 하단 점프(한쪽 방향 발판 위에서 ↓ + 점프), 가드 보호막·막기 소리.
+## 2026-10-19 기획자 요청: 바람·빛 영혼 기술 파격 상향(피해 ×4, 크기 2배쯤, 쿨 5/7초), 낙하 공격 버튼, 영혼 이름·색·쿨다운 조회 함수(HUD·터치가 쓴다).
 
 enum State { IDLE, WALK, RUN, JUMP, FALL, ROLL, ATTACK, SOUL_SLASH, PLUNGE, GUARD, HIT, HEAL, PURIFY, REST, DEAD }
 const LOCOMOTION := [State.IDLE, State.WALK, State.RUN, State.JUMP, State.FALL]
 ## 히트박스를 쓰는 공격 상태들 (나가면 히트박스를 끈다)
 const ATTACK_STATES := [State.ATTACK, State.SOUL_SLASH, State.PLUNGE]
+## 쿨다운이 이보다 적게 남으면 끝난 것으로 본다 (부동소수 찌꺼기)
+const COOLDOWN_EPS := 0.001
+## 바람·빛 투사체 판정이 소녀 가운데보다 뒤로 나가는 최대 거리 (px). 이보다 뒤(등 뒤)의 적은 맞지 않는다.
+const SHOT_BACK_REACH := 15.0
 
 signal state_changed(new_state: State)
 signal jumped(air_jump: bool)
@@ -164,21 +169,31 @@ signal blocked
 
 @export_group("바람 공격 (잿빛 잎새의 새의 영혼)")
 ## 2026-10-18 강화: 피해 14→24, 크기 60×34→110×60, 사거리 0.5초→0.95초(약 720px)
-@export var gust_damage := 24.0
-@export var gust_poise := 24.0
+## 2026-10-19 파격 상향 (기획자 요청): 피해 ×4 (24→96), 크기 240×130, 사거리 1.3초(약 990px), 쿨다운 5초.
+##   '한 방이 크고 자주 못 쓰는' 기술로. 씨앗 베기(처음부터 있는 것)는 그대로.
+@export var gust_damage := 96.0
+@export var gust_poise := 24.0   # 흐트러짐은 그대로 (요청은 피해·크기·쿨만). 30 미만이라 침식된 기계에는 여전히 35%만 들어간다
 @export var gust_speed := 760.0
-@export var gust_range_time := 0.95
-@export var gust_cooldown := 1.1
-@export var gust_size := Vector2(110, 60)
+@export var gust_range_time := 1.3
+@export var gust_cooldown := 5.0
+@export var gust_size := Vector2(240, 130)
 
 @export_group("빛 공격 (등불 기사의 영혼)")
 ## 2026-10-18 강화: 피해 22→34, 크기 70×22→120×40, 사거리 0.7초→1.1초(약 1200px)
-@export var light_shot_damage := 34.0
-@export var light_shot_poise := 30.0
+## 2026-10-19 파격 상향 (기획자 요청): 피해 ×4 (34→136), 크기 280×90, 사거리 1.4초(약 1540px), 쿨다운 7초.
+@export var light_shot_damage := 136.0
+@export var light_shot_poise := 30.0   # 흐트러짐은 그대로 (요청은 피해·크기·쿨만)
 @export var light_shot_speed := 1100.0
-@export var light_shot_time := 1.1
-@export var light_shot_cooldown := 0.9
-@export var light_shot_size := Vector2(120, 40)
+@export var light_shot_time := 1.4
+@export var light_shot_cooldown := 7.0
+@export var light_shot_size := Vector2(280, 90)
+
+## 영혼마다의 이름·설명·색 (HUD·터치 버튼·전환 알림이 함께 쓴다). 색: 씨앗 연둣빛 / 바람 민트 / 빛 금빛.
+const SOUL_INFO := {
+	"seed": {"name": "씨앗", "title": "씨앗의 영혼", "source": "세계수의 씨앗", "desc": "넓은 베기 — 앞·위·아래를 한 번에 벤다", "color": Color(0.85, 1.0, 0.75)},
+	"wind": {"name": "바람", "title": "바람의 영혼", "source": "잿빛 잎새의 새", "desc": "커다란 돌풍 — 멀리 날아가 크게 친다", "color": Color(0.85, 1.0, 0.9)},
+	"light": {"name": "빛", "title": "빛의 영혼", "source": "등불 기사", "desc": "빛의 창 — 가장 멀리 날아가 가장 세게 친다", "color": Color(1.0, 0.9, 0.7)},
+}
 
 @export_group("피격")
 @export var hit_stun := 0.3
@@ -228,12 +243,21 @@ var _hit_timer := 0.0
 var _invuln_timer := 0.0
 var _heal_timer := 0.0
 var _guard_regen_delay := 0.0
-var _soul_cooldown := 0.0
+## 영혼마다 남은 쿨다운 (초): {"seed": …, "wind": …, "light": …}. 2026-10-19 검토: 바람·빛 쿨이 5~7초가 되면서
+## 하나를 같이 쓰면 빛을 쏜 뒤 씨앗 베기(1.4초)까지 7초 막혔다 → 영혼마다 따로 센다. 고른 영혼을 바꿔도 각자 줄어든다.
+var _soul_cooldowns := {}
+## 지금 고른 영혼의 남은 쿨다운 (옛 이름 그대로 둔 통로 — 시험 도구들이 읽고 쓴다).
+var _soul_cooldown: float:
+	get:
+		return float(_soul_cooldowns.get(soul, 0.0))
+	set(v):
+		_soul_cooldowns[soul] = maxf(v, 0.0)
 var _interact_buffer := 0.0
 var _drop_timer := 0.0
 var _drop_body: Node = null
 var _plunge_lock := 0.0        # 튕긴 뒤 다시 낙하 공격을 받기까지 남은 시간
 var _plunge_buffered := false  # 잠금 중에 누른 ↓+약공격 (풀리면 바로 낙하 공격)
+var _plunge_btn_buffered := false  # 잠금 중에 누른 낙하 공격 버튼 (↓ 없이도 풀리면 바로 낙하 공격)
 var _plunge_hits := 0          # 바닥에 닿기 전에 낙하 공격으로 맞힌 횟수 (두 번째부터 피해 감쇠)
 var _light: PointLight2D
 ## 포자 구름 등으로 느려진 비율 (1 = 정상). 매 프레임 되돌아온다.
@@ -418,6 +442,7 @@ func _tick_timers(delta: float, on_floor: bool) -> void:
 		_jumps_left = max_jumps
 		_plunge_hits = 0
 		_plunge_buffered = false
+		_plunge_btn_buffered = false
 	else:
 		_coyote_timer = maxf(_coyote_timer - delta, 0.0)
 		# 발판에서 걸어 떨어져 코요테 시간이 지났다: 땅 점프는 쓴 것으로 (이단 점프만 남는다).
@@ -431,7 +456,10 @@ func _tick_timers(delta: float, on_floor: bool) -> void:
 	_invuln_timer = maxf(_invuln_timer - delta, 0.0)
 	_heal_timer = maxf(_heal_timer - delta, 0.0)
 	_guard_regen_delay = maxf(_guard_regen_delay - delta, 0.0)
-	_soul_cooldown = maxf(_soul_cooldown - delta, 0.0)
+	for k in _soul_cooldowns.keys():
+		var left: float = _soul_cooldowns[k] - delta
+		# 1/60 씩 빼다 남는 부동소수 찌꺼기(0.000…1)는 0 으로: 끝나기 직전 한 프레임 '0' 이 보이거나 버튼이 꺼진 채 남지 않게
+		_soul_cooldowns[k] = left if left > COOLDOWN_EPS else 0.0
 	_interact_buffer = maxf(_interact_buffer - delta, 0.0)
 	if _drop_timer > 0.0:
 		_drop_timer -= delta
@@ -499,9 +527,17 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 	if state in LOCOMOTION or state == State.GUARD:
 		if not input_enabled:
 			_plunge_buffered = false
+			_plunge_btn_buffered = false
 			return
-		if Input.is_action_just_pressed("attack_light"):
-			# 공중에서 ↓를 분명히 누른 채 약공격 = 낙하 공격. 아니면 평소 약공격(공중 포함).
+		if not on_floor and Input.is_action_just_pressed("plunge"):
+			# 낙하 공격 버튼 (터치 전용 동작 'plunge', 2026-10-19 기획자 요청: 터치에서 ↓+공격이 잘 안 나가서).
+			# 공중에서만 듣는다. ↓를 누르고 있지 않아도 나간다. 땅에서는 그냥 지나가서, 같은 프레임의 공격이 씹히지 않는다.
+			if _plunge_lock > 0.0:
+				_plunge_btn_buffered = true
+			else:
+				_start_plunge()
+		elif Input.is_action_just_pressed("attack_light"):
+			# 공중에서 ↓를 분명히 누른 채 공격 = 낙하 공격. 아니면 평소 공격(공중 포함).
 			if not on_floor and _down_held():
 				if _plunge_lock > 0.0:
 					_plunge_buffered = true   # 튕겨 오르는 중: 기억했다가 잠금이 풀리는 순간 나간다
@@ -509,11 +545,22 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 					_start_plunge()
 			else:
 				_start_light(1)
-		elif _plunge_buffered and not on_floor and _plunge_lock <= 0.0:
+		elif (_plunge_buffered or _plunge_btn_buffered) and not on_floor and _plunge_lock <= 0.0:
+			var go := _plunge_btn_buffered or _down_held()
 			_plunge_buffered = false
-			if _down_held():
+			_plunge_btn_buffered = false
+			if go:
 				_start_plunge()
 		return
+	if state == State.ATTACK or state == State.SOUL_SLASH:
+		# 공중 공격·공중 씨앗 베기 중에 누른 낙하 버튼은 기억했다가, 휘두름이 끝나는(되돌림) 순간 낙하 공격으로 잇는다.
+		# (터치에서 '점프 → 공격 → 낙하'를 조금 빨리 눌러도 씹히지 않게. 착지하면 _tick_timers 가 지운다.)
+		if input_enabled and not on_floor and Input.is_action_just_pressed("plunge"):
+			_plunge_btn_buffered = true
+		if _plunge_btn_buffered and not on_floor and _plunge_lock <= 0.0 and attack_phase == "recovery":
+			_plunge_btn_buffered = false
+			_start_plunge()
+			return
 	if state == State.ATTACK:
 		if input_enabled and Input.is_action_just_pressed("attack_light"):
 			_attack_buffered = true
@@ -589,7 +636,7 @@ func _tick_soul_slash(delta: float) -> void:
 			if _attack_timer <= 0.0:
 				attack_phase = "active"
 				_attack_timer = slash_active
-				_soul_cooldown = slash_cooldown
+				_soul_cooldowns["seed"] = slash_cooldown   # 예비동작 중에 영혼을 바꿔도 씨앗 쪽에 건다
 				var hit := HitData.make(slash_damage * attack_multiplier, slash_poise, self, slash_knockback)
 				hit.from_player = true
 				hit.hitstop = 0.08
@@ -731,6 +778,90 @@ func soul_name() -> String:
 	return ""
 
 
+## 영혼의 짧은 이름 (터치 버튼·HUD 용): 씨앗 / 바람 / 빛. 모르는 값은 그대로.
+func soul_short_name(s := "") -> String:
+	if s == "":
+		s = soul
+	return SOUL_INFO.get(s, {}).get("name", s)
+
+
+## 전환 알림의 큰 글자: "바람의 영혼"
+func soul_title(s := "") -> String:
+	if s == "":
+		s = soul
+	return SOUL_INFO.get(s, {}).get("title", s)
+
+
+## 전환 알림의 작은 설명 한 줄: "커다란 돌풍 — 멀리 날아가 크게 친다 / 쿨 5초"
+func soul_desc(s := "") -> String:
+	if s == "":
+		s = soul
+	var d: String = SOUL_INFO.get(s, {}).get("desc", "")
+	if d == "":
+		return ""
+	return "%s / 쿨 %s초" % [d, _fmt_seconds(soul_cooldown_total(s))]
+
+
+static func soul_color_of(s: String) -> Color:
+	return SOUL_INFO.get(s, {}).get("color", Color.WHITE)
+
+
+func soul_color(s := "") -> Color:
+	return soul_color_of(soul if s == "" else s)
+
+
+## 영혼 기술의 쿨다운 전체 길이 (초). 씨앗 1.4 / 바람 5 / 빛 7.
+func soul_cooldown_total(s := "") -> float:
+	if s == "":
+		s = soul
+	match s:
+		"seed": return slash_cooldown
+		"wind": return gust_cooldown
+		"light": return light_shot_cooldown
+	return 0.0
+
+
+## 남은 쿨다운 (초). 0 이면 쓸 수 있다. 비우면 지금 고른 영혼 (쿨다운은 영혼마다 따로 센다).
+func soul_cooldown_left(s := "") -> float:
+	if s == "":
+		s = soul
+	return float(_soul_cooldowns.get(s, 0.0))
+
+
+## 남은 비율 (1 = 방금 씀, 0 = 준비됨). 그 영혼 자신의 쿨다운 길이로 나누므로 호가 멈추지 않고 차오른다.
+func soul_cooldown_ratio(s := "") -> float:
+	if s == "":
+		s = soul
+	var total := soul_cooldown_total(s)
+	var left := soul_cooldown_left(s)
+	if total <= 0.0 or left <= 0.0:
+		return 0.0
+	return clampf(left / total, 0.0, 1.0)
+
+
+## 터치 버튼·HUD 에 보이는 남은 초: "7", "6", … "1". 준비됐으면 "" ('0' 은 나오지 않는다).
+func soul_cooldown_text(s := "") -> String:
+	var left := soul_cooldown_left(s)
+	if left <= 0.0:
+		return ""
+	return str(maxi(1, ceili(left - COOLDOWN_EPS)))
+
+
+## 다음 영혼 (전환 버튼이 띠는 색을 고를 때). 영혼이 하나뿐이면 "".
+func next_soul() -> String:
+	var owned := owned_souls()
+	if owned.size() <= 1:
+		return ""
+	var i := owned.find(soul)
+	return owned[(i + 1) % owned.size()]
+
+
+static func _fmt_seconds(v: float) -> String:
+	if is_equal_approx(v, roundf(v)):
+		return str(int(roundf(v)))
+	return "%.1f" % v
+
+
 ## 영혼 기술. I / K / L2 / R2 (강공격 자리). 영혼 전환은 Q / 십자키 ← →.
 func _handle_soul(_on_floor: bool) -> void:
 	if not input_enabled:
@@ -746,7 +877,7 @@ func _handle_soul(_on_floor: bool) -> void:
 		return
 	# 약공격 되돌림 중에도 이어 쓸 수 있다 (가드·구르기와 같은 허용: 3연타 → 영혼 기술 연계)
 	var can_cast := state in LOCOMOTION or state == State.GUARD or (state == State.ATTACK and attack_phase == "recovery")
-	if Input.is_action_just_pressed("soul_ability") and _soul_cooldown <= 0.0 and can_cast:
+	if Input.is_action_just_pressed("soul_ability") and soul_cooldown_left() <= 0.0 and can_cast:
 		match soul:
 			"seed":
 				_start_soul_slash()
@@ -758,7 +889,7 @@ func _handle_soul(_on_floor: bool) -> void:
 func _cast_projectile() -> void:
 	var p: Projectile = PROJECTILE.instantiate()
 	if soul == "light":
-		_soul_cooldown = light_shot_cooldown
+		_soul_cooldowns["light"] = light_shot_cooldown
 		p.kind = Projectile.Kind.FEATHER
 		p.speed = light_shot_speed
 		p.damage = light_shot_damage * attack_multiplier
@@ -767,7 +898,7 @@ func _cast_projectile() -> void:
 		p.size = light_shot_size
 		p.color = Color(1.0, 0.85, 0.5)
 	else:
-		_soul_cooldown = gust_cooldown
+		_soul_cooldowns["wind"] = gust_cooldown
 		p.kind = Projectile.Kind.GUST
 		p.speed = gust_speed
 		p.damage = gust_damage * attack_multiplier
@@ -776,10 +907,55 @@ func _cast_projectile() -> void:
 		p.size = gust_size
 		p.color = Color(0.8, 1.0, 0.85)
 	get_parent().add_child(p)
-	p.global_position = global_position + Vector2(facing * 50.0, -20.0)
+	# 생기는 자리 (2026-10-19 검토): 판정 사각형(size×0.9)의 뒤끝이 소녀 가운데에서 SHOT_BACK_REACH 만큼 뒤에 오도록
+	# 크기 절반만큼 앞으로 민다. 옛 자리(+50)에선 커진 바람·빛 판정이 등 뒤 60~90px 의 적까지 덮었다. 작은 투사체는 예전처럼 +50.
+	var origin := global_position + Vector2(0.0, -20.0)
+	var ahead := maxf(50.0, p.size.x * 0.45 - SHOT_BACK_REACH)
+	# 벽에 붙어 쏘면 생기는 자리가 벽 속·벽 너머가 되지 않게 소녀 가운데에서 선을 그어 본다. 투사체는 처음 두 프레임 안에
+	# 벽에 닿으면 적을 맞힐 틈 없이 사라지므로 그만큼 더 본다.
+	var reach := ahead + p.speed * 2.0 / float(Engine.physics_ticks_per_second)
+	var ray := PhysicsRayQueryParameters2D.create(origin, origin + Vector2(facing * reach, 0.0), 1)
+	var wall := get_world_2d().direct_space_state.intersect_ray(ray)
+	if wall.is_empty():
+		p.global_position = origin + Vector2(facing * ahead, 0.0)
+	else:
+		# 벽 바로 앞에 놓는다: 투사체는 첫 프레임에 벽에 닿아 사라지고(부서지는 벽이면 한 대 친다),
+		# 소녀와 벽 사이에 낀 적은 여기서 바로 한 번 맞힌다.
+		var wall_x: float = wall["position"].x
+		p.global_position = Vector2(wall_x - facing * 2.0, origin.y)
+		_point_blank_hit(p, origin, wall_x)
 	p.launch(Vector2(facing, 0), self, true)
 	gust_cast.emit()
-	Juice.rumble(0.2, 0.3, 0.08)
+	# 한 방이 큰 기술이 됐으니 쏘는 손맛도 크게 (2026-10-19): 흔들림 6, 진동, 아주 짧은 히트스톱
+	Juice.shake(6.0)
+	Juice.rumble(0.45, 0.8, 0.14)
+	Juice.hitstop(0.03, 0.2)
+
+
+## 벽에 바짝 붙어 쏜 바람·빛: 소녀 뒤 SHOT_BACK_REACH 부터 벽까지, 투사체 판정 높이의 사각형 안의 적 하나를 바로 맞힌다
+## (투사체가 맞혔을 때와 같은 피해·흐트러짐·밀기). 투사체는 벽에서 곧바로 사라지므로 두 번 맞지 않는다.
+func _point_blank_hit(p: Projectile, origin: Vector2, wall_x: float) -> void:
+	var back_x := origin.x - facing * SHOT_BACK_REACH
+	var w := absf(wall_x - back_x)
+	if w < 1.0:
+		return
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(w, p.size.y * 0.9)
+	var q := PhysicsShapeQueryParameters2D.new()
+	q.shape = rect
+	q.transform = Transform2D(0.0, Vector2((back_x + wall_x) * 0.5, origin.y))
+	q.collision_mask = 16   # 적 맞는 영역
+	q.collide_with_areas = true
+	q.collide_with_bodies = false
+	for r in get_world_2d().direct_space_state.intersect_shape(q, 16):
+		var area = r.get("collider")
+		if area is Hurtbox:
+			var hit := HitData.make(p.damage, p.poise, self, Vector2(260, -100))
+			hit.guardable = p.guardable
+			hit.from_player = true
+			hit.hitstop = 0.04
+			if area.receive(hit) != "ignored":
+				return
 
 
 ## 어두운 방에서 소녀 주변을 밝힌다 (티아의 등불은 희미하게, 기사의 영혼이 깃들면 넓게).
@@ -917,6 +1093,9 @@ func _set_state(new_state: State) -> void:
 	if not (new_state in ATTACK_STATES):
 		attack_step = 0
 		attack_phase = ""
+	if not (new_state in ATTACK_STATES or new_state in LOCOMOTION):
+		# 맞거나 구르거나 회복하는 등 흐름이 끊기면 기억해 둔 낙하 버튼은 버린다 (맞고 난 뒤 저절로 내리꽂지 않게)
+		_plunge_btn_buffered = false
 	state_changed.emit(new_state)
 
 
@@ -1063,6 +1242,7 @@ func revive(at: Vector2) -> void:
 	_end_drop_through()
 	_plunge_lock = 0.0
 	_plunge_buffered = false
+	_plunge_btn_buffered = false
 	_plunge_hits = 0
 	_set_state(State.IDLE)
 	hp_changed.emit(hp, max_hp)
