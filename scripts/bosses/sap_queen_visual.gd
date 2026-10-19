@@ -2,7 +2,7 @@ extends Sprite2D
 ## 수액의 여왕 그림. 부위 뼈대(PartRig — art/rigs/sap_queen, 설계도 data/rigs/sap_queen.json)를 움직임 층(RigMotion,
 ## 자세 모음 data/rigs/_archetypes/sap_queen.json)으로 상태에 맞춰 움직인다. 판정·시간은 전혀 건드리지 않는다 (그림이 논리를 따라간다).
 ## 이 노드는 보스 씬의 'Sprite'(Sprite2D)다 — 보스 스크립트가 $Sprite 로 찾으므로 이름·종류를 그대로 두고, 그림은 자식 뼈대가 그린다.
-## (뼈대를 못 읽으면 texture(조립 그림 한 장, boss_sap_queen_now.png)를 대신 띄운다.)
+## (뼈대를 못 읽으면 조립 그림 한 장(fallback_texture — boss_sap_queen_now.png)을 그때 읽어 대신 띄운다. 평소엔 읽지 않아 메모리를 쓰지 않는다.)
 ##
 ## 움직임 원칙 (몹·다른 보스와 같은 약속): 자세 값은 '툭' 바뀌지 않는다 — 매 프레임 목표 자세만 정하고 RigMotion 의 스프링이 쫓는다.
 ##  - 정면을 보는 나비 정령: 날개 넷이 따로 퍼덕인다 (위 날개가 앞서고 아래 날개가 조금 늦게, 왼·오른도 살짝 어긋나게).
@@ -25,6 +25,8 @@ extends Sprite2D
 @export var art_faces_right := true
 ## art/rigs/<rig_id>/rig.json
 @export var rig_id := "sap_queen"
+## 뼈대를 못 읽었을 때만 읽는 조립 그림 (tools/queen_film.tscn -- --render 가 만든다)
+@export_file("*.png") var fallback_texture := "res://art/bosses/boss_sap_queen_now.png"
 
 ## 날개 크기 배율 (시트 비율보다 조금 크게 — 보스 날개가 몸통 판정 폭 340 에 맞게)
 const WING_SCALE := 1.1
@@ -121,7 +123,7 @@ func _ready() -> void:
 	rig.name = "Rig"
 	add_child(rig)
 	if rig.build(rig_id):
-		texture = null   # 조립 그림 한 장은 뼈대를 못 읽을 때만
+		texture = null   # 조립 그림 한 장은 뼈대를 못 읽을 때만 (씬에 넣어 두지 않는다)
 		motion = RigMotion.new(rig)
 		motion.breath = 0.7
 		rig.setup_ghosts(rig.data.get("ghost", ["arm_f_up", "arm_f_lo", "hand_f"]), 6)
@@ -135,6 +137,8 @@ func _ready() -> void:
 	else:
 		rig.queue_free()
 		rig = null
+		if texture == null and ResourceLoader.exists(fallback_texture):
+			texture = load(fallback_texture)
 		position = Vector2(0, -FALLBACK_LIFT)
 		scale = Vector2.ONE * FALLBACK_SCALE
 	# 박자 고리·착지 표시·내리꽂기 꼬리는 세계 좌표에 그린다 (그림의 기울기와 무관하게)
