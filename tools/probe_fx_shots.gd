@@ -8,6 +8,8 @@ var _out := "res://screenshots/"
 var _only: Array = []
 var _zoom := 2.0
 var _room_name := "canopy_01"
+var _face := 1          # --left 이면 왼쪽을 보고 찍는다
+var _spot := Vector2.ZERO   # --at x,y : 소녀를 세울 자리 (방마다)
 var _room: Node
 var _player: Player
 var _cam: Camera2D
@@ -37,12 +39,20 @@ func _ready() -> void:
 			"--only": _only = args[i + 1].split(",")
 			"--zoom": _zoom = float(args[i + 1])
 			"--room": _room_name = args[i + 1]
+			"--left": _face = -1
+			"--alive":
+				Purity.regions["canopy"] = true   # 정화된(색이 돌아온) 밝은 방에서
+			"--at":
+				var xy: PackedStringArray = args[i + 1].split(",")
+				_spot = Vector2(float(xy[0]), float(xy[1]))
 	if not _out.ends_with("/"):
 		_out += "/"
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_out) if _out.begins_with("res://") else _out)
 	_room = load("res://scenes/rooms/%s.tscn" % _room_name).instantiate()
 	add_child(_room)
 	await _frames(10)
+	if Purity.is_purified("canopy"):
+		Purity.apply_region("canopy")
 	for n in _room.get_children():
 		if n is CanvasLayer:
 			n.visible = false
@@ -51,6 +61,10 @@ func _ready() -> void:
 	_player._invuln_timer = 0.0
 	for e in get_tree().get_nodes_in_group("enemy"):
 		e.queue_free()
+	if _spot != Vector2.ZERO:
+		_floor = _spot
+	elif _room_name != "canopy_01":
+		_floor = _player.global_position   # 다른 방은 소녀가 처음 선 자리에서
 	_cam = _player.get_node("Camera2D")
 	_cam.zoom = Vector2(_zoom, _zoom)
 	_cam.vertical_offset = -40.0
@@ -94,10 +108,10 @@ func _capture(name: String, frames: Array) -> void:
 		await _shot("%s_%02d" % [name, int(target)])
 
 
-func _reset(pos := Vector2.ZERO, facing := 1) -> void:
+func _reset(pos := Vector2.ZERO, facing := 0) -> void:
 	_player.global_position = _floor if pos == Vector2.ZERO else pos
 	_player.velocity = Vector2.ZERO
-	_player.facing = facing
+	_player.facing = facing if facing != 0 else _face
 	_player._set_state(Player.State.IDLE)
 	_player._soul_cooldowns.clear()
 	await _frames(20)
@@ -201,13 +215,13 @@ func _run() -> void:
 		await _capture("heal", [8, 22, 38, 50])
 	if _want("hit"):
 		await _reset()
-		var e := await _dummy(150.0)
+		var e := await _dummy(150.0 * _face)
 		_player._start_light(1)
 		await _capture("hitspark", [8, 10, 13, 17])
 		e.queue_free()
 	if _want("break"):
 		await _reset()
-		var e2 := await _dummy(200.0)
+		var e2 := await _dummy(200.0 * _face)
 		e2.max_poise = 10.0
 		e2._break(false)
 		await _capture("break", [3, 8, 15, 24])
@@ -216,7 +230,7 @@ func _run() -> void:
 		await _capture("death", [6, 20, 40, 52])
 	if _want("purify"):
 		await _reset()
-		var e3 := await _dummy(120.0)
+		var e3 := await _dummy(120.0 * _face)
 		e3._break(false)
 		await _frames(10)
 		_player.start_purify(e3)
@@ -237,19 +251,19 @@ func _run() -> void:
 	if _want("wind"):
 		Progress.gain_ability("wind")
 		_player._apply_abilities()
-		await _reset(_floor + Vector2(-200, 0))
+		await _reset(_floor + Vector2(-200 * _face, 0))
 		_player.soul = "wind"
-		var e4 := await _dummy(700.0)
+		var e4 := await _dummy(700.0 * _face)
 		_player.cast_soul_skill()
 		await _capture("wind", [2, 6, 12, 20, 30, 40])
 		e4.queue_free()
 	if _want("laser"):
 		Progress.gain_ability("light")
 		_player._apply_abilities()
-		await _reset(_floor + Vector2(-200, 0))
+		await _reset(_floor + Vector2(-200 * _face, 0))
 		_player.soul = "light"
-		var e5 := await _dummy(400.0)
-		var e6 := await _dummy(650.0)
+		var e5 := await _dummy(400.0 * _face)
+		var e6 := await _dummy(650.0 * _face)
 		_player.cast_soul_skill()
 		await _capture("laser", [3, 6, 9, 12, 16, 22, 30])
 		e5.queue_free()

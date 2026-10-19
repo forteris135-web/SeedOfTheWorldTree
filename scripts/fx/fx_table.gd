@@ -121,7 +121,7 @@ const EFFECTS := {
 	"ring_pop": {"tex": "ring", "life": 0.28, "scale": [0.3, 0.9], "ease": 3.0, "fade_out": 0.25, "energy": 1.05, "priority": 1},
 	# 회복: 발밑에서 솟는 백합 빛 기둥 + 떠오르는 빛 알갱이
 	"heal": {"tex": "pillar_lily", "life": 0.85, "scale": [0.42, 0.48], "ease": 2.0, "fade_in": 0.12, "fade_out": 0.5,
-		"pivot": Vector2(0.5, 0.93), "color": Color(0.85, 0.9, 0.85, 1.0), "priority": 1,
+		"pivot": Vector2(0.5, 0.93), "color": Color(0.95, 1.0, 0.95, 1.0), "priority": 1,
 		"children": [["mote", 5, Vector2(36, 20), {"offset": Vector2(0, -30), "palette": "heal"}]]},
 	# 정화의 손길: 대상 위에 감아 오르는 금빛 기둥 + 별빛 + 떠오르는 알갱이
 	"purify": {"tex": "pillar_spiral", "life": 1.0, "scale": [0.5, 0.56], "ease": 2.0, "fade_in": 0.1, "fade_out": 0.5,
