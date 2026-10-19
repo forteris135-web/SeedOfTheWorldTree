@@ -523,7 +523,11 @@ func _rescuetest() -> void:
 	await tree.create_timer(0.4).timeout
 	savable.hp = 5.0
 	var tries := 0
-	while is_instance_valid(savable) and savable.state != EnemyBase.State.BROKEN and tries < 6:
+	while is_instance_valid(savable) and savable.state != EnemyBase.State.BROKEN and tries < 8:
+		# 매번 곁에 다시 선다 (경비병이 돌진해 멀어지거나 정원사가 물러나도 칼이 닿게)
+		player.global_position = savable.global_position + Vector2(-140, 0)
+		player.velocity = Vector2.ZERO
+		player.facing = 1
 		Input.action_press("attack_light")
 		await tree.physics_frame
 		Input.action_release("attack_light")
@@ -602,6 +606,7 @@ func _villagetest() -> void:
 		print("[마을시험] 기록물 %s 읽음: %s" % [node.record_id, Progress.has("read_" + node.record_id)])
 	for e in tree.get_nodes_in_group("enemy"):
 		if e is Guard:
+			e.charge_chance = 1.0   # 장면 찍기용: 첫 공격이 반드시 돌진이 되게 (무작위 제거)
 			player.global_position = e.global_position + Vector2(-520, 0)
 			player.facing = 1
 			var waited := 0.0
@@ -616,15 +621,22 @@ func _villagetest() -> void:
 					got["stuck"] = true
 					_save_screenshot("debug_guard_stuck.png")
 			print("[마을시험] 경비병 장면: " + str(got.keys()))
-			# 정면 공격은 튕긴다
-			player.global_position = e.global_position + Vector2(-e.facing * 120.0, 0)
-			player.facing = e.facing
+			# 정면 공격은 튕긴다: 박힘이 풀려 추격으로 돌아올 때까지 기다렸다가(박힌 동안은 막지 못한다, 풀린 뒤 1.2초는 공격을 쉰다)
+			# 경비병이 보는 쪽에 마주 선다 (경비병은 늦게 돌아서므로 등 뒤에 서면 그냥 맞는다)
+			var w2 := 0.0
+			while w2 < 4.0 and (e._mode == "stuck" or e.state != EnemyBase.State.CHASE):
+				await tree.physics_frame
+				w2 += get_physics_process_delta_time()
+			player.global_position = e.global_position + Vector2(e.facing * 120.0, 0)
+			player.velocity = Vector2.ZERO
+			player.facing = -e.facing
+			await tree.create_timer(0.15).timeout
 			var hp0: float = e.hp
 			Input.action_press("attack_light")
 			await tree.physics_frame
 			Input.action_release("attack_light")
 			await tree.create_timer(0.5).timeout
-			print("[마을시험] 정면 공격 뒤 경비병 체력 %.0f → %.0f (상태 %s)" % [hp0, e.hp, e.state_name()])
+			print("[마을시험] 정면 공격 뒤 경비병 체력 %.0f → %.0f (상태 %s, 그림 방향 %d)" % [hp0, e.hp, e.state_name(), e.get_node("Visual").visible_facing()])
 			break
 	_save_screenshot("debug_village_end.png")
 	tree.quit()

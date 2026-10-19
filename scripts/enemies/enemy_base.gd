@@ -30,6 +30,9 @@ signal state_changed(old_state: State, new_state: State)
 @export var lunge_multiplier := 2.4
 ## 공격 뒤 뒤로 빠질 확률.
 @export var backstep_chance := 0.35
+## 추격 중 소녀가 등 뒤로 갔을 때 돌아서기까지 걸리는 시간(초). 0 이면 바로 돈다.
+## 방패를 든 경비병처럼 몸이 무거운 자는 늦게 돌아서서(0.45) 등 뒤가 빈틈이 된다. 도는 동안은 걷지 않고 멈칫한다.
+@export var turn_delay := 0.0
 
 @export_group("행동")
 ## 이 거리 안에 소녀가 오면 알아챈다.
@@ -72,6 +75,8 @@ var _origin := Vector2.ZERO
 var _patrol_dir := 1
 var _registered := false
 var _flash := 0.0
+## 돌아서려고 기다린 시간 (turn_delay 용)
+var _turn_timer := 0.0
 ## 예고 진행도: WINDUP 중 0→1 (예고를 늘린 적도 실제 길이 기준으로 0에서 시작한다)
 var windup_progress := 0.0
 ## 그림 쪽에 주는 힌트: "red"(가드 불가 예고) / "charge"(돌진) / "stuck"(박힘)
@@ -187,6 +192,8 @@ func _physics_process(delta: float) -> void:
 					_timer = randf_range(0.6, 1.5)
 		State.ALERT:
 			velocity.x = move_toward(velocity.x, 0.0, 1600.0 * delta)
+			if turn_delay > 0.0:
+				_turn_toward_player(delta)   # 늦게 도는 자는 발견 순간에도 바로 돌지 않고 여기서부터 기다린다
 			if _timer <= 0.0 and is_on_floor():
 				_set_state(State.CHASE)
 				_timer = 0.1
@@ -196,9 +203,12 @@ func _physics_process(delta: float) -> void:
 				_timer = 0.8
 			else:
 				var dx := player.global_position.x - global_position.x
-				facing = 1 if dx > 0.0 else -1
+				var want := _turn_toward_player(delta)
 				var close_y := absf(player.global_position.y - global_position.y) < 140.0
-				if absf(dx) <= attack_range and close_y and _timer <= 0.0:
+				if facing != want:
+					# 아직 돌아서는 중(turn_delay): 등을 보인 채 멈칫한다 (걷지도 공격하지도 않는다)
+					velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+				elif absf(dx) <= attack_range and close_y and _timer <= 0.0:
 					_begin_windup()
 				elif absf(dx) <= attack_range + lunge_extra and absf(dx) > attack_range * 0.9 and close_y and _timer <= 0.0 and _can_walk(facing) and randf() < 0.04:
 					_set_state(State.LUNGE)
@@ -211,7 +221,9 @@ func _physics_process(delta: float) -> void:
 			velocity.x = facing * walk_speed * lunge_multiplier
 			if not _can_walk(facing) or _timer <= 0.0:
 				velocity.x *= 0.3
-				if player and absf(player.global_position.x - global_position.x) <= attack_range * 1.2:
+				# 달려든 끝에 소녀가 아직 **앞**에 있을 때만 예고로 (달려드는 사이 등 뒤로 빠졌으면 등진 채 휘두르지 않고 다시 쫓는다)
+				var ldx := player.global_position.x - global_position.x if player else 0.0
+				if player and absf(ldx) <= attack_range * 1.2 and ldx * facing >= 0.0:
 					_begin_windup()
 				else:
 					_set_state(State.CHASE)
@@ -241,6 +253,8 @@ func _physics_process(delta: float) -> void:
 				_timer = cooldown * 0.5
 		State.HIT:
 			velocity.x = move_toward(velocity.x, 0.0, 1400.0 * delta)
+			if turn_delay > 0.0 and player:
+				_turn_toward_player(delta)   # 맞는 동안에도 '등 뒤에 있은 시간'은 계속 흐른다 (피격 뒤 더 빨리·더 늦게 돌지 않게)
 			if _timer <= 0.0:
 				_set_state(State.CHASE)
 				_timer = 0.1
@@ -282,9 +296,34 @@ func _can_walk(dir: int) -> bool:
 	return space.intersect_ray(wall).is_empty()
 
 
-## 발견: 펄쩍 뛰며 경계한다.
+## 소녀 쪽으로 돌아선다 (매 틱 부른다). 돌려주는 값은 소녀가 있는 쪽(±1).
+## turn_delay 가 0 이면 바로 돈다. 아니면 소녀가 등 뒤에 그 시간 동안 **이어서** 있어야 돈다:
+##  - 이미 그쪽을 보고 있으면 기다린 시간은 0 으로 뚝 끊기지 않고 절반 속도로 식는다
+##    (좌우를 turn_delay 보다 빠르게 번갈아 넘나들어도 결국 돌아선다 — 영영 굳는 일 없음).
+##  - 소녀가 몸에 겹쳐 있으면(등 뒤라고 할 수 없음) 바로 돈다.
+func _turn_toward_player(delta: float) -> int:
+	if player == null:
+		return facing
+	var dx := player.global_position.x - global_position.x
+	var want := 1 if dx > 0.0 else -1
+	if want == facing:
+		_turn_timer = maxf(_turn_timer - delta * 0.5, 0.0)
+		return want
+	if turn_delay <= 0.0 or absf(dx) < hurt_radius * 1.5:
+		facing = want
+		_turn_timer = 0.0
+		return want
+	_turn_timer = minf(_turn_timer + delta, turn_delay)
+	if _turn_timer >= turn_delay:
+		facing = want
+		_turn_timer = 0.0
+	return want
+
+
+## 발견: 펄쩍 뛰며 경계한다. 늦게 도는 자(turn_delay > 0)는 여기서도 바로 돌지 않는다 (등 뒤에서 다가가면 그만큼 빈틈).
 func _alert() -> void:
-	if player:
+	_turn_timer = 0.0
+	if player and turn_delay <= 0.0:
 		facing = 1 if player.global_position.x > global_position.x else -1
 	velocity.y = -420.0
 	velocity.x = 0.0
@@ -332,13 +371,17 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	if poise >= max_poise:
 		_break(false)
 		return "hit"
-	# 예고·휘두르기 중에는 작은 공격으로 멈칫하지 않는다 (단단함)
-	var armored := state in [State.WINDUP, State.STRIKE, State.LUNGE] and hit.poise < 30.0
-	if not armored:
+	if not _is_armored(hit):
 		hitbox.deactivate()
 		_set_state(State.HIT)
 		_timer = hit_stun
 	return "hit"
+
+
+## 이 공격에 멈칫(HIT)하지 않는가. 예고·휘두르기 중에는 작은 공격으로 멈칫하지 않는다 (단단함).
+## 종류별 스크립트가 덧붙인다 (경비병: 박힌 동안은 맞아도 박힌 채로 남는다).
+func _is_armored(hit: HitData) -> bool:
+	return state in [State.WINDUP, State.STRIKE, State.LUNGE] and hit.poise < 30.0
 
 
 ## 소녀가 저스트 가드로 받아냈다.

@@ -2,15 +2,44 @@ extends EnemyBase
 class_name Guard
 ## 방패 돌진 적 (침식된 마을 경비병). 나무껍질 방패로 정면을 막는다(그냥 때리면 튕김).
 ## 붉은 예고 뒤 **가드 불가 돌진**. 피하면 방패가 박혀 잠시 무방비(흐트러짐 2배). 방패 치기도 한다.
+##
+## 공략 길 (기획자 요청으로 너프):
+## - 몸이 무거워 늦게 돌아선다(turn_delay 0.45초): 구르기로 등 뒤로 가면 그동안 방패가 없다.
+## - 방패 판정은 **그림이 실제로 보는 방향** 기준이다 (그림이 저쪽을 보는데 튕기는 일 없음).
+## - 정면에서 연속 block_limit(3)번 막으면 다음 한 대는 방패가 들려 맞고(흐트러짐 +block_break_poise), 잠깐 방패가 열린다.
+## - 돌진이 박히면 stuck_time 동안 무방비, 풀린 뒤에도 charge_cooldown 동안 다음 공격을 못 한다.
 
-@export var charge_speed := 980.0
-@export var charge_time := 0.65
-@export var charge_damage := 22.0
-@export var stuck_time := 1.6
-@export var charge_chance := 0.55
+@export_group("돌진")
+@export var charge_speed := 700.0
+@export var charge_time := 0.55
+@export var charge_damage := 14.0
+## 돌진이 벽·끝에 박혀 무방비로 있는 시간
+@export var stuck_time := 2.4
+## 공격할 때 돌진을 고를 확률 (나머지는 방패 치기)
+@export var charge_chance := 0.35
+## 박힘에서 풀린 뒤 다음 공격까지 쉬는 시간
+@export var charge_cooldown := 1.2
+
+@export_group("방패")
+## 연속으로 막아 주는 횟수. 그다음 한 대는 방패가 들려 맞는다.
+@export var block_limit := 3
+## 마지막 막기 뒤 이 시간(초)이 지나면 막은 횟수가 0 으로 돌아간다.
+@export var block_reset_time := 1.5
+## 방패가 들려 맞을 때 더해지는 흐트러짐
+@export var block_break_poise := 40.0
+## 방패가 들린 뒤 막지 못하는 시간(초)
+@export var block_open_time := 0.7
 
 var _mode := ""          # "", "bash", "charge", "stuck"
 var _charge_timer := 0.0
+var _block_count := 0    # 연속으로 막은 횟수
+var _block_reset := 0.0  # 막은 횟수가 돌아가기까지 남은 시간
+var _block_open := 0.0   # 방패가 들려 있는 남은 시간
+
+
+func _init() -> void:
+	# 방패를 든 몸은 늦게 돌아선다 (씬에서 turn_delay 로 바꿀 수 있다)
+	turn_delay = 0.45
 
 
 func _begin_windup() -> void:
@@ -40,6 +69,12 @@ func _strike() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# 방패 횟수 시계
+	_block_open = maxf(_block_open - delta, 0.0)
+	if _block_reset > 0.0:
+		_block_reset -= delta
+		if _block_reset <= 0.0:
+			_block_count = 0
 	if state == State.STRIKE and _mode == "charge":
 		_tick_common(delta)
 		_charge_timer -= delta
@@ -69,7 +104,7 @@ func _physics_process(delta: float) -> void:
 			_mode = ""
 			anim_hint = ""
 			_set_state(State.CHASE)
-			_timer = cooldown
+			_timer = charge_cooldown   # 박힘에서 빠져나온 뒤엔 한참 숨을 고른다
 		return
 	if _mode != "" and state in [State.IDLE, State.PATROL, State.ALERT, State.CHASE, State.HIT, State.BROKEN, State.DEAD]:
 		_mode = ""
@@ -77,17 +112,43 @@ func _physics_process(delta: float) -> void:
 	super._physics_process(delta)
 
 
-## 정면 방패: 무방비·무너짐·피격이 아닐 때 앞에서 온 공격은 튕긴다.
+## 방패를 들 수 있는 상태인가 (무방비·무너짐·피격·쓰러짐이 아님).
+func _can_block() -> bool:
+	return _mode != "stuck" and _block_open <= 0.0 and state in [State.IDLE, State.PATROL, State.ALERT, State.CHASE, State.LUNGE, State.WINDUP, State.BACKSTEP]
+
+
+## 그림이 실제로 보는 방향 기준으로 공격이 앞에서 왔는가. 그림이 아직 돌아서는 중이면 앞이 없다(막지 못한다).
+func _hit_from_front(hit: HitData) -> bool:
+	if hit.source == null:
+		return false
+	var vis := get_node_or_null("Visual")
+	var look := facing
+	if vis and vis.has_method("is_facing_settled"):
+		if not vis.is_facing_settled():
+			return false
+		look = vis.visible_facing()
+	return (hit.source.global_position.x - global_position.x) * look > 0.0
+
+
+## 정면 방패: 무방비·무너짐·피격이 아닐 때 앞에서 온 공격은 튕긴다. 연속 block_limit 번까지만.
 func receive_hit(hit: HitData, hb: Hurtbox) -> String:
 	var stuck := _mode == "stuck"
-	if not stuck and state in [State.IDLE, State.PATROL, State.ALERT, State.CHASE, State.LUNGE, State.WINDUP, State.BACKSTEP] and hit.source:
-		var from_front := (hit.source.global_position.x - global_position.x) * facing > 0.0
-		if from_front:
-			_flash = 0.6
-			Juice.hitstop(0.03, 0.1)
-			# 방패로 막는 자세: 몸이 뒤로 살짝 밀리며 번쩍
-			_visual_call("block", [-facing, clampf(hit.poise / 40.0, 0.6, 1.5)])
-			return "blocked"
+	if _can_block() and _hit_from_front(hit):
+		if _block_count >= block_limit:
+			# 방패가 들렸다: 이번 한 대는 맞고 크게 흔들린다. 잠깐 방패가 열린다.
+			_block_count = 0
+			_block_reset = 0.0
+			_block_open = block_open_time
+			hit.poise += block_break_poise
+			Juice.hitstop(0.04, 0.1)
+			return super.receive_hit(hit, hb)
+		_block_count += 1
+		_block_reset = block_reset_time
+		_flash = 0.6
+		Juice.hitstop(0.03, 0.1)
+		# 방패로 막는 자세: 몸이 뒤로 살짝 밀리며 번쩍
+		_visual_call("block", [-facing, clampf(hit.poise / 40.0, 0.6, 1.5)])
+		return "blocked"
 	if stuck:
 		hit.poise *= 2.0
 	return super.receive_hit(hit, hb)
