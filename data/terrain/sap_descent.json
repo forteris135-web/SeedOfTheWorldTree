@@ -16,7 +16,7 @@
     "slab": {"max_w": 200},
     "branch": {"thin_poly": 110},
     "thorn": {"tint": [0.86, 0.8, 0.76], "reach_min": 0.9, "reach_max": 1.35, "sink": 22},
-    "wall": {"width": 140, "out": 14, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.42, "v_hi": 0.8, "top_inset": 40}
+    "wall": {"width": 140, "art_faces": 1, "flip_random": true, "out": 14, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.42, "v_hi": 0.8, "top_inset": 40}
   },
   "cut": {
     "sheet": "res://익스펜션/그림/지형/C082DF1A-939D-47FE-9DD7-9DA84BE5FB9C.PNG",

@@ -5,14 +5,15 @@ extends RefCounted
 ## art/terrain/<지역>/pieces.json (tools/terrain_cut.gd 가 잰 값: atlas 자리·윗선·걷는 구간) 을 함께 읽는다.
 ## 그림 옷이 없는 지역(아직 그림이 안 온 곳)은 null → 지형은 옛 방식(TerrainStyle, 코드로 그리기)으로 그린다.
 ##
-## 역할(role) — 조각마다 pieces.json 에 적혀 있고, data 의 "roles" 로 덮어쓰거나 거를 수 있다:
-##   branch : 떠 있는 가지 발판 (얇은 발판·얇은 경사). 걷는 구간을 충돌 윗면에 맞춰 늘이거나 이어 붙인다.
-##   slab   : 짧은 한쪽 방향(one_way) 발판용 떠 있는 판.
-##   ground : 큰 바닥·덩어리 윗면에 이어 까는 띠 (윗면에서 band px 아래까지만 그리고 fade px 동안 몸통 결로 녹아든다).
-##   hang   : 천장·덩어리 아랫면·드러난 옆면에 매다는 장식 (덩굴·꽃).
-##   bush   : 윗면에 가끔 얹는 작은 덤불.
-##   prop   : 윗면에 띄엄띄엄 세우는 장식 (마을의 난간·등불 줄 토막 — 있는 지역만).
-##   thorn  : 가시 (Thorns). cracked : 금 간 벽 (SecretWall·SecretCeiling·CrackedWall).
+## 역할(role) — 조각마다 pieces.json 에 적혀 있고, data 의 "roles" 로 덮어쓰거나 거를 수 있다 (표는 TERRAIN.md 2장).
+## 지형 코드(TerrainArt)가 쓰는 역할 — 그림 옷에 그 조각이 있을 때만 켜진다:
+##   발 딛는 곳 : branch(떠 있는 가지) · slab(짧은 한쪽 방향 판) · log(한쪽 방향이 아닌 얇은 단 — 굵은 통나무) · ground(큰 윗면 띠)
+##   윗면 장식  : bush(가끔 덤불) · prop(띄엄띄엄 세우는 난간·등불 줄 토막)
+##   아랫면·옆면: hang(매단 덩굴·등불) · hang_side(옆면에 박는 걸이) · ceiling(천장 들보·관) · wall(높은 옆면의 줄기·기둥) · pillar(세로로 긴 덩어리 전체를 감싸는 기둥)
+##   웅덩이     : water(웅덩이 몸통) · wave(수면 물결 띠) — SapPool 이 쓴다
+##   가시·금 간 벽: thorn (Thorns) · cracked / cracked_layer / shard (CrackedArt)
+## 지형 코드가 쓰지 않는 역할: decor (TerrainProp·Waterwheel·MachineLamp 가 이름으로 꺼내 쓰는 단독 장식), source (몸통 결 재료),
+##   fork / slope / arch (수관에 잘라 두었지만 아직 쓰는 코드가 없다).
 
 const DATA_DIR := "res://data/terrain/"
 const ART_DIR := "res://art/terrain/"
@@ -56,23 +57,29 @@ static func for_region(region: String) -> TerrainSkin:
 	return skin
 
 
-## 지형 노드가 쓸 그림 옷: override 가 있으면 그 지역, 없으면 조상 Room 의 region.
-## 방 하나만 지역과 다른 그림 옷: 방(Room) 노드 메타 "terrain_skin", 또는 지역 설명의 "room_skins": {방 id: 그림 옷 이름}.
-## (잿빛 팔레트·정화·음악은 지역 것 그대로.)
+## 지형 노드가 쓸 그림 옷. 고르는 차례:
+##  1) override (노드의 style_region) 가 있으면 그 그림 옷
+##  2) 조상 Room 의 지역 설명(data/terrain/<지역>.json)에 "room_skins": {방 id: 그림 옷 이름} 이 있고 그 방이 있으면 그 그림 옷
+##     (같은 지역 안에서 방마다 다른 시트 — 심연의 달빛 정원·정원의 끝 = abyss_garden, 수액의 호수의 숨은 내리막 = sap_descent)
+##  3) 조상 Room 의 region 그림 옷
+## 방마다 다른 그림 옷이어도 잿빛 팔레트·정화·음악은 지역 것 그대로다 (Room.region 은 바뀌지 않는다).
 static func for_node(node: Node, override := "") -> TerrainSkin:
 	if override != "":
 		return for_region(override)
-	var room := TerrainStyle.room_of(node)
-	if room != null and room.has_meta("terrain_skin"):
-		return for_region(str(room.get_meta("terrain_skin")))
-	var skin := for_region(TerrainStyle.region_of(node))
-	if skin != null and skin.data.has("room_skins"):
-		if room != null and "room_id" in room:
-			var other := str((skin.data["room_skins"] as Dictionary).get(str(room.get("room_id")), ""))
-			if other != "":
-				var s2 := for_region(other)
-				if s2 != null:
-					return s2
+	return for_room(TerrainStyle.room_of(node), TerrainStyle.region_of(node))
+
+
+## 방의 그림 옷 (room_skins 를 따른다). room 이 null 이면 region 그림 옷.
+static func for_room(room: Node, region := "") -> TerrainSkin:
+	if region == "" and room != null and "region" in room:
+		region = str(room.get("region"))
+	var skin := for_region(region)
+	if skin != null and room != null and "room_id" in room:
+		var other := str((skin.data.get("room_skins", {}) as Dictionary).get(str(room.get("room_id")), ""))
+		if other != "":
+			var s2 := for_region(other)
+			if s2 != null:
+				return s2
 	return skin
 
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3 uid="uid://c1seedfloodmineboss"]
+[gd_scene load_steps=26 format=3 uid="uid://c1seedfloodmineboss"]
 
 [ext_resource type="Script" path="res://scripts/bosses/iron_pump_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -19,7 +19,6 @@
 [ext_resource type="PackedScene" uid="uid://c1seedbosspump" path="res://scenes/bosses/iron_pump.tscn" id="56_boss_pump"]
 [ext_resource type="Script" path="res://scripts/bosses/iron_pump_remains.gd" id="58_remains"]
 [ext_resource type="Texture2D" path="res://art/backgrounds/bg_flooded_mine_boss.png" id="11_bg"]
-[ext_resource type="Script" path="res://scripts/world/pool_art.gd" id="60_poolart"]
 [ext_resource type="Script" path="res://scripts/world/machine_lamp.gd" id="63_lamp"]
 [ext_resource type="Script" path="res://scripts/world/terrain_prop.gd" id="61_prop"]
 [ext_resource type="Script" path="res://scripts/world/waterwheel.gd" id="62_wheel"]
@@ -227,9 +226,6 @@ one_way = true
 [node name="SapFloor" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(700, 1440)
 size = Vector2(2840, 110)
-
-[node name="Art" type="Node2D" parent="Hazards/SapFloor"]
-script = ExtResource("60_poolart")
 
 [node name="Markers" type="Node2D" parent="."]
 

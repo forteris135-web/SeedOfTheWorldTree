@@ -1,7 +1,8 @@
 {
   "region": "sap_lake",
   "name": "수액의 호수",
-  "note": "수액의 호수 지형 그림 조각 (호숫가의 뿌리·수면 자국 벽·호수 한가운데). 금빛 뿌리 발판(위에 고인 수액·작은 폭포) + 물 지형(수액 웅덩이 겉모습, water 역할). 숨은 내리막은 방 메타 terrain_skin 으로 sap_descent 그림 옷을 입는다. 자르기: tools/terrain_cut.gd sap_lake → art/terrain/sap_lake/. 설명은 TERRAIN.md.",
+  "note": "수액의 호수 지형 그림 조각 (호숫가의 뿌리·수면 자국 벽·호수 한가운데). 금빛 뿌리 발판(위에 고인 수액·작은 폭포) + 물 지형(수액 웅덩이 겉모습, water 역할). 숨은 내리막은 room_skins 로 sap_descent 그림 옷을 입는다. 자르기: tools/terrain_cut.gd sap_lake → art/terrain/sap_lake/. 설명은 TERRAIN.md.",
+  "room_skins": {"hidden_descent": "sap_descent"},
   "scale": 1.0,
   "tint": [0.8, 0.77, 0.72],
   "fill": {"top": 1.0, "deep": 0.62, "deep_px": 340, "rim": 0.7, "rim_px": 34, "wall": 0.72, "top_inset": 14},
@@ -18,8 +19,8 @@
     "slab": {"max_w": 210},
     "branch": {"thin_poly": 110},
     "thorn": {"tint": [0.9, 0.78, 0.66], "reach_min": 0.9, "reach_max": 1.35, "sink": 22},
-    "water": {"alpha": 0.86, "alpha_ash": 0.8, "wave_alpha": 0.55},
-    "wall": {"width": 128, "out": 12, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.04, "v_hi": 0.96, "top_inset": 36}
+    "water": {"tint": [0.86, 0.96, 1.0], "tint_ash": [0.9, 0.92, 0.9], "alpha": [0.3, 0.68], "alpha_ash": [0.42, 0.78], "band": 0.62, "wave_alpha": 0.5, "wave_h": 24, "line": [0.75, 0.95, 1.0]},
+    "wall": {"width": 128, "art_faces": 1, "flip_random": true, "out": 12, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.04, "v_hi": 0.96, "top_inset": 36}
   },
   "ash": {
     "neutral": [[0.0, "#1b1f1e"], [0.25, "#464d4a"], [0.55, "#848b87"], [0.8, "#bbc0bc"], [1.0, "#e6e9e6"]],

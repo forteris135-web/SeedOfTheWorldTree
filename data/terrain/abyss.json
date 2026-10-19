@@ -9,6 +9,7 @@
   "lift": 2,
   "roles": {"branch": ["vine_a", "vine_b", "vine_c"], "log": ["log_a"], "ground": ["log_a", "vine_b", "deck_a"]},
   "params": {
+    "probe": {"deco": 18, "note": "윗면에 선 버섯·등불·수정은 시험의 윗선 재기에서 뺀다 (윗선보다 이만큼 넘게 솟은 곳, px)"},
     "ground": {"band": 40, "fade": 55, "cap": 150, "overlap": 110, "caps": ["log_a"]},
     "branch": {"thin_poly": 110},
     "glow": {"color": [1.0, 0.76, 0.48]},

@@ -668,7 +668,7 @@
       ]
     },
     "basin_a": {
-      "role": "water_body",
+      "role": "water",
       "size": [
         818,
         102
@@ -787,7 +787,7 @@
       ]
     },
     "basin_b": {
-      "role": "water_body",
+      "role": "water",
       "size": [
         452,
         86
@@ -860,7 +860,7 @@
       ]
     },
     "wave_a": {
-      "role": "water_wave",
+      "role": "wave",
       "size": [
         971,
         52
@@ -998,7 +998,7 @@
       ]
     },
     "wave_b": {
-      "role": "water_wave",
+      "role": "wave",
       "size": [
         251,
         47
@@ -1046,7 +1046,7 @@
       ]
     },
     "wave_c": {
-      "role": "water_wave",
+      "role": "wave",
       "size": [
         204,
         37
@@ -1088,7 +1088,7 @@
       ]
     },
     "wheel_q1": {
-      "role": "wheel",
+      "role": "decor",
       "size": [
         270,
         274
@@ -1138,7 +1138,7 @@
       ]
     },
     "wheel_q2": {
-      "role": "wheel",
+      "role": "decor",
       "size": [
         295,
         269
@@ -1191,7 +1191,7 @@
       ]
     },
     "wheel_q3": {
-      "role": "wheel",
+      "role": "decor",
       "size": [
         224,
         286
@@ -1235,7 +1235,7 @@
       ]
     },
     "wheel_q4": {
-      "role": "wheel",
+      "role": "decor",
       "size": [
         258,
         309
@@ -1284,7 +1284,7 @@
       ]
     },
     "wheel_ring": {
-      "role": "wheel",
+      "role": "decor",
       "size": [
         258,
         309
@@ -1333,7 +1333,7 @@
       ]
     },
     "wheel_hub": {
-      "role": "wheel",
+      "role": "decor",
       "size": [
         248,
         342
@@ -1380,7 +1380,7 @@
       ]
     },
     "tower_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         226,
         342
@@ -1425,7 +1425,7 @@
       ]
     },
     "tower_b": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         264,
         338
@@ -1474,7 +1474,7 @@
       ]
     },
     "rock_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         280,
         127
@@ -1525,7 +1525,7 @@
       ]
     },
     "rock_b": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         314,
         170
@@ -1581,7 +1581,7 @@
       ]
     },
     "pipe_elbow": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         255,
         212
@@ -1629,7 +1629,7 @@
       ]
     },
     "rock_d": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         146,
         66
@@ -1664,7 +1664,7 @@
       ]
     },
     "pipe_h_a": {
-      "role": "ceiling_edge",
+      "role": "ceiling",
       "size": [
         160,
         74
@@ -1700,7 +1700,7 @@
       ]
     },
     "pipe_h_b": {
-      "role": "ceiling_edge",
+      "role": "ceiling",
       "size": [
         180,
         66
@@ -1739,7 +1739,7 @@
       ]
     },
     "gate_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         313,
         472
@@ -1794,7 +1794,7 @@
       ]
     },
     "panel_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         221,
         266
@@ -1838,7 +1838,7 @@
       ]
     },
     "panel_b": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         200,
         266
@@ -1879,7 +1879,7 @@
       ]
     },
     "column_a": {
-      "role": "wall_edge",
+      "role": "wall",
       "size": [
         121,
         393
@@ -1910,7 +1910,7 @@
       ]
     },
     "column_b": {
-      "role": "wall_edge",
+      "role": "wall",
       "size": [
         144,
         385
@@ -1944,7 +1944,7 @@
       ]
     },
     "lamp_y": {
-      "role": "lamp",
+      "role": "decor",
       "size": [
         131,
         129
@@ -1977,7 +1977,7 @@
       ]
     },
     "lamp_b": {
-      "role": "lamp",
+      "role": "decor",
       "size": [
         129,
         128
@@ -2009,7 +2009,7 @@
       ]
     },
     "lamp_g": {
-      "role": "lamp",
+      "role": "decor",
       "size": [
         128,
         125
@@ -2041,7 +2041,7 @@
       ]
     },
     "lamp_r": {
-      "role": "lamp",
+      "role": "decor",
       "size": [
         128,
         126
@@ -2073,7 +2073,7 @@
       ]
     },
     "lamp_p": {
-      "role": "lamp",
+      "role": "decor",
       "size": [
         131,
         132

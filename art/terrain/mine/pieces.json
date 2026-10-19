@@ -559,7 +559,7 @@
       ]
     },
     "pillar_a": {
-      "role": "pillar",
+      "role": "decor",
       "size": [
         177,
         265
@@ -701,7 +701,7 @@
       ]
     },
     "crane_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         221,
         392
@@ -745,7 +745,7 @@
       ]
     },
     "frame_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         205,
         194
@@ -787,7 +787,7 @@
       ]
     },
     "frame_b": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         131,
         221
@@ -820,7 +820,7 @@
       ]
     },
     "post_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         56,
         147
@@ -843,7 +843,7 @@
       ]
     },
     "gallows_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         162,
         387
@@ -999,7 +999,7 @@
       ]
     },
     "basin_a": {
-      "role": "water_body",
+      "role": "water",
       "size": [
         818,
         102
@@ -1118,7 +1118,7 @@
       ]
     },
     "basin_b": {
-      "role": "water_body",
+      "role": "water",
       "size": [
         452,
         86
@@ -1191,7 +1191,7 @@
       ]
     },
     "wave_a": {
-      "role": "water_wave",
+      "role": "wave",
       "size": [
         971,
         52
@@ -1329,7 +1329,7 @@
       ]
     },
     "wave_b": {
-      "role": "water_wave",
+      "role": "wave",
       "size": [
         251,
         47
@@ -1377,7 +1377,7 @@
       ]
     },
     "wave_c": {
-      "role": "water_wave",
+      "role": "wave",
       "size": [
         204,
         37
@@ -1419,7 +1419,7 @@
       ]
     },
     "post_v": {
-      "role": "wall_edge",
+      "role": "wall",
       "size": [
         50,
         620
@@ -1442,7 +1442,7 @@
       ]
     },
     "beam_h": {
-      "role": "ceiling_edge",
+      "role": "ceiling",
       "size": [
         202,
         30
@@ -1484,7 +1484,7 @@
       ]
     },
     "ledge_a": {
-      "role": "prop",
+      "role": "decor",
       "size": [
         341,
         288
