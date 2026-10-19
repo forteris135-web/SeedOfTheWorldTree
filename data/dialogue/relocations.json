@@ -15,7 +15,8 @@
     "facing": 1,
     "texture": "res://art/enemies/enemy_gardener_savable.png",
     "art_scale": 0.16,
-    "art_faces_right": false
+    "art_faces_right": false,
+    "rig": "gardener_savable"
   },
   "guard_village": {
     "scene": "village_shrine",
@@ -40,6 +41,7 @@
     "facing": -1,
     "texture": "res://art/enemies/enemy_herbalist_savable.png",
     "art_scale": 0.17,
-    "art_faces_right": false
+    "art_faces_right": false,
+    "rig": "herbalist_savable"
   }
 }
