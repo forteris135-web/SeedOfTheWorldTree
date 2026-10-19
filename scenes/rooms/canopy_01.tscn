@@ -181,6 +181,7 @@ decorate = false
 [node name="Climb1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3650, 1800)
 size = Vector2(260, 40)
+one_way = true
 
 [node name="Climb2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3200, 1580)
@@ -189,10 +190,12 @@ size = Vector2(260, 40)
 [node name="Climb3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2750, 1360)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="Climb4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2250, 1150)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="MidBranch" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(900, 950)
@@ -209,10 +212,12 @@ size = Vector2(400, 60)
 [node name="Up1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(250, 850)
 size = Vector2(220, 40)
+one_way = true
 
 [node name="Up2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(600, 620)
 size = Vector2(220, 40)
+one_way = true
 
 [node name="Top1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(900, 400)

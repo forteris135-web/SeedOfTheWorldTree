@@ -155,22 +155,27 @@ label_text = "달빛풀 → 싸움터"
 [node name="Branch1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1000, 1230)
 size = Vector2(280, 44)
+one_way = true
 
 [node name="Branch2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1500, 1010)
 size = Vector2(300, 44)
+one_way = true
 
 [node name="Branch3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2100, 1120)
 size = Vector2(320, 44)
+one_way = true
 
 [node name="Branch4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2650, 960)
 size = Vector2(300, 44)
+one_way = true
 
 [node name="Branch5" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3100, 1240)
 size = Vector2(280, 44)
+one_way = true
 
 [node name="Markers" type="Node2D" parent="."]
 

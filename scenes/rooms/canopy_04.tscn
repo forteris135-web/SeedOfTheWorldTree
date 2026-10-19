@@ -160,31 +160,38 @@ label_text = "갈림길"
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(500, 1750)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1000, 1550)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1500, 1350)
 size = Vector2(320, 40)
+one_way = true
 
 [node name="P5" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2000, 1150)
 size = Vector2(320, 40)
+one_way = true
 
 [node name="P6" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2500, 950)
 size = Vector2(320, 40)
+one_way = true
 
 [node name="P7" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1200, 800)
 size = Vector2(900, 60)
+one_way = true
 label_text = "높은 가지 (기록물 자리)"
 
 [node name="P8" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2900, 700)
 size = Vector2(300, 60)
+one_way = true
 
 [node name="RightUpper" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3200, -100)

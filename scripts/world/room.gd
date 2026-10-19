@@ -694,6 +694,14 @@ func _fake_touch(pos: Vector2, pressed: bool) -> void:
 	Input.parse_input_event(ev)
 
 
+## 시험용: 동작을 상태로 눌렀다가 물리 한 틱 뒤에 뗀다 (소녀처럼 Input.is_action_just_pressed 로 듣는 쪽용).
+func _press_action(action: String) -> void:
+	Input.action_press(action)
+	await get_tree().physics_frame
+	await get_tree().process_frame
+	Input.action_release(action)
+
+
 ## 시험용: 동작을 진짜 입력 이벤트로 눌렀다 뗀다 (메뉴처럼 이벤트로 듣는 화면용).
 func _fake_action(action: String) -> void:
 	var ev := InputEventAction.new()
@@ -708,7 +716,8 @@ func _fake_action(action: String) -> void:
 	Input.parse_input_event(ev)
 
 
-## Claude Code용: 터치 '지도'·'메뉴' 버튼이 열리는지, 포탈 앞에서 ↑를 눌러 옆 방으로 건너가는지 확인한다.
+## Claude Code용: 터치 '지도'·'메뉴' 버튼이 열리는지, 포탈 앞에서 손길(interact)을 눌러 옆 방으로 건너가는지 확인한다.
+## (↑로 들어가던 것은 뺐으므로 ↑를 눌러도 아무 일이 없어야 한다.)
 func _portaltest() -> void:
 	var tree := get_tree()
 	await tree.create_timer(0.5).timeout
@@ -751,24 +760,24 @@ func _portaltest() -> void:
 			player.global_position = p.global_position + Vector2(-40, -70)
 			player.velocity = Vector2.ZERO
 			await tree.create_timer(0.6).timeout
-			Input.action_press("move_up")
-			await tree.physics_frame
-			Input.action_release("move_up")
+			await _press_action("interact")
 			await tree.create_timer(0.5).timeout
-			print("[포탈시험] 잠긴 포탈(%s)에서 ↑: 그대로 이 방 %s, 안내 '%s'" % [p.requires_ability, tree.current_scene == self, get_node("CombatHUD")._message])
+			print("[포탈시험] 잠긴 포탈(%s)에서 손길: 그대로 이 방 %s, 안내 '%s'" % [p.requires_ability, tree.current_scene == self, get_node("CombatHUD")._message])
 		elif target == null:
 			target = p
 	player.global_position = target.global_position + Vector2(-40, -70)
 	player.velocity = Vector2.ZERO
 	await tree.create_timer(0.6).timeout
 	print("[포탈시험] 포탈 앞: 상호작용 가능 %s, 바닥 %s, 터치 상황 버튼 글자 '%s'" % [player.can_interact, player.is_on_floor(), touch._interact_label() if touch else "-"])
+	# ↑는 더 이상 포탈과 무관하다: 눌러도 방이 바뀌지 않아야 한다
+	await _press_action("move_up")
+	await tree.create_timer(0.3).timeout
+	print("[포탈시험] ↑ 누름 → 다음 등장 자리 '%s' (비어 있어야 함), 입력 가능 %s, 그대로 이 방 %s" % [Progress.next_spawn, player.input_enabled, tree.current_scene == self])
 	Progress.set_flag("_test_travelled")
 	Progress.set_flag("_test_target_" + target.spawn_name)
-	Input.action_press("move_up")
-	await tree.physics_frame
-	Input.action_release("move_up")
+	await _press_action("interact")
 	await tree.create_timer(0.3).timeout
-	print("[포탈시험] ↑ 누름 → 다음 등장 자리 '%s', 입력 잠김 %s" % [Progress.next_spawn, not player.input_enabled])
+	print("[포탈시험] 손길 누름 → 다음 등장 자리 '%s', 입력 잠김 %s" % [Progress.next_spawn, not player.input_enabled])
 	await tree.create_timer(6.0).timeout
 	print("[포탈시험] 6초가 지나도 방이 바뀌지 않았다")
 	tree.quit()

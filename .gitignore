@@ -11,3 +11,6 @@ build/
 export/
 *.xcarchive
 *.ipa
+
+# Python 도구 부산물
+__pycache__/

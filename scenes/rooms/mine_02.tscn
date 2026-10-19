@@ -155,41 +155,47 @@ decorate = false
 
 [node name="P1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, 1200)
-size = Vector2(1800, 300)
-label_text = "관의 복도"
+size = Vector2(2040, 300)
+label_text = "관의 복도 (가시 구덩이 240: 달려서, 위에 가지 없음)"
 
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1800, 1230)
-size = Vector2(500, 270)
+position = Vector2(2040, 1230)
+size = Vector2(240, 270)
 decorate = false
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(2300, 1200)
-size = Vector2(2700, 300)
+position = Vector2(2280, 1200)
+size = Vector2(2720, 300)
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(800, 950)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P5" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1700, 900)
+position = Vector2(1200, 900)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P6" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2500, 920)
 size = Vector2(320, 40)
+one_way = true
 
 [node name="P7" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3400, 880)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P8" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(4200, 940)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P9" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3000, 650)
 size = Vector2(1200, 60)
+one_way = true
 label_text = "훼손된 경전"
 
 [node name="PLedge" parent="Terrain" instance=ExtResource("3_platform")]
@@ -199,8 +205,8 @@ size = Vector2(380, 40)
 [node name="Hazards" type="Node2D" parent="."]
 
 [node name="Thorns1" parent="Hazards" instance=ExtResource("17_thorns")]
-position = Vector2(1800, 1170)
-size = Vector2(500, 60)
+position = Vector2(2040, 1170)
+size = Vector2(240, 60)
 
 [node name="Markers" type="Node2D" parent="."]
 
