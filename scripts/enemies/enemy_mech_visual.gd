@@ -39,6 +39,8 @@ const SPIN_WINDUP_MAX := 14.0
 const SPIN_CHARGE := 17.0
 const SPIN_SLAM := 12.0
 const SPIN_SHADER := preload("res://shaders/drill_spin.gdshader")
+## 대롱이 '늘 겨눔'(aim_always_range)으로 더 겨누는 상태 (쫓기·공격 중은 EnemyRigVisual 이 겨눈다)
+const AIM_IDLE_STATES := [EnemyBase.State.IDLE, EnemyBase.State.PATROL, EnemyBase.State.ALERT]
 
 var _spin := 0.0
 var _spin_phase := 0.0
@@ -49,7 +51,6 @@ var _spin_mat: ShaderMaterial
 var _glows: Array[Sprite2D] = []
 var _glow_part_sprites: Array[Sprite2D] = []
 var _glow_level := 1.0
-var _glow_flicker := 0.0
 var _steam: CPUParticles2D
 var _sparks: CPUParticles2D       # 들이받는 동안 계속 튀는 불꽃
 var _spark_burst: CPUParticles2D  # 한 번에 터지는 불꽃 (내려찍기·부딪힘)
@@ -152,7 +153,6 @@ func fall(dir: int, gentle: bool) -> void:
 		var side := "collapse_front" if rel > 0.0 else "collapse_back"
 		_use_pose("dead_back", side)
 		_use_pose("dead_back_lie", side + "_lie")
-	_glow_flicker = 1.0
 
 
 func _use_pose(dst: String, src: String) -> void:
@@ -202,7 +202,7 @@ func _pre_motion(delta: float) -> void:
 			leg.h = 0.0
 			leg.x = Motion.damp(leg.x, float(motion.target.get(leg.k_foot, 0.0)) * motion.L, 9.0, delta)
 	# 대롱: 제자리에서 늘 겨눈다 (EnemyRigVisual 은 쫓기·공격 중에만 겨눈다)
-	if aim_always_range > 0.0 and _aim_i >= 0 and st in [EnemyBase.State.IDLE, EnemyBase.State.PATROL, EnemyBase.State.ALERT]:
+	if aim_always_range > 0.0 and _aim_i >= 0 and st in AIM_IDLE_STATES:
 		var pl := _enemy.player
 		if pl and is_instance_valid(pl) and pl.global_position.distance_to(_enemy.global_position) < aim_always_range:
 			_aim_gun(st)
