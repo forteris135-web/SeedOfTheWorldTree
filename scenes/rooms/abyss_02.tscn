@@ -161,22 +161,27 @@ label_text = "비석의 방"
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(400, 1950)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(900, 1750)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1400, 1550)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P5" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1900, 1350)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P6" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2400, 1150)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P7" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1200, 900)

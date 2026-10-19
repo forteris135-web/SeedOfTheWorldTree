@@ -154,58 +154,61 @@ decorate = false
 
 [node name="P1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, 1100)
-size = Vector2(1500, 300)
-label_text = "잎의 회랑"
+size = Vector2(1700, 300)
+label_text = "잎의 회랑 (가시 구덩이 240 두 곳: 달려서 뛰어넘기, 구덩이 둘레 위에 가지 없음)"
 
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1500, 1120)
-size = Vector2(300, 280)
+position = Vector2(1700, 1120)
+size = Vector2(240, 280)
 decorate = false
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1800, 1100)
-size = Vector2(1500, 300)
+position = Vector2(1940, 1100)
+size = Vector2(1460, 300)
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(3300, 1120)
-size = Vector2(400, 280)
+position = Vector2(3400, 1120)
+size = Vector2(240, 280)
 decorate = false
 
 [node name="P5" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(3700, 1100)
-size = Vector2(1500, 300)
+position = Vector2(3640, 1100)
+size = Vector2(1560, 300)
 
 [node name="P6" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1400, 880)
-size = Vector2(220, 40)
+position = Vector2(2650, 760)
+size = Vector2(240, 40)
+one_way = true
 
 [node name="P7" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1700, 760)
+position = Vector2(4700, 620)
 size = Vector2(240, 40)
+one_way = true
 
 [node name="P8" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2300, 850)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P9" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(3200, 860)
+position = Vector2(300, 640)
 size = Vector2(240, 40)
-
-[node name="P10" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(3550, 720)
-size = Vector2(260, 40)
+one_way = true
 
 [node name="P11" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3900, 860)
 size = Vector2(240, 40)
+one_way = true
 
 [node name="P12" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(4400, 820)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P13" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(600, 820)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="SecretStalk" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1050, -100)
@@ -219,12 +222,12 @@ secret_id = "secret_canopy_03_1"
 [node name="Hazards" type="Node2D" parent="."]
 
 [node name="Thorns1" parent="Hazards" instance=ExtResource("17_thorns")]
-position = Vector2(1500, 1060)
-size = Vector2(300, 60)
+position = Vector2(1700, 1060)
+size = Vector2(240, 60)
 
 [node name="Thorns2" parent="Hazards" instance=ExtResource("17_thorns")]
-position = Vector2(3300, 1060)
-size = Vector2(400, 60)
+position = Vector2(3400, 1060)
+size = Vector2(240, 60)
 
 [node name="Markers" type="Node2D" parent="."]
 

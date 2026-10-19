@@ -27,8 +27,12 @@ class_name Platform
 @export var label_text := ""
 ## 장식을 그릴지 (벽·천장은 끈다)
 @export var decorate := true
-## 한쪽 방향 발판: 아래에서 뛰어오르면 통과해 위에 올라선다 (천장 틈의 비밀 발판처럼).
-@export var one_way := false
+## 한쪽 방향 발판: 아래에서 뛰어오르면 통과해 위에 올라선다 (아래+점프로 내려갈 수도 있다 — player.gd 가 one_way 를 읽는다).
+## 눈으로 구분하는 단서: 아랫선이 끊어진 점선(빛 조각)으로 보인다 (글자 없음). 세기는 ONE_WAY_DASH_* 상수.
+@export var one_way := false:
+	set(v):
+		one_way = v
+		queue_redraw()
 ## 수상한 발판: 비밀로 이어지는 자리에 켠다. 글자 대신 미묘한 빛과 창백한 이끼로만 알린다.
 @export var suspicious := false:
 	set(v):
@@ -52,6 +56,11 @@ const HINT_HEIGHT := 24.0
 const PALE_MOSS := Color(0.78, 0.86, 0.72)
 const PALE_MOSS_LIGHT := Color(0.96, 0.98, 0.86)
 const PALE_MIX := 0.45
+## one_way 단서: 밑면의 빛 점선 (조각 길이 / 간격 / 투명도 / 굵기). 윗면 테두리(굵기 2.0, 투명도 0.8)보다 조금 약하게.
+const ONE_WAY_DASH_LEN := 10.0
+const ONE_WAY_DASH_GAP := 12.0
+const ONE_WAY_DASH_ALPHA := 0.6
+const ONE_WAY_DASH_WIDTH := 2.0
 
 var _label: Label
 var _hint: SuspiciousHint
@@ -191,14 +200,31 @@ func _draw() -> void:
 	var w := size.x
 	var h := size.y
 	var thin := h <= 90.0 and w >= 120.0     # 가지 발판
+	var sag := 0.0                             # 가지 아랫선의 처짐 (점선이 같은 선을 따라가도록 _draw_branch 가 돌려준다)
 	if thin:
-		_draw_branch(rng, w, h)
+		sag = _draw_branch(rng, w, h)
 	else:
 		_draw_block(rng, w, h)
+	if one_way:
+		_draw_one_way_hint(w, h, sag)
 
 
-## 굽은 가지: 둥근 끝, 살짝 처진 아랫선, 껍질 결, 위에 이끼.
-func _draw_branch(rng: RandomNumberGenerator, w: float, h: float) -> void:
+## one_way 단서: 밑면을 따라 끊어진 빛 점선. 가지는 처진 아랫선(같은 sag)을 2px 아래에서 따라가고, 덩어리는 밑변을 따라 그린다.
+## (덩굴·결 위에 얹히므로 '아래가 비어 있다'는 느낌만 준다. 글자는 쓰지 않는다.)
+func _draw_one_way_hint(w: float, h: float, sag: float) -> void:
+	var tint := Color(edge_color.r, edge_color.g, edge_color.b, ONE_WAY_DASH_ALPHA)
+	var x := 6.0
+	while x + ONE_WAY_DASH_LEN < w - 6.0:
+		var t0 := x / w
+		var t1 := (x + ONE_WAY_DASH_LEN) / w
+		var y0 := h + 2.0 + sin(t0 * PI) * sag * 0.35
+		var y1 := h + 2.0 + sin(t1 * PI) * sag * 0.35
+		draw_line(Vector2(x, y0), Vector2(x + ONE_WAY_DASH_LEN, y1), tint, ONE_WAY_DASH_WIDTH, true)
+		x += ONE_WAY_DASH_LEN + ONE_WAY_DASH_GAP
+
+
+## 굽은 가지: 둥근 끝, 살짝 처진 아랫선, 껍질 결, 위에 이끼. 돌려주는 값: 아랫선 처짐(sag) — one_way 점선이 같은 선을 따른다.
+func _draw_branch(rng: RandomNumberGenerator, w: float, h: float) -> float:
 	var mc := _moss()
 	var ml := _moss_light()
 	var pts := PackedVector2Array()
@@ -252,6 +278,7 @@ func _draw_branch(rng: RandomNumberGenerator, w: float, h: float) -> void:
 			var tt := float(j + 1) / 4.0
 			var p := Vector2(x + sway * tt, h + len * tt)
 			draw_colored_polygon(PackedVector2Array([p, p + Vector2(-6, 8), p + Vector2(0, 16), p + Vector2(6, 8)]), vine_color.lightened(0.15))
+	return sag
 
 
 ## 큰 덩어리(바닥·벽): 채우고 윗선에 결과 이끼, 옆에 덩굴.

@@ -153,41 +153,73 @@ size = Vector2(2600, 100)
 decorate = false
 
 [node name="P1" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(0, 300)
-size = Vector2(1200, 100)
-label_text = "마을에서 내려오는 길"
+position = Vector2(0, 440)
+size = Vector2(1360, 100)
+label_text = "마을에서 내려오는 길 (가운데 가시 160: 뛰어넘기, 머리 공간 306)"
+
+[node name="P1b" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1380, 560)
+size = Vector2(330, 50)
+one_way = true
+label_text = "디딤 가지 (선반 끝에서 120 내려서기)"
 
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1800, 600)
-size = Vector2(800, 60)
+position = Vector2(1760, 600)
+size = Vector2(840, 60)
+one_way = true
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(300, 900)
 size = Vector2(500, 50)
+one_way = true
+
+[node name="P4b" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1500, 900)
+size = Vector2(260, 50)
+one_way = true
+label_text = "디딤 가지 (올라올 때)"
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1200, 1150)
 size = Vector2(500, 50)
+one_way = true
 
 [node name="P5" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2000, 1400)
 size = Vector2(600, 50)
+one_way = true
+
+[node name="P6b" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(1450, 1450)
+size = Vector2(260, 50)
+one_way = true
+label_text = "디딤 가지 (올라올 때)"
 
 [node name="P6" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(600, 1700)
 size = Vector2(600, 50)
+one_way = true
 
 [node name="P7" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1500, 1950)
 size = Vector2(600, 50)
+one_way = true
+
+[node name="P8b" parent="Terrain" instance=ExtResource("3_platform")]
+position = Vector2(960, 2040)
+size = Vector2(260, 50)
+one_way = true
+label_text = "디딤 가지 (올라올 때)"
 
 [node name="P8" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(200, 2250)
 size = Vector2(500, 50)
+one_way = true
 
 [node name="P9" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1100, 2500)
+position = Vector2(1100, 2540)
 size = Vector2(700, 50)
+one_way = true
 label_text = "포스터"
 
 [node name="P10" parent="Terrain" instance=ExtResource("3_platform")]
@@ -212,17 +244,13 @@ secret_id = "secret_mine_01_1"
 [node name="Hazards" type="Node2D" parent="."]
 
 [node name="Thorns1" parent="Hazards" instance=ExtResource("17_thorns")]
-position = Vector2(1200, 240)
-size = Vector2(600, 60)
-
-[node name="Thorns2" parent="Hazards" instance=ExtResource("17_thorns")]
-position = Vector2(1200, 2940)
-size = Vector2(500, 60)
+position = Vector2(1000, 380)
+size = Vector2(160, 60)
 
 [node name="Markers" type="Node2D" parent="."]
 
 [node name="FromVillage" type="Marker2D" parent="Markers"]
-position = Vector2(120, 232)
+position = Vector2(120, 372)
 
 [node name="FromMine02" type="Marker2D" parent="Markers"]
 position = Vector2(2480, 2932)
@@ -230,7 +258,7 @@ position = Vector2(2480, 2932)
 [node name="Exits" type="Node2D" parent="."]
 
 [node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
-position = Vector2(190, 300)
+position = Vector2(190, 440)
 target_scene = "res://scenes/rooms/village_02.tscn"
 spawn_name = "FromMine"
 
@@ -242,12 +270,12 @@ spawn_name = "FromMine01"
 [node name="Interactables" type="Node2D" parent="."]
 
 [node name="Grass1" parent="Interactables" instance=ExtResource("9_grass")]
-position = Vector2(600, 300)
+position = Vector2(600, 440)
 grass_id = "mine_top"
 display_name = "채굴장 · 갱도 입구"
 
 [node name="Record_mine_poster" parent="Interactables" instance=ExtResource("30_record")]
-position = Vector2(1500, 2500)
+position = Vector2(1500, 2540)
 record_id = "mine_poster"
 kind = "poster"
 
@@ -273,7 +301,7 @@ position = Vector2(500, 2932)
 position = Vector2(1700, 1882)
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
-position = Vector2(120, 232)
+position = Vector2(120, 372)
 
 [node name="FogNear" type="Parallax2D" parent="."]
 scroll_scale = Vector2(1.15, 1.15)

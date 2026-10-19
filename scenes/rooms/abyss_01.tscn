@@ -159,22 +159,27 @@ label_text = "그을린 뿌리"
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(700, 1550)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1300, 1350)
 size = Vector2(320, 40)
+one_way = true
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2000, 1500)
 size = Vector2(360, 40)
+one_way = true
 
 [node name="P5" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2700, 1300)
 size = Vector2(320, 40)
+one_way = true
 
 [node name="P6" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3400, 1500)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="Markers" type="Node2D" parent="."]
 

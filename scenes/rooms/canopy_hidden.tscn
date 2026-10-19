@@ -156,14 +156,17 @@ label_text = "잿가지의 둥지"
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(300, 1050)
 size = Vector2(260, 40)
+one_way = true
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2100, 1000)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1150, 850)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="Markers" type="Node2D" parent="."]
 

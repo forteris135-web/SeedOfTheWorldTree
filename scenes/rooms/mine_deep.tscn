@@ -159,15 +159,18 @@ label_text = "책임자의 방"
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(700, 850)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1400, 700)
 size = Vector2(400, 40)
+one_way = true
 label_text = "책상"
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2200, 850)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="Markers" type="Node2D" parent="."]
 

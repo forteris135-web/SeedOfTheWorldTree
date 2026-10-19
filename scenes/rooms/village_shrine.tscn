@@ -155,6 +155,7 @@ label_text = "사당"
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1000, 760)
 size = Vector2(400, 40)
+one_way = true
 label_text = "제단"
 
 [node name="Markers" type="Node2D" parent="."]

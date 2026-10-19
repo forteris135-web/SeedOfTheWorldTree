@@ -1,7 +1,8 @@
 extends Area2D
 class_name Portal
-## 포탈: 옆 방으로 이어지는 빛의 문 (메이플스토리처럼). 방의 양 끝에 서 있고, 앞에 서서 ↑(위) 또는 손길 버튼을
-## 누르면 건너간다. 건너간 방에서는 그 방 포탈 앞(Markers/<spawn_name>)에 서므로 되돌아올 수도 있다.
+## 포탈: 옆 방으로 이어지는 빛의 문 (메이플스토리처럼). 방의 양 끝에 서 있고, 앞에 서서 손길(상호작용) 버튼을
+## 누르면 건너간다. (↑로 들어가던 것은 기획자 요청으로 뺐다 — 위 키는 이제 포탈과 무관하다.)
+## 건너간 방에서는 그 방 포탈 앞(Markers/<spawn_name>)에 서므로 되돌아올 수도 있다.
 ## 그림: art/objects/portal.png (원본 1263×1246, 돌바닥 밑동은 약 1232줄, 문 가운데는 (630, 720)).
 
 ## 건너갈 방과 그 방에서 설 자리(Marker2D 이름).
@@ -128,20 +129,12 @@ func _process(delta: float) -> void:
 	if _player_near and not _used:
 		_prompt.visible = true
 		var locked := requires_ability != "" and not Progress.has_ability(requires_ability)
-		_prompt.text = "잠긴 길" if locked else "%s / ↑  들어가기" % InputDevice.prompt("interact")
+		_prompt.text = "잠긴 길" if locked else "%s  들어가기" % InputDevice.prompt("interact")
 	else:
 		_prompt.visible = false
 	var pulse := 0.85 + 0.15 * sin(_time * 1.7)
 	_glow.modulate = Color(1.5, 1.5, 1.5, 1.0) * pulse
 	_glow.scale = Vector2(0.8, 1.15) * (0.95 + 0.08 * sin(_time * 1.1))
-
-
-## 앞에 서서 위를 누르면 들어간다 (소녀와 같은 물리 틱에서 읽는다).
-func _physics_process(_delta: float) -> void:
-	if _player_near == null or _used or not _player_near.input_enabled:
-		return
-	if _player_near.is_on_floor() and _player_near.state in Player.LOCOMOTION and Input.is_action_just_pressed("move_up"):
-		_enter(_player_near)
 
 
 func _on_body_entered(body: Node) -> void:

@@ -152,25 +152,27 @@ decorate = false
 
 [node name="P1" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(0, 2400)
-size = Vector2(900, 300)
-label_text = "바람의 틈"
+size = Vector2(1220, 300)
+label_text = "바람의 틈 (가시 구덩이 180: 뛰어넘기)"
 
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(900, 2420)
-size = Vector2(700, 280)
+position = Vector2(1220, 2420)
+size = Vector2(180, 280)
 decorate = false
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
-position = Vector2(1600, 2400)
-size = Vector2(800, 300)
+position = Vector2(1400, 2400)
+size = Vector2(1000, 300)
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(200, 2150)
 size = Vector2(260, 40)
+one_way = true
 
 [node name="P5" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(700, 1950)
 size = Vector2(260, 40)
+one_way = true
 
 [node name="P6" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1250, 1800)
@@ -179,26 +181,32 @@ size = Vector2(300, 40)
 [node name="P7" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1800, 1600)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P8" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1350, 1350)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P9" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(800, 1150)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P10" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(300, 950)
 size = Vector2(300, 40)
+one_way = true
 
 [node name="P11" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(800, 700)
 size = Vector2(320, 40)
+one_way = true
 
 [node name="P12" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1400, 500)
 size = Vector2(320, 40)
+one_way = true
 
 [node name="P13" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1900, 300)
@@ -208,8 +216,8 @@ label_text = "위로"
 [node name="Hazards" type="Node2D" parent="."]
 
 [node name="Thorns1" parent="Hazards" instance=ExtResource("17_thorns")]
-position = Vector2(900, 2360)
-size = Vector2(700, 60)
+position = Vector2(1220, 2360)
+size = Vector2(180, 60)
 
 [node name="Markers" type="Node2D" parent="."]
 

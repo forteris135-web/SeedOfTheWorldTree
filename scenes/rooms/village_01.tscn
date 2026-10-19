@@ -160,21 +160,25 @@ label_text = "가지 위의 마을"
 [node name="P2" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(700, 1150)
 size = Vector2(480, 50)
+one_way = true
 label_text = "지붕"
 
 [node name="P3" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(1500, 1000)
 size = Vector2(420, 50)
+one_way = true
 label_text = "지붕"
 
 [node name="P4" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(2300, 1180)
 size = Vector2(520, 50)
+one_way = true
 label_text = "지붕"
 
 [node name="P5" parent="Terrain" instance=ExtResource("3_platform")]
 position = Vector2(3200, 1020)
 size = Vector2(460, 50)
+one_way = true
 label_text = "지붕"
 
 [node name="SecretStalk" parent="Terrain" instance=ExtResource("3_platform")]
