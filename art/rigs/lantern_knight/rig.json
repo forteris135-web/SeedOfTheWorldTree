@@ -195,7 +195,17 @@
           -99.5,
           24.88
         ]
-      ]
+      ],
+      "variants": {
+        "front": {
+          "tex": "res://art/rigs/lantern_knight/head@front.png",
+          "pivot": [
+            62.4,
+            148.0
+          ],
+          "rot": 0.0
+        }
+      }
     },
     {
       "name": "arm_f_up",

@@ -88,6 +88,7 @@ var _spin_base := 0.0
 var _spear_w := 0.0        # 이번 프레임 창의 세상 각도 (라디안, 뼈대 틀)
 var _spear_shown := 0.0    # 빠르기를 제한한 창 각도 (자세 채널을 쫓는다, 값은 이어진다 — 감싸지 않는다)
 var _walking := false      # 걸음이 막 시작됐는지 (걸음 위상 맞추기)
+var _head_front := false   # 투구 앞모습 그림을 끼웠는가
 var _grip_eff := 1.0       # 뒷손이 실제로 쥔 정도 (닿지 않으면 놓는다)
 ## 창이 손을 떠남 (쓰러짐·정화): 밑동 자리(뼈대 틀)와 기울기·각속도
 var _spear_free := false
@@ -279,6 +280,11 @@ func _process(delta: float) -> void:
 		_lan_w = -_lan_w
 		_lan_prev = Vector2.INF
 	scale = Vector2(fx, 1.0)
+	# 몸을 트는 한가운데(옆모습이 납작해질 때)엔 투구를 앞모습 그림으로 바꿔 끼운다 (시트의 정면 투구) — 판때기가 뒤집히는 대신 돌아서는 것처럼
+	var front := absf(fx) < 0.45
+	if front != _head_front:
+		_head_front = front
+		rig.set_variant("head", "front" if front else "")
 	# 목표 자세
 	var info := {"drive": RigMotion.Drive.NORMAL, "feet": RigMotion.Feet.POSE, "breath": 1.0}
 	var pose := _pose_now(st, delta, info)

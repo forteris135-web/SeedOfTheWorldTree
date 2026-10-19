@@ -30,7 +30,8 @@
     },
     "head": {
       "comps": [3],
-      "pivot": [1000, 182], "parent": "torso", "attach": [985, 246], "z": 3
+      "pivot": [1000, 182], "parent": "torso", "attach": [985, 246], "z": 3,
+      "variants": {"front": {"comps": [5], "pivot": [1322, 190]}}
     },
     "arm_f_up": {
       "comps": [20],
