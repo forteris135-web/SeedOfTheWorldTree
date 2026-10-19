@@ -11,7 +11,8 @@ extends Node2D
 ##       실제 몹 씬을 바닥 위에 세우고 동작을 차례로 돌려 0.05초(--every) 간격 필름 띠: screenshots/rig_<씬 이름>_<동작>.png
 ##       (상태는 EnemyBase 를 직접 바꿔 돌린다 — 판정·시간은 실제 게임과 같다)
 ##   공통: --zoom 2.5 (카메라 배율), --every 0.05 (필름 칸 간격, 초), --cols 5, --crop 0.5 (필름 칸에 남길 화면 몫)
-##   자세 모드: --cam_y 0.5 / --cam_x 0 (카메라 자리, 키의 몇 배 — 발을 크게 보려면 --zoom 8 --cam_y 0.1)
+##   자세 모드: --cam_y 0.5 / --cam_x 0 (카메라 자리, 키의 몇 배 — 발을 크게 보려면 --zoom 8 --cam_y 0.1),
+##             --variant head@human (변형 그림 끼워 보기), --flash 0.7 (번쩍임 세기 보기), --nomat (셰이더 없이)
 
 const FLOOR_Y := 600.0
 
@@ -118,6 +119,9 @@ func _run_poses(id: String) -> void:
 		marks.queue_redraw()
 		if _args.has("flash"):
 			rig.set_flash(float(_args["flash"]))
+		if _args.has("variant"):
+			var vv := str(_args["variant"]).split("@")   # --variant head@human
+			rig.set_variant(vv[0], vv[1] if vv.size() > 1 else "")
 		var img: Image = await _grab()
 		var path := "%s/rig_%s_%s.png" % [_out_dir(), id, pname]
 		img.save_png(path)

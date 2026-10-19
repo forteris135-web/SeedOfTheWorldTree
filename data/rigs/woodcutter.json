@@ -4,6 +4,7 @@
   "sheet": "res://익스펜션/그림/리뉴얼-몹/AF637C8F-2F49-4B37-9DEA-BB5A6590E4C4.PNG",
   "faces": "left",
   "segment": {"alpha": 0.5, "erode": 4, "min_pixels": 1500, "soft_alpha": 0.03, "min_small": 150},
+  "extra_sheets": {"savable": {"path": "res://익스펜션/그림/리뉴얼-몹/2F7333CC-3271-44DD-8ED2-C6FCADC9A502.PNG"}},
   "out_scale": 0.5,
   "game_scale": 0.152,
   "archetype": "humanoid",
@@ -53,7 +54,8 @@
     },
     "head": {
       "comps": [4],
-      "pivot": [1305, 300], "parent": "torso", "attach": [955, 140], "z": 5
+      "pivot": [1305, 300], "parent": "torso", "attach": [955, 140], "z": 5,
+      "variants": {"human": {"sheet": "savable", "comps": [2], "pivot": [505, 195]}}
     },
     "arm_f_up": {
       "comps": [0],

@@ -99,7 +99,8 @@ func _ready() -> void:
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 22)
 	_label.add_theme_color_override("font_color", Color("ffd46a"))
-	_label.position = Vector2(-80, -230)
+	# '정화의 손길' 글자: 머리 위 (거대화 중간 보스는 EliteTraits.fit_visual 이 다시 맞춘다)
+	_label.position = Vector2(-80, -float(rig.data.get("height", 1000.0)) * rig.game_scale * art_scale - 70.0)
 	_label.visible = false
 	add_child(_label)
 	_overlay = Node2D.new()

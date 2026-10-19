@@ -44,6 +44,10 @@ class Chan:
 class Leg:
 	var name := ""
 	var sfx := "f"
+	## 채널 이름 (매 프레임 글자를 이어 붙이지 않도록 미리 만들어 둔다)
+	var k_foot := "foot_f"
+	var k_kneel := "kneel_f"
+	var k_toe := "toe_f"
 	var up := -1
 	var lo := -1          # -1 이면 한 뼈 다리
 	var foot := -1
@@ -121,6 +125,7 @@ var fall_angle := 0.0
 var fall_pivot := Vector2.ZERO
 var ground_lock := 0.0
 
+var _raw := {}            # 이번 프레임의 섞인 목표 (매 프레임 새 사전을 만들지 않게 돌려 쓴다)
 var _fade_from := {}
 var _fade_vel := {}
 var _fade_t := 1.0
@@ -193,6 +198,9 @@ func _setup_legs() -> void:
 		var leg := Leg.new()
 		leg.name = str(ld["name"])
 		leg.sfx = leg.name.substr(leg.name.rfind("_") + 1) if leg.name.contains("_") else leg.name
+		leg.k_foot = "foot_" + leg.sfx
+		leg.k_kneel = "kneel_" + leg.sfx
+		leg.k_toe = "toe_" + leg.sfx
 		leg.up = rig.bone_index(str(ld["up"]))
 		leg.foot = rig.bone_index(str(ld["foot"]))
 		leg.knee_back = bool(ld.get("knee_back", false))
@@ -226,7 +234,7 @@ func _setup_legs() -> void:
 	var ry := -INF
 	for leg in legs:
 		var j0 := rig.base_pos[leg.up].rotated(rig.rest[root])
-		var home := float(base.get("foot_" + leg.sfx, 0.0)) * L
+		var home := float(base.get(leg.k_foot, 0.0)) * L
 		var need := 0.0
 		if leg.lo >= 0:
 			var r := (leg.a + leg.b) * 0.985
@@ -255,7 +263,7 @@ func _setup_guard() -> void:
 func _place_feet_home() -> void:
 	var base: Dictionary = poses["base"]
 	for leg in legs:
-		leg.x = float(base.get("foot_" + leg.sfx, 0.0)) * L
+		leg.x = float(base.get(leg.k_foot, 0.0)) * L
 		leg.h = 0.0
 		leg.swing = false
 
@@ -336,7 +344,7 @@ func flip_feet() -> void:
 ## 발을 지금 자세의 자리로 바로 옮긴다 (순간 이동·처음 놓일 때).
 func snap_feet() -> void:
 	for leg in legs:
-		leg.x = float(target.get("foot_" + leg.sfx, 0.0)) * L
+		leg.x = float(target.get(leg.k_foot, 0.0)) * L
 		leg.h = 0.0
 		leg.swing = false
 
@@ -392,7 +400,9 @@ func update(delta: float, ctx: Dictionary) -> void:
 	var vy := float(ctx.get("vy", 0.0))
 
 	# 1) 관성 크로스페이드
-	var raw := target.duplicate()
+	var raw := _raw
+	for k in keys:
+		raw[k] = target[k]
 	if _fade_t < 1.0 and delta > 0.0:
 		_fade_t = minf(_fade_t + delta / maxf(_fade_len, 0.001), 1.0)
 		var w := smoothstep(0.0, 1.0, _fade_t)
@@ -498,14 +508,14 @@ func _apply_body() -> void:
 	var kw := 0.0
 	var kleg: Leg = null
 	for leg in legs:
-		var k := clampf(float(fin.get("kneel_" + leg.sfx, 0.0)), 0.0, 1.0)
+		var k := clampf(float(fin.get(leg.k_kneel, 0.0)), 0.0, 1.0)
 		if k <= 0.01:
 			leg.knee_set = false
 		if k > kw and leg.lo >= 0:
 			kw = k
 			kleg = leg
 	for leg in legs:
-		var k := clampf(float(fin.get("kneel_" + leg.sfx, 0.0)), 0.0, 1.0)
+		var k := clampf(float(fin.get(leg.k_kneel, 0.0)), 0.0, 1.0)
 		if k > 0.01 and not leg.knee_set and leg.lo >= 0:
 			# 꿇기 시작: 딛은 발은 그 자리에 두고, 정강이가 발에서 앞으로 눕도록 무릎 자리를 발보다 정강이 길이만큼 앞에 잡는다
 			# (서 있다 꿇으면 발끝은 남고 무릎이 앞으로 내려간다)
@@ -544,7 +554,7 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 		_airborne = true
 		for leg in legs:
 			var j := rig.xf[leg.up].origin
-			var home := float(fin.get("foot_" + leg.sfx, 0.0)) * L
+			var home := float(fin.get(leg.k_foot, 0.0)) * L
 			var tx := j.x + home * 0.5
 			var hang := (leg.a + leg.b) * 0.82 + leg.ankle_h if leg.lo >= 0 else leg.sole.length() * 0.95
 			var th := maxf(-(j.y + hang), 0.0)
@@ -579,7 +589,7 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 		_phase += absf(dx) / stride
 		for k in legs.size():
 			var leg := legs[k]
-			var home := float(fin.get("foot_" + leg.sfx, 0.0)) * L
+			var home := float(fin.get(leg.k_foot, 0.0)) * L
 			var ph := fposmod(_phase + (0.5 if k % 2 == 1 else 0.0), 1.0)
 			var to := home + dir * stance * 0.5
 			if ph < swing_frac:
@@ -601,7 +611,7 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 	# 서 있거나 공격 중: 옮기던 발은 시간으로 마저 딛고, 딛은 발은 자세의 자리에서 많이 어긋나면 한 걸음 옮긴다
 	var any_swing := false
 	for leg in legs:
-		var home := float(fin.get("foot_" + leg.sfx, 0.0)) * L
+		var home := float(fin.get(leg.k_foot, 0.0)) * L
 		if leg.swing:
 			if not leg.timed:
 				leg.timed = true
@@ -624,7 +634,7 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 	var worst: Leg = null
 	var worst_err := thr
 	for leg in legs:
-		var err := absf(leg.x - float(fin.get("foot_" + leg.sfx, 0.0)) * L)
+		var err := absf(leg.x - float(fin.get(leg.k_foot, 0.0)) * L)
 		if err > worst_err:
 			worst_err = err
 			worst = leg
@@ -643,10 +653,10 @@ func _solve_legs() -> void:
 	# 닿지 않는 발이 있으면 엉덩이를 낮춘다 (발바닥이 늘 땅에)
 	var drop := 0.0
 	for leg in legs:
-		if leg.lo < 0 or float(fin.get("kneel_" + leg.sfx, 0.0)) > 0.5:
+		if leg.lo < 0 or float(fin.get(leg.k_kneel, 0.0)) > 0.5:
 			continue
 		var j := rig.xf[leg.up].origin
-		var phi := leg.foot_rest_world + deg_to_rad(float(fin.get("toe_" + leg.sfx, 0.0)))
+		var phi := leg.foot_rest_world + deg_to_rad(float(fin.get(leg.k_toe, 0.0)))
 		var a := Vector2(leg.x, -leg.h) - leg.sole.rotated(phi)
 		var r := (leg.a + leg.b) * 0.995
 		var dxa := a.x - j.x
@@ -665,7 +675,7 @@ func _solve_legs() -> void:
 	var lift := 0.0
 	var kmax := 0.0
 	for leg in legs:
-		var kw := clampf(float(fin.get("kneel_" + leg.sfx, 0.0)), 0.0, 1.0)
+		var kw := clampf(float(fin.get(leg.k_kneel, 0.0)), 0.0, 1.0)
 		if kw <= 0.0 or leg.lo < 0:
 			continue
 		var low := rig.lowest_y(PackedInt32Array([leg.lo, leg.foot]), false)
@@ -684,7 +694,7 @@ func _solve_leg(leg: Leg) -> void:
 	var j := rig.xf[leg.up].origin
 	var pw := rig.world_rot(rig.parent[leg.up]) if rig.parent[leg.up] >= 0 else 0.0
 	var s := Vector2(leg.x, -leg.h)
-	var kw := clampf(float(fin.get("kneel_" + leg.sfx, 0.0)), 0.0, 1.0)
+	var kw := clampf(float(fin.get(leg.k_kneel, 0.0)), 0.0, 1.0)
 	if leg.lo < 0:
 		# 한 뼈 다리: 다리를 발 쪽으로 돌리고, 길이 차이는 축 방향으로 살짝 늘이거나 줄인다
 		var d := s - j
@@ -692,7 +702,7 @@ func _solve_leg(leg: Leg) -> void:
 		rig.rot[leg.up] = r_w - pw
 		rig.scl[leg.up] = Vector2(1.0, clampf(d.length() / maxf(leg.sole.length(), 1.0), 0.82, 1.08))
 		return
-	var phi := leg.foot_rest_world + deg_to_rad(float(fin.get("toe_" + leg.sfx, 0.0)))
+	var phi := leg.foot_rest_world + deg_to_rad(float(fin.get(leg.k_toe, 0.0)))
 	var a_pt := s - leg.sole.rotated(phi)
 	var d := a_pt - j
 	var dist := clampf(d.length(), absf(leg.a - leg.b) + 0.5, leg.a + leg.b - 0.05)

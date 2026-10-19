@@ -277,7 +277,17 @@
           -122.0,
           -128.0
         ]
-      ]
+      ],
+      "variants": {
+        "human": {
+          "tex": "res://art/rigs/woodcutter/head@human.png",
+          "pivot": [
+            52.5,
+            94.5
+          ],
+          "rot": 0.0
+        }
+      }
     },
     {
       "name": "arm_f_up",
@@ -1199,9 +1209,14 @@
       "weapon": -10.0
     },
     "dead_lie": {
-      "arm_f_up": -150.0,
+      "arm_f_up": -175.0,
       "arm_f_lo": -6.0,
       "weapon": -8.0
+    },
+    "dead_back_lie": {
+      "arm_f_up": 14.0,
+      "arm_f_lo": -2.0,
+      "weapon": -2.0
     },
     "hit": {
       "arm_f_up": -34.0,

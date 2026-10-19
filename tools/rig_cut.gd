@@ -858,7 +858,9 @@ func _cut() -> bool:
 		mid_x += fx / feet_x.size()
 	# 4) 다리 (IK) 정보
 	var legs: Array = []
-	for cname in _spec.get("legs", []):
+	for leg_spec in _spec.get("legs", []):
+		# "leg_f" (사슬 이름) 또는 {"chain": "leg_f", "knee_back": true} (무릎이 뒤로 꺾이는 다리 — 새·짐승 뒷다리)
+		var cname := str(leg_spec["chain"]) if leg_spec is Dictionary else str(leg_spec)
 		var ch: Array = chains.get(cname, [])
 		if ch.is_empty():
 			push_error("legs 의 사슬이 없다: " + str(cname))
@@ -877,6 +879,8 @@ func _cut() -> bool:
 		if not bmap[leg["foot"]].has("sole"):
 			push_error("다리 끝 부위에 sole 이 없다: " + str(leg["foot"]))
 			return false
+		if leg_spec is Dictionary and bool(leg_spec.get("knee_back", false)):
+			leg["knee_back"] = true
 		legs.append(leg)
 	var rig := {
 		"_설명": "tools/rig_cut.gd 가 data/rigs/%s.json 에서 만든 실행용 뼈대. 손으로 고치지 말고 설계도를 고쳐 다시 자른다." % _id,
@@ -887,7 +891,7 @@ func _cut() -> bool:
 		"height": snappedf(ground - min_y, 0.01),
 		"bones": bones, "legs": legs, "chains": chains,
 	}
-	for k in ["weapon_chain", "ground_guard", "ghost", "sockets", "poses", "motion", "npc"]:
+	for k in ["weapon_chain", "ground_guard", "ghost", "sockets", "poses"]:
 		if _spec.has(k):
 			var v = _spec[k]
 			if k == "sockets":

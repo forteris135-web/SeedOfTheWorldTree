@@ -89,6 +89,20 @@ func _probe_rig(id: String) -> void:
 		if str(b["parent"]) == "":
 			root_count += 1
 	_check(root_count == 1, "%s: 뿌리 뼈 하나 (%d)" % [id, root_count])
+	# 변형 그림: 바꿔 끼우고 되돌릴 수 있는가
+	for b in bones:
+		for vn in b.get("variants", {}):
+			var vr := PartRig.new()
+			add_child(vr)
+			vr.build(id)
+			var spr := vr.sprite_of(str(b["name"]))
+			var t0: Texture2D = spr.texture if spr else null
+			vr.set_variant(str(b["name"]), str(vn))
+			var t1: Texture2D = spr.texture if spr else null
+			vr.set_variant(str(b["name"]), "")
+			var t2: Texture2D = spr.texture if spr else null
+			_check(spr != null and t1 != t0 and t2 == t0, "%s: 변형 그림 %s@%s 바꿔 끼우기·되돌리기" % [id, b["name"], vn])
+			vr.queue_free()
 
 	# 2) 자세들
 	var rig := PartRig.new()
@@ -187,7 +201,7 @@ func _measure(m: RigMotion, rig: PartRig, body: PackedInt32Array, guard: PackedI
 			var lo := INF
 			for k in ys.size():
 				var leg: RigMotion.Leg = m.legs[k]
-				if float(m.fin.get("kneel_" + leg.sfx, 0.0)) > 0.3:
+				if float(m.fin.get(leg.k_kneel, 0.0)) > 0.3:
 					continue
 				lo = minf(lo, absf(ys[k]))
 			feet = (0.0 if lo == INF else lo) * gs
