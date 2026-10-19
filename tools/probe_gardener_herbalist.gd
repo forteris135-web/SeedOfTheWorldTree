@@ -31,6 +31,11 @@ func _ready() -> void:
 		await _run_shots()
 		get_tree().quit()
 		return
+	var fi := OS.get_cmdline_user_args().find("--film")
+	if fi >= 0:
+		await _run_film(OS.get_cmdline_user_args()[fi + 1])
+		get_tree().quit()
+		return
 	print("[probe] 시작: 정원사·약초꾼 부위 뼈대")
 	_make_floor()
 	_player = (load("res://scenes/player/player.tscn") as PackedScene).instantiate()
@@ -308,6 +313,11 @@ func _probe_rescue(scene: String) -> void:
 
 # ---------- 창으로: 실제 방에서 장면 찍기 ----------
 
+## 파일 이름용 상태 이름 (영문 소문자)
+static func _st(e: EnemyBase) -> String:
+	return str(EnemyBase.State.keys()[e.state]).to_lower()
+
+
 func _run_shots() -> void:
 	var dir := ProjectSettings.globalize_path("res://screenshots")
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -337,10 +347,21 @@ func _shoot_case(room_id: String, enemy_name: String, dir: String) -> void:
 		return
 	pl.hurtbox.set_deferred("monitorable", false)
 	pl.set_physics_process(false)
+	# 화면: 터치 버튼·HUD 는 숨기고, 몹을 따라가는 카메라 (게임 카메라와 같은 배율)
+	for cl in get_tree().root.find_children("*", "CanvasLayer", true, false):
+		(cl as CanvasLayer).visible = false
+	var cam := Camera2D.new()
+	cam.zoom = Vector2(1.15, 1.15) * (0.8 if enemy_name == "MiniBoss" else 1.0)
+	room.add_child(cam)
+	cam.make_current()
+	var follow := func() -> void:
+		if is_instance_valid(e):
+			cam.global_position = e.global_position + Vector2(0, -40)
 	var tag := "%s_%s" % [room_id, enemy_name.to_lower()]
 	var n := [0]
 	var keep_hp := func() -> void:
 		pl.hp = pl.max_hp
+		follow.call()
 	var shot := func(label: String) -> void:
 		await RenderingServer.frame_post_draw
 		var img := get_viewport().get_texture().get_image()
@@ -350,7 +371,7 @@ func _shoot_case(room_id: String, enemy_name: String, dir: String) -> void:
 			img.linear_to_srgb()
 		var w := img.get_width()
 		var h := img.get_height()
-		img = img.get_region(Rect2i(w / 6, h / 8, w * 2 / 3, h * 3 / 4))
+		img = img.get_region(Rect2i(w / 4, h / 6, w / 2, h * 2 / 3))
 		img.save_png("%s/gh_%s_%02d_%s.png" % [dir, tag, n[0], label])
 		n[0] += 1
 	var elite := enemy_name == "MiniBoss"
@@ -359,6 +380,8 @@ func _shoot_case(room_id: String, enemy_name: String, dir: String) -> void:
 	pl.global_position = e.global_position + Vector2(-1400, -20)
 	for i in 30:
 		await get_tree().physics_frame
+		follow.call()
+	await shot.call("idle")
 	pl.global_position = e.global_position + Vector2(-far, 0)
 	pl.global_position.y = e.global_position.y + (e.hurt_height * 0.5 - 67.0)
 	# 쏘기·뿌리기 (실제 AI)
@@ -371,24 +394,29 @@ func _shoot_case(room_id: String, enemy_name: String, dir: String) -> void:
 		t += STEP
 		if t >= next:
 			next += every
-			await shot.call(e.state_name())
+			await shot.call(_st(e))
 	# 물러남
 	if is_instance_valid(e):
-		pl.global_position.x = e.global_position.x - (180.0 if not elite else 280.0)
+		# 소녀가 몹 앞 바짝(보통 150px)에 붙어 따라간다 → 정원사는 대롱을 겨눈 채 폴짝 물러나고, 약초꾼은 뒷걸음질하며 뿌린다
+		var close := 150.0 if not elite else 240.0
+		var side := -1.0 if pl.global_position.x < e.global_position.x else 1.0
+		pl.global_position.x = e.global_position.x + side * close
 		t = 0.0
 		next = 0.0
-		while t < 1.6 and is_instance_valid(e):
+		while t < 2.0 and is_instance_valid(e):
 			await get_tree().physics_frame
+			pl.global_position.x = move_toward(pl.global_position.x, e.global_position.x + side * close, 400.0 * STEP)
 			keep_hp.call()
 			t += STEP
 			if t >= next:
-				next += 0.08
-				await shot.call("retreat_" + e.state_name())
+				next += 0.06
+				await shot.call("retreat_" + _st(e))
 	# 피격
 	if is_instance_valid(e):
 		e.receive_hit(HitData.make(1.0, 5.0, pl, Vector2(300, -100)), null)
 		for i in 4:
 			await get_tree().physics_frame
+			follow.call()
 		await shot.call("hit")
 	# 무너짐 / 무릎 꿇음
 	if is_instance_valid(e):
@@ -401,6 +429,7 @@ func _shoot_case(room_id: String, enemy_name: String, dir: String) -> void:
 			keep_hp.call()
 		await shot.call("broken")
 	# 쓰러짐 (일반: 앞에서 맞아 뒤로) / 정화 (구원 가능한 자)
+	var savable := is_instance_valid(e) and e.savable
 	if is_instance_valid(e):
 		if e.savable:
 			e.purified_by(pl)
@@ -414,7 +443,72 @@ func _shoot_case(room_id: String, enemy_name: String, dir: String) -> void:
 		for i in 30:
 			await get_tree().physics_frame
 		await shot.call("after")
+		if savable:
+			# 구원된 사람 (같은 뼈대) — 대화가 끝날 때까지 몇 장
+			for i in 3:
+				for k in 30:
+					await get_tree().physics_frame
+				await shot.call("rescued")
 	print("[shots] %s: %d장" % [tag, n[0]])
 	room.queue_free()
 	for i in 3:
 		await get_tree().process_frame
+
+
+# ---------- 창으로: 평평한 바닥에서 실제 AI 필름 ----------
+
+## ... res://tools/probe_gardener_herbalist.tscn -- --film gardener
+## 소녀(멈춤)를 쏠 거리에 두었다가 바짝 붙여 따라가게 하고, 0.05초마다 몹 둘레를 찍는다 → screenshots/ghf_<몹>_<번호>_<상태>.png
+func _run_film(scene: String) -> void:
+	RenderingServer.set_default_clear_color(Color(0.42, 0.45, 0.5))
+	_make_floor()
+	var ground := ColorRect.new()
+	ground.color = Color(0.3, 0.33, 0.3)
+	ground.position = Vector2(-10000, FLOOR_Y)
+	ground.size = Vector2(20000, 400)
+	add_child(ground)
+	_player = (load("res://scenes/player/player.tscn") as PackedScene).instantiate()
+	add_child(_player)
+	_player.set_physics_process(false)
+	_player.hurtbox.set_deferred("monitorable", false)
+	var pcam := _player.get_node_or_null("Camera2D")
+	if pcam:
+		pcam.enabled = false
+	var cam := Camera2D.new()
+	add_child(cam)
+	cam.make_current()
+	var e := _spawn(scene, 0.0)
+	e.set_physics_process(true)
+	e.get_node("Visual").set_process(true)
+	e.player = _player
+	var elite := scene.begins_with("elite")
+	cam.zoom = Vector2.ONE * (2.2 if not elite else 1.4)
+	var far := (500.0 if e.get("seed_speed") != null else 430.0) * (1.3 if elite else 1.0)
+	_player.global_position = Vector2(far, FLOOR_Y - 67.0)
+	var dir := ProjectSettings.globalize_path("res://screenshots")
+	var t := 0.0
+	var next := 0.0
+	var n := 0
+	var close := 150.0 if not elite else 240.0
+	while t < 6.0 and is_instance_valid(e):
+		await get_tree().physics_frame
+		t += STEP
+		_player.hp = _player.max_hp
+		if t > 2.6:
+			var side := 1.0 if _player.global_position.x >= e.global_position.x else -1.0
+			_player.global_position.x = move_toward(_player.global_position.x, e.global_position.x + side * close, 400.0 * STEP)
+		cam.global_position = Vector2(e.global_position.x + 60.0, FLOOR_Y - e.hurt_height * 0.6)
+		if t >= next:
+			next += 0.05
+			await RenderingServer.frame_post_draw
+			var img := get_viewport().get_texture().get_image()
+			var hdr := img.get_format() in [Image.FORMAT_RGBAH, Image.FORMAT_RGBAF, Image.FORMAT_RGBH, Image.FORMAT_RGBF]
+			img.convert(Image.FORMAT_RGBA8)
+			if hdr:
+				img.linear_to_srgb()
+			var w := img.get_width()
+			var h := img.get_height()
+			img = img.get_region(Rect2i(w / 5, h / 8, w * 3 / 5, h * 3 / 4))
+			img.save_png("%s/ghf_%s_%03d_%s.png" % [dir, scene, n, _st(e)])
+			n += 1
+	print("[film] %s: %d장" % [scene, n])

@@ -259,5 +259,10 @@
    "robe": 8.0,
    "robe_f": 8.0
   }
+ },
+ "dead_back": {
+  "step_thr": 0.2,
+  "step_dur": 0.14,
+  "step_lift": 0.1
  }
 }

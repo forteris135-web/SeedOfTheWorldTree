@@ -18,6 +18,10 @@ const POP_KICK := 9.0
 const RETREAT_SPEED := 40.0
 ## 포자 가루 색 (HDR — 1 을 넘겨 화면 글로우가 번진다)
 const SPORE_COLOR := Color(1.7, 1.45, 0.8, 0.9)
+## 어두운 방의 버섯 빛: 반지름(게임 px, 보통 크기)·세기·색
+const GLOW_RADIUS := 105.0
+const GLOW_ENERGY := 0.6
+const GLOW_COLOR := Color(1.0, 0.86, 0.6)
 
 static var _spore_tex: Texture2D
 
@@ -28,6 +32,7 @@ var _h_second_burst := false
 var _h_spores: CPUParticles2D
 var _h_closed_eyes := false
 var _h_has_closed := false
+var _h_glow: PointLight2D
 
 
 func _ready() -> void:
@@ -68,6 +73,7 @@ func _ready() -> void:
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_h_spores.material = add
 	add_child(_h_spores)
+	_h_add_glow()
 
 
 func _process(delta: float) -> void:
@@ -103,12 +109,36 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	for key in swap:
 		motion.poses[key] = swap[key]
+	if _h_glow:
+		# 뿌릴 때 잠깐 밝아지고, 쓰러져 흩어지면 꺼진다
+		_h_glow.energy = GLOW_ENERGY * (1.0 + clampf(_mush_puff.v, 0.0, 0.5)) * (1.0 - rig.dissolve_amount())
 	# 구원 가능한 자: 무릎 꿇고 기다리는 동안 눈을 감는다
 	if _h_has_closed:
 		var want := _enemy.savable and st == EnemyBase.State.BROKEN
 		if want != _h_closed_eyes:
 			_h_closed_eyes = want
 			rig.set_variant("head", "closed" if want else "")
+
+
+## 어두운 방(심연)에서는 몸의 버섯이 은은하게 주변을 밝힌다 — 어둠 속에서도 약초꾼이 보이게 (빛나는 버섯 그림 그대로).
+## 빛은 몸통에 붙어 따라다니고, 쓰러져 흩어질 때 함께 꺼진다. 밝은 방에서는 만들지 않는다 (비용 0).
+func _h_add_glow() -> void:
+	var n: Node = self
+	var dark := false
+	while n:
+		if n.get("dark") == true:
+			dark = true
+			break
+		n = n.get_parent()
+	if not dark or not rig.has_bone("torso"):
+		return
+	_h_glow = PointLight2D.new()
+	_h_glow.name = "MushroomGlow"
+	_h_glow.texture = _soft_dot()
+	_h_glow.texture_scale = GLOW_RADIUS / 16.0 * art_scale
+	_h_glow.energy = GLOW_ENERGY
+	_h_glow.color = GLOW_COLOR
+	rig.attach("torso", _h_glow, Vector2.ZERO)
 
 
 ## 손끝(앞손 축 끝)에서 빛나는 포자 가루를 흩날린다. strength 0~1.

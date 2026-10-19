@@ -9,7 +9,8 @@
   "cape_lo": 0,
   "leaves_f": 0,
   "leaves_f2": 0,
-  "leaves_b": 0
+  "leaves_b": 0,
+  "leaves_b2": 0
  },
  "idle": {
   "torso": 16,
@@ -271,7 +272,13 @@
    "pod_hang": 14.0,
    "leaves_f": 10.0,
    "leaves_f2": 10.0,
-   "leaves_b": 10.0
+   "leaves_b": 10.0,
+   "leaves_b2": 8.0
   }
+ },
+ "dead_back": {
+  "step_thr": 0.2,
+  "step_dur": 0.14,
+  "step_lift": 0.1
  }
 }
