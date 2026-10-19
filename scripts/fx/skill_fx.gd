@@ -24,7 +24,7 @@ func _ready() -> void:
 	if boss == null:
 		set_physics_process(false)
 		return
-	_prev_state = int(boss.get("state"))
+	_prev_state = int(val("state", -1))
 	var consts: Dictionary = boss.get_script().get_script_constant_map() if boss.get_script() else {}
 	var e: Dictionary = consts.get("State", {})
 	_names.resize(e.size())
@@ -34,11 +34,11 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	if boss == null or not boss.visible:
-		_prev_state = int(boss.get("state")) if boss else -1
+		_prev_state = int(val("state", -1)) if boss else -1
 		_prev_phase = ""
 		return
-	var st := int(boss.get("state"))
-	var ph := String(boss.get("attack_phase")) if "attack_phase" in boss else ""
+	var st := int(val("state", -1))
+	var ph := String(val("attack_phase", ""))
 	if st != _prev_state:
 		var old := _prev_state
 		_prev_state = st
@@ -78,7 +78,7 @@ func state_is(st: int) -> String:
 
 
 func state_name() -> String:
-	return state_is(int(boss.get("state")))
+	return state_is(int(val("state", -1)))
 
 
 ## interval 초마다 한 번 true (이름별 시계). 이어지는 이펙트를 띄울 때 쓴다.
@@ -97,7 +97,18 @@ func body_point(frac: float, height := 300.0) -> Vector2:
 
 
 func facing() -> int:
-	return int(boss.get("facing"))
+	return int(val("facing", 1))
+
+
+## 보스의 값 (없거나 null 이면 def). 보스 논리가 바뀌어 이름이 사라져도 이펙트 때문에 멈추지 않게.
+func val(name: String, def: Variant = null) -> Variant:
+	var v: Variant = boss.get(name)
+	return def if v == null else v
+
+
+## 붉은 예고(가드 불가) 중인가 — 보스의 is_red() (없으면 false)
+func red() -> bool:
+	return boss.has_method("is_red") and bool(boss.call("is_red"))
 
 
 ## 바라보는 쪽 기준의 자리 (dx 는 앞쪽 +)

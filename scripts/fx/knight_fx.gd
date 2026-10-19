@@ -30,7 +30,7 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		"THRUST":
 			Fx.spawn("spear_thrust", ahead(-10.0, -155.0), {"facing": f})
 		"COMBO3":
-			match int(boss.combo_step):
+			match int(val("combo_step", 0)):
 				0:
 					Fx.spawn("spear_thrust", ahead(-10.0, -155.0), {"facing": f})
 				1:
@@ -49,7 +49,7 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 func _tick(delta: float) -> void:
 	var st := state_name()
 	# 가드 불가 예고 (내려찍기·올려치기): 몸에서 붉은 불티가 피어오른다
-	if boss.is_red() and every("red", 0.08, delta):
+	if red() and every("red", 0.08, delta):
 		Fx.spawn("danger_ember", body_point(randf_range(0.1, 0.9), 330.0) + Vector2(randf_range(-90.0, 90.0), 0.0))
 	match st:
 		"MARCH", "INTRO":
@@ -57,19 +57,19 @@ func _tick(delta: float) -> void:
 			if every("amb", 0.32, delta):
 				Fx.spawn("ember", body_point(randf_range(0.35, 0.85), 330.0) + Vector2(randf_range(-70.0, 70.0), 0.0))
 		"CHARGE":
-			if String(boss.attack_phase) == "active":
+			if String(val("attack_phase", "")) == "active":
 				if every("streak", 0.05, delta):
 					Fx.spawn("charge_streak", ahead(-20.0, -160.0), {"facing": facing()})
 				if every("dust", 0.08, delta):
 					Fx.spawn("dust_puff", ahead(-40.0, -10.0), {"vel": Vector2(-facing() * 160.0, -40.0)})
 		"SPIN":
-			var r := int(boss.rings_sent)
+			var r := int(val("rings_sent", 0))
 			while _prev_rings < r:
 				_prev_rings += 1
-				Fx.spawn("fire_ring", Vector2(boss.global_position.x, float(boss.ground_y) - 30.0), {"scale": 1.0 + 0.15 * _prev_rings})
+				Fx.spawn("fire_ring", Vector2(boss.global_position.x, float(val("ground_y", boss.global_position.y)) - 30.0), {"scale": 1.0 + 0.15 * _prev_rings})
 		"WAVE":
-			var sent := bool(boss.get("_wave_sent"))
-			if sent and not _prev_wave_sent and String(boss.attack_phase) == "active":
+			var sent := bool(val("_wave_sent", false))
+			if sent and not _prev_wave_sent and String(val("attack_phase", "")) == "active":
 				Fx.spawn("wave_flash", ahead(150.0, -120.0), {"facing": facing()})
 				Fx.spawn("spear_swing", ahead(140.0, -150.0), {"facing": facing(), "rot": 10.0, "scale": 1.1})
 			_prev_wave_sent = sent

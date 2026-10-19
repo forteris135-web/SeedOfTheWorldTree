@@ -35,19 +35,19 @@ func _on_state(_old: int, _new: int) -> void:
 
 func _tick(delta: float) -> void:
 	var st := state_name()
-	if boss.is_red():
+	if red():
 		if every("red", 0.1, delta):
 			Fx.spawn("danger_vent", ahead(VENT.x, VENT.y) + Vector2(randf_range(-20.0, 20.0), 0.0))
 			Fx.spawn("danger_steam", ahead(VENT.x, VENT.y - 60.0) + Vector2(randf_range(-30.0, 30.0), 0.0))
 			Fx.spawn("danger_ember", body_point(randf_range(0.2, 0.8), 420.0) + Vector2(randf_range(-120.0, 120.0), 0.0))
 	match st:
 		"SUCK":
-			if String(boss.attack_phase) == "active" and not bool(boss.get("_bit")) and every("suck", 0.06, delta):
+			if String(val("attack_phase", "")) == "active" and not bool(val("_bit", false)) and every("suck", 0.06, delta):
 				var mouth := ahead(MOUTH.x, MOUTH.y)
 				var from := mouth + Vector2(facing() * randf_range(160.0, 560.0), randf_range(-70.0, 90.0))
 				var to := mouth - from
 				Fx.spawn("suck_strip", from, {"vel": to / 0.42, "rot": rad_to_deg(to.angle()) + 180.0})
-			var bit := bool(boss.get("_bit"))
+			var bit := bool(val("_bit", false))
 			if bit and not _prev_bit:
 				Fx.spawn("pump_bite", ahead(MOUTH.x - 40.0, MOUTH.y))
 			_prev_bit = bit

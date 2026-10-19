@@ -17,20 +17,31 @@ const STREAK_SPEED := 1700.0
 var _prev_flash := 0.0
 var _prev_stagger := 0.0
 var _prev_crouch := false
+## 기술이 끊기면(무너짐 등) 거둘 따라다니는 이펙트: [[FxSprite, gen], ...]
+var _held: Array = []
 
 
 func _on_state(old: int, _new: int) -> void:
+	# 날갯바람·잎 회오리가 끝나거나 끊기면 따라다니던 소용돌이를 부드럽게 거둔다
+	for h in _held:
+		Fx.end_soon(h[0], h[1])
+	_held.clear()
 	match state_name():
 		"WIND":
-			Fx.spawn("gust_gather", boss.body_center(), {"follow": boss, "offset": Vector2(0, -150), "life": float(boss.wind_telegraph)})
+			_hold(Fx.spawn("gust_gather", body_point(0.5), {"follow": boss, "offset": Vector2(0, -150), "life": float(val("wind_telegraph", 0.8))}))
 		"LEAF_RAIN":
-			if int(boss.phase) == 2:
-				var life := float(boss.leaf_rain_time)
-				Fx.spawn("leaf_tornado", boss.body_center(), {"follow": boss, "offset": Vector2(0, -150), "life": life})
-				Fx.spawn("leaf_tornado", boss.body_center(), {"follow": boss, "offset": Vector2(0, -150), "life": life, "flip_v": true, "scale": 0.72, "rot": 90.0})
+			if int(val("phase", 1)) == 2:
+				var life := float(val("leaf_rain_time", 3.5))
+				_hold(Fx.spawn("leaf_tornado", body_point(0.5), {"follow": boss, "offset": Vector2(0, -150), "life": life}))
+				_hold(Fx.spawn("leaf_tornado", body_point(0.5), {"follow": boss, "offset": Vector2(0, -150), "life": life, "flip_v": true, "scale": 0.72, "rot": 90.0}))
 		"GROUND_IDLE":
 			if state_is(old) == "DESCEND":
 				Fx.spawn("bird_land", boss.global_position)
+
+
+func _hold(fx: FxSprite) -> void:
+	if fx:
+		_held.append([fx, fx.gen])
 
 
 func _on_phase(_st: int, _old: String, new: String) -> void:
@@ -46,30 +57,30 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 func _tick(delta: float) -> void:
 	var st := state_name()
 	if st == "WIND":
-		if boss.is_red():
+		if red():
 			if every("ember", 0.1, delta):
-				Fx.spawn("danger_ember", boss.body_center() + Vector2(randf_range(-140.0, 140.0), randf_range(-60.0, 80.0)))
+				Fx.spawn("danger_ember", body_point(0.5) + Vector2(randf_range(-140.0, 140.0), randf_range(-60.0, 80.0)))
 		else:
 			_blow(delta)
 	# 깃털: 한 발 쏠 때마다 muzzle_flash 가 1 로 튄다
-	var fl := float(boss.muzzle_flash)
-	if fl > _prev_flash + 0.5:
-		Fx.spawn("feather_flash", boss.muzzle_point())
+	var fl := float(val("muzzle_flash", 0.0))
+	if fl > _prev_flash + 0.5 and boss.has_method("muzzle_point"):
+		Fx.spawn("feather_flash", boss.call("muzzle_point"))
 	_prev_flash = fl
 	# 잎 삼키기: 잎 더미에서 부리로 잎이 빨려 든다
 	if st == "EAT" and every("suck", 0.12, delta):
-		var pile = boss.get("_target_pile")
+		var pile = val("_target_pile")
 		if pile != null and is_instance_valid(pile):
 			var from: Vector2 = pile.global_position + Vector2(randf_range(-80.0, 80.0), randf_range(-40.0, -8.0))
 			var beak := ahead(170.0, -70.0)
 			Fx.spawn("leaf_suck", from, {"vel": (beak - from) / 0.45})
 	# 잎 삼키기를 끊었다 (움찔이 1 로 튄다): 부리 앞 잎이 흩어진다
-	var sg := float(boss.stagger)
+	var sg := float(val("stagger", 0.0))
 	if sg > _prev_stagger + 0.5:
 		Fx.spawn("pile_burst", ahead(160.0, 0.0), {"scale": 0.8})
 	_prev_stagger = sg
 	# 날아오르기: 웅크렸다 박차는 순간 발밑에 잎이 터진다
-	var cr := bool(boss.crouching)
+	var cr := bool(val("crouching", false))
 	if _prev_crouch and not cr and st == "TAKEOFF":
 		Fx.spawn("bird_land", boss.global_position, {"scale": 0.8})
 	_prev_crouch = cr
@@ -77,10 +88,10 @@ func _tick(delta: float) -> void:
 
 ## 날갯바람이 부는 동안: 바람 방향(_wind_dir)으로 화면을 가로지르는 줄기·초승달·잎
 func _blow(delta: float) -> void:
-	var dir := float(boss.get("_wind_dir"))
+	var dir := float(val("_wind_dir", 1.0))
 	if dir == 0.0:
 		dir = 1.0
-	var p: Node2D = boss.get("player")
+	var p: Node2D = val("player")
 	var center: Vector2 = p.global_position if p else boss.global_position
 	var vel := Vector2(dir * STREAK_SPEED, 0.0)
 	if every("streak", STREAK_GAP, delta):

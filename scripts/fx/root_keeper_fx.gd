@@ -21,7 +21,7 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		"SWEEP2":
 			Fx.spawn("staff_arc", ahead(150.0, -180.0), {"facing": f, "rot": -25.0, "flip_v": true})
 		"ORBS":
-			Fx.spawn("orb_charge", boss.orb_origin())
+			Fx.spawn("orb_charge", boss.call("orb_origin") if boss.has_method("orb_origin") else body_point(1.0, 460.0))
 		"STOMP":
 			Fx.spawn("root_stomp", boss.global_position)
 		"RING":
@@ -31,11 +31,11 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 
 
 func _tick(delta: float) -> void:
-	if not boss.is_red():
+	if not red():
 		return
 	if every("red", 0.09, delta):
 		Fx.spawn("danger_ember", body_point(randf_range(0.1, 0.9), 400.0) + Vector2(randf_range(-80.0, 80.0), 0.0))
 	# 뿌리 손 예고: 손이 솟을 자리에서 붉은 불티가 오른다 (예고 고리는 보스 그림·늦게 솟는 손이 그린다)
 	if state_name() == "HAND" and every("hand", 0.07, delta):
-		for x in boss.hand_targets:
-			Fx.spawn("danger_ember", Vector2(float(x) + randf_range(-90.0, 90.0), float(boss.ground_y) - 6.0))
+		for x in val("hand_targets", []):
+			Fx.spawn("danger_ember", Vector2(float(x) + randf_range(-90.0, 90.0), float(val("ground_y", boss.global_position.y)) - 6.0))

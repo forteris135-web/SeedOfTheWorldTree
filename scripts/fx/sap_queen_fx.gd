@@ -27,7 +27,7 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		"DUST":
 			Fx.spawn("wing_dust_burst", boss.global_position + BODY)
 		"WAVE":
-			Fx.spawn("sap_splash", Vector2(boss.global_position.x, float(boss.surface_y)), {"scale": 1.25})
+			Fx.spawn("sap_splash", Vector2(boss.global_position.x, float(val("surface_y", boss.global_position.y))), {"scale": 1.25})
 		"BUTTERFLIES":
 			Fx.spawn("butterfly_burst", ahead(90.0, -140.0))
 
@@ -38,12 +38,12 @@ func _tick(delta: float) -> void:
 	match st:
 		"DUST":
 			# 2페이즈: 반 박 뒤 한 번 더 흩뿌린다 (_spawned 1 → 2)
-			var sp := int(boss.get("_spawned"))
+			var sp := int(val("_spawned", 0))
 			if sp == 2 and _prev_spawned == 1:
 				Fx.spawn("wing_dust_burst", body, {"scale": 0.8})
 			_prev_spawned = sp
 		"WAVE":
-			if String(boss.attack_phase) == "startup" and every("drip", 0.1, delta):
+			if String(val("attack_phase", "")) == "startup" and every("drip", 0.1, delta):
 				Fx.spawn("sap_drip", body + Vector2(randf_range(-70.0, 70.0), randf_range(0.0, 50.0)))
 		"CRACK":
 			if every("crack", 0.06, delta):

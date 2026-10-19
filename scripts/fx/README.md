@@ -75,3 +75,49 @@ Fx 밖의 노드(레이저, 초승달 검기 등)도 `Fx.make_material("light", 
 영혼 기술: `wind_wisp` `wind_fade` `wind_hit` `laser_flash` `laser_wall` `laser_hit` (그림 노드: `WindCrescent`, `SoulLaser`)
 공용: `hit_spark` `hit_spark_big` `hit_glint` `ring_pop` `break_burst`(적 무너짐) `death_dust`(적 쓰러짐) `pickup_sparkle` `pickup_big`
 보호막(가드 중 유리 구)과 칼끝·손에 모이는 빛은 `selenia_rig.gd` 의 자식 그림이다 (`_make_shield`, `_make_tip_glow`).
+
+---
+
+## F2: 보스·적 기술 이펙트 + 물 이펙트 (2026-10-19)
+
+판정은 하나도 바꾸지 않았다 — 그림만. 시트에 불 그림이 없어 등불 기사의 불꽃은 금빛·물 그림을 `fire` 팔레트로 칠해 쓴다.
+**가드 불가 공격의 예고·불꽃은 언제나 `danger`(진한 붉은빛) 팔레트**, 가드 가능한 불꽃은 `fire`(주황~노랑).
+
+### 세 가지 길
+
+| 무엇 | 어디 | 어떻게 |
+|---|---|---|
+| 날아가는 투사체 (깃털·잎·불꽃 파도·등불·불기둥·펌프 충격파·수액 방울·나비·가루·씨앗) | `scripts/fx/fx_art.gd` 의 `LOOKS` | `Projectile.look = "bird_feather"` 한 줄. 코드 그림 대신 그 그림을 그리고 꼬리 잔상도 같은 그림. 되받으면 금빛 |
+| 보스의 순간들 (휘두르기 호·착지·붉은 예고 불티·바람 줄기·회오리·김 …) | `scripts/fx/<보스>_fx.gd` (바탕 `skill_fx.gd`) | 보스 `_ready` 의 한 줄 `add_child(preload(...).new())`. 보스의 공개 값(state·attack_phase·facing·is_red() …)을 매 물리 프레임 읽어 상태·공격 단계가 바뀌는 순간 `Fx.spawn` |
+| 공격 노드 그림 (뿌리 가시·뿌리 손·달빛 구슬·씨앗·충격파·뿌리 벽·검기·수액 물결·수액 기둥·포자 구름·잎 더미) | 각 노드 스크립트 (`scripts/combat/`, `scripts/bosses/root_*.gd`, `sword_wave.gd`, `scripts/world/leaf_pile.gd`) | 자식 Sprite2D + `Fx.shared_material(팔레트, 더하기, 남김)`. 그림이 없으면 예전 코드 그림으로 돌아간다 |
+
+몹(정원사·경비병·기계·수액 어부)은 각 몹 스크립트의 공격 순간에 `Fx.spawn` 한 줄. 작은 펌프·무쇠 펌프의 물줄기는 `SapBlob.launch`.
+물 이펙트는 `scripts/fx/water_fx.gd` (수액 웅덩이 `sap_pool.gd` 의 `_ready` 한 줄).
+
+### 관찰자(skill_fx) 규칙
+
+- 보스 그림(뼈대)은 다른 묶음이 고치므로 이펙트는 그림 스크립트에 넣지 않았다. 관찰자는 보스의 값만 읽는다.
+- 값은 `val("이름", 기본값)` 으로 읽는다 — 보스 논리가 바뀌어 이름이 사라져도 이펙트 때문에 멈추지 않는다.
+- 공용: 무너짐(BROKEN) → `boss_break`, 쓰러짐(FALLEN) → `boss_fall`.
+- 따라다니는 긴 이펙트(새의 바람 소용돌이·잎 회오리)는 상태가 바뀌면 `Fx.end_soon` 으로 부드럽게 거둔다.
+
+### 새로 생긴 것
+
+- 팔레트: `fire` `ember` `sap` `spore` `moon` `danger` `steam`
+- `Fx.shared_material(팔레트, 더하기, 남김)` (같은 조합끼리 재질 하나 → 묶어 그리기), `Fx.end_soon(fx, gen)`,
+  시험용 `Fx.log_spawns` / `Fx.spawn_log`
+- 그림 34장 (`tools/cut_fx.gd` 의 F2 줄): 보스 이펙트 1(금빛 깃털·잎·바람 초승달·잎 회오리·낱장 잎), 보스 이펙트 2(물기둥·물방울·나비·물줄기·김·물 초승달),
+  물 이펙트(물결·물보라·물마루·물줄기), PNG image(보랏빛 초승달), c5ae(뿌리 손·씨앗·씨앗 터짐), 41d289(창 빛줄기·뿌리 가시·뿌리 덩어리), f9e7(등불·버섯·포자 안개)
+- 시험: `tools/probe_fx_boss.tscn` (화면 없음 — 그림 묶음 판정 그대로, 보스 다섯 기술별 이펙트, 공격 노드 그림, 몹, 물, 상한),
+  `tools/probe_fx_boss_shots.tscn -- --boss bird|knight|root|queen|pump|mobs|water [--only 기술,…]` (창 모드 스크린샷, headless 면 바로 끝)
+
+### 세기 조절
+
+- 투사체 그림 크기·색: `fx_art.gd` 의 `LOOKS` (scale, palette, keep, glow, trail)
+- 순간 이펙트 크기·수명·색: `fx_table.gd` 의 F2 줄
+- 바람 줄기 간격: `bird_fx.gd` 의 `STREAK_GAP`/`CRESCENT_GAP`/`LEAF_GAP`, 물결 간격: `water_fx.gd` 의 `STEP_GAP`, 방울 간격 `DRIP_GAP`
+- 노드 그림 배율: 각 노드 스크립트 위의 `ART_SCALE` 상수
+
+### 메모리
+
+그림은 F1 30장 + F2 34장 = 64장, 디스크 약 7MB, 밉맵 포함 VRAM 약 17MB (Fx 가 처음에 모두 읽어 둔다 — 싸움 중 처음 쓰는 순간의 끊김 없음).

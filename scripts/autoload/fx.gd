@@ -34,6 +34,9 @@ var _scene: Node
 var spawned_total := 0
 var dropped_total := 0
 var stolen_total := 0
+## 시험용: true 면 띄운 이펙트 이름을 spawn_log 에 적는다 (보스 기술 이펙트 시험 probe_fx_boss)
+var log_spawns := false
+var spawn_log: Array = []
 
 
 func _ready() -> void:
@@ -102,6 +105,8 @@ func spawn(name: String, pos: Vector2, opts := {}) -> FxSprite:
 	if def.is_empty():
 		push_warning("Fx: 모르는 이펙트 " + name)
 		return null
+	if log_spawns:
+		spawn_log.append(name)
 	var sc := get_tree().current_scene if is_inside_tree() else null
 	if sc != _scene:
 		# 방이 막 바뀌었다 (새 방의 _ready 에서 띄우는 이펙트): 옛 방 이펙트를 먼저 거둔다
@@ -254,6 +259,12 @@ func set_reveal(fx: FxSprite, gen: int, v: float) -> void:
 func release(fx: FxSprite, gen: int) -> void:
 	if alive(fx, gen):
 		fx.release()
+
+
+## 곧 끝낸다: 사라지기 시작하는 때(fade_out)로 건너뛴다 (보스 기술이 끊겼을 때 따라다니던 이펙트를 부드럽게 거둔다)
+func end_soon(fx: FxSprite, gen: int) -> void:
+	if alive(fx, gen) and not fx.driven:
+		fx.t = maxf(fx.t, fx._fade_out * fx.life)
 
 
 ## 바로 거둔다
