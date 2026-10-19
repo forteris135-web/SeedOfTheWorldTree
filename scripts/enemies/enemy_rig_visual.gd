@@ -474,8 +474,8 @@ func _process(delta: float) -> void:
 	motion.ground_settle = settle
 	motion.breath = breath
 	motion.set_target(p, drive, feet)
-	if _aim_i >= 0 and st in AIM_STATES and not airborne:
-		_aim_gun(st)
+	if _aim_i >= 0 and st in AIM_STATES:
+		_aim_gun(st)   # 폴짝 물러나는 공중에서도 겨눈다 (예전 그림과 같게)
 	motion.update(delta, {"speed": speed_rig, "dx": dx_rig, "vy": _enemy.velocity.y / maxf(gscale, 0.0001), "grounded": on_floor or not airborne})
 
 	# 떨림·반동·번쩍임 (덧붙임)
