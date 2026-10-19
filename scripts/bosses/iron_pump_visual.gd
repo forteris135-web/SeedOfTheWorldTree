@@ -477,10 +477,10 @@ func _guard_cannon() -> void:
 	if _i_cannon < 0:
 		return
 	var fixed := false
-	for it in 10:
+	for it in 24:
 		if rig.lowest_y(_cannon_only) < -3.0:
 			break
-		rig.rot[_i_cannon] -= 0.07   # 위로(앞쪽으로) 들어 올린다
+		rig.rot[_i_cannon] -= 0.06   # 위로(앞쪽으로) 들어 올린다 (최대 약 80도)
 		rig.compute_from(_i_cannon)
 		fixed = true
 	if fixed:
