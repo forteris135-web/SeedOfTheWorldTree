@@ -921,7 +921,8 @@ func _on_landed(fall_speed: float) -> void:
 	var amount := clampf(fall_speed / 1600.0, 0.1, 0.35)
 	_kick("squash", amount * 21.0)
 	_kick("crouch", amount * 20.0)
-	if fall_speed > 380.0:
+	# 수액 웅덩이에 내려앉으면 물보라(water_fx)만 — 흙먼지는 띄우지 않는다
+	if fall_speed > 380.0 and not SapPool.any_contains(get_tree(), _feet()):
 		Fx.spawn("land_dust", _feet(), {"scale": clampf(fall_speed / 1100.0, 0.6, 1.4)})
 
 

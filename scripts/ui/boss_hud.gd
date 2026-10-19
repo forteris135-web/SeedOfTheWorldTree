@@ -13,6 +13,8 @@ const BAR_TRAIL := Color(0.86, 0.80, 0.62)
 const BAR_BACK := Color(0.06, 0.05, 0.04, 0.85)
 const BAR_EDGE := Color(0.80, 0.76, 0.62, 0.75)
 const POISE := Color(0.56, 0.83, 1.0)
+## 터치 조작 중 막대 오른쪽 끝을 화면 오른쪽 가장자리에서 이만큼(버튼 크기 '보통' 기준 px) 안쪽에 둔다 — 가드 버튼과 그 누름 범위를 피한다
+const TOUCH_CLEAR := 660.0
 ## 흙 색: 띠 위쪽 → 아래쪽
 const SOIL_TOP := Color(0.21, 0.145, 0.095)
 const SOIL_BOTTOM := Color(0.035, 0.022, 0.016)
@@ -194,10 +196,12 @@ func _draw_bar(band: Rect2, a: float) -> void:
 	var bar_w := minf(900.0, size.x * 0.47)
 	var bar_h := 18.0
 	# 터치 조작 중에는 오른쪽 아래 버튼 무리(가드 버튼 왼쪽 끝 ≈ 오른쪽 가장자리 −636)와 겹치지 않게,
-	# 막대 오른쪽 끝이 가장자리 −660 안에 들어올 만큼만 왼쪽으로 민다 (넓은 화면에선 안 밀어도 된다)
+	# 막대 오른쪽 끝이 가장자리 −660 안에 들어올 만큼만 왼쪽으로 민다 (넓은 화면에선 안 밀어도 된다).
+	# 버튼은 오른쪽 아래 모서리 기준으로 '터치 버튼 크기'만큼 벌어지므로 비우는 폭도 같이 키운다
+	# (2026-10-20 QA: 아이패드 4:3 + 크게 에서 가드 버튼이 막대 오른쪽 끝을 덮었다)
 	var x := (size.x - bar_w) / 2.0
 	if InputDevice.current == InputDevice.Kind.TOUCH:
-		x -= maxf(0.0, x + bar_w - (size.x - 660.0))
+		x -= maxf(0.0, x + bar_w - (size.x - TOUCH_CLEAR * Settings.touch_scale_factor()))
 	var y := band.position.y + band.size.y * 0.52
 	# 이름 (막대 왼쪽 위, 사진처럼 작은 글씨)
 	_canvas.draw_string_outline(font, Vector2(x, y - 10.0), _name, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, 4, Color(0, 0, 0, 0.7 * a))

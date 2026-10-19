@@ -5,8 +5,13 @@ class_name PauseMenu
 ## 음량 세 가지(음악·효과음·전체)는 각자 자기 소리 버스만 바꾼다 (Settings → AudioBuses). 0 은 끔.
 ## 보스 러시 중에는 저장·불러오기·타이틀로 대신 '포기하기' 하나 (BossRush.give_up → 결과 화면 → 타이틀).
 
-## 좌우로 값을 바꾸는 줄 (터치: 값 칸의 왼쪽 반 = 줄이기, 오른쪽 반 = 키우기)
+## 좌우로 값을 바꾸는 줄 (터치: 그려진 값 글자 '◀ … ▶' 의 왼쪽 반 = 줄이기, 오른쪽 반 = 키우기)
 const SLIDER_KEYS := ["music_volume", "sfx_volume", "master_volume", "touch_scale"]
+## 값 글자의 크기와, 줄 오른쪽 끝에서 글자 오른쪽 끝까지 비우는 거리 (그리기·누름 판정이 같은 값을 쓴다)
+const VALUE_FONT := 24
+const VALUE_RIGHT_PAD := 20.0
+## 값 글자 바깥으로 이만큼까지는 누름을 값 바꾸기로 친다 (◀ ▶ 가장자리를 손가락으로 누르기 쉽게)
+const VALUE_TOUCH_PAD := 24.0
 
 var _items := []   # {key, label}
 var _index := 0
@@ -124,11 +129,11 @@ func _input(event: InputEvent) -> void:
 		var hit := _row_at(event.position)
 		if hit >= 0:
 			var key: String = _items[hit]["key"]
-			var vr := _value_rect(hit)
-			if key in SLIDER_KEYS and vr.has_point(event.position):
-				# 값 칸: 왼쪽 반을 누르면 줄이고 오른쪽 반을 누르면 키운다 (터치로도 음량을 낮출 수 있게)
+			var dir := slider_dir_at(hit, event.position)
+			if key in SLIDER_KEYS and dir != 0:
+				# 값 글자: ◀ 쪽(글자의 왼쪽 반)을 누르면 줄이고 ▶ 쪽(오른쪽 반)을 누르면 키운다 (터치로도 음량을 낮출 수 있게)
 				_index = hit
-				_adjust(-1 if event.position.x < vr.get_center().x else 1)
+				_adjust(dir)
 			elif hit == _index:
 				_activate()
 			else:
@@ -136,6 +141,10 @@ func _input(event: InputEvent) -> void:
 				Sfx.play("blip")
 		else:
 			close()
+	# 손가락 떼기는 터치 버튼(TouchControls)에도 흘려보낸다: 메뉴를 연 손가락·스틱을 쥐고 있던 손가락을 메뉴가 삼키면
+	# 그 동작(메뉴·이동)이 눌린 채 남아, 닫은 뒤 소녀가 혼자 걷는다 (2026-10-20 QA, travel_menu 와 같은 규칙). 떼기로 메뉴가 하는 일은 없다.
+	if event is InputEventScreenTouch and not event.pressed:
+		return
 	get_viewport().set_input_as_handled()
 
 
@@ -222,10 +231,26 @@ func _row_rect(i: int) -> Rect2:
 	return Rect2((size.x - w) / 2.0, size.y * 0.26 + i * 58.0, w, 52.0)
 
 
-## 줄 안에서 값 글자가 있는 칸 (오른쪽 320px)
-func _value_rect(i: int) -> Rect2:
+## 줄 i 의 값 글자가 실제로 그려지는 자리 (오른쪽 끝을 줄 끝 − VALUE_RIGHT_PAD 에 맞춘다). 글자가 없으면 빈 사각형.
+## 글꼴에 따라 ■□ 폭이 달라도(아이폰 기기 글꼴 등) 그리기와 누름 판정이 늘 같은 자리를 쓴다.
+func value_text_rect(i: int) -> Rect2:
+	var vt := _value_text(_items[i]["key"])
+	if vt == "":
+		return Rect2()
 	var r := _row_rect(i)
-	return Rect2(r.position.x + r.size.x - 320.0, r.position.y, 320.0, r.size.y)
+	var tw := ThemeDB.fallback_font.get_string_size(vt, HORIZONTAL_ALIGNMENT_LEFT, -1, VALUE_FONT).x
+	return Rect2(r.end.x - VALUE_RIGHT_PAD - tw, r.position.y, tw, r.size.y)
+
+
+## 값을 좌우로 바꾸는 줄에서 pos 를 누르면: -1 = 줄이기(◀ 쪽), +1 = 키우기(▶ 쪽), 0 = 값 글자 밖.
+## 그려진 글자 '◀ … ▶' 의 가운데를 기준으로 가른다 (예전엔 고정 320px 칸의 가운데라, 짧은 값 '◀ 보통 ▶' 의 ◀ 가 오른쪽 반에 들어가 거꾸로 움직였다).
+func slider_dir_at(i: int, pos: Vector2) -> int:
+	if i < 0 or i >= _items.size() or not (_items[i]["key"] in SLIDER_KEYS):
+		return 0
+	var tr := value_text_rect(i)
+	if tr.size.x <= 0.0 or pos.x < tr.position.x - VALUE_TOUCH_PAD or pos.x > _row_rect(i).end.x:
+		return 0
+	return -1 if pos.x < tr.get_center().x else 1
 
 
 func _row_at(pos: Vector2) -> int:
@@ -249,5 +274,7 @@ func _on_draw() -> void:
 		_panel.draw_string(font, r.position + Vector2(20, 35), ("▸  " if sel else "    ") + it["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1.0, 0.86, 0.5) if sel else Color(0.9, 0.9, 0.9))
 		var vt := _value_text(it["key"])
 		if vt != "":
-			_panel.draw_string(font, r.position + Vector2(r.size.x - 300, 35), vt, HORIZONTAL_ALIGNMENT_RIGHT, 280, 24, Color(0.56, 0.83, 1.0) if sel else Color(0.75, 0.8, 0.85))
+			# 폭 제한 없이 왼쪽 정렬로, value_text_rect 가 잰 자리에 그린다 (누름 판정과 같은 자리)
+			var tr := value_text_rect(i)
+			_panel.draw_string(font, Vector2(tr.position.x, r.position.y + 35), vt, HORIZONTAL_ALIGNMENT_LEFT, -1, VALUE_FONT, Color(0.56, 0.83, 1.0) if sel else Color(0.75, 0.8, 0.85))
 	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.26 + _items.size() * 58.0 + 40.0), "위·아래로 고르고 좌·우로 바꾼다  ·  메뉴 / 회피: 닫기" if InputDevice.current != InputDevice.Kind.TOUCH else "줄을 눌러 고르고, 값의 ◀ ▶ 쪽을 눌러 바꾼다  ·  바깥을 누르면 닫기", HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.45))

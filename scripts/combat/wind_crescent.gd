@@ -2,7 +2,7 @@ extends Projectile
 class_name WindCrescent
 ## 바람의 영혼 기술 (2026-10-19 이펙트 리뉴얼 F1): 앞으로 날아가는 민트빛 초승달 검기.
 ## 바탕은 예전 바람 투사체(Projectile, Kind.GUST)와 같다 — 속도·사거리·피해·흐트러짐·쿨다운은 player.gd 의 gust_* 그대로,
-## 지형에 닿으면 사라지고(가운데 줄 레이캐스트) 부서지는 벽은 한 대 친다. 바뀐 것은 그림과 판정 모양뿐이다:
+## 지형에 닿으면 사라지고(가운데 줄 레이캐스트, 한쪽 방향 가지는 지나감) 부서지는 벽은 한 대 친다. 바뀐 것은 그림과 판정 모양뿐이다:
 ## 그림 = art/fx/crescent_wave.png (초승달 머리 + 뒤로 흐르는 꼬리), 민트 팔레트, 보통 섞기(밝은 그림이라 더하기로는 하얗게 뜬다).
 ## 판정 = 초승달 머리 부분을 덮는 사각형 (size × 0.9, 세로로 길다). 꼬리(옅은 빛줄기)는 맞히지 않는다.
 
@@ -21,6 +21,8 @@ var _mote_t := 0.0
 
 func _ready() -> void:
 	kind = Kind.GUST
+	# 한쪽 방향 가지(one_way 발판)는 지나간다 — 빛 레이저·기사 검기와 같은 규칙 (2026-10-20 QA: 키 207px 검기가 두께 40px 가지 옆면에 지워졌다)
+	pass_one_way = true
 	super._ready()
 	var tex := Fx.texture(ART)
 	var mat := Fx.make_material("wind", false, 0.2)

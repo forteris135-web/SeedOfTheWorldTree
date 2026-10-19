@@ -19,6 +19,8 @@ var _floor := Vector2(1240, 2132)
 ## 화면 그리기가 느리면 그리는 동안 물리 프레임이 여러 번 지나가 버리므로, 시간을 느리게(SLOW) 흘리고 시간으로 기다린다.
 var _gt := 0.0
 const SLOW := 0.2
+## 동작 사이에 기다리는 게임 시간 (초) — 가장 긴 이펙트(씨앗 베기 0.5초 + 머묾)가 다 사라질 만큼
+const RESET_WAIT := 0.9
 
 
 func _physics_process(delta: float) -> void:
@@ -119,7 +121,11 @@ func _reset(pos := Vector2.ZERO, facing := 0) -> void:
 	_player.facing = facing if facing != 0 else _face
 	_player._set_state(Player.State.IDLE)
 	_player._soul_cooldowns.clear()
-	await _frames(20)
+	# 앞 동작의 이펙트가 다 사라질 만큼 '게임 시간'으로 기다린다 (시간을 SLOW 로 늦춰 두었으므로 물리 20프레임은 게임 시간 0.07초뿐이라
+	# 앞 시험의 바람 터짐이 다음 사진에 남았다 — 2026-10-20 QA)
+	var t0 := _gt
+	while _gt - t0 < RESET_WAIT:
+		await get_tree().process_frame
 
 
 func _dummy(x_off: float, hp := 99999.0) -> EnemyBase:

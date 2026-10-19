@@ -366,7 +366,16 @@ func _water() -> void:
 		return
 	for e in get_tree().get_nodes_in_group("enemy"):
 		e.queue_free()
+	# 떨어지면 수면에 바로 닿는 자리를 고른다 (웅덩이 위 돌 선반에 내려앉으면 '떨어져 들어가는 물보라'가 찍히지 않는다 — 2026-10-20 QA)
 	var x := pool.global_position.x + pool.size.x * 0.3
+	var space: PhysicsDirectSpaceState2D = _room.get_world_2d().direct_space_state
+	for i in 19:
+		var tx := pool.global_position.x + pool.size.x * (0.05 + 0.05 * i)
+		var q := PhysicsRayQueryParameters2D.create(Vector2(tx, pool.global_position.y - 300.0), Vector2(tx, pool.global_position.y + pool.size.y + 40.0), 1)
+		var hit: Dictionary = space.intersect_ray(q)
+		if hit.is_empty() or float(hit["position"].y) >= pool.global_position.y - 4.0:
+			x = tx
+			break
 	_place_player(Vector2(x, pool.global_position.y - 300.0), 1)
 	_player._set_state(Player.State.FALL)
 	await _capture("fall_in", [0.25, 0.32, 0.4, 0.5])

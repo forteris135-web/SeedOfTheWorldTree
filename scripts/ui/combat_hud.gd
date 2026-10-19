@@ -82,6 +82,13 @@ const SOUL_NOTICE_DESC_SIZE := 20
 const DUST_ICON_TEX := preload("res://art/ui/touch/touch_dust.png")
 const DUST_BOX_GAP := 22.0          # 영혼 줄 글자 기준선 아래로 이만큼 띄워 칸 윗변 (영혼 원이 번쩍일 때 번짐이 닿지 않게)
 const DUST_BOX_X := 26.0            # 칸 왼쪽 (영혼 원 줄과 맞춤)
+## 화면 왼쪽이 가려지는 기기(노치 있는 아이폰을 가로로)에서 영혼 줄·빛 가루 칸을 안전 영역 안으로 민다 (2026-10-20 QA).
+## 이 둘은 화면 세로 가운데(노치 자리, 1080 기준 y 239~841)에 있어서 노치를 왼쪽에 두고 쥐면 빛 가루 그림과 첫 숫자가 가려졌다.
+## 가려지는 폭은 기기의 안전 영역(DisplayServer.get_display_safe_area)으로 잰다 — 모바일에서만, 맥·아이패드는 0.
+## 시험은 safe_left_override(캔버스 px)로 흉내 낸다. 위쪽의 체력 막대·씨앗은 노치 띠 밖이라 그대로.
+const SAFE_LEFT_GAP := 6.0          # 안전 영역 안쪽으로 더 띄우는 거리
+const SAFE_LEFT_MAX := 160.0
+var safe_left_override := -1.0
 const DUST_BOX_H := 42.0
 const DUST_BOX_MIN_W := 150.0
 const DUST_BOX_PAD := 14.0          # 숫자 오른쪽 여백
@@ -544,7 +551,7 @@ func dust_box_rect() -> Rect2:
 	var tw := font.get_string_size(_thousands(Progress.dust), HORIZONTAL_ALIGNMENT_LEFT, -1, DUST_FONT_SIZE).x
 	var w := maxf(DUST_BOX_MIN_W, 8.0 + DUST_ICON_SIZE + 6.0 + tw + DUST_BOX_PAD)
 	var top := soul_origin().y + DUST_BOX_GAP
-	return Rect2(DUST_BOX_X, top, w, DUST_BOX_H)
+	return Rect2(DUST_BOX_X + notch_shift(), top, w, DUST_BOX_H)
 
 
 ## 칸 오른쪽 끝의 잎 장식 자리 (화면 좌표)
@@ -584,7 +591,26 @@ func growth_end_x() -> float:
 
 ## 영혼 줄의 시작점 (화면 좌표, 글자 기준선). 이슬이 두 줄이면 한 줄만큼 아래
 func soul_origin() -> Vector2:
-	return _s(SOUL_POS + Vector2(0, DEW_ROW_STEP * (dew_rows() - 1)))
+	return _s(SOUL_POS + Vector2(0, DEW_ROW_STEP * (dew_rows() - 1))) + Vector2(notch_shift(), 0.0)
+
+
+## 기기 화면 왼쪽에서 가려지는 폭 (캔버스 px). 모바일 기기에서만 안전 영역으로 잰다.
+func safe_left_inset() -> float:
+	if safe_left_override >= 0.0:
+		return safe_left_override
+	if not OS.has_feature("mobile"):
+		return 0.0
+	var win := DisplayServer.window_get_size()
+	if win.x <= 0:
+		return 0.0
+	var safe := DisplayServer.get_display_safe_area()
+	var canvas_w := _canvas.size.x if _canvas and _canvas.size.x > 0.0 else get_viewport().get_visible_rect().size.x
+	return clampf(float(safe.position.x - DisplayServer.screen_get_position().x) / float(win.x) * canvas_w, 0.0, SAFE_LEFT_MAX)
+
+
+## 영혼 줄·빛 가루 칸을 오른쪽으로 미는 거리 (가려지는 폭 + SAFE_LEFT_GAP 이 칸 왼쪽 DUST_BOX_X 보다 크면 그만큼)
+func notch_shift() -> float:
+	return maxf(0.0, safe_left_inset() + SAFE_LEFT_GAP - DUST_BOX_X)
 
 
 ## 영혼 원들: [{"soul", "center", "radius", "color", "selected"}]

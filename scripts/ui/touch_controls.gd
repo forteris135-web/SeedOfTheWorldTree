@@ -22,6 +22,9 @@ extends CanvasLayer
 ## - 누르면: 바탕이 금빛으로 밝아지고 테두리가 굵어지며 그림이 살짝 눌려 작아진다.
 ## - 컨트롤러나 키보드 입력이 들어오면 숨고, 화면을 만지면 다시 나타난다.
 ## - 멈춤(지도·메뉴) 중에도 손가락 떼기는 받아서 버튼이 눌린 채 남지 않게 한다.
+## - 누른 동작은 손가락마다 기억해 두었다가 그 동작을 뗀다 (누른 사이 상황 버튼이 사라져도 손길이 눌린 채 남지 않게).
+## - 장면이 바뀌어 이 노드가 사라질 때 누르고 있던 동작을 모두 뗀다 (_exit_tree): 손가락을 댄 채 포탈·회상·불러오기로 넘어가면
+##   새 방의 터치 조작은 그 손가락을 모르므로, 떼지 않으면 소녀가 혼자 달린다 (2026-10-20 QA).
 ## - 시험·스크린샷용: 실행 인수 `--touch` 가 있으면 처음부터 터치 장치로 쳐서 버튼을 보인다.
 ## 겹침 검사(tools/probe_ui.gd): 모든 버튼 쌍의 중심 거리 ≥ (r1 + r2) × 1.2, 1920×1080 / 2338×1080 / 1920×1440 세 비율.
 ## 노치 검사(같은 시험): 화면 세로 가운데 띠(1080 기준 y 239~841, 아이폰 가로 노치 자리)에 걸치는 버튼은 가장자리에서 NOTCH_DEPTH 이상 떨어진다.
@@ -71,7 +74,7 @@ const FILL_PRESSED := Color(1.0, 0.84, 0.5, 0.42)
 const RING := Color(1.0, 0.92, 0.72, 0.62)
 const RING_DARK := Color(0.06, 0.04, 0.02, 0.55)
 
-var _touches := {}  # 손가락 번호 -> {"role": String, "origin": Vector2, "pos": Vector2}
+var _touches := {}  # 손가락 번호 -> {"role": String, "action": String(누른 동작, 스틱은 ""), "origin": Vector2, "pos": Vector2}
 var _pie := PackedVector2Array()   # 쿨다운 부채꼴 점 (매 프레임 새로 만들지 않게 재사용)
 var _canvas: Control
 var _shown := true
@@ -91,6 +94,12 @@ func _ready() -> void:
 		InputDevice._set_device(InputDevice.Kind.TOUCH, -1)
 	InputDevice.device_changed.connect(_on_device_changed)
 	_on_device_changed(InputDevice.current)
+
+
+## 장면이 바뀌어 사라질 때: 이 노드가 누른 동작을 모두 뗀다 (Input.action_release 는 이 API 로 누른 것만 떼므로
+## 키보드·패드로 쥐고 있는 입력은 그대로다).
+func _exit_tree() -> void:
+	_release_all()
 
 
 func _process(_delta: float) -> void:
@@ -271,15 +280,17 @@ func _begin_touch(index: int, pos: Vector2) -> void:
 		if d <= b["r"] * GAP_RATIO and d < best:
 			best = d
 			role = name
+	var action := ""
 	if role == "":
 		if pos.x < _canvas.size.x * 0.45:
 			role = "stick"
 		else:
 			return
 	else:
-		Input.action_press(buttons[role]["action"])
-		_send_action_event(buttons[role]["action"], true)
-	_touches[index] = {"role": role, "origin": pos, "pos": pos}
+		action = buttons[role]["action"]
+		Input.action_press(action)
+		_send_action_event(action, true)
+	_touches[index] = {"role": role, "action": action, "origin": pos, "pos": pos}
 
 
 ## 지도·메뉴처럼 _unhandled_input 으로 듣는 동작은 진짜 입력 이벤트로도 보낸다.
@@ -295,21 +306,30 @@ func _send_action_event(action: String, pressed: bool) -> void:
 func _end_touch(index: int) -> void:
 	if not _touches.has(index):
 		return
-	var role: String = _touches[index]["role"]
+	var t_of_index: Dictionary = _touches[index]
+	var role: String = t_of_index["role"]
 	_touches.erase(index)
 	if role == "stick":
 		_update_stick()
 		return
-	var buttons := _buttons()
-	var action: String = buttons[role]["action"] if buttons.has(role) else ""
+	# 누를 때 기억한 동작을 뗀다 (지금 버튼 표에서 찾으면, 누른 사이 사라진 상황 버튼·러시의 지도 버튼은 떼지 못한다)
+	var action: String = _touches_action(t_of_index)
 	if action == "":
 		return
 	# 같은 동작을 다른 손가락이 아직 누르고 있으면 유지
 	for t in _touches.values():
-		if buttons.has(t["role"]) and buttons[t["role"]]["action"] == action:
+		if _touches_action(t) == action:
 			return
 	Input.action_release(action)
 	_send_action_event(action, false)
+
+
+## 손가락 기록에 남은 누른 동작 (기록에 없으면 — 시험이 손으로 넣은 기록 등 — 지금 버튼 표에서 찾는다)
+func _touches_action(t: Dictionary) -> String:
+	if t.has("action"):
+		return str(t["action"])
+	var buttons := _buttons()
+	return buttons[t["role"]]["action"] if buttons.has(t["role"]) else ""
 
 
 func _update_stick() -> void:

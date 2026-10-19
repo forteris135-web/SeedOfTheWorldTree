@@ -655,7 +655,7 @@ func _throw_lantern() -> void:
 	p.speed = aim[1]
 	p.launch(aim[0], self, false)
 	Sfx.play("spear_whoosh", -5.0, 0.1)
-	# 등불이 땅·가지에 떨어진 바로 그 자리에 불기둥 (붉은 예고 PILLAR_WARN 초 뒤).
+	# 등불이 땅·가지에 떨어진 바로 그 자리에 불기둥 (주황 예고 PILLAR_WARN 초 뒤).
 	# 예전엔 0.9초 고정 타이머가 '그 순간 공중의 등불 아래'에 세웠고, 그 전에 떨어지면 아예 안 생겼다 (2026-10-19 검수).
 	p.landed.connect(_on_lantern_landed)
 
@@ -697,7 +697,7 @@ func _aim_lantern(from: Vector2, target_x: float, grav: float, life: float) -> A
 	return best
 
 
-## 불기둥 붉은 예고 길이(초)
+## 불기둥 예고(주황 고리) 길이(초)
 const PILLAR_WARN := 0.3
 
 
@@ -714,11 +714,12 @@ func _on_lantern_landed(pos: Vector2, normal: Vector2) -> void:
 		var a := TAU * i / 20.0
 		pts.append(Vector2(cos(a) * 62.0, sin(a) * 14.0))
 	mark.polygon = pts
-	mark.color = Color(1.0, 0.25, 0.12, 0.0)
+	# 불기둥은 가드할 수 있다 → 예고도 주황(불꽃) 빛. '진한 붉은빛 = 가드 불가' 원칙(기획서 8장)에 맞춘다 (2026-10-20 QA)
+	mark.color = Color(1.0, 0.55, 0.15, 0.0)
 	mark.add_to_group("knight_pillar_mark")
 	get_parent().add_child(mark)
 	mark.global_position = at
-	Fx.spawn("danger_ring", at, {"life": PILLAR_WARN + 0.1})   # 이펙트 리뉴얼 F2: 붉은 예고 고리
+	Fx.spawn("danger_ring", at, {"life": PILLAR_WARN + 0.1, "palette": "fire"})   # 이펙트 리뉴얼 F2: 예고 고리 (가드 가능 → 주황)
 	var tw := mark.create_tween()
 	tw.tween_property(mark, "color:a", 0.75, PILLAR_WARN * 0.6)
 	tw.parallel().tween_property(mark, "scale", Vector2(1.25, 1.25), PILLAR_WARN).from(Vector2(0.6, 0.6))

@@ -32,6 +32,11 @@ const FILL_DONE := Color(0.45, 0.82, 1.0)
 const OUTLINE := Color(0.02, 0.04, 0.08, 0.9)
 const REGION_BAND := 6.0
 const GOLD := Color(1.0, 0.86, 0.5)
+## 해골 표식 크기(지도 확대 100% 기준 px)와 색: 보스 방 / 아직 쓰러뜨리지 않은 중간 보스 방
+const SKULL_BOSS := 15.0
+const SKULL_MINI := 10.5
+const SKULL_BOSS_COLOR := Color(1.0, 0.8, 0.66)
+const SKULL_MINI_COLOR := Color(1.0, 0.72, 0.58, 0.9)
 
 ## 배율 (화면 px / 세계 px). 0.1 이면 4800 너비의 방이 480px.
 const ZOOM_OPEN := 0.1       # 열 때 (읽기 좋은 크기)
@@ -129,7 +134,7 @@ static func explore_fill(r: Dictionary) -> Color:
 	return FILL_REMAIN if counts[0] < counts[1] else FILL_DONE
 
 
-## 아직 쓰러뜨리지 않은 중간 보스가 있는 방인가 (지도에 작은 ☠).
+## 아직 쓰러뜨리지 않은 중간 보스가 있는 방인가 (지도에 작은 해골 표식).
 static func has_live_miniboss(r: Dictionary) -> bool:
 	var raw = r.get("explore_ids", null)
 	if raw is Dictionary:
@@ -379,10 +384,16 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventScreenTouch:
 		_on_touch(event)
-		get_viewport().set_input_as_handled()
+		# 손가락 떼기는 터치 버튼(TouchControls)에도 흘려보낸다: 지도를 연 '지도' 손가락·걷던 스틱 손가락의 떼기를 지도가 삼키면
+		# 그 동작이 눌린 채 남아, 닫은 뒤 소녀가 혼자 걷고 '지도' 버튼이 눌린 채 보인다 (2026-10-20 QA, travel_menu 와 같은 규칙).
+		if event.pressed:
+			get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
+		var mine: bool = _touches.has(event.index)
 		_on_drag(event)
-		get_viewport().set_input_as_handled()
+		# 지도를 열기 전부터 눌려 있던 손가락(스틱 등)의 끌기도 터치 버튼이 받게 둔다 (지도는 그 손가락을 쓰지 않는다)
+		if mine:
+			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 		var steps: float = event.factor if event.factor > 0.0 else 1.0
 		var f := pow(WHEEL_STEP, steps)
@@ -495,7 +506,12 @@ func _on_draw() -> void:
 	var size := _panel.size
 	_panel.draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.03, 0.05, 0.88))
 	_panel.draw_string(font, Vector2(60, 70), "지도", HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(0.95, 0.9, 0.8))
-	_panel.draw_string(font, Vector2(150, 70), "가 본 곳만 그려진다  ·  ● 달빛풀  ◆ 포탈  ☠ 수호자", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1, 0.45))
+	# 머리글: '☠' 글자는 기기 글꼴에 따라 작은 얼룩으로 보여서 지도와 같은 그린 해골을 쓴다
+	var head := "가 본 곳만 그려진다  ·  ● 달빛풀  ◆ 포탈  "
+	_panel.draw_string(font, Vector2(150, 70), head, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1, 0.45))
+	var hx := 150.0 + _tw(font, head, 20)
+	draw_skull(_panel, Vector2(hx + 10.0, 63.0), 9.0, SKULL_BOSS_COLOR)
+	_panel.draw_string(font, Vector2(hx + 26.0, 70), "수호자", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1, 0.45))
 	_panel.draw_string(font, Vector2(60, 106), hint_text(), HORIZONTAL_ALIGNMENT_LEFT, size.x - 260.0, 20, Color(1, 1, 1, 0.45))
 	_draw_legend(font, Vector2(60, 138))
 	# 지도 칸 테두리
@@ -504,6 +520,26 @@ func _on_draw() -> void:
 	# 배율 표시 (오른쪽 아래, 작게)
 	var zt := "×%.0f%%" % (_zoom / ZOOM_OPEN * 100.0)
 	_panel.draw_string(font, Vector2(size.x - VIEW_MARGIN - 8.0 - _tw(font, zt, 16), size.y - VIEW_MARGIN - 10.0), zt, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.35))
+
+
+## 그린 해골 표식 (보스·중간 보스 방). 가운데 c, 크기 sz(머리 반지름쯤). 짙은 둥근 바탕 위에 그려 연초록·하늘색 칸에서도 또렷하다.
+## (예전엔 '☠' 글자였는데 기기 글꼴로 약 10px 의 검붉은 얼룩이 되어 칸 위에서 거의 안 보였다 — 2026-10-20 QA)
+static func draw_skull(ci: CanvasItem, c: Vector2, sz: float, col: Color) -> void:
+	var dark := Color(0.06, 0.03, 0.03, 0.92)
+	ci.draw_circle(c, sz * 1.32, Color(OUTLINE, 0.85))
+	ci.draw_arc(c, sz * 1.32, 0, TAU, 32, Color(col, 0.75), maxf(1.5, sz * 0.12), true)
+	# 머리뼈 + 턱
+	var head := c + Vector2(0, -sz * 0.16)
+	ci.draw_circle(head, sz * 0.66, col)
+	ci.draw_rect(Rect2(c + Vector2(-sz * 0.38, sz * 0.12), Vector2(sz * 0.76, sz * 0.5)), col)
+	# 눈구멍·코
+	for sx in [-1.0, 1.0]:
+		ci.draw_circle(head + Vector2(sx * sz * 0.27, sz * 0.02), sz * 0.19, dark)
+	var n := c + Vector2(0, sz * 0.16)
+	ci.draw_colored_polygon(PackedVector2Array([n + Vector2(0, -sz * 0.14), n + Vector2(sz * 0.1, sz * 0.06), n + Vector2(-sz * 0.1, sz * 0.06)]), dark)
+	# 이빨 사이 금
+	for tx in [-0.13, 0.13]:
+		ci.draw_line(c + Vector2(tx * sz, sz * 0.36), c + Vector2(tx * sz, sz * 0.62), dark, maxf(1.0, sz * 0.09))
 
 
 ## 오른쪽 위 ✕ (터치 '지도' 버튼 자리)
@@ -572,14 +608,10 @@ func _on_draw_view() -> void:
 			_view.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -d), c + Vector2(d, 0), c + Vector2(0, d), c + Vector2(-d, 0)]), GOLD)
 			_view.draw_polyline(PackedVector2Array([c + Vector2(0, -d - 4), c + Vector2(d + 4, 0), c + Vector2(0, d + 4), c + Vector2(-d - 4, 0), c + Vector2(0, -d - 4)]), Color(GOLD, 0.3 + 0.2 * sin(_t * 3.0 + 1.0)), 2.0)
 		if r.get("boss", false):
-			var c := rect.get_center()
-			_view.draw_string_outline(font, c + Vector2(-20, 12), "☠", HORIZONTAL_ALIGNMENT_CENTER, 40, 30, 5, OUTLINE)
-			_view.draw_string(font, c + Vector2(-20, 12), "☠", HORIZONTAL_ALIGNMENT_CENTER, 40, 30, Color(1.0, 0.75, 0.6, 0.95))
+			draw_skull(_view, rect.get_center(), SKULL_BOSS * mk, SKULL_BOSS_COLOR)
 		elif has_live_miniboss(r):
-			# 아직 쓰러뜨리지 않은 중간 보스: 작은 ☠ (쓰러뜨리면 사라진다)
-			var c := rect.get_center()
-			_view.draw_string_outline(font, c + Vector2(-15, 8), "☠", HORIZONTAL_ALIGNMENT_CENTER, 30, 22, 4, OUTLINE)
-			_view.draw_string(font, c + Vector2(-15, 8), "☠", HORIZONTAL_ALIGNMENT_CENTER, 30, 22, Color(1.0, 0.7, 0.55, 0.8))
+			# 아직 쓰러뜨리지 않은 중간 보스: 작은 해골 (쓰러뜨리면 사라진다)
+			draw_skull(_view, rect.get_center(), SKULL_MINI * mk, SKULL_MINI_COLOR)
 		# 찾은 수 / 전체 수 (찾을 것이 있는 방만), 오른쪽 아래 작은 글씨. 표식 뒤에 그려 맨 위에 올리고,
 		# 포탈·달빛풀 표식과 가까우면 20px 위로 올려 피한다. 글자 뒤에는 작은 어두운 바탕. 방이 너무 작으면 숨긴다.
 		if total > 0:

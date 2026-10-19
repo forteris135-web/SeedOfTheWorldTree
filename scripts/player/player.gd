@@ -952,7 +952,14 @@ func _cast_wind() -> void:
 	# 벽에 닿으면 적을 맞힐 틈 없이 사라지므로 그만큼 더 본다.
 	var reach := ahead + p.speed * 2.0 / float(Engine.physics_ticks_per_second)
 	var ray := PhysicsRayQueryParameters2D.create(origin, origin + Vector2(facing * reach, 0.0), 1)
-	var wall := get_world_2d().direct_space_state.intersect_ray(ray)
+	var space := get_world_2d().direct_space_state
+	var wall := space.intersect_ray(ray)
+	# 한쪽 방향 가지는 검기가 지나가므로(WindCrescent.pass_one_way) 벽으로 치지 않는다
+	var skip := 0
+	while not wall.is_empty() and skip < 4 and wall.get("collider") is Platform and wall["collider"].one_way:
+		ray.exclude = ray.exclude + [wall["rid"]]
+		wall = space.intersect_ray(ray)
+		skip += 1
 	if wall.is_empty():
 		p.global_position = origin + Vector2(facing * ahead, 0.0)
 	else:

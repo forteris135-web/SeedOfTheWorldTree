@@ -122,16 +122,27 @@ static func advance() -> void:
 
 ## 러시를 끝낸다: outcome = "clear"(완주) / "dead"(쓰러짐) / "quit"(포기). 기록을 남기고 결과 화면으로.
 ## (진행은 결과 화면이 열릴 때 되돌린다 — 보스 방이 아직 화면에 있는 동안 깃발이 바뀌지 않게)
+## 보스를 쓰러뜨린 뒤 다음 방으로 넘어가는 사이(advancing)에 끝나면: 그 싸움 시간은 이미 splits 에 들어 있으므로 '지금 싸움'은 0,
+## 다다른 곳은 다음 보스, 다섯을 다 쓰러뜨린 뒤였으면 완주로 친다 (2026-10-20 QA: 시간이 두 번 더해지고 다 이긴 기록이 '포기'로 남았다).
 static func finish(outcome: String) -> void:
 	if not active or not result.is_empty():
 		return
+	var between := advancing
 	running = false
 	advancing = false
 	var total := 0.0
 	for s in splits:
 		total += float(s)
-	var current := elapsed if outcome != "clear" else 0.0
-	result = {"outcome": outcome, "reached": index, "splits": splits.duplicate(), "current": current,
+	var reached := index
+	var current := elapsed
+	if outcome == "clear":
+		current = 0.0
+	elif between:
+		current = 0.0
+		reached = mini(splits.size(), BOSSES.size() - 1)
+		if splits.size() >= BOSSES.size():
+			outcome = "clear"
+	result = {"outcome": outcome, "reached": reached, "splits": splits.duplicate(), "current": current,
 		"total": total + current, "growth": growth_source}
 	_record_best(result)
 	_go(RESULT_SCENE, 0.8, 0.8)

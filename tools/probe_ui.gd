@@ -87,6 +87,8 @@ func _run() -> void:
 	await _test_plunge_button()
 	await _test_dust()
 	await _test_texts_and_screens()
+	await _test_touch_release()
+	await _test_pause_slider_touch()
 	await _screenshot_if_window()
 
 
@@ -372,6 +374,125 @@ func _test_texts_and_screens() -> void:
 	_check(last.end.y <= 1060.0, "키 바꾸기 화면의 줄이 1080 안에 든다")
 	_check(Keymap.label_for("plunge", "kb") == "-" and Keymap.label_for("plunge", "ds") == "-", "plunge 는 기본 배치가 없어 '-' 로 보인다")
 	rs.queue_free()
+
+
+# ---------- 터치 손가락이 눌린 채 남지 않는다 (2026-10-20 QA) ----------
+## 진짜 입력 길(Input.parse_input_event)로 손가락 하나를 누르거나 끌거나 뗀다. pos 는 화면(캔버스) 좌표.
+func _finger(index: int, pos: Vector2, kind: String) -> void:
+	var wpos: Vector2 = get_tree().root.get_final_transform() * pos
+	var ev: InputEvent
+	if kind == "drag":
+		var d := InputEventScreenDrag.new()
+		d.index = index
+		d.position = wpos
+		ev = d
+	else:
+		var t := InputEventScreenTouch.new()
+		t.index = index
+		t.position = wpos
+		t.pressed = kind == "down"
+		ev = t
+	Input.parse_input_event(ev)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func _test_touch_release() -> void:
+	_teleport(Vector2(700, 2200 - 67))
+	_player.input_enabled = true
+	await _frames(4)
+	var stick0 := Vector2(300, 700)
+	# 1) 손가락을 댄 채 장면이 바뀌면(이 노드가 트리에서 빠지면) 누르던 동작을 모두 뗀다
+	await _finger(0, stick0, "down")
+	await _finger(0, stick0 + Vector2(90, 0), "drag")
+	var held := Input.is_action_pressed("move_right")
+	_room.remove_child(_touch)   # Game.go_to 가 방을 지울 때와 같은 _exit_tree
+	var after_exit := Input.is_action_pressed("move_right")
+	_room.add_child(_touch)
+	await _finger(0, stick0 + Vector2(90, 0), "up")
+	_check(held and not after_exit and _touch._touches.is_empty() and not Input.is_action_pressed("move_right"),
+		"스틱을 오른쪽으로 민 채 장면이 바뀌면 move_right 를 뗀다 (쥔 동안 %s → 빠진 뒤 %s)" % [held, after_exit])
+	# 2) 상황 버튼(손길)을 누른 사이 버튼이 사라져도 손을 떼면 손길이 떨어진다 (누를 때 기억한 동작을 뗀다)
+	var dummy := Node2D.new()
+	var saved_inter: Array = _player.interactables.duplicate()
+	_player.interactables.clear()
+	_player.interactables.append(dummy)
+	var ib: Dictionary = _touch._buttons()
+	var has_ib := ib.has("interact")
+	if has_ib:
+		_touch._begin_touch(7, ib["interact"]["pos"])
+	var pressed_i := Input.is_action_pressed("interact")
+	_player.interactables.erase(dummy)
+	dummy.free()
+	var gone: bool = not _touch._buttons().has("interact")
+	_touch._end_touch(7)
+	_player.interactables.append_array(saved_inter)
+	_check(has_ib and pressed_i and gone and not Input.is_action_pressed("interact"), "손길 버튼을 누른 사이 버튼이 사라져도 떼면 interact 가 떨어진다 (버튼 %s, 눌림 %s, 사라짐 %s, 뗀 뒤 %s)" % [has_ib, pressed_i, gone, Input.is_action_pressed("interact")])
+	# 3) 지도가 열려 있는 동안 뗀 손가락도 터치 버튼이 받는다 (스틱 손가락 / '지도' 버튼 손가락)
+	await _finger(0, stick0, "down")
+	await _finger(0, stick0 + Vector2(90, 0), "drag")
+	var mb: Dictionary = _touch._buttons()["map"]
+	await _finger(1, mb["pos"], "down")
+	await _frames(2)
+	var map_open: bool = _room._map != null and _room._map.is_open()
+	await _finger(0, stick0 + Vector2(90, 0), "up")
+	await _finger(1, mb["pos"], "up")
+	var stale: Array = _touch._touches.keys()
+	var mr := Input.is_action_pressed("move_right")
+	var mp := Input.is_action_pressed("map")
+	if map_open:
+		_room._map.close()
+	await _frames(2)
+	_check(map_open and stale.is_empty() and not mr and not mp, "지도가 열린 동안 뗀 손가락(스틱·'지도')을 터치 버튼이 받는다 (지도 열림 %s, 남은 손가락 %s, move_right %s, map %s)" % [map_open, stale, mr, mp])
+	# 4) 일시정지 메뉴가 열린 동안 뗀 손가락도
+	await _finger(0, stick0, "down")
+	await _finger(0, stick0 + Vector2(90, 0), "drag")
+	var pm := PauseMenu.new()
+	_room.add_child(pm)
+	pm.open()
+	await _finger(0, stick0 + Vector2(90, 0), "up")
+	var stale2: Array = _touch._touches.keys()
+	var mr2 := Input.is_action_pressed("move_right")
+	pm.close()
+	pm.queue_free()
+	await _frames(2)
+	_check(stale2.is_empty() and not mr2, "일시정지 메뉴가 열린 동안 뗀 스틱 손가락도 떨어진다 (남은 손가락 %s, move_right %s)" % [stale2, mr2])
+	_player.input_enabled = true
+
+
+# ---------- 설정 화면: 터치로 ◀ ▶ (2026-10-20 QA: 짧은 값에서 ◀ 가 키우는 쪽으로 움직였다) ----------
+func _test_pause_slider_touch() -> void:
+	var saved := {}
+	for k in ["touch_scale", "sfx_volume"]:
+		saved[k] = Settings.get_value(k)
+	var pm := PauseMenu.new()
+	_room.add_child(pm)
+	pm.open(true)
+	await get_tree().process_frame
+	var results := []
+	var ok := true
+	# [줄, 처음 값, 누를 쪽(-1 ◀ / +1 ▶), 기대 값]
+	var cases := [["touch_scale", 1, -1, 0], ["touch_scale", 0, 1, 1], ["touch_scale", 1, 1, 2], ["touch_scale", 2, -1, 1],
+		["sfx_volume", 0, -1, 0], ["sfx_volume", 0, 1, 1], ["sfx_volume", 5, -1, 4], ["sfx_volume", 5, 1, 6], ["sfx_volume", 10, -1, 9], ["sfx_volume", 10, 1, 10]]
+	for c in cases:
+		Settings.set_value(c[0], c[1])
+		var row := pm.row_of(c[0])
+		var tr: Rect2 = pm.value_text_rect(row)
+		# ◀ 는 글자 왼쪽 끝 안쪽, ▶ 는 오른쪽 끝 안쪽을 누른다 (그려진 글자 자리)
+		var x: float = tr.position.x + 8.0 if c[2] < 0 else tr.end.x - 8.0
+		await _finger(3, Vector2(x, tr.get_center().y), "down")
+		await _finger(3, Vector2(x, tr.get_center().y), "up")
+		var got := int(Settings.get_value(c[0]))
+		results.append("%s %d %s → %d" % [c[0], c[1], "◀" if c[2] < 0 else "▶", got])
+		if got != c[3]:
+			ok = false
+	pm.close()
+	pm.queue_free()
+	for k in saved:
+		Settings.set_value(k, saved[k])
+	await get_tree().process_frame
+	print("[probe]   ", results)
+	_check(ok, "설정 화면: 그려진 ◀ 를 누르면 줄고 ▶ 를 누르면 는다 (짧은 값 '◀ 보통 ▶'·'◀ 끔 ▶' 포함)")
 
 
 # ---------- 창이 있으면 스크린샷 (기획자·Claude 눈 확인용) ----------

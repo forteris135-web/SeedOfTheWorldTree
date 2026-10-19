@@ -59,6 +59,7 @@ static func apply(e: EnemyBase, hp_mult := HP_MULT, size_mult := SIZE_MULT, dmg_
 	e.walk_speed *= SPEED_MULT
 	e.hurt_radius *= size_mult
 	e.hurt_height *= size_mult
+	e.fx_scale = size_mult   # 무너짐·쓰러짐 이펙트도 몸 크기만큼 (2026-10-20 QA)
 	e.strike_box = Rect2(e.strike_box.position * BOX_MULT, e.strike_box.size * BOX_MULT)
 	e.knockback *= 1.25
 	e.hit_stun *= 0.6          # 묵직해서 맞아도 덜 멈칫한다

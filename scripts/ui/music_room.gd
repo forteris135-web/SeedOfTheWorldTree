@@ -4,7 +4,8 @@ class_name MusicRoom
 ## 곡을 고르면 처음부터 흐르고 **반복**한다 (엔딩에서 한 번만 흐르는 셀레니아의 허밍도 여기선 반복). 흐르는 곡을 다시 고르면 멈춘다.
 ## 아래에 지금 흐르는 곡 이름 · 흐른 시간 / 길이 · 진행 막대. '돌아가기'(또는 회피·메뉴·취소)로 닫으면 closed 신호 →
 ## 타이틀이 타이틀 곡을 다시 튼다. 곡 이름은 data/dialogue/music_titles.json (곡 파일은 Music.DIR, 목록은 Music.TRACKS 와 같아야 한다).
-## 조작: 컨트롤러·키보드 = 위·아래·좌·우로 고르고 결정 / 터치·마우스 = 곡을 누르면 흐르고 다시 누르면 멈춤.
+## 조작: 컨트롤러·키보드 = 위·아래·좌·우로 고르고 결정 / 터치·마우스 = 곡을 누르면 흐르고 다시 누르면 멈춤
+## (흉내 낸 사건은 건너뛰어 누름 한 번 = 한 번만 처리 — _is_tap).
 
 signal closed
 
@@ -154,7 +155,7 @@ func _input(event: InputEvent) -> void:
 		Sfx.play("blip", -6.0)
 	elif event.is_action_pressed("jump") or event.is_action_pressed("interact") or event.is_action_pressed("ui_accept"):
 		_activate()
-	elif (event is InputEventScreenTouch and event.pressed) or (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+	elif _is_tap(event):
 		var hit := _hit_at(event.position)
 		if hit == back_index():
 			_index = hit
@@ -162,6 +163,17 @@ func _input(event: InputEvent) -> void:
 		elif hit >= 0:
 			toggle(hit)
 	get_viewport().set_input_as_handled()
+
+
+## 누름 한 번인가. 터치 한 번은 '터치 + 흉내 낸 마우스'(emulate_mouse_from_touch), 클릭 한 번은 '클릭 + 흉내 낸 터치'
+## (project.godot 의 emulate_touch_from_mouse)로 사건이 둘씩 들어온다 → 흉내 낸 사건(device = DEVICE_ID_EMULATION)은 건너뛴다.
+## 둘 다 받으면 곡이 틀어지자마자 다시 멈췄다 (2026-10-20 QA).
+static func _is_tap(event: InputEvent) -> bool:
+	if event.device == InputEvent.DEVICE_ID_EMULATION:
+		return false
+	if event is InputEventScreenTouch:
+		return event.pressed
+	return event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
 
 
 func _activate() -> void:
@@ -211,7 +223,8 @@ func _on_draw() -> void:
 	var font := ThemeDB.fallback_font
 	var size := _panel.size
 	var gold := Color(1.0, 0.86, 0.5)
-	_panel.draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.03, 0.05, 0.96))
+	# 완전히 가린다: 뒤의 타이틀 제목·메뉴 글자는 발광(HDR)이라 조금만 비쳐도 눈에 띈다 (2026-10-20 QA)
+	_panel.draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.03, 0.05, 1.0))
 	var top := _top()
 	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, top + 70), str(_data.get("title", "")), HORIZONTAL_ALIGNMENT_CENTER, 800, 44, Color(1.0, 0.9, 0.72))
 	var playing := playing_index()

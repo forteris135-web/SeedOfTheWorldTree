@@ -359,3 +359,26 @@ func _test_wind() -> void:
 	wall.queue_free()
 	behind.queue_free()
 	await _frames(3)
+	# 한쪽 방향 가지(one_way)는 지나간다 — 레이저·기사 검기와 같은 규칙 (2026-10-20 QA: 두께 40px 가지 옆면에 검기가 지워졌다).
+	# 가지는 검기 높이(소녀 가운데 -20)를 가로지르고, 소녀 바로 앞(생기는 자리의 벽 검사 안)에도 하나 둔다.
+	var branches := []
+	for bx in [70.0, 300.0]:
+		var br := Platform.new()
+		br.size = Vector2(120, 40)
+		br.one_way = true
+		br.decorate = false
+		br.position = Vector2(bx, FLOOR_Y - 68 - 20 - 20)
+		_arena.add_child(br)
+		branches.append(br)
+	var past := _dummy(600.0)
+	_player.global_position = Vector2(0, FLOOR_Y - 68)
+	_player._soul_cooldowns.clear()
+	_player._set_state(Player.State.IDLE)
+	await _frames(4)
+	_player.cast_soul_skill()
+	await _frames(90)
+	print("[probe] 바람이 한쪽 방향 가지 둘을 지나: 가지 너머 적 %.0f (피해 %.0f)" % [_lost(past), dmg])
+	_check(absf(_lost(past) - dmg) < 0.5, "바람: 한쪽 방향 가지는 지나가 그 너머 적을 맞힌다")
+	for n in branches + [past]:
+		n.queue_free()
+	await _frames(3)

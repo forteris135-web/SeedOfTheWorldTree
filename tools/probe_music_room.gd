@@ -87,18 +87,34 @@ func _press(action: String) -> void:
 	await _frames(2)
 
 
-## 화면 누르기 (좌표 변환 없이 음악 감상 화면에 바로 넘긴다 — probe_music 의 터치 시험과 같은 방식)
+## 화면 누르기: 진짜 입력 길(Input.parse_input_event)로 보낸다 — 터치 한 번에 '흉내 낸 마우스'가 함께 들어오는 것까지 그대로
+## (2026-10-20 QA: 화면에 바로 넘기던 예전 시험은, 한 번 누르면 두 번 처리돼 곡이 바로 멈추는 것을 잡지 못했다).
+## pos 는 화면(캔버스) 좌표 → 창 좌표로 바꿔 보낸다.
 func _touch(mr: MusicRoom, pos: Vector2) -> void:
+	var wpos: Vector2 = get_tree().root.get_final_transform() * pos
 	var ev := InputEventScreenTouch.new()
-	ev.position = pos
+	ev.position = wpos
 	ev.pressed = true
-	mr._input(ev)
+	Input.parse_input_event(ev)
 	await _frames(2)
 	var up := InputEventScreenTouch.new()
-	up.position = pos
+	up.position = wpos
 	up.pressed = false
-	mr._input(up)
+	Input.parse_input_event(up)
 	await _frames(2)
+
+
+## 마우스 왼쪽 클릭 한 번 (진짜 입력 길 — '흉내 낸 터치'가 함께 들어온다)
+func _click(pos: Vector2) -> void:
+	var wpos: Vector2 = get_tree().root.get_final_transform() * pos
+	for pressed in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.position = wpos
+		ev.global_position = wpos
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = pressed
+		Input.parse_input_event(ev)
+		await _frames(2)
 
 
 func _run() -> void:
@@ -184,6 +200,18 @@ func _run() -> void:
 	await _touch(mr, mr.row_rect(13).get_center())
 	await _wait(0.3)
 	_check(Music.current() == ids[13], "터치: 오른쪽 줄 곡 (%s)" % Music.current())
+	# 한 번 누르면 한 번만: 곡이 바뀐 뒤 한참 지나도 그대로 흐른다 (두 번 처리되면 틀자마자 멈춘다)
+	await _wait(0.8)
+	_check(Music.current() == ids[13] and mr.playing_index() == 13, "터치 한 번 = 한 번만 처리 (0.8초 뒤에도 %s 이 흐름)" % Music.current())
+	# 마우스 클릭도 한 번만 (클릭 + 흉내 낸 터치)
+	await _click(mr.row_rect(4).get_center())
+	await _wait(0.8)
+	_check(Music.current() == ids[4] and mr.selected() == 4, "클릭 한 번 = 한 번만 처리 (%s)" % Music.current())
+	await _click(mr.row_rect(4).get_center())
+	await _wait(0.9)
+	_check(Music.current() == "", "클릭: 흐르는 곡을 다시 클릭하면 멈춤 (%s)" % Music.current())
+	await _touch(mr, mr.row_rect(13).get_center())
+	await _wait(0.3)
 	# 5) 회피로 닫으면 타이틀 곡으로
 	await _press("dodge")
 	await _wait(0.3)

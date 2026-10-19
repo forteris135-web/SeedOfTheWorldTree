@@ -283,6 +283,11 @@ func _start_scene(i: int) -> void:
 	var sc: Dictionary = _scenes[i]
 	_clear_fx()
 	_clear_sprites()
+	# 앞 장면의 장소 글자(4.4초 연출)가 새 장면 그림 위에 남지 않게 빠르게 거둔다 (2026-10-20 QA: 마을 그림 위에 '수관'이 떴다)
+	_kill(_place_tw)
+	if _place.modulate.a > 0.0:
+		_place_tw = create_tween()
+		_place_tw.tween_property(_place, "modulate:a", 0.0, 0.25 / time_scale)
 	events.append({"kind": "scene", "index": i, "id": sc.get("id", ""), "name": sc.get("name", ""), "image": sc.get("image", ""),
 		"music": Music.current(), "music_pos": Music.playback_time(Music.ENDING_TRACK)})
 	# 허밍: 정해진 장면이 시작되는 순간 처음부터, 한 번만 (반복 없이) — 크레딧이 끝날 때까지 다시 틀지 않는다

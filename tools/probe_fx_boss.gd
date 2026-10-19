@@ -192,7 +192,7 @@ func _test_bosses() -> void:
 	await _try(r, "기사 등불 회전 (2페이즈)", func() -> void: b.force_attack(b.State.SPIN), 120, ["fire_ring"])
 	b._set_state(b.State.MARCH)
 	b._timer = 99.0
-	await _try(r, "기사 등불 던지기 → 붉은 고리 → 불기둥", func() -> void: b.force_attack(b.State.THROW), 200, ["danger_ring", "fire_pillar_burst"])
+	await _try(r, "기사 등불 던지기 → 주황 예고 고리(가드 가능) → 불기둥", func() -> void: b.force_attack(b.State.THROW), 200, ["danger_ring", "fire_pillar_burst"])
 	await _unload(r)
 	# --- 뿌리지기 ---
 	r = await _load_room("abyss_boss")
@@ -378,12 +378,16 @@ func _test_water() -> void:
 	player.velocity = Vector2.ZERO
 	await _frames(70)
 	var entered := Fx.spawn_log.has("water_splash_in")
+	# 수액에 내려앉으면 물보라만 — 갈색 흙먼지(land_dust)는 띄우지 않는다 (2026-10-20 QA)
+	var dusty := Fx.spawn_log.has("land_dust")
+	var feet_in := SapPool.any_contains(get_tree(), player.global_position + Vector2(0, 66))
 	player.input_enabled = true
 	Input.action_press("move_left")
 	await _frames(50)
 	Input.action_release("move_left")
 	player.input_enabled = false
 	_check(entered, "웅덩이에 떨어지면 물보라")
+	_check(feet_in and not dusty, "웅덩이에 내려앉을 때 흙먼지는 없다 (발이 웅덩이 안 %s, 흙먼지 %s)" % [feet_in, dusty])
 	_check(Fx.spawn_log.has("water_ripple"), "웅덩이에서 걸으면 잔물결")
 	room.queue_free()
 	await _frames(3)

@@ -23,6 +23,10 @@ var _settings: PauseMenu
 ## 음악 감상 (엔딩을 본 뒤)
 var _music_room: MusicRoom
 var _cleared := false
+## '새로 시작' 확인 중 (저장이 있을 때 한 번 더 눌러야 저장을 지우고 시작한다 — 2026-10-20 QA: 클리어 기록까지 확인 없이 지워졌다)
+var _confirm_new := false
+const START_TEXT := "새로 시작"
+const START_CONFIRM_TEXT := "새로 시작 — 한 번 더 누르면 저장이 지워집니다"
 
 
 func _ready() -> void:
@@ -153,10 +157,29 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _select(i: int) -> void:
+	var prev := _index
 	_index = clampi(i, 0, max(_items.size() - 1, 0))
+	if _confirm_new and _index != prev:
+		_cancel_new_confirm()
+
+
+## '새로 시작' 확인을 거둔다 (다른 항목으로 옮기면)
+func _cancel_new_confirm() -> void:
+	_confirm_new = false
+	for b in _items:
+		if is_instance_valid(b) and b.name == "Start":
+			b.text = ("▸  " if b.text.begins_with("▸  ") else "") + START_TEXT
+	_refresh_hint()
+
+
+## '새로 시작'을 확인 중인가 (시험용)
+func confirming_new_game() -> bool:
+	return _confirm_new
 
 
 func _on_item_pressed(b: Button) -> void:
+	# 누른 항목을 먼저 고른다 (터치는 마우스가 그 위로 '들어오지' 않고 바로 눌릴 수 있다)
+	_select(_items.find(b))
 	_activate(_items.find(b))
 
 
@@ -178,7 +201,15 @@ func _activate(i: int) -> void:
 			var scene := SaveGame.load_game()
 			Game.go_to(scene if scene != "" else Game.FIRST_ROOM, 1.2, 1.4)
 		"Start":
+			_select(i)
+			if SaveGame.has_save() and not _confirm_new:
+				# 저장이 있으면 한 번 더 확인한다 ('이어하기' 바로 아래라 잘못 누르기 쉽고, 엔딩 기록·클리어 후 타이틀도 함께 사라진다)
+				_confirm_new = true
+				b.text = "▸  " + START_CONFIRM_TEXT
+				hint.text = "다시 누르면 처음부터 시작합니다 · 다른 항목으로 옮기면 취소"
+				return
 			_started = true
+			_confirm_new = false
 			SaveGame.new_game()
 			Game.go_to(Game.FIRST_ROOM, 1.2, 1.4)
 		"InputTest":
@@ -230,6 +261,8 @@ func activate_item(item_name: String) -> void:
 
 
 func _refresh_hint() -> void:
+	if _confirm_new:
+		return
 	match InputDevice.current:
 		InputDevice.Kind.TOUCH:
 			hint.text = "항목을 누르세요"

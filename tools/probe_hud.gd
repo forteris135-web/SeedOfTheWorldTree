@@ -61,10 +61,19 @@ func _test_dust_box_layout(room: Node, label: String) -> void:
 	var saved_scale = Settings.data.get("touch_scale", 1)
 	var all_ok := true
 	var report := []
-	for win in [Vector2i(1920, 1080), Vector2i(2338, 1080), Vector2i(2048, 1536)]:
+	# [창 크기, 왼쪽이 가려지는 폭(캔버스 px, -1 = 없음)]. 127 = 아이폰 11 Pro 를 가로로 쥔 안전 영역 (44pt, 2026-10-20 QA: 노치)
+	for case in [[Vector2i(1920, 1080), -1.0], [Vector2i(2338, 1080), -1.0], [Vector2i(2338, 1080), 127.0], [Vector2i(2048, 1536), -1.0]]:
+		var win: Vector2i = case[0]
+		_hud.safe_left_override = float(case[1])
 		get_window().size = win
 		await _frames(3)
 		var size: Vector2 = _hud._canvas.size
+		if float(case[1]) >= 0.0:
+			var nd: float = room.get_node("TouchControls").NOTCH_DEPTH
+			var bx: float = _hud.dust_box_rect().position.x
+			var sx: float = _hud.soul_origin().x
+			_check(bx >= float(case[1]) and sx >= float(case[1]) and bx >= nd and sx >= nd,
+				"노치 기기(왼쪽 %.0fpx 가려짐): 빛 가루 칸 x %.0f · 영혼 줄 x %.0f 이 안전 영역 안 (노치 깊이 %.0f)" % [float(case[1]), bx, sx, nd])
 		var box: Rect2 = _hud.dust_box_full_rect()
 		var orn: Rect2 = _hud.dust_ornament_rect()
 		var core: Rect2 = _hud.dust_box_rect()
@@ -126,14 +135,15 @@ func _test_dust_box_layout(room: Node, label: String) -> void:
 						hits.append("터치 %s(크기 %d)" % [n, sc])
 		Settings.data["touch_scale"] = saved_scale
 		var inside := Rect2(Vector2.ZERO, size).encloses(box) and Rect2(Vector2.ZERO, size).encloses(pop)
-		report.append("%s 칸 %s 겹침 %s 화면 안 %s" % [size, core, hits, inside])
+		report.append("%s 노치 %.0f 칸 %s 겹침 %s 화면 안 %s" % [size, float(case[1]), core, hits, inside])
 		if not hits.is_empty() or not inside:
 			all_ok = false
+	_hud.safe_left_override = -1.0
 	get_window().size = Vector2i(1920, 1080)
 	await _frames(2)
 	for r in report:
 		print("[probe]   %s" % r)
-	_check(all_ok, "빛 가루 칸 (%s): 세 화면 비율 × 터치 버튼 크기 3단계에서 HUD·터치 버튼·보스 띠·대화 상자·전환 알림·보스 이름과 겹치지 않는다" % label)
+	_check(all_ok, "빛 가루 칸 (%s): 세 화면 비율(+노치 아이폰) × 터치 버튼 크기 3단계에서 HUD·터치 버튼·보스 띠·대화 상자·전환 알림·보스 이름과 겹치지 않는다" % label)
 
 
 func _ready() -> void:

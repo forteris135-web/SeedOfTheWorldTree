@@ -49,6 +49,7 @@ var _rng := RandomNumberGenerator.new()   # 그릴 때마다 같은 씨앗으로
 
 
 func _ready() -> void:
+	add_to_group("sap_pool")
 	collision_layer = 0
 	collision_mask = 2
 	_rebuild()
@@ -81,6 +82,21 @@ func _rebuild() -> void:
 	rect.size = Vector2(size.x, size.y * 0.8)
 	_shape.shape = rect
 	_shape.position = Vector2(size.x / 2.0, size.y * 0.6)
+
+
+## 세계 좌표 pos(발 자리)가 어느 웅덩이의 수면 위·안인가 (위로 margin px 까지). 소녀가 웅덩이에 내려앉을 때
+## 흙먼지 대신 물보라만 나게 셀레니아 그림이 묻는다 (2026-10-20 QA: 수액 위 착지에 갈색 흙먼지가 함께 떴다).
+static func any_contains(tree: SceneTree, pos: Vector2, margin := 40.0) -> bool:
+	if tree == null:
+		return false
+	for n in tree.get_nodes_in_group("sap_pool"):
+		var pool := n as SapPool
+		if pool == null:
+			continue
+		var o := pool.global_position
+		if pos.x >= o.x and pos.x <= o.x + pool.size.x and pos.y >= o.y - FILL_RISE - margin and pos.y <= o.y + pool.size.y + 10.0:
+			return true
+	return false
 
 
 func can_walk() -> bool:

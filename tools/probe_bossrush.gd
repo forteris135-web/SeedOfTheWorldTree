@@ -153,6 +153,15 @@ func _run() -> void:
 	_check(title != null and title.has_item("BossRush") and title.has_item("MusicRoom"), "엔딩을 본 세이브: 타이틀에 '보스 러시'·'음악 감상'이 생긴다")
 	if title == null:
 		return
+	# '새로 시작'은 저장이 있으면 한 번 더 눌러야 한다 (2026-10-20 QA: 클리어한 저장·엔딩 기록이 확인 없이 지워졌다)
+	title.activate_item("Start")
+	await _frames(2)
+	var confirming: bool = title.confirming_new_game()
+	var kept := FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes and not title._started
+	title._select((title._index + 1) % title._items.size())
+	await _frames(2)
+	_check(confirming and kept and not title.confirming_new_game() and FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes,
+		"저장이 있을 때 '새로 시작' 한 번 → 확인만 (저장 그대로), 다른 항목으로 옮기면 확인 취소")
 	if _shots:
 		await _wait(3.5)
 		await _shot("rush_title_menu")
@@ -262,6 +271,26 @@ func _run() -> void:
 	res = await _wait_scene("boss_rush_result", 20.0) as BossRushResult
 	_check(res != null and res.outcome() == "quit" and int(res.result().get("reached", -1)) == 0 and not get_tree().paused, "들어서자마자 '포기하기' → 결과 (포기, 1번째)")
 	_check(FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes and _progress_json() == before, "포기한 뒤에도 save.json·진행 그대로")
+	# 5b) 보스를 쓰러뜨린 직후(다음 방으로 넘어가기 전 약 3.6초 사이)에 포기 (2026-10-20 QA: 그 싸움 시간이 전체에 두 번 들어가고,
+	#     포기한 곳에 방금 이긴 보스 이름이 나왔다) → 그 싸움 시간은 한 번만, 지금 싸움 0, 다다른 곳 = 다음 보스
+	_goto(Game.TITLE_SCENE)
+	title = await _wait_scene("title_screen", 10.0) as TitleScreen
+	await _frames(4)
+	title.activate_item("BossRush")
+	var room5 := await _wait_scene(EXPECT[0], 20.0) as BossRoom
+	await _frames(20)
+	await room5.debug_force_defeat()
+	await _wait(0.3)
+	var split5: float = float(BossRush.splits[0]) if BossRush.splits.size() > 0 else -1.0
+	var adv5 := BossRush.advancing
+	BossRush.give_up()
+	res = await _wait_scene("boss_rush_result", 20.0) as BossRushResult
+	r = res.result() if res else {}
+	_check(res != null and adv5 and str(r.get("outcome", "")) == "quit" and int(r.get("reached", -1)) == 1 and (r.get("splits", []) as Array).size() == 1
+		and is_zero_approx(float(r.get("current", -1.0))) and split5 > 0.0 and absf(float(r.get("total", 0.0)) - split5) < 0.001,
+		"쓰러뜨린 직후 포기 → 포기, 다다른 곳 %d번째(다음 보스), 지금 싸움 %s, 전체 %s = 첫 싸움 %s (두 번 더하지 않음)" % [int(r.get("reached", -1)) + 1,
+		BossRush.format_time(float(r.get("current", -1.0))), BossRush.format_time(float(r.get("total", 0.0))), BossRush.format_time(split5)])
+	_check(FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes and _progress_json() == before, "쓰러뜨린 직후 포기한 뒤에도 save.json·진행 그대로")
 	# 6) 저장 파일이 없을 때: 다 자란 몸, save.json 을 만들지 않는다
 	_rm(SaveGame.PATH)
 	Progress.reset()
@@ -279,9 +308,22 @@ func _run() -> void:
 	_check(BossRush.growth_source == "full" and p4.max_dews == 8 and is_equal_approx(p4.max_hp, 100.0 + float(full["upgrades"]["max_hp"]))
 		and p4.max_jumps == 2 and Progress.has_ability("light") and Progress.has_ability("wind"),
 		"저장 파일이 없으면 다 자란 몸: 체력 %.0f, 이슬 %d, 점프 %d" % [p4.max_hp, p4.max_dews, p4.max_jumps])
+	# 다섯째(마지막) 보스를 쓰러뜨린 직후에 포기해도 완주로 남는다 (QA: 'quit' 로 남아 최고 기록·완주 수에 들지 않았다).
+	# 다섯 방을 다 돌지 않고, 첫 보스를 쓰러뜨린 뒤 기록 수만 다섯으로 채워 끝 처리를 본다.
+	await room4.debug_force_defeat()
+	await _wait(0.3)
+	var clears_before := int(BossRush.load_best()["clears"])
+	BossRush.splits = [float(BossRush.splits[0]) if BossRush.splits.size() > 0 else 1.0, 900.0, 900.0, 900.0, 900.0]
+	var sum6 := 0.0
+	for v in BossRush.splits:
+		sum6 += float(v)
 	BossRush.give_up()
 	res = await _wait_scene("boss_rush_result", 20.0) as BossRushResult
-	_check(res != null and not SaveGame.has_save() and _progress_json() == before2, "다 자란 몸으로 포기 → save.json 을 만들지 않고 진행 그대로")
+	r = res.result() if res else {}
+	_check(res != null and res.outcome() == "clear" and is_zero_approx(float(r.get("current", -1.0))) and absf(float(r.get("total", 0.0)) - sum6) < 0.001
+		and int(BossRush.load_best()["clears"]) == clears_before + 1,
+		"다섯째를 쓰러뜨린 직후 포기 → 완주로 기록 (결과 %s, 전체 %s, 완주 수 %d → %d)" % [res.outcome() if res else "-", BossRush.format_time(float(r.get("total", 0.0))), clears_before, int(BossRush.load_best()["clears"])])
+	_check(res != null and not SaveGame.has_save() and _progress_json() == before2, "다 자란 몸으로 끝냄 → save.json 을 만들지 않고 진행 그대로")
 	# 정리
 	_goto(Game.TITLE_SCENE)
 	await _frames(10)

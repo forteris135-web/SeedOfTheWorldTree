@@ -480,18 +480,28 @@ func _probe_volume() -> void:
 	pm.adjust_row("sfx_volume", -1)
 	var e := [_db("Master"), _db("Music"), _db("SFX")]
 	_check(int(Settings.get_value("sfx_volume")) == 9 and absf(e[2] - linear_to_db(0.9)) < 0.01 and absf(e[1] - linear_to_db(0.8)) < 0.01, "설정 화면에서 효과음 음량 ◀ → 9, SFX 만 바뀜")
-	# 터치: 값 칸 왼쪽 반 = 줄이기, 오른쪽 반 = 키우기
+	# 터치: 그려진 값 글자 '◀ … ▶' 의 ◀ 를 누르면 줄이기, ▶ 를 누르면 키우기 (2026-10-20 QA: 고정 칸 가운데로 가르면 짧은 값에서 거꾸로 움직였다)
 	var row := pm.row_of("music_volume")
-	var vr: Rect2 = pm._value_rect(row)
+	var vr: Rect2 = pm.value_text_rect(row)
 	var ev := InputEventScreenTouch.new()
 	ev.pressed = true
-	ev.position = Vector2(vr.position.x + 10.0, vr.get_center().y)
+	ev.position = Vector2(vr.position.x + 8.0, vr.get_center().y)
 	pm._input(ev)
 	var after_left := int(Settings.get_value("music_volume"))
-	ev.position = Vector2(vr.end.x - 10.0, vr.get_center().y)
+	ev.position = Vector2(pm.value_text_rect(row).end.x - 8.0, vr.get_center().y)
 	pm._input(ev)
 	var after_right := int(Settings.get_value("music_volume"))
-	_check(after_left == 7 and after_right == 8, "터치로 음악 음량: 왼쪽 누르면 %d, 오른쪽 누르면 %d" % [after_left, after_right])
+	_check(after_left == 7 and after_right == 8, "터치로 음악 음량: ◀ 누르면 %d, ▶ 누르면 %d" % [after_left, after_right])
+	# 음량 0 ('◀ 끔 ▶' — 짧은 글자): ◀ 는 그대로 0, ▶ 는 1
+	Settings.set_value("music_volume", 0)
+	ev.position = Vector2(pm.value_text_rect(row).position.x + 8.0, vr.get_center().y)
+	pm._input(ev)
+	var zero_left := int(Settings.get_value("music_volume"))
+	ev.position = Vector2(pm.value_text_rect(row).end.x - 8.0, vr.get_center().y)
+	pm._input(ev)
+	var zero_right := int(Settings.get_value("music_volume"))
+	_check(zero_left == 0 and zero_right == 1, "음량 0 ('◀ 끔 ▶'): ◀ 누르면 %d (그대로), ▶ 누르면 %d" % [zero_left, zero_right])
+	Settings.set_value("music_volume", 8)
 	pm.close()
 	pm.queue_free()
 	# 옛 settings.json (전체 음량 없음) 도 읽힌다

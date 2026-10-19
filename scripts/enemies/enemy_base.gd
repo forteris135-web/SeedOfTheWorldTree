@@ -114,6 +114,8 @@ var _fall_facing := 1
 var _fall_by: Player
 ## 마지막으로 맞은 방향(밀린 쪽, ±1). 쓰러질 때 이쪽으로 기울어진다.
 var last_hit_dir := 1
+## 무너짐·쓰러짐 이펙트 크기 배수 (거대화 중간 보스는 몸 크기만큼 — EliteTraits.apply 가 정한다)
+var fx_scale := 1.0
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -490,7 +492,7 @@ func _break(permanent: bool) -> void:
 	Sfx.play("broke", -3.0)
 	_set_state(State.BROKEN)
 	_timer = INF if permanent else broken_time
-	Fx.spawn("break_burst", global_position + Vector2(0, -hurt_height * 0.3))   # 이펙트 리뉴얼: 무너짐 금빛 별
+	Fx.spawn("break_burst", global_position + Vector2(0, -hurt_height * 0.3), {"scale": fx_scale})   # 이펙트 리뉴얼: 무너짐 금빛 별
 	broke.emit()
 
 
@@ -604,7 +606,7 @@ func _finish_fall() -> void:
 			if is_instance_valid(_fall_by):
 				npc.greet(_fall_by)
 	else:
-		Fx.spawn("death_dust", _fall_at + Vector2(0, -24))   # 이펙트 리뉴얼: 쓰러져 사라질 때 잿빛 먼지
+		Fx.spawn("death_dust", _fall_at + Vector2(0, -24 * fx_scale), {"scale": fx_scale})   # 이펙트 리뉴얼: 쓰러져 사라질 때 잿빛 먼지
 		_spawn_sprout(_fall_at)
 	queue_free()
 
