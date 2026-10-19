@@ -89,6 +89,10 @@ const BODY_KEYS := ["hip_x", "hip_y", "lean", "pitch", "step_thr", "step_dur", "
 const FOOT_PREFIX := ["foot_", "lift_", "toe_", "kneel_"]
 ## 걸음: 이 속도(L/초)보다 느리면 걸음 위상을 멈추고 한 걸음씩 맞춘다
 const GAIT_MIN_SPEED := 0.25
+## 걸음 위상 다시 맞추기: 딛은 발이 걸음 범위(보폭의 절반)보다 이만큼(L 배) 더 뒤에 남으면 그 발부터 옮긴다
+const GAIT_RESYNC := 0.1
+## 닿지 않는 발 때문에 엉덩이를 낮추는 한계 (L 배)
+const DROP_MAX := 0.3
 ## 무기 땅 막기: 땅 위 여유 (뼈대 단위)와 관절별 최대 고침 각도. 어깨부터 든다 (팔이 곧은 채 칼끝이 땅에 얹힌 모양),
 ## 어깨로 모자라면 팔꿈치, 그다음 손목.
 const GUARD_MARGIN := 3.0
@@ -691,6 +695,15 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 		var dir := signf(speed)
 		var lift := L * clampf(0.07 + aspeed * 0.012, 0.06, 0.13)
 		_phase += absf(dx) / stride
+		# 걸음 위상 다시 맞추기: 방향이 바뀌거나(앞으로 걷다 뒷걸음) 서 있다 걷기 시작해 딛은 발이 가는 쪽 반대편 멀리 남았으면
+		# 그 발부터 옮긴다 (안 그러면 그 발이 한 주기 내내 딛은 채 남아 다리가 닿지 않고 엉덩이가 땅까지 주저앉았다 — 2026-10-20)
+		for k in legs.size():
+			var lg := legs[k]
+			if not lg.swing and (lg.x - float(fin.get(lg.k_foot, 0.0)) * L) * dir < -(stance * 0.5 + L * GAIT_RESYNC):
+				var phk := fposmod(_phase + (0.5 if k % 2 == 1 else 0.0), 1.0)
+				if phk >= swing_frac:
+					_phase -= phk
+				break
 		for k in legs.size():
 			var leg := legs[k]
 			var home := float(fin.get(leg.k_foot, 0.0)) * L
@@ -770,7 +783,8 @@ func _solve_legs() -> void:
 		if j.y < need_y:
 			drop = maxf(drop, need_y - j.y)
 	if drop > 0.0:
-		rig.root_pos.y += drop
+		# 한계: 다리가 거의 수평으로 뻗을 만큼 먼 발 하나 때문에 몸 전체가 땅까지 내려앉지 않게 (그땐 발이 잠깐 뜬다)
+		rig.root_pos.y += minf(drop, L * DROP_MAX)
 		rig.compute()
 	for leg in legs:
 		_solve_leg(leg)
