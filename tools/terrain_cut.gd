@@ -9,10 +9,11 @@ extends SceneTree
 ## 읽는 것: data/terrain/<지역>.json 의 "cut" 부분
 ##   sheet  : 시트 경로 (res:// — 익스펜션 폴더는 읽기만 한다)
 ##   alpha / gap : 조각 나누기 기준 (불투명 기준값, 이만큼 떨어진 덩어리까지 한 조각)
-##   pieces : [{name, role, src:[x,y,w,h], sheet?, scale?, walk?:[x0,x1], run?, keep?:"largest"|"all"}]
+##   pieces : [{name, role, src:[x,y,w,h], sheet?, scale?, walk?:[x0,x1], run?, keep?:"largest"|"all", clip?:[x,y,w,h]}]
 ##            src 는 시트 위의 대략적인 상자. 그 상자에 가장 많이 들어 있는 덩어리(+ 상자 안에 절반 넘게 든 덩어리)를 조각으로 쓴다.
 ##            scale 을 주면 그만큼 줄여서 넣는다 (아주 큰 그림 — 금 간 벽·가시).
 ##            walk 를 주면 자동으로 잰 '걷는 구간' 대신 그 값(조각 안 x, 원래 크기 px)을 쓴다.
+##            clip 을 주면 고른 덩어리의 상자를 그 사각형(시트 px) 안으로 줄인다 (붙은 옆 그림을 곧게 잘라 낼 때 — 다각형 자르기는 없다).
 ##            atlas: false 면 atlas 에 넣지 않는다 (몸통 결 재료로만 쓰는 큰 그림).
 ##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright}
 ##            from 조각들에서 나무껍질 색(hue·sat·val 범위)만 있는 작은 네모(patch)를 찾아 이어 붙여 size×size 무늬를 만든다.
@@ -713,7 +714,7 @@ func _pack() -> Dictionary:
 
 
 ## PNG 로 저장하고, 처음 저장하는 그림이면 밉맵을 켠 .import 를 같이 만든다 (줄여 보이는 지형이 지글거리지 않게).
-## vram: true 면 GPU 압축(아이폰 ASTC)으로 들여온다 — 큰 atlas 의 메모리를 약 1/4 로 (그림 결이 커서 압축 티가 거의 안 난다).
+## vram: true 면 GPU 압축(VRAM 압축 — 모바일 ETC2; high_quality 를 켜면 ASTC)으로 들여온다 — 큰 atlas 의 메모리를 약 1/4 로 (그림 결이 커서 압축 티가 거의 안 난다).
 func _save(img: Image, res_path: String, vram := false) -> void:
 	var abs := ProjectSettings.globalize_path(res_path)
 	DirAccess.make_dir_recursive_absolute(abs.get_base_dir())

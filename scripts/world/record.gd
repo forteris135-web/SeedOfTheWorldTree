@@ -6,18 +6,20 @@ class_name Record
 const DATA_PATH := "res://data/dialogue/records.json"
 
 @export var record_id := ""
-## 모양: poster(벽보) / book(책) / stone(비석) / note(쪽지) / page(찢긴 경전 조각 — 확장판)
-## 비석(stone)이 아니면 기획자가 준 양피지 그림(art/objects/record_parchment.png, tools/terrain_cut.gd _objects)을
-## 모양마다 크기·기울기를 달리해 쓴다. 경전 조각(page)은 살짝 떠서 흔들린다.
+## 모양: poster(벽보) / book(책) / stone(비석) / note(쪽지) / page(찢긴 경전 조각 — 확장판, 그림 object_scripture_page.png)
+## 벽보·책·쪽지는 기획자가 준 양피지 그림(art/objects/record_parchment.png, tools/terrain_cut.gd _objects)을
+## 모양마다 크기·기울기를 달리해 쓴다 (책 전용 그림이 오기 전까지 책은 바닥에 놓인 양피지).
+## 경전 조각(page)은 확장판 자리 그림(EXPANSION.md 10번, object_scripture_page.png)을 그대로 쓰고 살짝 떠서 흔들린다.
 @export_enum("poster", "book", "stone", "note", "page") var kind := "poster"
 
 const PARCHMENT := preload("res://art/objects/record_parchment.png")
-## 모양별 양피지: [가운데 자리, 높이 px, 기울기(도)]
+const PAGE_TEX := preload("res://art/objects/object_scripture_page.png")
+## 모양별 그림: [가운데 자리, 높이 px, 기울기(도)] (page 만 PAGE_TEX, 나머지는 양피지)
 const PARCHMENT_LOOK := {
 	"poster": [Vector2(0, -78), 112.0, -4.0],
 	"note": [Vector2(0, -44), 64.0, 9.0],
-	"book": [Vector2(0, -30), 70.0, -78.0],
-	"page": [Vector2(0, -72), 96.0, 6.0],
+	"book": [Vector2(0, -34), 62.0, 4.0],
+	"page": [Vector2(0, -68), 88.0, 0.0],
 }
 
 var _data := {}
@@ -52,11 +54,11 @@ func _ready() -> void:
 	if PARCHMENT_LOOK.has(kind):
 		var look: Array = PARCHMENT_LOOK[kind]
 		_sheet = Sprite2D.new()
-		_sheet.texture = PARCHMENT
+		_sheet.texture = PAGE_TEX if kind == "page" else PARCHMENT
 		_sheet.use_parent_material = true
 		_sheet.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		_sheet.position = look[0]
-		_sheet.scale = Vector2.ONE * (float(look[1]) / PARCHMENT.get_height())
+		_sheet.scale = Vector2.ONE * (float(look[1]) / _sheet.texture.get_height())
 		_sheet.rotation_degrees = float(look[2])
 		add_child(_sheet)
 
@@ -68,7 +70,7 @@ func _process(delta: float) -> void:
 		_prompt.text = "%s  읽기" % InputDevice.prompt("interact")
 	if _sheet and kind == "page":
 		_sheet.position = (PARCHMENT_LOOK["page"][0] as Vector2) + Vector2(0, sin(_t * 1.4) * 4.0)
-		_sheet.rotation_degrees = 6.0 + sin(_t * 0.9) * 3.0
+		_sheet.rotation_degrees = sin(_t * 0.9) * 3.0
 	queue_redraw()
 
 

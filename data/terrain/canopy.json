@@ -11,7 +11,7 @@
     "ground": {"band": 110, "fade": 50, "cap": 150, "overlap": 110, "caps": ["ground_a"]},
     "slab": {"max_w": 360},
     "branch": {"thin_poly": 110},
-    "thorn": {"tint": [0.92, 0.72, 0.64], "h_min": 1.6, "h_max": 2.3, "sink": 22}
+    "thorn": {"tint": [0.92, 0.72, 0.64], "reach_min": 0.9, "reach_max": 1.35, "sink": 22}
   },
   "ash": {
     "neutral": [[0.0, "#1d2026"], [0.25, "#4a4e56"], [0.55, "#8a8f97"], [0.8, "#c0c3c8"], [1.0, "#eaebed"]],

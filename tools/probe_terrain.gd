@@ -37,6 +37,8 @@ const COST_ROOMS := ["canopy_01", "mine_02", "village_02", "abyss_02", "canopy_b
 ## 그림 조각 지형 방 (수관)
 const ART_ROOMS := ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canopy_06", "canopy_07", "canopy_boss", "canopy_hidden", "canopy_hidden_1", "canopy_hidden_2", "canopy_mini_1", "canopy_mini_2"]
 const REPEAT := 5
+## 드러난 충돌 끝 밖 발 높이에 그림이 남아도 되는 거리 (px) — TerrainArt.CLIP_START 남짓
+const OVERHANG_MAX := 34.0
 
 var _fail := 0
 var _room: Node
@@ -690,11 +692,33 @@ func _probe_art_rooms(skin: TerrainSkin) -> void:
 	var tops_all: Array = []
 	var worst_cov := 1.0
 	var worst_name := ""
+	var ends_checked := 0
+	var over_bad := []
+	var over_all := []
+	var fill_bad := []
+	var tip_bad := []
+	var tip_worst := 0.0
+	var sink := float(skin.param("thorn", "sink", 10.0))
 	for id in ART_ROOMS:
 		var room := await _load_room(id)
 		var solids := _solids(room)
 		var bounds: Rect2 = room.get("bounds")
 		for t in room.get_node("Terrain").get_children():
+			# f) 몸통 결은 부모 묶음 맨 아래 겹 (나중 형제의 몸통이 앞 형제의 끝 조각을 덮지 않게)
+			var art_n = t.get("_art")
+			if art_n is TerrainArt and not (art_n as TerrainArt).fill_in_layer():
+				fill_bad.append("%s/%s" % [id, t.name])
+			# e) 드러난 끝 밖 발 높이에 남는 그림 (서지 못하는 자리가 발판처럼 보이지 않게)
+			if art_n is TerrainArt and not (t is SecretWall or t is CrackedWall):
+				for seg in _top_segments(t):
+					for side in [-1.0, 1.0]:
+						var far := _overhang(t, art_n, seg[0] if side < 0.0 else seg[1], side, solids, bounds)
+						if far < 0.0:
+							continue
+						ends_checked += 1
+						over_all.append([far, "%s/%s %s" % [id, t.name, "왼끝" if side < 0.0 else "오른끝"]])
+						if far > OVERHANG_MAX:
+							over_bad.append("%s/%s %s %.0fpx" % [id, t.name, "왼끝" if side < 0.0 else "오른끝", far])
 			if t is SecretWall or t is CrackedWall:
 				if t.get("_crack") == null and not (t.get("_broken") == true):
 					not_art.append("%s/%s" % [id, t.name])
@@ -736,9 +760,18 @@ func _probe_art_rooms(skin: TerrainSkin) -> void:
 					if th.get("_art") == null:
 						not_art.append("%s/%s" % [id, th.name])
 					var cs2: CollisionShape2D = _first_shape(th)
-					var want := Vector2(th.size.x - 8, th.size.y * 0.7)
-					if cs2 == null or (cs2.shape as RectangleShape2D).size != want or cs2.position != Vector2(th.size.x / 2.0, th.size.y * 0.65):
+					var hr := Thorns.hit_rect(th.size, th.facing_dir)
+					var old_rect := Vector2(th.size.x - 8, th.size.y * 0.7)
+					if cs2 == null or (cs2.shape as RectangleShape2D).size != hr.size or cs2.position != hr.get_center() or (th.facing_dir == 0 and hr.size != old_rect):
 						collider_bad.append("%s/%s(가시)" % [id, th.name])
+					# g) 가시 끝 높이: 그림 끝이 상자 위로 0.5h 넘게 솟지 않는다 (판정보다 훨씬 높은 가시를 발이 지나가 보이지 않게)
+					var ab := _art_bounds(th.get("_art"))
+					var lh := Thorns.frame_size(th.size, th.facing_dir)
+					var allowed := _thorn_allowed(th.size, th.facing_dir, sink)
+					var tip_up := -ab.position.y / lh.y if th.facing_dir == 0 else 0.0
+					tip_worst = maxf(tip_worst, tip_up)
+					if not allowed.encloses(ab) or ab.intersection(hr).get_area() < hr.get_area() * 0.95:
+						tip_bad.append("%s/%s 그림 %s 판정 %s" % [id, th.name, ab, hr])
 		await _free_room(room)
 	_check(not_art.is_empty(), "수관 %d곳: 지형·가시·비밀 벽이 모두 그림 조각 (아닌 것 %s)" % [ART_ROOMS.size(), not_art.slice(0, 8)])
 	_check(collider_bad.is_empty(), "수관 %d곳: 충돌 모양이 그대로 (다른 것 %s)" % [ART_ROOMS.size(), collider_bad.slice(0, 8)])
@@ -746,6 +779,69 @@ func _probe_art_rooms(skin: TerrainSkin) -> void:
 	tops_all.sort()
 	var med_all: float = tops_all[tops_all.size() / 2] if not tops_all.is_empty() else 0.0
 	_check(top_bad.is_empty(), "드러난 윗면 %d곳: 그림 윗선(빽빽한 윗면)이 충돌 윗면 ±10px 안 (전체 중앙값 %+.0fpx, 범위 %+.0f~%+.0f) %s" % [tops_checked, med_all, tops_all[0] if not tops_all.is_empty() else 0.0, tops_all[-1] if not tops_all.is_empty() else 0.0, top_bad.slice(0, 6)])
+	over_all.sort_custom(func(x, y): return x[0] > y[0])
+	if "--verbose" in OS.get_cmdline_user_args():
+		for r in over_all.slice(0, 12):
+			print("[probe]   끝 밖 그림 %3.0fpx  %s" % [r[0], r[1]])
+	_check(ends_checked > 100 and over_bad.is_empty(), "드러난 충돌 끝 %d곳: 끝 밖 발 높이(윗면 +2·+8px)에 그림이 %.0fpx 넘게 남지 않는다 (가장 긴 %s) %s" % [ends_checked, OVERHANG_MAX, ("%.0fpx %s" % [over_all[0][0], over_all[0][1]]) if not over_all.is_empty() else "-", over_bad.slice(0, 6)])
+	_check(fill_bad.is_empty(), "몸통 결은 지형 묶음 맨 아래 겹에 그린다 (모든 몸통 → 모든 조각; 아닌 것 %s)" % [fill_bad.slice(0, 6)])
+	_check(tip_bad.is_empty(), "방의 가시: 그림이 판정을 덮고, 끝이 상자 위로 0.5h 넘게 솟지 않는다 (가장 높은 %.2fh) %s" % [tip_worst, tip_bad.slice(0, 4)])
+
+
+## 윗면 끝 e(노드 좌표)가 드러난 끝이면 그 밖 발 높이(윗면 +2·+8px)에서 이 노드의 조각 그림(알파 0.5 넘음)이 이어지는 거리(px),
+## 드러난 끝이 아니면(다른 지형이 이어지거나 방 밖) −1.
+func _overhang(t: Node2D, art: TerrainArt, e: Vector2, side: float, solids: Array, bounds: Rect2) -> float:
+	var ge := t.global_position + e
+	var probe := ge + Vector2(side * 6.0, 6.0)
+	if _inside_other(solids, null, probe) != "" or not bounds.has_point(probe):
+		return -1.0
+	var near: Array = []
+	for tr in _atlas_tris(art):
+		var bb: Rect2 = tr[3]
+		if bb.end.y >= e.y - 2.0 and bb.position.y <= e.y + 10.0 and bb.end.x >= e.x - 270.0 and bb.position.x <= e.x + 270.0:
+			near.append(tr)
+	var far := 0.0
+	var d := 6.0
+	while d <= 260.0:
+		var p := e + Vector2(side * d, 8.0)
+		if _inside_other(solids, null, t.global_position + p) != "":
+			break
+		if maxf(_alpha_at(near, p), _alpha_at(near, p + Vector2(0, -6))) > 0.5:
+			far = d
+		d += 4.0
+	return far
+
+
+## 조각 그림이 그려지는 상자 (노드 좌표, 거의 투명한 꼭짓점은 뺀다)
+func _art_bounds(art: TerrainArt) -> Rect2:
+	if art == null:
+		return Rect2()
+	var b: Dictionary = art._bufs[TerrainArt.BUF_ATLAS]
+	var pts: PackedVector2Array = b["pts"]
+	var cols: PackedColorArray = b["cols"]
+	var xf := art.transform
+	var out := Rect2()
+	var first := true
+	for i in pts.size():
+		if cols[i].a < 0.02:
+			continue
+		var q := xf * pts[i]
+		if first:
+			out = Rect2(q, Vector2.ZERO)
+			first = false
+		else:
+			out = out.expand(q)
+	return out
+
+
+## 가시 그림이 있어도 되는 상자 (노드 좌표): 길이 쪽 양 끝 26px, 밑동 쪽 sink+4px, 끝 쪽 0.5H 까지.
+func _thorn_allowed(sz: Vector2, facing: int, sink: float) -> Rect2:
+	var lh := Thorns.frame_size(sz, facing)
+	var local := Rect2(-26.0, -lh.y * 0.5, lh.x + 52.0, lh.y * 1.5 + sink + 4.0)
+	var xf := Thorns.frame_of(sz, facing)
+	var a := xf * local.position
+	var b := xf * local.end
+	return Rect2(Vector2(minf(a.x, b.x), minf(a.y, b.y)), (b - a).abs())
 
 
 func _first_shape(n: Node) -> CollisionShape2D:
@@ -881,32 +977,60 @@ static func _bary(p: Vector2, a: Vector2, b: Vector2, c: Vector2) -> Vector3:
 	return Vector3(1.0 - v - w, v, w)
 
 
-## 가시 방향 (위·아래·왼쪽·오른쪽): 그림이 돌아가 밑동이 반대쪽 면에 붙는다. 판정은 그대로.
+## 가시 방향 (위·아래·왼쪽·오른쪽): 옆을 향하면 가시가 세로로 늘어서고, 판정도 같은 쪽(밑동 쪽 70%)에 놓인다.
+## 그림 상자가 판정을 덮고, 노드 상자에서 크게 벗어나지 않는지(길이 쪽 26px, 밑동 쪽 sink+4, 끝 쪽 0.5H) 잰다.
 func _probe_thorn_facing() -> void:
 	var fake := FakeRoom.new()
 	fake.region = "canopy"
 	add_child(fake)
+	var skin := TerrainSkin.for_region("canopy")
+	var sink := float(skin.param("thorn", "sink", 10.0)) if skin else 10.0
+	var cases := [[Vector2(240, 60), 0], [Vector2(240, 60), 1], [Vector2(60, 240), 2], [Vector2(60, 240), 3], [Vector2(300, 60), 1], [Vector2(60, 300), 2], [Vector2(60, 300), 3], [Vector2(300, 60), 3]]
 	var made := []
-	for f in 4:
+	for i in cases.size():
 		var t := Thorns.new()
-		t.size = Vector2(240, 60)
-		t.facing_dir = f
-		t.position = Vector2(0, 300 * f)
+		t.size = cases[i][0]
+		t.facing_dir = cases[i][1]
+		t.position = Vector2(0, 500 * i)
 		fake.add_child(t)
 		made.append(t)
 	await _frames(1)
-	var rots := []
-	var ok := true
-	for t in made:
+	var bad := []
+	for i in made.size():
+		var t: Thorns = made[i]
 		var art: TerrainArt = t.get("_art")
+		var tag := "%s 방향%d" % [t.size, t.facing_dir]
 		if art == null or art.triangle_count() == 0:
-			ok = false
+			bad.append(tag + " 그림 없음")
 			continue
-		rots.append(int(round(rad_to_deg(art.rotation))))
 		var cs := _first_shape(t)
-		if cs == null or (cs.shape as RectangleShape2D).size != Vector2(232, 42):
-			ok = false
-	_check(ok and rots == [0, 180, -90, 90], "가시 네 방향 모두 그림 조각, 회전 %s, 판정 그대로" % [rots])
+		var hr := Thorns.hit_rect(t.size, t.facing_dir)
+		if cs == null or (cs.shape as RectangleShape2D).size != hr.size or cs.position != hr.get_center():
+			bad.append(tag + " 판정 자리 다름")
+			continue
+		# 판정은 밑동 쪽 면에 붙는다
+		var base_ok := false
+		match t.facing_dir:
+			0: base_ok = is_equal_approx(hr.end.y, t.size.y)
+			1: base_ok = is_zero_approx(hr.position.y)
+			2: base_ok = is_equal_approx(hr.end.x, t.size.x)
+			3: base_ok = is_zero_approx(hr.position.x)
+		var ab := _art_bounds(art)
+		var allowed := _thorn_allowed(t.size, t.facing_dir, sink)
+		var cover := ab.intersection(hr).get_area() / maxf(hr.get_area(), 1.0)
+		if not base_ok or not allowed.encloses(ab) or cover < 0.95:
+			bad.append("%s 그림 %s 판정 %s 덮음 %.0f%%" % [tag, ab, hr, cover * 100.0])
+	_check(bad.is_empty(), "가시 네 방향(가로·세로 상자 %d가지): 그림이 판정을 덮고 상자 둘레를 벗어나지 않음, 판정은 밑동 쪽 %s" % [cases.size(), bad.slice(0, 4)])
+	# 옛 방식(코드로 그리기)도 같은 틀로 돌려 그린다 — 오류 없이 그려지는지만
+	TerrainSkin.enabled = false
+	var legacy := Thorns.new()
+	legacy.size = Vector2(60, 240)
+	legacy.facing_dir = 2
+	fake.add_child(legacy)
+	await _frames(2)
+	TerrainSkin.enabled = true
+	var lcs := _first_shape(legacy)
+	_check(legacy.get("_art") == null and lcs != null and lcs.position == Thorns.hit_rect(legacy.size, 2).get_center(), "옛 방식 가시도 방향대로 판정 (왼쪽을 향하면 오른쪽 면에)")
 	fake.queue_free()
 	await _frames(1)
 
@@ -1025,8 +1149,16 @@ func _probe_record() -> void:
 	var st := Record.new()
 	st.kind = "stone"
 	holder.add_child(st)
+	var pg := Record.new()
+	pg.kind = "page"
+	holder.add_child(pg)
+	var bk := Record.new()
+	bk.kind = "book"
+	holder.add_child(bk)
 	await _frames(1)
 	_check(rec._sheet != null and rec._sheet.texture == Record.PARCHMENT, "기록물(쪽지)은 양피지 그림")
 	_check(st._sheet == null, "비석은 그대로 돌")
+	_check(pg._sheet != null and pg._sheet.texture == Record.PAGE_TEX, "경전 조각(page)은 확장판 자리 그림 object_scripture_page.png")
+	_check(bk._sheet != null and absf(bk._sheet.rotation_degrees) < 20.0, "책(book) 양피지는 옆으로 눕지 않는다 (기울기 %.0f도)" % (bk._sheet.rotation_degrees if bk._sheet else 0.0))
 	holder.queue_free()
 	await _frames(1)
