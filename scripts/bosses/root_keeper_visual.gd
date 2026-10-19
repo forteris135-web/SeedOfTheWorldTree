@@ -1,75 +1,93 @@
 extends Sprite2D
-## 뿌리지기의 그림. 몸통(art/bosses/parts/boss_rootkeeper_body.png)과 지팡이(…_staff.png) 두 겹 — tools/cut_boss_parts_root.gd 로 잘랐다.
-## 원칙: 자세 값은 절대 '툭' 바뀌지 않는다. 매 프레임 '목표 자세'를 정하고 Motion.damp(프레임 독립)로 쫓는다.
-## 그 위에 '충격 스프링'(지팡이 내리꽂기·벽 돌진 멈춤·휘청·피격)이 한 겹 더 얹힌다.
-## 공격은 세 박자(예비 → 타격 → 되돌림)로, 진행도는 보스가 공개한 단계 길이로 계산한다.
-## 지팡이는 몸통 스프라이트의 자식: 손잡이(쥔 손)를 축으로 돌고(ang), 축이 자루를 따라 미끄러지며(pivot: 휘두를 때 자루 아래쪽을 고쳐 쥠),
-## 손이 앞뒤·위아래로 내밀어진다(reach). 휘두를 때 보랏빛 호 궤적(_trail)과 잔상(몸통+지팡이)을 남긴다. 등불 빛은 지팡이 고리에 매달려 흔들린다.
-## 붉은 예고(_draw_marks): 가시 바닥 사각형(+가시 높이만큼 옅은 기둥)·휘두르기 부채꼴(판정 사각형 sweep_reach 를 덮음)·구슬 고리·뿌리 벽 띠·뿌리 손 타원·달빛 고리 원·내려찍기 띠.
-##   가드 가능 = 주황빛(GUARD_C), 가드 불가 = 진한 붉은색 깜빡임(RED_C, 초당 RootKeeper.TELEGRAPH_BLINK_HZ 번). 세기 조절 상수는 아래 TG_* 참고.
-##   예고 층은 보스 씬의 Marks 노드(보스 그림보다 먼저 = 보스 뒤, 소녀보다 먼저 = 소녀 뒤, 지형·배경보다는 위)에 그린다.
-## 그림은 정면이라 뒤집기는 의미가 적다. 지팡이가 오른손이므로 기울기 부호만 바라보는 쪽으로 자연스럽게 둔다.
+## 뿌리지기의 그림 — 부위 뼈대(PartRig: art/rigs/root_keeper, 설계도 data/rigs/root_keeper.json) + 움직임 층(RigMotion,
+## 원형 자세 data/rigs/_archetypes/root_keeper.json). 2026-10-20 개편: 예전엔 몸통 한 장 + 지팡이 한 장을 통째로 기울이고 늘여서
+## 땅에서 떠 보이거나 판자처럼 넘어졌다. 이제 치마·몸통·머리·두 팔(위팔·아래팔·손)·지팡이·소매·뿌리 발이 관절로 움직인다.
+##  - 뿌리 발 두 개(foot_f·foot_b)가 땅을 딛는다: 걸으면 번갈아 뿌리를 떼어 옮기고(디딘 뿌리는 미끄러지지 않음), 서 있을 땐 움켜쥔다.
+##    다리(허벅지·정강이)는 치마 속에 숨은 뼈라 보이지 않고, 치마 자락(부드러운 부위)은 땅에 닿으면 눌려 접혀 늘 땅에 붙어 있다.
+##  - 공격은 세 박자(예비 멈칫 → 빠른 타격과 지나침 → 출렁이며 돌아옴). 진행도는 보스가 공개한 단계(attack_phase·phase_progress)라
+##    단계 길이가 바뀌어도(2페이즈 0.7배) 모양이 같다. 판정·시간은 보스 스크립트 그대로 — 그림이 따라간다.
+##  - 휘두르기는 손이 자루 아래쪽을 고쳐 쥐어(slide 채널, 지팡이가 손 안에서 미끄러짐) 지팡이 머리가 크게 호를 그린다.
+##  - 무너짐(RISE)·쓰러짐(FALLEN): 치마가 구겨지며 몸이 내려앉고(무릎이 꺾이듯) 윗몸이 앞으로 접혀 땅에 엎드린다. 뿌리는 땅에 남는다.
+##    쓰러짐은 그 자세로 정화를 기다리고, 정화되면 윗몸을 들고 고요해진다(빛이 된다).
+## 공개 함수(보스·시험이 부른다): head_world()(지팡이 머리 = 구슬·씨앗 예고 자리), sweep_fan(st)(휘두르기 붉은 부채꼴).
+## 붉은 예고(_draw_marks)는 예전 그대로 보스 씬의 Marks 노드(보스·소녀 뒤)에 그린다:
+##   가드 가능 = 주황빛(GUARD_C), 가드 불가 = 진한 붉은색 깜빡임(RED_C, 초당 RootKeeper.TELEGRAPH_BLINK_HZ 번).
+## 이 노드는 시험이 Sprite2D 로 읽어서 Sprite2D 로 두되 그림(texture)은 없다 — 부위 그림은 자식 PartRig 가 그린다.
 
-## 자세 묶음: (기울기, 가로 찌그러짐, 세로 찌그러짐, 세로 오프셋)
-const NEUTRAL := Vector4(0.0, 1.0, 1.0, 0.0)
-const STRIDE := 120.0
-## 지팡이 자세 묶음: (앞으로 기운 각도 rad, 축 위치 0~1(위 끝→아래 끝), 손 앞으로 내밀기 px, 손 위로 올리기 px) — 원본 px 기준
-const STAFF_NEUTRAL := Vector4(0.0, 0.344, 0.0, 0.0)
-## 지팡이 조각 (tools/cut_boss_parts_root.gd 의 값)
-const STAFF_TEX := preload("res://art/bosses/parts/boss_rootkeeper_staff.png")
-const TEX_SIZE := Vector2(1024, 1536)
-const STAFF_POS := Vector2(698, 60)
-const GRIP := Vector2(828, 590)
-const STAFF_TOP := Vector2(880, 100)
-const STAFF_BOTTOM := Vector2(745, 1525)
-const HOOK := Vector2(872, 338)
+const RIG_ID := "root_keeper"
 ## 예고 색과 세기
 const GUARD_C := Color(1.0, 0.5, 0.15)
 const RED_C := Color(1.0, 0.1, 0.08)
 const RED_BODY := Color(1.6, 0.45, 0.4)   # 가드 불가 예고 때 몸이 물드는 색 (너무 밝으면 글로우로 번진다)
 const TRAIL_LIFE := 0.28   # 지팡이 호 궤적이 남는 시간
 const TRAIL_C := Color(0.7, 0.45, 1.0)
+## 손이 자루를 따라 미끄러지는 길이 (시트 px, slide 채널 1 일 때): 휘두를 때 자루 아래쪽을 쥔다
+const SLIDE_PX := 330.0
+## 지팡이 위 자리 (시트 px → 지팡이 뼈 틀). 설계도 sockets 에 있다: staff_head(달 원반), lantern(등불), staff_mid(자루 가운데)
+const GHOST_INTERVAL := 0.03
+## 방향 전환: 보이는 폭이 +1 → 0 → −1 로 지나가는 빠르기
+const TURN_SPEED := 16.0
+## 쓰러짐(FALLEN): 주저앉는 시간 / 엎드려 눕는 시간 (초)
+const FALL_KNEES := 0.55
+const FALL_LIE := 0.75
+## 다시 일어섬(RISE, 3초)의 앞부분(무너짐) 몫
+const RISE_COLLAPSE := 0.3
 
+var rig: PartRig
+var motion: RigMotion
+## 확인 도구용: 이름을 넣으면 상태와 상관없이 그 자세로 선다 (tools/root_keeper_film.gd 의 --poses)
+var debug_pose := ""
 var _boss: RootKeeper
 var _t := 0.0
-var _base_scale := Vector2.ONE
-var _base_pos := Vector2.ZERO
 var _marks: Node2D
-var _staff: Sprite2D
 var _trail: Node2D
 var _trail_pts: Array = []   # [tip(world), mid(world), 시각]
-
-var _pose := NEUTRAL
-var _staff_pose := STAFF_NEUTRAL
-var _imp := 0.0
-var _imp_v := 0.0
-var _kick := 0.0
-var _kick_v := 0.0
-var _face := -1.0
-var _red := 0.0
-var _dist := 0.0
-var _last_step := 0
+var _mir := RigMotion.Chan.new(-1.0)
+var _last_mir_sign := -1.0
+var _entered := -1
+var _state_from := {}       # 상태(또는 공격 단계)에 들어설 때 보이던 자세
 var _prev_phase := ""
 var _prev_hint := ""
 var _prev_flash := 0.0
 var _prev_vx := 0.0
-var _rise_from := NEUTRAL   # RISE 에 들어선 순간의 자세 (거기서 이어서 쓰러진다)
-var _staff_rise_from := STAFF_NEUTRAL
-var _dust: CPUParticles2D
-var _ghosts: Array = []   # [몸통 Sprite2D, 지팡이 Sprite2D]
+var _last_x := 0.0
+var _state_t := 0.0         # 지금 상태에 머문 시간 (FALLEN·PURIFIED·INTRO 연출)
+var _staff_i := -1
+var _staff_axis := Vector2.DOWN   # 지팡이 축 방향 (손 뼈 틀)
+var _staff_bones := PackedInt32Array()   # 지팡이 땅 막기로 지키는 부위 (staff·staff_lo)
+var _sock := {}             # 이름 → [뼈 번호, 뼈 틀 자리]
 var _ghost_timer := 0.0
-# 지팡이 등불 빛: 고리에 매달려 한 박자 늦게 흔들린다
+var _dust: CPUParticles2D
+var _red := 0.0
+var _thud_done := false
+var _rise_steps := 0
+var _surge_t := 0.0
+var _ready_ok := false
+# 지팡이 등불 빛 (등불 부위를 따라간다)
 var _light: PointLight2D
-var _lamp := 0.0
-var _lamp_v := 0.0
-var _hook_prev := Vector2.ZERO
 
 
 func _ready() -> void:
+	texture = null
 	_boss = get_parent() as RootKeeper
-	_base_scale = scale
-	_base_pos = position
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	rig = PartRig.new()
+	rig.name = "Rig"
+	add_child(rig)
+	if not rig.build(RIG_ID):
+		return
+	motion = RigMotion.new(rig)
+	rig.setup_ghosts(rig.data.get("ghost", []), 6)
+	_staff_i = rig.bone_index("staff")
+	if _staff_i >= 0:
+		# 지팡이 축(뼈 틀 아래쪽)을 손(부모) 틀로: 손 안에서 자루를 따라 미끄러지는 방향
+		_staff_axis = Vector2.DOWN.rotated(rig.rest[_staff_i])
+		for nm in ["staff", "staff_lo"]:
+			if rig.has_bone(nm):
+				_staff_bones.append(rig.bone_index(nm))
+	for sname in rig.data.get("sockets", {}):
+		var sd: Dictionary = rig.data["sockets"][sname]
+		_sock[sname] = [rig.bone_index(str(sd["bone"])), PartRig._v(sd["pos"])]
 	# 예고 자국 (월드 좌표). 보스 씬의 Marks 노드: 트리 순서상 지형 뒤·보스 그림 앞·소녀 앞이라
 	# 배경·지형 위, 보스와 소녀 아래에 그려진다 (몸 그림의 붉은 깜빡임 modulate 도 물려받지 않는다).
 	_marks = get_parent().get_node_or_null("Marks") as Node2D if get_parent() else null
@@ -78,13 +96,6 @@ func _ready() -> void:
 		_marks.top_level = true
 		add_child(_marks)
 	_marks.draw.connect(_draw_marks)
-	# 지팡이
-	_staff = Sprite2D.new()
-	_staff.texture = STAFF_TEX
-	_staff.centered = false
-	_staff.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	add_child(_staff)
-	_apply_staff(STAFF_NEUTRAL, 0.0)
 	# 호 궤적 (월드 좌표, 더하기 혼합)
 	_trail = Node2D.new()
 	_trail.top_level = true
@@ -93,10 +104,6 @@ func _ready() -> void:
 	_trail.material = add
 	_trail.draw.connect(_draw_trail)
 	add_child(_trail)
-	if _boss:
-		_face = float(_boss.facing)
-		_boss.state_changed.connect(_on_state_changed)
-		_light = _boss.get_node_or_null("Light") as PointLight2D
 	_dust = CPUParticles2D.new()
 	_dust.top_level = true
 	_dust.emitting = false
@@ -112,351 +119,512 @@ func _ready() -> void:
 	_dust.scale_amount_min = 3.0
 	_dust.scale_amount_max = 7.0
 	_dust.color = Color(0.55, 0.5, 0.6, 0.5)
+	_dust.texture = _soft_dot()
+	_dust.scale_amount_min = 0.25
+	_dust.scale_amount_max = 0.6
 	add_child(_dust)
-	for i in 4:
-		var g := Sprite2D.new()
-		g.texture = texture
-		g.top_level = true
-		g.visible = false
-		g.show_behind_parent = true
-		g.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		add_child(g)
-		var gs := Sprite2D.new()
-		gs.texture = STAFF_TEX
-		gs.centered = false
-		gs.top_level = true
-		gs.visible = false
-		gs.show_behind_parent = true
-		gs.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		add_child(gs)
-		_ghosts.append([g, gs])
+	if _boss:
+		_mir.v = float(_boss.facing)
+		_last_mir_sign = signf(_mir.v)
+		_last_x = _boss.global_position.x
+		_boss.state_changed.connect(_on_state_changed)
+		_light = _boss.get_node_or_null("Light") as PointLight2D
+	_state_from = motion.pose("idle")
+	motion.snap_feet()
+	_ready_ok = true
+
+
+## 먼지 알갱이 그림: 둥글고 가장자리가 부드러운 점 (기본 네모 알갱이는 가까이서 네모로 보였다). 한 번 만들어 둔다.
+static var _dot: Texture2D
+static func _soft_dot() -> Texture2D:
+	if _dot == null:
+		var grad := Gradient.new()
+		grad.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+		grad.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.6), Color(1, 1, 1, 0)])
+		var gt := GradientTexture2D.new()
+		gt.gradient = grad
+		gt.width = 24
+		gt.height = 24
+		gt.fill = GradientTexture2D.FILL_RADIAL
+		gt.fill_from = Vector2(0.5, 0.5)
+		gt.fill_to = Vector2(1.0, 0.5)
+		_dot = gt
+	return _dot
 
 
 func _on_state_changed(st: RootKeeper.State) -> void:
-	match st:
-		RootKeeper.State.RISE:
-			_rise_from = _pose
-			_staff_rise_from = _staff_pose
-			_jolt(1.2, -1.5)
-			_puff(14, 0.0)
-		RootKeeper.State.BROKEN:
-			_jolt(1.4, 3.0)
-			_puff(10, 0.0)
-		RootKeeper.State.FALLEN:
-			_jolt(2.2, 2.0)
-			_puff(16, 0.0)
+	_entered = st
 
 
-## 충격: squash 양수 = 눌림, kick = 기울기 충격(바라보는 방향 기준, 양수 = 앞으로)
-func _jolt(squash: float, kick: float) -> void:
-	_imp_v += squash
-	_kick_v += (kick * float(_boss.facing)) if _boss else kick
+# ---------- 공개 ----------
 
+## 지팡이 머리(달 원반)의 월드 좌표 — 구슬·씨앗 예고 고리가 여기 뜬다 (보스의 orb_origin 이 읽는다)
+func head_world() -> Vector2:
+	return socket_world("staff_head")
+
+
+## 설계도 sockets 의 자리를 월드 좌표로 (없으면 보스 머리 위)
+func socket_world(sname: String) -> Vector2:
+	if rig == null or not _sock.has(sname):
+		return global_position + Vector2(0, -300)
+	var s: Array = _sock[sname]
+	return rig.to_global(rig.to_rig_local(rig.xf[s[0]] * (s[1] as Vector2)))
+
+
+# ---------- 매 프레임 ----------
 
 func _process(delta: float) -> void:
-	_t += delta
-	if _boss == null:
+	if not _ready_ok or _boss == null:
 		return
-	var f := float(_boss.facing)
+	_t += delta
+	_state_t += delta
 	var st := _boss.state
 	var ph := _boss.attack_phase
-	var speed := absf(_boss.velocity.x)
+	var gs := rig.game_scale
 
-	# ---- 일회성 사건 ----
+	# 방향 전환: 보이는 폭이 +1 → 0 → −1 을 지나며 돈다 (0 인 순간 딛은 발을 뒤집는다)
+	_mir.damp(float(_boss.facing), TURN_SPEED, delta)
+	var ms := signf(_mir.v) if _mir.v != 0.0 else _last_mir_sign
+	if ms != _last_mir_sign:
+		motion.flip_feet()
+		_last_mir_sign = ms
+	var fvis := _last_mir_sign
+
+	# 상태·단계 진입 (그 순간 보이던 자세에서 출발한다)
+	if _entered >= 0:
+		_on_entered(_entered)
+		_entered = -1
 	if ph != _prev_phase:
-		if ph == "active":
-			match st:
-				RootKeeper.State.SPIKES:
-					_jolt(1.6, 0.6)
-					_puff(12, 0.0)
-				RootKeeper.State.SWEEP:
-					_puff(5, -f * 30.0)
-				RootKeeper.State.SWEEP2:
-					_puff(5, f * 30.0)
-				RootKeeper.State.WALL:
-					_jolt(-0.6, 0.0)
-				RootKeeper.State.HAND:
-					_jolt(1.4, 0.8)
-					_puff(10, 0.0)
-				RootKeeper.State.SEEDS:
-					_jolt(-0.5, -0.3)
-				RootKeeper.State.STOMP:
-					_jolt(2.4, 0.4)
-					_puff(24, 0.0)
+		_on_phase(st, ph)
 		_prev_phase = ph
 	if _boss.anim_hint == "stagger" and _prev_hint != "stagger":
-		_jolt(-0.9, -4.5)
+		# 저스트 가드로 지팡이가 튕겼다: 휘두르던 속도를 뒤집고 팔이 뒤로 튄다
+		motion.scale_velocity(motion.parry_bounce, -0.35)
+		motion.kick("parry", 240.0)
+		motion.kick("impact", 90.0)
 	_prev_hint = _boss.anim_hint
 	var fl := _boss.flash_amount()
-	if fl > _prev_flash + 0.4 and st not in [RootKeeper.State.BROKEN, RootKeeper.State.FALLEN, RootKeeper.State.RISE]:
-		_jolt(0.3, -1.0)
+	if fl > _prev_flash + 0.4 and st not in [RootKeeper.State.BROKEN, RootKeeper.State.FALLEN, RootKeeper.State.RISE, RootKeeper.State.PURIFIED]:
+		motion.kick("impact", 70.0)
+		motion.kick("crouch", 0.12)
 	_prev_flash = fl
 	# 벽 돌진이 벽에 막혀 멈출 때: 앞으로 쏠린 몸이 튕긴다
+	var speed := absf(_boss.velocity.x)
 	if st == RootKeeper.State.WALL and absf(_prev_vx) > 600.0 and speed < 50.0:
-		_jolt(1.2, 2.5)
-		_puff(14, f * 60.0)
+		motion.kick("impact", 140.0)
+		motion.kick("crouch", 0.5)
+		_puff(14, float(_boss.facing) * 60.0)
 	_prev_vx = _boss.velocity.x
 
-	# ---- 목표 자세 (몸통·지팡이) ----
-	var target := NEUTRAL
-	var staff := STAFF_NEUTRAL
-	var follow := 9.0
-	var sfollow := 8.0
+	# 몸이 간 거리 (뼈대 단위, 보이는 방향 기준 + = 앞)
+	var dxw := _boss.global_position.x - _last_x
+	_last_x = _boss.global_position.x
+	if absf(dxw) > 200.0:
+		dxw = 0.0   # 순간 이동 (싸움 시작·되돌리기)
+		motion.snap_feet()
+	var dx_rig := dxw / gs * fvis
+	var speed_rig := _boss.velocity.x / gs * fvis
+
+	# ---- 자세 ----
+	var p := {}
+	var drive := RigMotion.Drive.NORMAL
+	var feet := RigMotion.Feet.POSE
 	var ghost := false
 	var trail := false
-	target.z += Motion.breathe(_t, 0.2, 0.012)
-	target.w += Motion.breathe(_t, 0.2, 3.0)
-	staff.x += Motion.breathe(_t + 0.4, 0.2, 0.025)
+	var breath := 1.0
+	var lock := 0.0
+	var settle := 0.0
+	var tremor := 0.0
+	var surge := false
 	match st:
-		RootKeeper.State.STANCE, RootKeeper.State.INTRO:
-			# 느린 걸음: 거리 기준 들썩임, 기울기는 실제 이동 방향
-			_dist += speed * delta
-			var amount := clampf(speed / _boss.walk_speed, 0.0, 1.2)
-			var bob := Motion.step_bob(_dist, STRIDE)
-			target.w += -bob * 5.0 * amount
-			target.x = 0.02 * f + 0.04 * amount * signf(_boss.velocity.x)
-			staff.x += -0.06 * amount * signf(_boss.velocity.x) * f
-			staff.w += bob * 10.0 * amount
-			var step := int(floor(_dist / STRIDE))
-			if step != _last_step:
-				_last_step = step
-				if amount > 0.3:
-					_puff(3, 0.0)
-					_imp_v += 0.25 * amount
+		RootKeeper.State.WAIT:
+			p = motion.pose("idle")
+		RootKeeper.State.INTRO:
+			# 고개 숙여 웅크린 채 → 천천히 일어서고 → 지팡이를 땅에 짚는다 (2.6초)
+			var k := _state_t / 2.6
+			p = motion.mix(motion.pose("intro_bow"), motion.pose("idle"), Motion.ease_in_out(clampf((k - 0.15) / 0.6, 0.0, 1.0)))
+			drive = RigMotion.Drive.SOFT
+			breath = 0.4
+		RootKeeper.State.STANCE:
+			p = _stance_pose(speed_rig)
+			feet = RigMotion.Feet.GAIT
+			breath = 1.0 if speed < 20.0 else 0.4
 		RootKeeper.State.SPIKES:
-			# 지팡이를 높이 들어 올리고(몸이 늘어남) → 땅에 내리꽂기(눌림) → 되돌림
-			target = _three_beat(Vector4(-0.1 * f, 0.96, 1.06, -28.0), Vector4(0.08 * f, 1.1, 0.93, 14.0), 0.55)
-			staff = _staff_beat(Vector4(-0.4, 0.344, -40.0, 300.0), Vector4(0.14, 0.3, 80.0, -150.0), 0.55)
-			if ph == "active":
-				staff.x += sin(_t * 50.0) * 0.03
-			follow = _beat_follow()
-			sfollow = _staff_follow()
+			p = _beat("spike_up", "spike_down", "idle", 0.5)
+			drive = _beat_drive()
+			breath = 0.0
 		RootKeeper.State.SWEEP:
-			# 자루 아래쪽을 고쳐 쥐고(pivot 0.72) 머리 쪽을 뒤로 들어 올렸다가 앞으로 크게 쓸어 내린다
-			target = _three_beat(Vector4(-0.26 * f, 0.96, 1.05, -8.0), Vector4(0.34 * f, 1.13, 0.93, 6.0), 0.75)
-			staff = _staff_beat(Vector4(-0.95, 0.72, -80.0, 140.0), Vector4(2.05, 0.72, 260.0, -60.0), 0.75)
-			follow = _beat_follow()
-			sfollow = _staff_follow()
+			p = _beat("sweep_up", "sweep_hit", "sweep_ready", 1.0)
+			drive = _beat_drive()
 			ghost = ph == "active"
 			trail = ph == "active" or (ph == "recovery" and _boss.phase_progress() < 0.25)
+			breath = 0.0
 		RootKeeper.State.SWEEP2:
-			# 되돌려 베기 = 앞에서 올려 베기: 쓸어 내린 지팡이 머리를 땅 가까이 더 낮췄다가(몸 숙임) 앞쪽 아래 → 앞쪽 위로 쳐올린다.
-			# 지팡이 머리가 타격 내내 보스 앞에 있어 판정(앞쪽)과 그림 방향이 같다.
-			target = _three_beat(Vector4(0.32 * f, 1.1, 0.94, 10.0), Vector4(-0.14 * f, 0.97, 1.06, -12.0), 0.75)
-			staff = _staff_beat(Vector4(2.45, 0.72, 270.0, -40.0), Vector4(0.75, 0.72, 300.0, 200.0), 0.75)
-			follow = _beat_follow()
-			sfollow = _staff_follow()
+			p = _beat("sweep2_low", "sweep2_hit", "sweep_ready", 1.0)
+			drive = _beat_drive()
 			ghost = ph == "active"
 			trail = ph == "active" or (ph == "recovery" and _boss.phase_progress() < 0.25)
+			breath = 0.0
 		RootKeeper.State.ORBS:
-			# 지팡이 끝을 앞으로 내밀어 구슬을 빚는다
-			target = _three_beat(Vector4(-0.1 * f, 0.98, 1.03, -12.0), Vector4(-0.06 * f, 1.0, 1.02, -10.0), 0.8)
-			staff = _staff_beat(Vector4(0.6, 0.5, 110.0, 210.0), Vector4(1.05, 0.5, 190.0, 240.0), 0.8)
-			follow = _beat_follow()
-			sfollow = _staff_follow()
+			p = _beat("orb_charge", "orb_cast", "idle", 0.6)
+			drive = _beat_drive()
+			if ph == "startup":
+				tremor = clampf((_boss.phase_progress() - 0.5) / 0.5, 0.0, 1.0) * 0.6
+			breath = 0.0
 		RootKeeper.State.WALL:
-			# 뒤로 물러 몸을 모았다가 지팡이를 창처럼 눕히고 앞으로 쏠리며 돌진 (잔상)
-			target = _three_beat(Vector4(-0.2 * f, 0.95, 1.06, -6.0), Vector4(0.38 * f, 1.2, 0.9, 8.0), 0.45)
-			staff = _staff_beat(Vector4(-0.3, 0.6, -50.0, 60.0), Vector4(1.45, 0.6, 220.0, 120.0), 0.45)
+			p = _beat("wall_gather", "wall_charge", "idle", 0.25)
+			drive = _beat_drive()
 			if ph == "startup":
-				target.x += sin(_t * 40.0) * 0.015 * clampf((_boss.phase_progress() - 0.5) / 0.5, 0.0, 1.0)
-			elif ph == "active":
-				target.x += clampf(_boss.velocity.x / 4000.0, -0.2, 0.2)
-			follow = _beat_follow()
-			sfollow = _staff_follow()
-			ghost = ph == "active" and speed > 300.0
+				tremor = clampf((_boss.phase_progress() - 0.5) / 0.5, 0.0, 1.0)
+			elif speed > 300.0:
+				# 돌진: 뿌리를 땅에 댄 채 미끄러지듯 밀려간다 (발을 떼어 걷지 않는다 — 뿌리가 땅을 긁으며 흙을 튀긴다)
+				surge = true
+			breath = 0.0
 		RootKeeper.State.HAND:
-			# 지팡이를 땅에 깊이 꽂고 몸을 앞으로 숙인다 → 저 앞에서 뿌리 손이 솟는다
-			target = _three_beat(Vector4(-0.14 * f, 0.97, 1.05, -20.0), Vector4(0.3 * f, 1.12, 0.9, 20.0), 0.6)
-			staff = _staff_beat(Vector4(-0.45, 0.344, -30.0, 240.0), Vector4(0.3, 0.28, 60.0, -170.0), 0.6)
+			p = _beat("hand_up", "hand_down", "idle", 0.5)
+			drive = _beat_drive()
 			if ph == "startup":
-				staff.x += sin(_t * 30.0) * 0.02 * _boss.phase_progress()
-			follow = _beat_follow()
-			sfollow = _staff_follow()
+				tremor = clampf(_boss.phase_progress(), 0.0, 1.0) * 0.5
+			breath = 0.0
 		RootKeeper.State.SEEDS:
-			# 지팡이를 머리 위로 높이 들고 흔든다 → 하늘에서 씨앗이 떨어진다
-			target = _three_beat(Vector4(-0.08 * f, 0.96, 1.08, -30.0), Vector4(0.02 * f, 0.98, 1.06, -26.0), 0.8)
-			staff = _staff_beat(Vector4(-0.25, 0.5, 0.0, 340.0), Vector4(0.1, 0.5, 30.0, 380.0), 0.8)
+			p = _beat("seed_up", "seed_up", "idle", 0.3)
+			drive = _beat_drive()
 			if ph == "active":
-				staff.x += sin(_t * 18.0) * 0.12
-				target.x += sin(_t * 18.0) * 0.01 * f
-			follow = _beat_follow()
-			sfollow = _staff_follow()
+				# 지팡이를 머리 위에서 흔든다 (씨앗이 떨어진다)
+				p = p.duplicate()
+				var w := sin(_t * 17.0)
+				p["hand_f"] = float(p["hand_f"]) + w * 16.0
+				p["arm_f_lo"] = float(p["arm_f_lo"]) + w * 8.0
+				p["torso"] = float(p["torso"]) + w * 1.5
+			breath = 0.0
 		RootKeeper.State.RING:
-			# 지팡이를 앞에 가로로 들고 천천히 돌리며 고리를 만든다 (몸이 살짝 떠오른다)
-			target = _three_beat(Vector4(0.04 * f, 1.0, 1.02, -8.0), Vector4(0.0, 1.02, 1.0, -16.0), 0.8)
-			staff = _staff_beat(Vector4(1.1, 0.5, 120.0, 220.0), Vector4(1.55, 0.5, 150.0, 250.0), 0.8)
+			p = _beat("ring", "ring", "idle", 0.3)
+			drive = _beat_drive()
 			if ph == "active":
-				staff.x += sin(_t * 2.6) * 0.18
-				target.w += sin(_t * 2.6) * 6.0
-			follow = _beat_follow()
-			sfollow = _staff_follow()
+				# 지팡이를 앞에 가로로 든 채 천천히 돌린다 (몸이 살짝 떠오른다)
+				p = p.duplicate()
+				var w := sin(_t * 2.6)
+				p["hand_f"] = float(p["hand_f"]) + w * 24.0
+				p["arm_f_up"] = float(p["arm_f_up"]) + w * 8.0
+				p["hip_y"] = float(p["hip_y"]) - 0.03 * (0.5 + 0.5 * sin(_t * 2.6 + 1.0))
+			breath = 0.3
 		RootKeeper.State.STOMP:
-			# 지팡이를 머리 위로 치켜들며 몸이 늘어났다가(예비) 땅에 내리찍으며 눌린다(타격)
-			target = _three_beat(Vector4(-0.18 * f, 0.94, 1.12, -50.0), Vector4(0.12 * f, 1.16, 0.86, 22.0), 0.5)
-			staff = _staff_beat(Vector4(-0.55, 0.55, -50.0, 420.0), Vector4(0.4, 0.3, 90.0, -180.0), 0.5)
-			if ph == "startup":
-				var k := clampf((_boss.phase_progress() - 0.6) / 0.4, 0.0, 1.0)
-				staff.x += sin(_t * 44.0) * 0.03 * k
-				target.x += sin(_t * 44.0) * 0.01 * k
-			follow = _beat_follow()
-			sfollow = _staff_follow()
+			p = _beat("stomp_up", "stomp_down", "idle", 0.4)
+			drive = _beat_drive()
 			ghost = ph == "active"
 			trail = ph == "active"
-		RootKeeper.State.RISE:
-			# 지금 자세에서 이어서 쓰러지고(앞 30%) → 떨며 천천히 일어선다
-			var k := _boss.state_progress(_boss.rise_len)
-			var collapsed := Vector4(0.6 * f, 1.02, 0.8, 120.0)
-			var staff_collapsed := Vector4(1.3, 0.344, 120.0, -200.0)
-			if k < 0.3:
-				target = _rise_from.lerp(collapsed, Motion.ease_in(k / 0.3, 1.8))
-				staff = _staff_rise_from.lerp(staff_collapsed, Motion.ease_in(k / 0.3, 1.8))
-				follow = 14.0
-				sfollow = 12.0
-			else:
-				var u := Motion.ease_in_out((k - 0.3) / 0.7)
-				target = collapsed.lerp(Vector4(0.0, 1.0, 1.05, -10.0), u)
-				staff = staff_collapsed.lerp(Vector4(-0.1, 0.344, 0.0, 30.0), u)
-				target.x += sin(_t * 26.0) * 0.02 * (1.0 - u)
-				staff.x += sin(_t * 26.0) * 0.04 * (1.0 - u)
-				follow = 8.0
-				sfollow = 7.0
+			if ph == "startup":
+				tremor = clampf((_boss.phase_progress() - 0.6) / 0.4, 0.0, 1.0)
+			breath = 0.0
 		RootKeeper.State.BROKEN:
-			target = Vector4(0.4 * f, 1.06, 0.88, 50.0)
-			target.z += Motion.breathe(_t, 0.6, 0.02)
-			staff = Vector4(0.7, 0.3, 80.0, -120.0)
-			follow = 6.0
-			sfollow = 5.0
-		RootKeeper.State.FALLEN, RootKeeper.State.PURIFIED:
-			target = Vector4(0.75 * f, 1.0, 1.0, 130.0)
-			staff = Vector4(1.5, 0.344, 140.0, -260.0)
-			follow = 5.0
-			sfollow = 4.0
-	# 지팡이가 튕겼다(저스트 가드): 뒤로 젖혔다가 stagger 가 1→0 으로 줄면서 서서히 돌아온다
-	target.x += -0.2 * f * _boss.stagger
-	staff.x += -0.6 * _boss.stagger
-
-	# ---- 보간 ----
-	_pose = Vector4(
-		Motion.damp(_pose.x, target.x, follow, delta),
-		Motion.damp(_pose.y, target.y, follow, delta),
-		Motion.damp(_pose.z, target.z, follow, delta),
-		Motion.damp(_pose.w, target.w, follow, delta))
-	_staff_pose = Vector4(
-		Motion.damp(_staff_pose.x, staff.x, sfollow, delta),
-		Motion.damp(_staff_pose.y, staff.y, sfollow * 0.8, delta),
-		Motion.damp(_staff_pose.z, staff.z, sfollow, delta),
-		Motion.damp(_staff_pose.w, staff.w, sfollow, delta))
-	var s := _spring_steps(_imp, _imp_v, 380.0, 13.0, delta)
-	_imp = s[0]; _imp_v = s[1]
-	s = _spring_steps(_kick, _kick_v, 210.0, 9.0, delta)
-	_kick = s[0]; _kick_v = s[1]
-	_face = Motion.damp(_face, f, 20.0, delta)
-	var fx := -_face
-	if absf(fx) < 0.03:
-		fx = 0.03 * (1.0 if fx >= 0.0 else -1.0)
-
-	var tilt := _pose.x + _kick
-	var sq := Vector2(_pose.y + _imp * 0.7, _pose.z - _imp)
-	var dy := _pose.w + _imp * 40.0
-	rotation = tilt
-	scale = Vector2(_base_scale.x * sq.x * fx, _base_scale.y * maxf(sq.y, 0.05))
-	position = _base_pos + Vector2(0, dy)
-	# 지팡이: 기울기 충격(_kick 은 바라보는 방향 부호가 곱해져 있다 → 로컬 앞 방향으로 되돌린다)
-	_apply_staff(_staff_pose, _kick * f * 1.3)
-	_update_trail(delta, trail)
-	_update_ghosts(delta, ghost)
+			p = motion.pose("broken").duplicate()
+			var sway := sin(_t * 1.6)
+			p["torso"] = float(p["torso"]) + sway * 3.0
+			p["head"] = float(p["head"]) + sin(_t * 1.6 + 0.8) * 4.0
+			p["hip_y"] = float(p["hip_y"]) + (sway * 0.5 + 0.5) * 0.02
+			drive = RigMotion.Drive.SOFT
+			breath = 0.5
+			lock = 1.0
+		RootKeeper.State.RISE:
+			var r := _rise_pose()
+			p = r[0]
+			drive = r[1]
+			tremor = r[2]
+			lock = 1.0
+			breath = 0.0
+		RootKeeper.State.FALLEN:
+			var r := _fall_pose()
+			p = r[0]
+			drive = r[1]
+			settle = r[2]
+			lock = 1.0
+			breath = 0.25 if _state_t > FALL_KNEES + FALL_LIE else 0.0
+		RootKeeper.State.PURIFIED:
+			var k := Motion.ease_in_out(clampf(_state_t / 1.2, 0.0, 1.0))
+			p = motion.mix(_state_from, motion.pose("purified"), k)
+			drive = RigMotion.Drive.SLOW
+			lock = 1.0
+			settle = 1.0 - k
+			breath = 0.6
+	if debug_pose != "":
+		p = motion.pose(debug_pose)
+		drive = RigMotion.Drive.NORMAL
+		feet = RigMotion.Feet.POSE
+		breath = 0.0
+		lock = 1.0 if debug_pose in ["crumple", "dead_lie", "purified", "broken"] else 0.0
+		settle = 1.0 if debug_pose.begins_with("dead_lie") else 0.0
+	if p.is_empty():
+		p = motion.pose("idle")
+	# 지팡이가 튕겼다(저스트 가드): stagger 1 → 0 동안 팔·몸통이 뒤로 젖혀졌다 돌아온다
+	if _boss.stagger > 0.0:
+		p = p.duplicate()
+		p["arm_f_up"] = float(p.get("arm_f_up", 0.0)) + 46.0 * _boss.stagger
+		p["torso"] = float(p.get("torso", 0.0)) - 10.0 * _boss.stagger
+		p["head"] = float(p.get("head", 0.0)) - 8.0 * _boss.stagger
+	# 떨림 (예비 끝·가드 불가 예고): 몸통·지팡이 손이 잘게 떤다
+	if tremor > 0.0:
+		p = p.duplicate()
+		var tw := sin(_t * 46.0) * tremor
+		p["torso"] = float(p.get("torso", 0.0)) + tw * 1.2
+		p["hand_f"] = float(p.get("hand_f", 0.0)) + tw * 3.0
+	motion.ground_lock = lock
+	motion.ground_settle = settle
+	motion.breath = breath
+	motion.set_target(p, drive, feet)
+	_apply_slide()
+	if surge:
+		dx_rig = 0.0   # 딛은 뿌리를 세상에 고정하지 않는다 = 몸과 함께 땅 위를 미끄러진다
+		_surge_t += delta
+		if _surge_t >= 0.06:
+			_surge_t = 0.0
+			_puff(4, -float(_boss.facing) * 40.0)
+	motion.update(delta, {"speed": speed_rig, "dx": dx_rig, "vy": _boss.velocity.y / gs, "grounded": true})
+	_staff_ground(delta)
+	rig.position = Vector2.ZERO
+	rig.scale = Vector2(_mir.v, 1.0)
+	# 디딤 먼지 (걷는 중 뿌리를 디딜 때)
+	if speed > 60.0:
+		for leg in motion.legs:
+			if leg.planted_now:
+				_puff(3, leg.x * gs * fvis)
+	# 잔상 (지팡이 팔)
+	if ghost:
+		_ghost_timer += delta
+		if _ghost_timer >= GHOST_INTERVAL:
+			_ghost_timer = 0.0
+			rig.snapshot_ghost(Color(0.85, 0.75, 1.0, 0.35))
+	else:
+		_ghost_timer = 0.0
+	rig.fade_ghosts(delta)
+	_update_trail(trail)
 	_update_light(delta)
 
 	# ---- 색 ----
 	_red = Motion.damp(_red, 1.0 if _boss.is_red() else 0.0, 14.0, delta)
-	var base := Color(0.9, 0.92, 1.0) if _boss.phase == 1 else Color(1.05, 0.95, 1.15)
+	var base := Color(0.94, 0.95, 1.0) if _boss.phase == 1 else Color(1.04, 0.97, 1.06)
+	if st == RootKeeper.State.FALLEN:
+		base = base.lerp(Color(0.6, 0.6, 0.66), clampf(_state_t / 1.5, 0.0, 1.0) * 0.6)
+	elif st == RootKeeper.State.PURIFIED:
+		base = Color(1.25, 1.2, 1.05)
 	base = base.lerp(RED_BODY, _red * (0.45 + 0.35 * sin(_t * TAU * RootKeeper.TELEGRAPH_BLINK_HZ)))
-	modulate = base.lerp(Color(2.5, 2.5, 2.5), fl * 0.8)
+	rig.modulate = base
+	rig.set_flash(fl * 0.8, Color(1.6, 1.6, 1.6))
 	if not _marks.top_level:
 		_marks.global_position = Vector2.ZERO   # 보스가 움직여도 예고는 월드 좌표로 그린다
 	_marks.queue_redraw()
 	_trail.queue_redraw()
 
 
-## 충격 스프링을 짧은 조각으로 나눠 돌린다: 한 프레임이 길어지면(스크린샷 저장·끊김) 한 번에 적분한 스프링이 터져 몸이 납작해졌다.
-static func _spring_steps(value: float, vel: float, k: float, d: float, delta: float) -> Array:
-	var n := maxi(1, int(ceil(delta / (1.0 / 50.0))))
-	var dt := delta / n
-	var v := value
-	var w := vel
-	for i in n:
-		var r := Motion.spring(v, 0.0, w, k, d, dt)
-		v = r[0]; w = r[1]
-	return [v, w]
+## 서 있기·걷기: 소녀와 거리를 두며 천천히 다가오거나(앞으로) 물러난다(뒤로 걷기)
+func _stance_pose(speed_rig: float) -> Dictionary:
+	var amt := clampf(absf(speed_rig) / maxf(motion.L * 1.0, 1.0), 0.0, 1.0)
+	var idle := motion.pose("idle").duplicate()
+	# 대기: 위엄 있게 천천히 흔들린다 (몸통·머리, 뿌리는 땅을 움켜쥔다)
+	var sway := sin(_t * 0.9)
+	idle["torso"] = float(idle["torso"]) + sway * 1.6
+	idle["head"] = float(idle["head"]) + sin(_t * 0.9 + 0.9) * 2.2
+	idle["toe_f"] = (0.5 + 0.5 * sin(_t * 0.7)) * 3.0
+	idle["toe_b"] = (0.5 + 0.5 * sin(_t * 0.7 + 2.0)) * 3.0
+	var walk := motion.pose("walk_back" if speed_rig < 0.0 else "walk")
+	return motion.mix(idle, walk, amt)
 
 
-# ---------- 지팡이 ----------
-
-## 자루 위의 점 (원본 px): t = 0 위 끝, 1 아래 끝
-static func _staff_point(t: float) -> Vector2:
-	return STAFF_TOP + (STAFF_BOTTOM - STAFF_TOP) * t
-
-
-## 지팡이 자세를 스프라이트에 적용한다. 손(노드 자리)은 손잡이 + 내밀기, 축은 자루 위 pivot 점, 각도는 앞으로 양수.
-func _apply_staff(p: Vector4, extra_ang: float) -> void:
-	var pivot := _staff_point(clampf(p.y, 0.0, 1.0))
-	_staff.offset = -(pivot - STAFF_POS)
-	# 로컬 좌표에서 앞 = -x (그림이 왼쪽을 볼 때; 뒤집히면 자동으로 거울), 위 = -y
-	_staff.position = (GRIP - TEX_SIZE / 2.0) + Vector2(-p.z, -p.w)
-	_staff.rotation = -(p.x + extra_ang)
-
-
-## 자루 위 점의 월드 좌표
-func _staff_world(t: float) -> Vector2:
-	var pivot := _staff_point(clampf(_staff_pose.y, 0.0, 1.0))
-	return _staff.to_global(_staff_point(t) - pivot)
-
-
-## 지팡이 머리(달 원반)의 월드 좌표 — 구슬·씨앗 예고 고리가 여기 뜬다
-func head_world() -> Vector2:
-	return _staff_world(0.08)
-
-
-## 세 박자 자세 (경계에서 값이 이어진다: 예비 끝 = back, 타격 시작 = back, 되돌림 시작 = fwd).
-func _three_beat(back: Vector4, fwd: Vector4, strike_span := 0.6) -> Vector4:
+## 공격 세 박자: 예비(startup) → 타격(active, 앞 span 몫에 끝나고 머문다) → 되돌림(recovery).
+func _beat(windup: String, strike: String, ready: String, span: float) -> Dictionary:
 	var p := _boss.phase_progress()
 	match _boss.attack_phase:
 		"startup":
-			return NEUTRAL.lerp(back, Motion.anticipation(p))
+			return motion.three_beat(_state_from, motion.pose(windup), motion.pose(strike), motion.pose(ready), "windup", p)
 		"active":
-			return back.lerp(fwd, Motion.strike(clampf(p / strike_span, 0.0, 1.0)))
+			return motion.three_beat(_state_from, motion.pose(windup), motion.pose(strike), motion.pose(ready), "strike", clampf(p / maxf(span, 0.01), 0.0, 1.0))
 		"recovery":
-			return fwd.lerp(NEUTRAL, Motion.settle(p))
-	return NEUTRAL
+			return motion.three_beat(_state_from, {}, {}, motion.pose(ready), "recover", p)
+	return motion.pose("idle")
 
 
-func _staff_beat(back: Vector4, fwd: Vector4, strike_span := 0.6) -> Vector4:
-	var p := _boss.phase_progress()
+func _beat_drive() -> RigMotion.Drive:
 	match _boss.attack_phase:
-		"startup":
-			return STAFF_NEUTRAL.lerp(back, Motion.anticipation(p))
-		"active":
-			return back.lerp(fwd, Motion.strike(clampf(p / strike_span, 0.0, 1.0)))
-		"recovery":
-			return fwd.lerp(STAFF_NEUTRAL, Motion.settle(p, 2.0, 3.5))
-	return STAFF_NEUTRAL
+		"startup": return RigMotion.Drive.SOFT
+		"active": return RigMotion.Drive.FAST
+		"recovery": return RigMotion.Drive.SETTLE
+	return RigMotion.Drive.NORMAL
 
 
-func _beat_follow() -> float:
-	match _boss.attack_phase:
-		"startup": return 11.0
-		"active": return 40.0
-		"recovery": return 12.0
-	return 9.0
+## 다시 일어섬 (RISE, rise_len 초): 앞 30% 에 지금 자세에서 무너져 치마가 구겨지며 땅에 주저앉고 윗몸이 앞으로 접힌다.
+## 그다음 떨며 지팡이를 땅에 짚고, 뿌리를 다시 움켜쥐며(한 걸음씩 다시 디딤) 천천히 일어선다. [자세, 보간, 떨림]
+func _rise_pose() -> Array:
+	var k := _boss.state_progress(_boss.rise_len)
+	if k < RISE_COLLAPSE:
+		var u := Motion.ease_in(k / RISE_COLLAPSE, 1.8)
+		return [motion.mix(_state_from, motion.pose("crumple"), u), RigMotion.Drive.QUICK, 0.0]
+	var v := (k - RISE_COLLAPSE) / (1.0 - RISE_COLLAPSE)
+	# 잠깐 엎드린 채 숨을 고르고(앞 15%), 지팡이를 짚어 밀어 올린다
+	var up := Motion.ease_in_out(clampf((v - 0.15) / 0.85, 0.0, 1.0))
+	var p := motion.mix(motion.pose("crumple"), motion.pose("rise_stand"), up)
+	# 뿌리를 다시 움켜쥐며 발을 차례로 고쳐 디딘다 (발 자리를 조금씩 옮겨 한 걸음씩)
+	var steps := int(floor(v * 4.0))
+	if steps != _rise_steps and steps <= 3:
+		_rise_steps = steps
+		if steps > 0:
+			motion.kick("crouch", 0.25)
+			_puff(6, 0.0)
+	p = p.duplicate()
+	p["foot_f"] = float(p.get("foot_f", 0.3)) + (0.06 if _rise_steps % 2 == 1 else 0.0)
+	p["foot_b"] = float(p.get("foot_b", -0.3)) - (0.06 if _rise_steps % 2 == 0 and _rise_steps > 0 else 0.0)
+	p["step_thr"] = 0.04
+	p["step_dur"] = 0.22
+	p["step_lift"] = 0.05
+	var tremor := (1.0 - up) * 0.8 if v > 0.1 else 0.0
+	return [p, RigMotion.Drive.SOFT, tremor]
 
 
-func _staff_follow() -> float:
-	match _boss.attack_phase:
-		"startup": return 9.0
-		"active": return 34.0
-		"recovery": return 9.0
-	return 8.0
+## 쓰러짐 (FALLEN): 맞은 순간 몸이 젖혀졌다가 → 치마가 구겨지며 주저앉고(FALL_KNEES) → 윗몸이 앞으로 넘어가 땅에 엎드린다(FALL_LIE).
+## 엎드린 몸은 내려놓기(ground_settle)가 땅에 붙인다. 닿는 순간 작게 튄다. 그 자세로 정화를 기다린다. [자세, 보간, 내려놓기]
+func _fall_pose() -> Array:
+	var e := _state_t
+	var knees := Motion.ease_in(clampf(e / FALL_KNEES, 0.0, 1.0), 1.6)
+	var lie := Motion.ease_in(clampf((e - FALL_KNEES * 0.7) / FALL_LIE, 0.0, 1.0), 2.0)
+	var p := motion.mix(motion.mix(_state_from, motion.pose("crumple"), knees), motion.pose("dead_lie"), lie)
+	if lie >= 1.0 and not _thud_done:
+		_thud_done = true
+		motion.kick("thud", 8.0)
+		motion.kick("impact", -60.0)
+		_puff(16, float(_boss.facing) * 120.0)
+	return [p, RigMotion.Drive.QUICK if lie < 1.0 else RigMotion.Drive.SOFT, lie]
+
+
+## 지팡이 땅 막기 (RigMotion 의 무기 땅 막기는 관절마다 한계가 있어, 엎드리는 동안 지팡이가 땅속으로 들어갈 때가 있다):
+## 지팡이(staff·staff_lo) 껍질의 가장 낮은 점이 땅 아래면 손 안에서 지팡이를 돌려 땅 위에 얹는다. 돌리는 각도(_staff_fix)는
+## 5도씩 양쪽으로 견줘 '지난 프레임의 각도에 가장 가까운' 해를 고르고(처음이면 지팡이 머리가 몸 앞쪽에 남는 쪽) 부드럽게 쫓는다
+## → 프레임마다 다른 해로 튀지 않는다. 쫓는 동안 모자라거나 손이 땅에 닿아 돌려도 남는 만큼은 지팡이를 들어 올린다.
+const STAFF_MARGIN := 3.0
+const STAFF_STEP := 0.087
+var _staff_fix := 0.0
+func _staff_ground(delta: float) -> void:
+	if _staff_i < 0:
+		return
+	var base := rig.rot[_staff_i]
+	var want := 0.0
+	if _staff_depth() > -STAFF_MARGIN:
+		var best := INF
+		var best_cost := INF
+		var least := INF
+		var least_fix := 0.0
+		for k in range(1, 28):
+			for sgn in [-1.0, 1.0]:
+				var fix: float = sgn * k * STAFF_STEP
+				rig.rot[_staff_i] = base + fix
+				rig.compute_from(_staff_i)
+				var d := _staff_depth()
+				if d <= -STAFF_MARGIN:
+					var cost := absf(fix - _staff_fix)
+					if absf(_staff_fix) < 0.01 and _sock.has("staff_head"):
+						cost -= (rig.body_xf * (rig.xf[_staff_i] * (_sock["staff_head"][1] as Vector2))).x * 0.0001   # 처음이면 머리가 앞쪽인 해
+					if cost < best_cost:
+						best_cost = cost
+						best = fix
+				elif d < least:
+					least = d
+					least_fix = fix
+		want = best if best < INF else least_fix
+	_staff_fix = Motion.damp(_staff_fix, want, 10.0, delta) if delta > 0.0 else want
+	if absf(_staff_fix) < 0.0005 and want == 0.0:
+		_staff_fix = 0.0
+		rig.rot[_staff_i] = base
+		rig.compute_from(_staff_i)
+		return
+	rig.rot[_staff_i] = base + _staff_fix
+	rig.compute_from(_staff_i)
+	var rest_d := _staff_depth() + STAFF_MARGIN
+	if rest_d > 0.0:
+		# 모자란 만큼 지팡이를 위로 (세상 위쪽을 부모 틀로 바꿔 자리에 더한다 — 다음 프레임에 _apply_slide 가 다시 정한다)
+		var up := (rig.body_xf * rig.xf[rig.parent[_staff_i]]).basis_xform_inv(Vector2(0.0, -rest_d))
+		rig.off[_staff_i] += up
+		rig.compute_from(_staff_i)
+	rig.apply()
+
+
+func _staff_depth() -> float:
+	var deepest := -INF
+	for b in _staff_bones:
+		var t := rig.body_xf * rig.xf[b]
+		for hp in rig.hulls[b]:
+			deepest = maxf(deepest, (t * hp).y)
+	return deepest
+
+
+## 지팡이를 손 안에서 자루를 따라 미끄러뜨린다 (slide 채널: 0 = 등불 아래 손잡이, 1 = 자루 아래쪽을 쥠)
+func _apply_slide() -> void:
+	if _staff_i < 0 or not motion.ch.has("slide"):
+		return
+	var s := clampf((motion.ch["slide"] as RigMotion.Chan).v, -0.2, 1.2)
+	rig.off[_staff_i] = -_staff_axis * s * SLIDE_PX
+
+
+func _on_entered(st: int) -> void:
+	_state_from = motion.capture()
+	_state_t = 0.0
+	var fade := 0.12
+	match st:
+		RootKeeper.State.FALLEN:
+			_thud_done = false
+			fade = 0.0
+			motion.kick("impact", 120.0)
+			_puff(16, 0.0)
+		RootKeeper.State.RISE:
+			_rise_steps = 0
+			fade = 0.0
+			motion.kick("impact", 100.0)
+			_puff(14, 0.0)
+		RootKeeper.State.BROKEN:
+			fade = 0.1
+			motion.kick("impact", 110.0)
+			motion.kick("crouch", 0.6)
+			_puff(10, 0.0)
+		RootKeeper.State.PURIFIED:
+			fade = 0.0
+		RootKeeper.State.STANCE:
+			fade = 0.25
+		RootKeeper.State.INTRO:
+			motion.snap_feet()
+			fade = 0.0
+	if st in RootKeeper.ATTACK_STATES:
+		fade = 0.0     # 세 박자 곡선이 지금 자세에서 출발한다
+	motion.transition(fade)
+
+
+## 공격 단계가 바뀌는 순간: 출발 자세를 다시 잡고(되돌림은 타격 끝 자세에서), 타격 순간의 먼지·눌림.
+func _on_phase(st: int, ph: String) -> void:
+	if ph == "recovery":
+		_state_from = motion.capture()
+	if ph != "active":
+		return
+	var f := float(_boss.facing)
+	match st:
+		RootKeeper.State.SPIKES, RootKeeper.State.HAND:
+			motion.kick("crouch", 0.6)
+			motion.kick("squash", 1.2)
+			_puff(12, _staff_tip_x())
+		RootKeeper.State.STOMP:
+			motion.kick("crouch", 1.0)
+			motion.kick("squash", 2.0)
+			_puff(24, _staff_tip_x())
+		RootKeeper.State.SWEEP:
+			_puff(5, -f * 30.0)
+		RootKeeper.State.SWEEP2:
+			_puff(5, f * 30.0)
+		RootKeeper.State.WALL:
+			_puff(10, -f * 60.0)
+		RootKeeper.State.SEEDS:
+			motion.kick("crouch", -0.3)
+
+
+## 지팡이 아래 끝의 x (보스 기준, 월드 px) — 내리꽂은 자리에서 먼지가 인다
+func _staff_tip_x() -> float:
+	var lo := rig.bone_index("staff_lo")
+	if lo < 0:
+		return 0.0
+	return rig.to_global(rig.bone_point("staff_lo", Vector2(0, 200))).x - _boss.global_position.x
 
 
 func _puff(n: int, ox: float) -> void:
@@ -466,11 +634,11 @@ func _puff(n: int, ox: float) -> void:
 	_dust.emitting = true
 
 
-# ---------- 호 궤적 · 잔상 · 빛 ----------
+# ---------- 호 궤적 · 빛 ----------
 
-func _update_trail(delta: float, active: bool) -> void:
+func _update_trail(active: bool) -> void:
 	if active:
-		_trail_pts.append([_staff_world(0.0), _staff_world(0.2), _t])
+		_trail_pts.append([socket_world("staff_head"), socket_world("staff_mid"), _t])
 	var keep: Array = []
 	for e in _trail_pts:
 		if _t - e[2] < TRAIL_LIFE:
@@ -491,14 +659,12 @@ func _draw_trail() -> void:
 		var alpha := (1.0 - age) * 0.32
 		var ma: Vector2 = (a[0] + a[1]) * 0.5
 		var mb: Vector2 = (b[0] + b[1]) * 0.5
-		# 바깥(머리 쪽)은 진하고 안쪽은 옅게: 초승달 베기 자국.
-		# 삼각형 둘로 나눠 그린다: 손이 움직이며 돌면 조각이 꼬여(나비 모양) 다각형 삼각분할이 실패하던 것을 피함
+		# 바깥(머리 쪽)은 진하고 안쪽은 옅게: 초승달 베기 자국. 삼각형 둘로 나눠 그린다 (조각이 꼬여도 삼각분할이 실패하지 않게)
 		_trail_quad(a[0], b[0], mb, ma, Color(TRAIL_C, alpha))
 		_trail_quad(ma, mb, b[1], a[1], Color(TRAIL_C, alpha * 0.3))
 		_trail.draw_line(a[0], b[0], Color(1.0, 0.9, 1.0, alpha * 1.4), 4.0, true)
 
 
-## 궤적 조각 하나 = 삼각형 둘. 감기는 방향(휘두르는 방향)과 상관없이 보이도록 삼각형마다 꼭짓점 순서를 맞추고, 넓이 없는 조각은 건너뛴다.
 func _trail_quad(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, c: Color) -> void:
 	_trail_tri(p0, p1, p2, c)
 	_trail_tri(p0, p2, p3, c)
@@ -508,52 +674,22 @@ func _trail_tri(p0: Vector2, p1: Vector2, p2: Vector2, c: Color) -> void:
 	var area := (p1 - p0).cross(p2 - p0)
 	if absf(area) < 1.0:
 		return
-	if area > 0.0:   # 화면에서 보이는 감김(휘두르기 SWEEP 궤적과 같은 쪽)으로 맞춘다
+	if area > 0.0:
 		var t := p1
 		p1 = p2
 		p2 = t
 	_trail.draw_primitive(PackedVector2Array([p0, p1, p2]), PackedColorArray([c, c, c]), PackedVector2Array())
 
 
-func _update_ghosts(delta: float, active: bool) -> void:
-	if active:
-		_ghost_timer += delta
-		if _ghost_timer >= 0.035:
-			_ghost_timer = 0.0
-			var pair: Array = _ghosts.pop_front()
-			var g: Sprite2D = pair[0]
-			var gs: Sprite2D = pair[1]
-			g.visible = true
-			g.global_transform = global_transform
-			g.modulate = Color(0.7, 0.85, 1.0, 0.3)
-			gs.visible = true
-			gs.offset = _staff.offset
-			gs.global_transform = _staff.global_transform
-			gs.modulate = Color(0.85, 0.7, 1.0, 0.4)
-			_ghosts.append(pair)
-	else:
-		_ghost_timer = 0.0
-	for pair in _ghosts:
-		for g in pair:
-			if g.visible:
-				g.modulate.a -= delta * 2.4
-				if g.modulate.a <= 0.0:
-					g.visible = false
-
-
-## 지팡이 등불 빛: 고리(HOOK)에 매달려 고리의 움직임에 끌려 한 박자 늦게 진자처럼 흔들린다.
-func _update_light(delta: float) -> void:
+## 지팡이 등불 빛: 등불 부위(lantern — 뼈대의 늘어진 천처럼 진자로 흔들린다)의 가운데를 따라간다.
+func _update_light(_delta: float) -> void:
 	if _light == null:
 		return
-	var pivot := _staff_point(clampf(_staff_pose.y, 0.0, 1.0))
-	var hook := _staff.to_global(HOOK - pivot)
-	var vx := (hook.x - _hook_prev.x) / maxf(delta, 0.001) if _hook_prev != Vector2.ZERO else 0.0
-	_hook_prev = hook
-	var drive := clampf(-vx / 2200.0, -0.7, 0.7)
-	var s := Motion.spring(_lamp, drive, _lamp_v, 44.0, 3.4, delta)
-	_lamp = s[0]; _lamp_v = s[1]
-	_light.global_position = hook + Vector2(sin(_lamp) * 40.0, cos(_lamp) * 40.0)
-	_light.energy = (1.0 if _boss.phase == 1 else 1.25) * (1.0 + Motion.breathe(_t, 0.9, 0.08))
+	_light.global_position = socket_world("lantern")
+	var e := (1.0 if _boss.phase == 1 else 1.25) * (1.0 + Motion.breathe(_t, 0.9, 0.08))
+	if _boss.state == RootKeeper.State.FALLEN:
+		e *= 0.45
+	_light.energy = e
 
 
 # ---------- 붉은 예고 ----------

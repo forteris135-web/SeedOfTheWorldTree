@@ -531,17 +531,22 @@ func _root_keeper() -> void:
 	boss._set_state(boss.State.STANCE)
 	boss._timer = 99.0
 	_run(boss, vis, func() -> bool: return false, 1.0)
+	# 2026-10-20 부위 뼈대: 뿌리지기 그림(Sprite 노드)은 통째로 기울지 않고 관절이 움직인다 → 위의 '기울기·배율·세로' 값은 늘 0 이다.
+	# 대신 뼈대 값을 잰다 (_root_watch: 관절 각도·몸 자리가 프레임 사이에 튀지 않는지, 뿌리 발이 땅에, 몸이 땅에 박히지 않는지, 지팡이 머리 속도 정점).
 	# SPIKES (지팡이 들어 올려 내리꽂기, 세로 움직임)
 	boss.spike_marks = [1000.0, 800.0]
 	boss._begin(boss.State.SPIKES, 0.9)
-	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0)
+	var rw := _root_watch_new()
+	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0, func(t: float) -> void: _root_watch(rw, boss, vis, t))
 	_report("뿌리지기 SPIKES", r)
+	_root_report("뿌리지기 SPIKES 뼈대", rw, r, -1.0)
 	# SWEEP
 	boss._timer = 99.0
 	boss._begin(boss.State.SWEEP, 0.5)
-	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0)
-	_check_active_window(r, 0.2)
+	rw = _root_watch_new()
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0, func(t: float) -> void: _root_watch(rw, boss, vis, t))
 	_report("뿌리지기 SWEEP", r)
+	_root_report("뿌리지기 SWEEP 뼈대", rw, r, 0.2)
 	# 저스트 가드 (SWEEP 타격 중)
 	boss._timer = 99.0
 	boss._begin(boss.State.SWEEP, 0.5)
@@ -561,8 +566,10 @@ func _root_keeper() -> void:
 	boss._timer = 99.0
 	boss._red = true
 	boss._begin(boss.State.WALL, 1.1)
-	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0)
+	rw = _root_watch_new()
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss.attack_phase == "", 6.0, func(t: float) -> void: _root_watch(rw, boss, vis, t))
 	_report("뿌리지기 WALL", r)
+	_root_report("뿌리지기 WALL 뼈대", rw, r, -1.0)
 	# 2페이즈: SPIKES 예고 도중 RISE 로 (쓰러졌다 일어섬; dy 점프 없어야 함)
 	boss._timer = 99.0
 	boss.spike_marks = [1000.0, 800.0]
@@ -570,11 +577,144 @@ func _root_keeper() -> void:
 	_run(boss, vis, func() -> bool: return false, 0.5)
 	boss.hp = boss.max_hp * 0.45
 	boss.receive_hit(HitData.make(1.0, 0.0, null), null)
-	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss._timer < 0.2, 6.0)
+	rw = _root_watch_new()
+	r = _run(boss, vis, func() -> bool: return boss.state == boss.State.STANCE and boss._timer < 0.2, 6.0, func(t: float) -> void: _root_watch(rw, boss, vis, t))
 	_report("뿌리지기 2페이즈(SPIKES→RISE→STANCE)", r)
+	_root_report("뿌리지기 2페이즈 무너졌다 일어섬 뼈대", rw, r, -1.0)
 	_facing_hold(boss, vis, "뿌리지기", boss.State.STANCE)
 	_root_new_patterns(boss, vis)
+	_root_fall(boss, vis)
 	boss.queue_free()
+
+
+# ---------- 뿌리지기 부위 뼈대 (2026-10-20) ----------
+
+func _root_watch_new() -> Dictionary:
+	return {"prev": {}, "root_prev": Vector2.INF, "max_body": 0.0, "max_limb": 0.0, "max_root": 0.0, "feet": 0.0, "sink": -INF,
+		"staff_low": -INF, "head_prev": Vector2.INF, "peak_v": 0.0, "peak_t": -1.0, "at": "", "sink_at": "", "limb_at": ""}
+
+
+## 한 프레임: 관절 세상 각도의 변화(몸통·머리·골반 / 팔·지팡이), 몸 자리 변화, 딛은 뿌리 발바닥, 몸·지팡이가 땅 아래로 들어간 깊이,
+## 지팡이 머리 속도 (모두 게임 px). 늘어진 천(chain)·부드러운 부위(soft)는 흔들리고 눌려 접히므로 뺀다.
+func _root_watch(w: Dictionary, boss, vis, t: float) -> void:
+	var rig: PartRig = vis.rig
+	var m: RigMotion = vis.motion
+	var gs := rig.game_scale
+	var soft: Array = rig.data.get("soft", [])
+	for i in rig.names.size():
+		var nm := rig.names[i]
+		var b: Dictionary = rig.data["bones"][i]
+		if b.has("chain") or soft.has(nm) or bool(b.get("hidden", false)):
+			continue
+		var a := (rig.body_xf * rig.xf[i]).get_rotation()
+		if w.prev.has(nm):
+			var d := absf(wrapf(a - float(w.prev[nm]), -PI, PI))
+			if nm in ["hips", "torso", "head"]:
+				if d > w.max_body:
+					w.max_body = d
+					w.at = "%s %.2f %s" % [nm, t, boss.state_name()]
+			elif d > w.max_limb:
+				w.max_limb = d
+				w.limb_at = "%s %.2f %s" % [nm, t, boss.state_name()]
+		w.prev[nm] = a
+		if not nm.begins_with("staff") and nm != "lantern":
+			var lo := rig.lowest_y(PackedInt32Array([i])) * gs
+			if lo > w.sink:
+				w.sink = lo
+				w.sink_at = "%s %.2f %s" % [nm, t, boss.state_name()]
+	var rp: Vector2 = (rig.body_xf * rig.xf[0].origin) * gs
+	if w.root_prev != Vector2.INF:
+		w.max_root = maxf(w.max_root, rp.distance_to(w.root_prev))
+	w.root_prev = rp
+	if boss.state_name() not in ["FALLEN", "RISE", "PURIFIED", "BROKEN"] and m.feet_mode != RigMotion.Feet.AIR:
+		var ys := m.sole_ys()
+		for k in ys.size():
+			if not m.legs[k].swing:
+				w.feet = maxf(w.feet, absf(ys[k]) * gs)
+	w.staff_low = maxf(w.staff_low, rig.lowest_y(PackedInt32Array([rig.bone_index("staff"), rig.bone_index("staff_lo")])) * gs)
+	var head: Vector2 = vis.head_world()
+	if w.head_prev != Vector2.INF:
+		var v := head.distance_to(w.head_prev) / DT
+		if v > w.peak_v:
+			w.peak_v = v
+			w.peak_t = t + DT
+	w.head_prev = head
+
+
+## 기준: 몸통·머리·골반 프레임 간 0.2rad 아래, 팔·지팡이 0.7rad 아래 (큰 휘두르기는 일부러 빠르다), 몸 자리 32px 아래,
+## 딛은 뿌리 발 땅 ±4px, 몸(지팡이 뺌)·지팡이가 땅 아래로 4px 넘게 들어가지 않음. strike_len > 0 이면 지팡이 머리가 가장 빠른 순간이
+## 히트박스가 켜진 구간(+0.05초) 안이어야 한다 (예비에서 멈칫 → 타격에서 가장 빠르다).
+func _root_report(label: String, w: Dictionary, r: Dictionary, strike_len: float) -> void:
+	var ok: bool = w.max_body < 0.2 and w.max_limb < 0.7 and w.max_root < 32.0 and w.feet <= 4.0 and w.sink <= 4.0 and w.staff_low <= 4.0
+	var win := ""
+	if strike_len > 0.0 and r.active_t >= 0.0:
+		var inside: bool = w.peak_t >= r.active_t - 0.001 and w.peak_t <= r.active_t + strike_len + 0.05
+		win = ", 지팡이 머리 최고 속도 %.0fpx/초 at %.2f초 (히트박스 %.2f~%.2f 안: %s)" % [w.peak_v, w.peak_t, r.active_t, r.active_t + strike_len, "예" if inside else "아니오!"]
+		ok = ok and inside
+	print("[probe] %s: 관절 프레임 간 최대 — 몸 %.3frad(%s) 팔·지팡이 %.3frad(%s), 몸 자리 %.1fpx, 뿌리 발 %.1fpx, 몸이 땅 아래 %+.1fpx(%s), 지팡이 %+.1fpx%s → %s" % [
+		label, w.max_body, w.at, w.max_limb, w.limb_at, w.max_root, w.feet, w.sink, w.sink_at, w.staff_low, win, "OK" if ok else "어긋남!"])
+	if not ok:
+		_fail += 1
+
+
+## 쓰러짐 → 정화 기다림 → 정화: 툭 바뀌지 않고, 땅에 엎드려 누우며(몸통·머리 가운데가 키의 30% 안, 가장 높은 점이 55% 안 —
+## 볼록 껍질로 재서 실제 그림보다 조금 높게 나온다), 땅에 박히지 않는다.
+func _root_fall(boss, vis) -> void:
+	boss.phase = 1
+	boss.hp = boss.max_hp
+	boss._events.clear()
+	boss._chain = -1
+	boss.hitbox.deactivate()
+	boss._set_state(boss.State.STANCE)
+	boss._timer = 99.0
+	boss.velocity = Vector2.ZERO
+	_run(boss, vis, func() -> bool: return false, 0.6)
+	var rig: PartRig = vis.rig
+	var gs := rig.game_scale
+	var stand_h := -rig.highest_y() * gs
+	boss.hp = 1.0
+	boss.receive_hit(HitData.make(5.0, 0.0, null), null)
+	var rw := _root_watch_new()
+	var r := _run(boss, vis, func() -> bool: return false, 2.6, func(t: float) -> void: _root_watch(rw, boss, vis, t))
+	var torso := _root_center_y(rig, "torso") * gs
+	var head := _root_center_y(rig, "head") * gs
+	var top := 0.0
+	var top_bone := ""
+	for i in rig.names.size():
+		# 숨은 뼈와 구멍 메움 조각(fill_*: 몸통·치마 뒤에 가려져 보이지 않는다)은 뺀다
+		if bool((rig.data["bones"][i] as Dictionary).get("hidden", false)) or rig.names[i].begins_with("fill"):
+			continue
+		var tb := -_root_top_y(rig, i) * gs
+		if tb > top:
+			top = tb
+			top_bone = rig.names[i]
+	var lie_ok: bool = boss.state_name() == "FALLEN" and -torso <= stand_h * 0.3 and -head <= stand_h * 0.3 and top <= stand_h * 0.55
+	print("[probe] 뿌리지기 쓰러져 누움: 서 있는 키 %.0fpx → 누운 키 %.0fpx(가장 높은 부위 %s), 몸통 가운데 %+.0fpx, 머리 가운데 %+.0fpx (땅 위 −, 키의 30%% 안이어야) → %s" % [
+		stand_h, top, top_bone, torso, head, "OK" if lie_ok else "덜 누움!"])
+	if not lie_ok:
+		_fail += 1
+	_root_report("뿌리지기 쓰러짐 뼈대", rw, r, -1.0)
+	boss.purified_by(null)
+	rw = _root_watch_new()
+	r = _run(boss, vis, func() -> bool: return false, 1.5, func(t: float) -> void: _root_watch(rw, boss, vis, t))
+	_root_report("뿌리지기 정화 뼈대", rw, r, -1.0)
+
+
+func _root_top_y(rig: PartRig, i: int) -> float:
+	var t := rig.body_xf * rig.xf[i]
+	var m := 0.0
+	for q in rig.hulls[i]:
+		m = minf(m, (t * q).y)
+	return m
+
+
+func _root_center_y(rig: PartRig, bone: String) -> float:
+	var i := rig.bone_index(bone)
+	var t := rig.body_xf * rig.xf[i]
+	var sum := 0.0
+	for q in rig.hulls[i]:
+		sum += (t * q).y
+	return sum / maxf(rig.hulls[i].size(), 1.0)
 
 
 ## 2026-10-19 개편: 새 패턴(뿌리 손·씨앗 비·달빛 고리·내려찍기·되돌려 베기)의 흐름·판정·예고·효과 수, 고르기 규칙, 가시 크기.
