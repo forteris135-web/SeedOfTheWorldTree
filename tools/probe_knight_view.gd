@@ -42,11 +42,28 @@ func _ready() -> void:
 	await _shot("knight_march.png")
 	for item in PATTERNS:
 		await _pattern(item[0], item[1], item[2])
-	# 쓰러짐 자세
+	# 무너짐 (흐트러짐 가득) — 창을 짚고 웅크려 헐떡인다
+	if await _until(func() -> bool: return _boss.state == LanternKnight.State.MARCH and _boss.attack_phase == "", 8.0):
+		_boss.phase = 1
+		_boss.receive_hit(HitData.make(1.0, _boss.max_poise, _player), null)
+		await get_tree().create_timer(0.9).timeout
+		await _shot("knight_broken.png")
+	# 쓰러짐: 한 무릎 → 창에 기댐 → 엎어져 누움 (몇 장)
+	await _until(func() -> bool: return _boss.state == LanternKnight.State.MARCH, 6.0)
 	_boss.hp = 1.0
 	_boss.receive_hit(HitData.make(5.0, 0.0, _player), null)
-	await get_tree().create_timer(1.2).timeout
+	await get_tree().create_timer(0.5).timeout
+	await _shot("knight_fallen_knee.png")
+	await get_tree().create_timer(0.8).timeout
+	await _shot("knight_fallen_lean.png")
+	await get_tree().create_timer(0.6).timeout
+	await _shot("knight_fallen_collapse.png")
+	await get_tree().create_timer(1.6).timeout
 	await _shot("knight_fallen.png")
+	# 정화
+	_boss.purified_by(_player)
+	await get_tree().create_timer(0.8).timeout
+	await _shot("knight_purified.png")
 	print("[knightview] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
 
@@ -118,4 +135,9 @@ func _shot(file_name: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	if img == null or img.is_empty():
 		return
+	# HDR 2D 화면은 선형 부동소수 그림 → sRGB 8비트로 (안 그러면 어둡게 찍힌다)
+	var hdr := img.get_format() in [Image.FORMAT_RGBAH, Image.FORMAT_RGBAF, Image.FORMAT_RGBH, Image.FORMAT_RGBF]
+	img.convert(Image.FORMAT_RGBA8)
+	if hdr:
+		img.linear_to_srgb()
 	img.save_png(ProjectSettings.globalize_path("res://screenshots/" + file_name))

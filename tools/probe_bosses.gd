@@ -53,17 +53,18 @@ func _spawn(scene: PackedScene) -> Array:
 	boss.arena = Rect2(0, 0, 2400, 1200)
 	boss.ground_y = 1000.0
 	boss.global_position = Vector2(1200, 1000)
-	var vis: Sprite2D = boss.get_node("Sprite")
+	var vis: Node2D = boss.get_node("Sprite")
 	vis.set_process(false)
 	return [boss, vis]
 
 
 ## 한 사이클을 돌리며 그림 값을 기록한다. done 은 끝났는지 알려 주는 콜러블.
 ## 돌려주는 값: {max_rot, max_sx, max_sy, max_dy, peak_t, active_t, frames, states}
-func _run(boss: Node, vis: Sprite2D, done: Callable, max_time := 6.0, each: Callable = Callable()) -> Dictionary:
-	var prev_rot := vis.rotation
-	var prev_scale := vis.scale
-	var prev_y := vis.position.y
+func _run(boss: Node, vis: Node2D, done: Callable, max_time := 6.0, each: Callable = Callable()) -> Dictionary:
+	var pz := _vpose(vis)
+	var prev_rot: float = pz[0]
+	var prev_scale: Vector2 = pz[1]
+	var prev_y: float = pz[2]
 	var r := {"max_rot": 0.0, "max_sx": 0.0, "max_sy": 0.0, "max_dy": 0.0, "peak_t": -1.0, "active_t": -1.0, "frames": 0, "states": [], "at": {},
 		"max_wrot": 0.0, "wrot_min": INF, "wrot_max": -INF, "actives": 0}
 	var t := 0.0
@@ -93,22 +94,26 @@ func _run(boss: Node, vis: Sprite2D, done: Callable, max_time := 6.0, each: Call
 				r.actives += 1
 				if r.active_t < 0.0:
 					r.active_t = t
-		var d_rot := absf(vis.rotation - prev_rot)
-		var d_sx := absf(absf(vis.scale.x) - absf(prev_scale.x))
-		var d_sy := absf(vis.scale.y - prev_scale.y)
-		var d_y := absf(vis.position.y - prev_y)
+		var pq := _vpose(vis)
+		var v_rot: float = pq[0]
+		var v_scale: Vector2 = pq[1]
+		var v_y: float = pq[2]
+		var d_rot := absf(v_rot - prev_rot)
+		var d_sx := absf(absf(v_scale.x) - absf(prev_scale.x))
+		var d_sy := absf(v_scale.y - prev_scale.y)
+		var d_y := absf(v_y - prev_y)
 		if d_rot > r.max_rot: r.max_rot = d_rot; r.at["rot"] = "%.2f %s/%s" % [t, boss.state_name(), boss.attack_phase if "attack_phase" in boss else ""]
 		if d_sx > r.max_sx: r.max_sx = d_sx; r.at["sx"] = "%.2f %s" % [t, boss.state_name()]
 		if d_sy > r.max_sy: r.max_sy = d_sy; r.at["sy"] = "%.2f %s" % [t, boss.state_name()]
 		if d_y > r.max_dy: r.max_dy = d_y; r.at["dy"] = "%.2f %s" % [t, boss.state_name()]
 		# 앞으로 기운 정도 (바라보는 방향 기준)
-		var fwd := vis.rotation * float(boss.facing)
+		var fwd := v_rot * float(boss.facing)
 		if fwd > peak:
 			peak = fwd
 			r.peak_t = t
-		prev_rot = vis.rotation
-		prev_scale = vis.scale
-		prev_y = vis.position.y
+		prev_rot = v_rot
+		prev_scale = v_scale
+		prev_y = v_y
 		if done.call():
 			break
 	r["peak_rot"] = peak
@@ -129,7 +134,7 @@ func _report(label: String, r: Dictionary, rot_lim := 0.2, scale_lim := 0.1, dy_
 func _knight() -> void:
 	var pair := _spawn(KNIGHT)
 	var boss = pair[0]
-	var vis: Sprite2D = pair[1]
+	var vis: Node2D = pair[1]
 	boss.facing = -1
 	boss._set_state(boss.State.MARCH)
 	boss._timer = 99.0
@@ -190,16 +195,19 @@ func _knight() -> void:
 	boss.facing = 1
 	var min_abs := INF
 	var flipped_frames := 0
-	var prev_sx := vis.scale.x
+	# (배율은 그림마다 기준이 달라 온전한 배율(full)에 대한 몫으로 본다: 예전 그림 0.4 → 한 프레임 0.2 = 전체 뒤집기(2×full)의 1/4, 최소 0.2 = full 의 절반)
+	var full: float = absf((_vpose(vis)[1] as Vector2).y)
+	var prev_sx: float = (_vpose(vis)[1] as Vector2).x
 	for i in 60:
 		boss._physics_process(DT)
 		vis._process(DT)
-		min_abs = minf(min_abs, absf(vis.scale.x))
-		if absf(vis.scale.x - prev_sx) > 0.2:   # 전체 뒤집기(0.8)의 1/4 넘게 한 프레임에 뛰면 끊김
+		var sx: float = (_vpose(vis)[1] as Vector2).x
+		min_abs = minf(min_abs, absf(sx))
+		if absf(sx - prev_sx) > full * 0.5:   # 전체 뒤집기(2×full)의 1/4 넘게 한 프레임에 뛰면 끊김
 			flipped_frames += 1
-		prev_sx = vis.scale.x
-	print("[probe] 기사 방향 전환: 60프레임 동안 |scale.x| 최소 %.3f (0.4 기준), 한 프레임에 0.2 넘게 뛴 횟수 %d → %s" % [min_abs, flipped_frames, "몸 틀기 OK" if flipped_frames == 0 and min_abs < 0.2 else "끊김!"])
-	if flipped_frames > 0 or min_abs >= 0.2:
+		prev_sx = sx
+	print("[probe] 기사 방향 전환: 60프레임 동안 |scale.x| 최소 %.3f (온전한 배율 %.2f 의 절반 아래), 한 프레임에 전체 뒤집기의 1/4 넘게 뛴 횟수 %d → %s" % [min_abs, full, flipped_frames, "몸 틀기 OK" if flipped_frames == 0 and min_abs < full * 0.5 else "끊김!"])
+	if flipped_frames > 0 or min_abs >= full * 0.5:
 		_fail += 1
 	# 다시 1페이즈로 (아래 시험은 1페이즈 길이 기준)
 	boss.phase = 1
@@ -209,11 +217,11 @@ func _knight() -> void:
 	boss.facing = -1
 	_run(boss, vis, func() -> bool: return false, 1.0)
 	# (람다는 지역 실수를 값으로 잡으므로 사전(참조)에 기록한다) — 세로 자리는 몸 + 그림 (몸이 뛰므로 월드 기준)
-	var y0: float = boss.global_position.y + vis.position.y
+	var y0: float = boss.global_position.y + float(_vpose(vis)[2])
 	var c := {"low": -INF, "high": INF, "t_low": 0.0, "t_high": 0.0, "land_dy": INF}
 	boss._begin(boss.State.SLAM, 1.0)
 	_run(boss, vis, func() -> bool: return boss.attack_phase != "startup", 3.0, func(t: float) -> void:
-		var dy: float = boss.global_position.y + vis.position.y - y0
+		var dy: float = boss.global_position.y + float(_vpose(vis)[2]) - y0
 		if dy > c.low:
 			c.low = dy; c.t_low = t
 		if dy < c.high:
@@ -249,7 +257,7 @@ func _clear_projectiles() -> void:
 
 
 ## 검기: 타격 순간 SwordWave 가 생기고(1페이즈 1갈래, 2페이즈 3갈래), 앞으로 날아가며, 저스트 가드로 되받으면 기사에게 돌아가 흐트러짐 +40.
-func _knight_wave(boss: Node, vis: Sprite2D) -> void:
+func _knight_wave(boss: Node, vis: Node2D) -> void:
 	_clear_projectiles()
 	boss._timer = 99.0
 	boss.facing = -1
@@ -313,7 +321,7 @@ func _knight_wave(boss: Node, vis: Sprite2D) -> void:
 
 
 ## 3연격: 타격 창이 세 번 켜지고, 마지막 타만 붉은 예고 + 가드 불가. 타 사이 창 자세가 끊기지 않는다.
-func _knight_combo(boss: Node, vis: Sprite2D) -> void:
+func _knight_combo(boss: Node, vis: Node2D) -> void:
 	boss._timer = 99.0
 	boss.facing = -1
 	var seen := {"red_steps": [], "unguardable_step": -1, "guardable_steps": []}
@@ -364,7 +372,7 @@ func _knight_combo(boss: Node, vis: Sprite2D) -> void:
 
 ## 돌진 찌르기: 뒤로 물러났다(예비) 아레나를 가로질러 끝에서 창이 박힌다(STUCK 2.0초, 피해 1.3배) → 행진.
 ## 박힌 동안 무너지면 무너짐은 남은 박힘 시간만큼만 (돌진 한 번에 공짜 시간이 박힘 2초 + 무너짐 4.5초로 이어지지 않게).
-func _knight_charge(boss: Node, vis: Sprite2D) -> void:
+func _knight_charge(boss: Node, vis: Node2D) -> void:
 	boss._timer = 99.0
 	boss.facing = -1
 	boss.global_position = Vector2(1800, 1000)
@@ -424,7 +432,7 @@ func _knight_charge(boss: Node, vis: Sprite2D) -> void:
 
 
 ## 등불 회전 (2페이즈): 창이 세 바퀴 돌고, 타격 중 불꽃 고리 3겹(양쪽 6개)이 낮게 퍼진다. 끝나면 창 각도가 제자리(±π 안)로 접힌다.
-func _knight_spin(boss: Node, vis: Sprite2D) -> void:
+func _knight_spin(boss: Node, vis: Node2D) -> void:
 	_clear_projectiles()
 	boss.phase = 2
 	boss._timer = 99.0
@@ -466,7 +474,7 @@ func _knight_spin(boss: Node, vis: Sprite2D) -> void:
 
 ## 소녀가 보스 바로 옆(데드존 안)을 왔다 갔다 해도 몸이 매 프레임 뒤집히지 않는지,
 ## 멀리(데드존 밖) 넘어가도 최소 유지 시간 안에는 다시 돌지 않는지 센다.
-func _facing_hold(boss: Node, vis: Sprite2D, label: String, idle_state: int) -> void:
+func _facing_hold(boss: Node, vis: Node2D, label: String, idle_state: int) -> void:
 	var player: Player = PLAYER.instantiate()
 	get_tree().root.add_child(player)
 	player.set_physics_process(false)
@@ -510,8 +518,16 @@ func _facing_hold(boss: Node, vis: Sprite2D, label: String, idle_state: int) -> 
 	player.queue_free()
 
 
-func _settled(vis: Sprite2D) -> bool:
-	return absf(vis.rotation) < 0.02
+func _settled(vis: Node2D) -> bool:
+	return absf(float(_vpose(vis)[0])) < 0.02
+
+
+## 그림의 몸 자세 [기울기(라디안), 배율, 세로 자리(px, + 아래)]. 부위 뼈대 그림은 노드 변환이 늘 그대로라(뼈대가 안에서 움직인다)
+## 그림이 내주는 probe_pose() 를 쓴다 (등불 기사). 예전 한 장 그림은 노드의 rotation/scale/position 그대로.
+func _vpose(vis: Node2D) -> Array:
+	if vis.has_method("probe_pose"):
+		return vis.probe_pose()
+	return [vis.rotation, vis.scale, vis.position.y]
 
 
 func _check_active_window(r: Dictionary, active_len: float) -> void:
@@ -526,7 +542,7 @@ func _check_active_window(r: Dictionary, active_len: float) -> void:
 func _root_keeper() -> void:
 	var pair := _spawn(ROOT)
 	var boss = pair[0]
-	var vis: Sprite2D = pair[1]
+	var vis: Node2D = pair[1]
 	boss.facing = -1
 	boss._set_state(boss.State.STANCE)
 	boss._timer = 99.0
@@ -578,7 +594,7 @@ func _root_keeper() -> void:
 
 
 ## 2026-10-19 개편: 새 패턴(뿌리 손·씨앗 비·달빛 고리·내려찍기·되돌려 베기)의 흐름·판정·예고·효과 수, 고르기 규칙, 가시 크기.
-func _root_new_patterns(boss: Node, vis: Sprite2D) -> void:
+func _root_new_patterns(boss: Node, vis: Node2D) -> void:
 	var player: Player = PLAYER.instantiate()
 	get_tree().root.add_child(player)
 	player.set_physics_process(false)
@@ -832,10 +848,10 @@ func _free_effects(root: Node) -> void:
 func _bird() -> void:
 	var pair := _spawn(BIRD)
 	var boss = pair[0]
-	var vis: Sprite2D = pair[1]
+	var vis: Node2D = pair[1]
 	# 2026-10-20 부위 뼈대(PartRig)로 바뀐 새: 그림 노드(Sprite)는 자리만 지키고 자식 Rig 가 관절로 움직인다
 	# → 예전의 '그림 전체 기울기·배율' 대신 뼈의 세계 각도·몸통 자리·발바닥·누운 몸 높이를 잰다 (_bird_run).
-	var rig: PartRig = vis.rig
+	var rig: PartRig = vis.get("rig")
 	_ok(rig != null and rig.names.size() >= 15, "새 그림이 부위 뼈대 (%d 부위)" % (rig.names.size() if rig else 0))
 	boss.facing = -1
 	boss.set_collision_mask_value(1, true)
@@ -1070,7 +1086,7 @@ func _ok(cond: bool, label: String) -> void:
 
 
 ## 2026-10-19 탄막 가시성 + 체력 2배: 깃털·잎의 그림 크기(판정 대비), 테두리·심·발광·꼬리, 붉은 점·흰 띠 예고의 때, 체력 1800.
-func _bird_shots(boss: Node, vis: Sprite2D) -> void:
+func _bird_shots(boss: Node, vis: Node2D) -> void:
 	print("[probe] 새 탄막 가시성·체력")
 	_ok(boss.max_hp == 1800.0 and boss.hp == 1800.0, "체력 최대 %.0f / 지금 %.0f (1800 기준)" % [boss.max_hp, boss.hp])
 	var player: Player = PLAYER.instantiate()
