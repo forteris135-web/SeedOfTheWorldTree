@@ -37,10 +37,12 @@ var _size := Vector2.ZERO
 func _ready() -> void:
 	_pool = get_parent() as Node2D
 	if _pool == null or not ("size" in _pool):
+		set_process(false)
 		queue_free()
 		return
 	_skin = TerrainSkin.for_node(_pool)
 	if _skin == null or not _skin.has_role("water_body"):
+		set_process(false)
 		queue_free()   # 그림 옷이 없는 지역 — SapPool 의 옛 그림 그대로
 		return
 	material = preload("res://shaders/ash_purify.tres")
@@ -172,6 +174,8 @@ func _lay(art: TerrainArt, name: String, xa: float, xb: float, y_top: float, h: 
 
 
 func _process(delta: float) -> void:
+	if _rings == null:
+		return
 	_t += delta
 	for i in _waves.size():
 		var w: Node2D = _waves[i]
