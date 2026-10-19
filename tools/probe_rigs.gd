@@ -67,10 +67,20 @@ func _rig_enemy_scenes() -> Array:
 			for k in st.get_node_property_count(i):
 				if st.get_node_property_name(i, k) == "script":
 					var sc = st.get_node_property_value(i, k)
-					if sc is Script and (sc as Script).resource_path.ends_with("enemy_rig_visual.gd"):
+					if sc is Script and _is_rig_visual(sc):
 						out.append(path)
 	out.sort()
 	return out
+
+
+## EnemyRigVisual 이거나 그것을 이은 그림 스크립트인가 (기계·어부처럼 자기 파일에서 EnemyRigVisual 을 넓힌 몹도 검사한다)
+func _is_rig_visual(sc: Script) -> bool:
+	var s := sc
+	while s:
+		if s.resource_path.ends_with("enemy_rig_visual.gd"):
+			return true
+		s = s.get_base_script()
+	return false
 
 
 func _rig_ids() -> Array:
