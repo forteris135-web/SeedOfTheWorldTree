@@ -8,7 +8,7 @@ extends CanvasLayer
 ##   낙하 공격은 '낙하' 버튼(동작 plunge) 또는 스틱을 절반 넘게 아래로 내린 채 공격, 하단 점프는 스틱 절반 넘게 아래 + 점프
 ##   (살짝 처진 엄지로는 안 걸린다 — player.gd DOWN_HOLD_STRENGTH 0.5).
 ## - **글자 대신 그림 (2026-10-19 기획자 요청):** 공격=칼, 가드=방패, 점프=날개와 위 화살, 회피=소용돌이, 낙하=아래로 꽂는 칼,
-##   영혼 기술=**지금 고른 영혼의 그림**(씨앗=새싹 / 바람=초승달 검기 / 빛=별), 전환=도는 화살 고리, 회복=이슬(기획자 그림),
+##   영혼 기술=**지금 고른 영혼의 그림**(씨앗=새싹 / 바람=초승달 검기 / 빛=빛줄기(레이저)), 전환=도는 화살 고리, 회복=이슬(기획자 그림),
 ##   상황 버튼=손(손길) / 문(들어가기) / 굽은 길 화살(이동) / 오르는 고리(성장), 지도=접힌 지도, 메뉴=세 줄.
 ##   그림은 tools/make_touch_icons.gd 가 미리 만든 art/ui/touch/*.png (상아·금빛 + 짙은 테두리 + 은은한 번짐, 밉맵).
 ##   버튼 표의 "text" 는 이름으로만 남아 있다 (시험·안내용, 화면에 그리지 않음).
@@ -193,6 +193,9 @@ func _buttons(size := Vector2.ZERO, with_interact := -1) -> Dictionary:
 		"map": {"pos": Vector2(s.x - 76, 76), "r": 46.0, "text": "지도", "action": "map"},
 		"menu": {"pos": Vector2(76, 76), "r": 46.0, "text": "메뉴", "action": "pause"},
 	}
+	# 보스 러시 동안은 지도가 열리지 않는다 (Room._unhandled_input) → 눌러도 아무 일 없는 버튼은 치운다 (2026-10-20 통합)
+	if BossRush.active:
+		b.erase("map")
 	var show_interact := (_has_player() and _player.can_interact) if with_interact < 0 else with_interact > 0
 	if show_interact:
 		b["interact"] = {"pos": br + Vector2(-740, -270), "r": 70.0, "text": _interact_label() if _has_player() else "손길", "action": "interact"}

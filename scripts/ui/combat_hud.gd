@@ -410,8 +410,40 @@ func soul_notice_desc() -> String:
 
 
 ## 알림 큰 글자 기준선의 높이 비율. 보스 등장 이름이 떠 있으면 그 위로 올린다.
+## 보스 러시 시계(BossRushHUD, 화면 위 가운데)와 겹치면 시계 아래로 내리고, 그때 보스 등장 이름도 떠 있으면 이름 아래로 (2026-10-20 통합).
 func soul_notice_y_ratio() -> float:
-	return SOUL_NOTICE_Y_BOSS if _boss_title_showing() else SOUL_NOTICE_Y
+	var r := SOUL_NOTICE_Y_BOSS if _boss_title_showing() else SOUL_NOTICE_Y
+	var clock := rush_clock_rect()
+	if clock.size.y <= 0.0:
+		return r
+	var h := _canvas.size.y if _canvas and _canvas.size.y > 0.0 else 1080.0
+	var y := h * r
+	var lift := SOUL_NOTICE_TITLE_SIZE * 0.95   # 기준선에서 띠 위 끝까지
+	if y - lift < clock.end.y + 8.0:
+		y = clock.end.y + 8.0 + lift
+		var below := _boss_title_bottom()
+		if below > 0.0:
+			y = maxf(y, below + 16.0 + lift)
+	return y / h
+
+
+## 보스 러시 시계 판의 자리 (화면 좌표). 러시가 아니면 빈 사각형.
+func rush_clock_rect() -> Rect2:
+	var room := get_parent()
+	var rh: Node = room.get_node_or_null("BossRushHUD") if room else null
+	if rh == null or not rh.has_method("panel_rect") or rh.get("_canvas") == null:
+		return Rect2()
+	return rh.panel_rect()
+
+
+## 보스 등장 이름(부제 포함)의 아래 끝 y (화면 px). 이름이 떠 있지 않으면 -1.
+func _boss_title_bottom() -> float:
+	if not _boss_title_showing():
+		return -1.0
+	var bhud: Node = get_parent().get_node_or_null("BossHUD")
+	if bhud == null or not bhud.has_method("title_y"):
+		return -1.0
+	return float(bhud.title_y()) + 52.0   # 부제 기준선(+44) + 글자 아래 끝
 
 
 ## 보스 등장 이름(BossHUD, 3초)이 화면에 떠 있는가
@@ -437,7 +469,8 @@ func hud_right_x(y0 := -INF, y1 := INF) -> float:
 	var slots := dew_slots()
 	for i in slots.size():
 		rects.append(Rect2(slots[i], dew_size(i)))
-	rects.append(dust_box_full_rect())
+	if dust_box_shown():
+		rects.append(dust_box_full_rect())
 	if _player:
 		var o := soul_origin()
 		var label := soul_label()
@@ -451,9 +484,16 @@ func hud_right_x(y0 := -INF, y1 := INF) -> float:
 	return right
 
 
-## HUD 덩어리의 아래 끝 y (화면 px): 빛 가루 칸 아래 (영혼 줄보다 아래에 있다).
+## HUD 덩어리의 아래 끝 y (화면 px): 빛 가루 칸 아래 (영혼 줄보다 아래에 있다). 칸이 숨었으면 영혼 줄 아래.
 func hud_bottom_y() -> float:
+	if not dust_box_shown():
+		return soul_origin().y + 12.0
 	return maxf(soul_origin().y + 12.0, dust_box_full_rect().end.y + 4.0)
+
+
+## 빛 가루 칸을 보이는가. 보스 러시 동안은 숨긴다 (러시에는 빛 가루가 없고 러시용 빈 진행이라 늘 0 — 2026-10-20 통합).
+func dust_box_shown() -> bool:
+	return not BossRush.active
 
 
 ## 영혼 전환 알림의 띠 (화면 좌표). 글자 폭에 맞춘 띠를 HUD 오른쪽 끝보다 오른쪽에 둔다 (화면이 넓으면 가운데).
@@ -814,7 +854,8 @@ func _on_draw() -> void:
 	# 이슬 방울 · 성장 표시 · 빛 가루 · 영혼
 	_draw_dews()
 	_draw_growth(font)
-	_draw_dust(font)
+	if dust_box_shown():
+		_draw_dust(font)
 	_draw_souls(font)
 	_draw_soul_notice(font)
 	# 메시지

@@ -593,6 +593,8 @@ func _probe_full_flow() -> void:
 		return
 	await _frames(30)
 	Progress.ending = ""
+	# 2026-10-20 통합(이펙트 Fx): 정원의 끝에 오래 사는 이펙트를 하나 띄워 두고, 엔딩 장면에 남지 않는지 본다
+	Fx.spawn("pickup_big", player.global_position, {"life": 60.0, "children": false})
 	choice.interact(player)
 	var ending: Node = await _wait_scene("ending_scene", 12.0)
 	_check(ending is EndingScene and Progress.ending == "return", "'마력의 관을 끊는다' → 엔딩 장면 (되돌림, %s)" % Progress.ending)
@@ -601,8 +603,11 @@ func _probe_full_flow() -> void:
 	var e: EndingScene = ending
 	e.time_scale = SPEED
 	var t0 := Time.get_ticks_msec()
+	var fx_max := 0
 	while not e.end_menu_ready() and Time.get_ticks_msec() - t0 < 90000:
 		await get_tree().process_frame
+		fx_max = maxi(fx_max, Fx.active_count())
+	_check(fx_max == 0, "엔딩 장면 동안 이펙트(Fx)가 하나도 떠 있지 않다 (정원의 끝 이펙트도 거둠, 최대 %d)" % fx_max)
 	_check(e.end_menu_ready() and Music.current() == Music.ENDING_TRACK, "엔딩 끝 화면까지, 허밍이 흐르는 중 (%s)" % Music.current())
 	e.time_scale = 1.0
 	e.choose("explore")

@@ -9,6 +9,7 @@ extends Node
 ## 테두리는 도형을 둥글게 부풀린 것(Geometry2D.offset_polygon)을 먼저 깔고 그 위에 칠해서, 여러 도형이 겹친 그림도 바깥선만 남는다.
 ## 이슬(회복)은 기획자 그림 art/objects/icon_dew.png 를 다듬어 줄인다.
 ## 다시 만들 때 이 파일의 도형만 고치고 다시 돌리면 된다. (만든 그림은 .import 에서 밉맵을 켜 둔다)
+## 몇 장만 다시 만들려면:  godot --path . res://tools/make_touch_icons.tscn -- --only=soul_light,soul_wind  (나머지 그림은 그대로 둔다)
 
 const OUT := "res://art/ui/touch/"
 const SIZE := 192
@@ -48,17 +49,24 @@ func _ready() -> void:
 	_vp.add_child(_painter)
 	await _detect_premult()
 	print("[아이콘] 찍은 그림의 알파: %s" % ("미리 곱해짐(가장자리 어두움) → 되돌린다" if _premult else "그대로"))
+	var only := []
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--only="):
+			only = a.trim_prefix("--only=").split(",", false)
 	var shots := {}
 	for name in ICONS:
+		if not only.is_empty() and not only.has(name):
+			continue
 		var img := await _render(name)
 		img = _finish(img, ICONS[name])
 		img.save_png(ProjectSettings.globalize_path(OUT + "touch_%s.png" % name))
 		shots[name] = img
 		print("[아이콘] %stouch_%s.png" % [OUT, name])
-	var dew := _make_dew()
-	dew.save_png(ProjectSettings.globalize_path(OUT + "touch_heal.png"))
-	shots["heal"] = dew
-	print("[아이콘] %stouch_heal.png (art/objects/icon_dew.png 에서)" % OUT)
+	if only.is_empty() or only.has("heal"):
+		var dew := _make_dew()
+		dew.save_png(ProjectSettings.globalize_path(OUT + "touch_heal.png"))
+		shots["heal"] = dew
+		print("[아이콘] %stouch_heal.png (art/objects/icon_dew.png 에서)" % OUT)
 	_contact_sheet(shots)
 	get_tree().quit()
 
@@ -590,18 +598,33 @@ func _star(c: Vector2, r_out: float, r_in: float, points: int, rot := 0.0) -> Pa
 
 
 func _icon_soul_light() -> void:
-	# 빛의 별 (빛의 영혼): 큰 네 갈래 별 + 뒤에 작은 비낀 별 + 가운데 빛
-	var c := Vector2(50, 50)
-	var back := _star(c, 27, 7, 4, PI / 4.0)
-	var main := _star(c, 43, 9.5, 4)
-	_ink([back, main])
-	_fill(back, Color(1.0, 0.95, 0.75), Color(0.95, 0.68, 0.3))
-	_fill(main, Color(1.0, 0.99, 0.92), Color(1.0, 0.78, 0.36))
-	for i in 4:
-		var a := -PI / 2.0 + PI * i / 2.0
-		_line(PackedVector2Array([c + Vector2(cos(a), sin(a)) * 6.0, c + Vector2(cos(a), sin(a)) * 34.0]), 1.3, Color(GOLD_DEEP, 0.55))
-	_painter.draw_circle(c, 7.5, Color(1.0, 1.0, 0.92))
-	_painter.draw_circle(c, 4.0, Color(1, 1, 1))
+	# 빛줄기 (빛의 영혼 = 레이저, 2026-10-20 통합: 이펙트 리뉴얼 F1 의 빛 레이저에 맞춤 — 예전엔 네 갈래 별):
+	# 손에 모인 빛 구슬 → 곧게 뻗는 빛줄기(하얀 심) → 끝에서 터지는 번쩍임 + 빛 알갱이 둘.
+	# 오른쪽 위로 조금 비스듬히(18°) 두어 '쏘는' 느낌을 준다 (게임에서는 수평으로 나간다).
+	var c := Vector2(50, 52)
+	var rot := deg_to_rad(-18)
+	var orb_c := c + Vector2(-26, 0).rotated(rot)
+	var tip_c := c + Vector2(31, 0).rotated(rot)
+	var beam := _xf(PackedVector2Array([Vector2(-24, -8.5), Vector2(31, -6.0), Vector2(31, 6.0), Vector2(-24, 8.5)]), c, rot)
+	var flare := _star(orb_c, 23, 3.0, 4, rot + PI / 4.0)   # 구슬 뒤 가는 네 갈래 빛살 (빛을 모으는 손), 빛줄기와 비껴서
+	var orb := _ellipse(orb_c, 14.5, 14.5, 40)
+	var burst := _star(tip_c, 13, 3.6, 4, PI / 4.0 + rot)   # 빛줄기 끝의 번쩍임 (벽에 닿은 자리)
+	var burst2 := _star(tip_c, 9, 2.6, 4, rot)
+	var sp1 := _star(c + Vector2(2, -18).rotated(rot), 6.0, 1.6, 4)
+	var sp2 := _star(c + Vector2(14, 17).rotated(rot), 4.6, 1.3, 4)
+	_ink([flare, beam, orb, burst, burst2, sp1, sp2])
+	_fill(flare, Color(1.0, 0.96, 0.78), Color(0.96, 0.7, 0.32))
+	_fill(beam, Color(1.0, 0.99, 0.9), Color(1.0, 0.76, 0.34))
+	_fill(burst, Color(1.0, 0.97, 0.82), Color(1.0, 0.74, 0.32))
+	_fill(burst2, Color(1.0, 1.0, 0.95), Color(1.0, 0.86, 0.5))
+	# 빛줄기 심: 하얀 가는 줄 (구슬에서 끝까지)
+	_line(_xf(PackedVector2Array([Vector2(-18, 0), Vector2(29, 0)]), c, rot), 3.4, Color(1, 1, 1, 0.95))
+	_fill(orb, Color(1.0, 1.0, 0.94), Color(1.0, 0.8, 0.4))
+	_painter.draw_circle(orb_c, 7.0, Color(1.0, 1.0, 0.92))
+	_painter.draw_circle(orb_c, 3.8, Color(1, 1, 1))
+	_painter.draw_circle(tip_c, 3.0, Color(1, 1, 1))
+	_fill(sp1, Color(1.0, 1.0, 0.92), GOLD)
+	_fill(sp2, Color(1.0, 1.0, 0.92), GOLD)
 
 
 func _arrow_arc(c: Vector2, r: float, a0: float, a1: float, width: float) -> Array:

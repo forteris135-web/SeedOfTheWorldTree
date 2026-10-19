@@ -2,12 +2,12 @@ extends Node
 ## 터치 버튼 그림·빛 가루 칸 눈 확인용 스크린샷 (창으로 돌린다 — 화면 없이 돌면 그림이 안 찍힌다):
 ##   godot --path . res://tools/shot_touch_ui.tscn
 ## 밝은 방(수관 시작의 가지, 정화된 색)과 어두운 방(채굴장 책임자의 방, 어둠)을 1920×1080 과 아이패드 4:3(2048×1536 → 캔버스 1920×1440)
-## 크기의 SubViewport 에 띄워, 터치 장치·바람 영혼 쿨다운 중·상황 버튼(손길 / 들어가기 / 쉬는 중 이동·성장)·공격 버튼 누름·빛 가루 +N 상태로 찍는다.
+## 크기의 SubViewport 에 띄워, 터치 장치·바람 영혼(어두운 1080 은 빛 영혼 = 빛줄기 그림) 쿨다운 중·상황 버튼(손길 / 들어가기 / 쉬는 중 이동·성장)·공격 버튼 누름·빛 가루 +N 상태로 찍는다.
 ## 결과: screenshots/touch_<방>_<크기>.png
 
 const CASES := [
 	{"room": "canopy_01", "size": Vector2i(1920, 1080), "tag": "bright_1080", "alive": true, "spot": "grass"},
-	{"room": "mine_deep", "size": Vector2i(1920, 1080), "tag": "dark_1080", "alive": false, "spot": "portal"},
+	{"room": "mine_deep", "size": Vector2i(1920, 1080), "tag": "dark_1080", "alive": false, "spot": "portal", "soul": "light"},
 	{"room": "canopy_01", "size": Vector2i(1920, 1440), "tag": "bright_ipad", "alive": true, "spot": "rest"},
 	{"room": "mine_deep", "size": Vector2i(1920, 1440), "tag": "dark_ipad", "alive": false, "spot": "portal"},
 ]
@@ -28,7 +28,10 @@ func _shot(c: Dictionary) -> void:
 	Progress.reset()
 	Progress.gain_ability("wind")
 	Progress.gain_ability("double_jump")
-	Progress.soul = "wind"
+	var soul: String = c.get("soul", "wind")
+	if soul != "wind":
+		Progress.gain_ability(soul)
+	Progress.soul = soul
 	Progress.add_upgrade("dews", 1)
 	if c["alive"]:
 		Purity.regions["canopy"] = true
@@ -59,7 +62,7 @@ func _shot(c: Dictionary) -> void:
 		var g: Node2D = get_tree().get_first_node_in_group("moonlight_grass")
 		player.start_rest(g)
 		await _frames(10)
-	player._soul_cooldowns["wind"] = 2.9
+	player._soul_cooldowns[soul] = 2.9
 	Progress.add_dust(1234)
 	await _frames(12)
 	# 공격 버튼을 누르고 있는 모습 (가짜 손가락)

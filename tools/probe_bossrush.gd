@@ -184,6 +184,8 @@ func _run() -> void:
 			_check(not Progress.has(room.defeat_flag) and Progress.pending_memory == "" and Progress.dust == 0 and not Progress.has("dust_" + room.defeat_flag),
 				"러시에서 정화의 손길: 깃발·회상·빛 가루 없음")
 		_check(not Progress.has(room.defeat_flag) and Progress.flags.is_empty(), "%s: 러시 중 깃발이 하나도 생기지 않았다 %s" % [EXPECT[i], Progress.flags.keys()])
+		if i == 0:
+			await _check_fx_cleared_on_advance(room)
 	_check(order == EXPECT, "보스 방 순서: %s" % [order])
 	var res := await _wait_scene("boss_rush_result", 20.0) as BossRushResult
 	_check(res != null and res.outcome() == "clear", "다섯을 모두 쓰러뜨리면 결과 화면 (완주)")
@@ -288,6 +290,56 @@ func _run() -> void:
 	_rm(BossRush.BEST_PATH)
 
 
+## 2026-10-20 통합(빛 가루 칸 U1 · 러시 시계 M3 · 영혼 알림): 러시에서는 빛 가루 칸을 숨기고(러시엔 빛 가루가 없다),
+## 영혼 전환 알림은 러시 시계·보스 등장 이름과 겹치지 않으며, 열리지 않는 지도의 터치 버튼은 치운다.
+func _check_rush_hud_layout(room: Node, ch: Node, hud: Node, player: Player) -> void:
+	_check(not ch.dust_box_shown(), "러시 중 빛 가루 칸은 숨는다 (러시용 빈 진행이라 늘 0)")
+	var bh: Node = room.get_node_or_null("BossHUD")
+	var title_on: bool = bh != null and float(bh.get("_title")) > 0.0
+	ch._on_soul_changed(player.soul if player else "wind")
+	await _frames(2)
+	# 화면 없는 실행의 캔버스 크기는 진짜 화면과 달라서, 세 화면 비율(아이폰·16:9·아이패드)의 캔버스 크기를 잠깐 넣어 재 본다
+	var canvases: Array = [ch._canvas, hud._canvas, bh._canvas if bh else null]
+	var keep: Array = []
+	for c in canvases:
+		keep.append(c.size if c else Vector2.ZERO)
+	for sz in [Vector2(2338, 1080), Vector2(1920, 1080), Vector2(1920, 1440)]:
+		for c in canvases:
+			if c:
+				c.size = sz
+		hud._place()
+		var nr: Rect2 = ch.soul_notice_rect()
+		var pr: Rect2 = hud.panel_rect()
+		var tb: float = ch._boss_title_bottom()
+		var tt: float = float(bh.title_y()) - 62.0 if bh else 0.0
+		_check(not nr.intersects(pr) and (not title_on or nr.position.y >= tb or nr.end.y <= tt) and nr.end.y < sz.y * 0.6,
+			"러시 %s: 영혼 전환 알림 %s 이 러시 시계 %s · 보스 등장 이름(%s, %.0f~%.0f)과 겹치지 않는다" % [sz, nr, pr, "떠 있음" if title_on else "없음", tt, tb])
+	for k in canvases.size():
+		if canvases[k]:
+			canvases[k].size = keep[k]
+	hud._place()
+	ch._soul_notice_timer = 0.0
+	var touch: Node = room.get_node_or_null("TouchControls")
+	if touch:
+		_check(not touch._buttons().has("map") and touch._buttons().has("menu"), "러시 중 터치 '지도' 버튼은 치우고 '메뉴'는 남긴다")
+
+
+## 2026-10-20 통합(이펙트 Fx F1 · 보스 러시 M3): 러시가 다음 방으로 저절로 넘어가면 옛 방의 이펙트가 하나도 남지 않는다.
+func _check_fx_cleared_on_advance(room: Node) -> void:
+	var probe_fx: FxSprite = Fx.spawn("pickup_big", room.player.global_position, {"life": 60.0, "children": false})
+	var last_old := Time.get_ticks_msec()
+	var t0 := last_old
+	while is_instance_valid(room) and get_tree().current_scene == room and Time.get_ticks_msec() - t0 < 20000:
+		last_old = Time.get_ticks_msec()
+		await get_tree().process_frame
+	await _frames(3)
+	var stale := 0
+	for a in Fx._active:
+		if a.born_ms <= last_old:
+			stale += 1
+	_check(probe_fx != null and stale == 0, "러시: 다음 보스 방으로 넘어가면 옛 방 이펙트를 모두 거둔다 (남은 것 %d, 지금 %d개)" % [stale, Fx.active_count()])
+
+
 ## 방마다 확인하는 것
 func _boss_room_checks(room: BossRoom, i: int, save_bytes: PackedByteArray) -> void:
 	var t0 := Time.get_ticks_msec()
@@ -316,6 +368,7 @@ func _boss_room_checks(room: BossRoom, i: int, save_bytes: PackedByteArray) -> v
 		var pr: Rect2 = hud.panel_rect()
 		var right: float = ch.hud_right_x(pr.position.y, pr.end.y)
 		_check(pr.position.x >= right, "러시 시계가 체력 막대·이슬 줄과 겹치지 않는다 (시계 왼쪽 %.0f ≥ HUD 오른쪽 %.0f)" % [pr.position.x, right])
+		await _check_rush_hud_layout(room, ch, hud, player)
 	if player:
 		_check(is_equal_approx(player.max_hp, 130.0) and is_equal_approx(player.hp, player.max_hp) and player.max_dews == 5 and player.dews == 5
 			and is_equal_approx(player.attack_multiplier, 1.15) and Progress.soul == "wind" and player.soul == "wind" and Progress.has_ability("sap_walk"),

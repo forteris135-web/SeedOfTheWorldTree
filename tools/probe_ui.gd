@@ -189,7 +189,7 @@ func _test_soul_button_and_notice() -> void:
 	_player.soul = "foo"
 	var odd_icon: String = _touch.button_icon("soul")
 	_player.soul = "wind"
-	_check(light_icon == "soul_light" and seed_icon == "soul_seed" and odd_icon == "soul_seed", "빛 → 별(soul_light), 씨앗 → 새싹(soul_seed), 모르는 값 → 새싹 (%s / %s / %s)" % [light_icon, seed_icon, odd_icon])
+	_check(light_icon == "soul_light" and seed_icon == "soul_seed" and odd_icon == "soul_seed", "빛 → 빛줄기(soul_light, 레이저), 씨앗 → 새싹(soul_seed), 모르는 값 → 새싹 (%s / %s / %s)" % [light_icon, seed_icon, odd_icon])
 	_check(_player.next_soul() == "light" and _player.soul_color("light").is_equal_approx(Color(1.0, 0.9, 0.7)), "전환 버튼이 띨 다음 영혼은 빛(금빛)")
 	_check(_hud._soul_notice_timer > 1.0 and _hud.soul_notice_title() == "바람의 영혼", "전환 순간 알림 1.2초 시작: '%s'" % _hud.soul_notice_title())
 	_check("쿨 5초" in _hud.soul_notice_desc(), "알림 설명에 쿨다운: '%s'" % _hud.soul_notice_desc())
