@@ -1,0 +1,98 @@
+{
+  "_설명": "등불 기사(보스) 부위 뼈대 설계도. tools/rig_cut.gd 가 읽어 art/rigs/lantern_knight/ 를 만든다. 좌표는 모두 원본 시트 px. 쓰는 법: RIGS.md 5장(보스).",
+  "id": "lantern_knight",
+  "sheet": "res://익스펜션/그림/리뉴얼-보스/098DD4E0-03DB-4307-9C9A-B5A1C77E6AED.PNG",
+  "faces": "right",
+  "segment": {"alpha": 0.5, "erode": 4, "min_pixels": 1500, "soft_alpha": 0.03, "min_small": 150},
+  "out_scale": 0.8,
+  "game_scale": 0.6,
+  "archetype": "knight",
+  "chains": {
+    "leg_f": ["leg_f_up", "leg_f_lo", "foot_f"],
+    "leg_b": ["leg_b_up", "leg_b_lo", "foot_b"],
+    "arm_f": ["arm_f_up", "arm_f_lo", "weapon"],
+    "arm_b": ["arm_b_up", "arm_b_lo"]
+  },
+  "legs": ["leg_f", "leg_b"],
+  "weapon_chain": "arm_f",
+  "ground_guard": [],
+  "soft": ["hips"],
+  "ghost": ["torso", "arm_f_up", "arm_f_lo", "weapon", "lantern"],
+  "parts": {
+    "hips": {
+      "comps": [10],
+      "clip": [[[1045, 348], [1205, 348], [1205, 432], [1045, 432]]],
+      "pivot": [1128, 380], "z": 1, "hidden": true
+    },
+    "torso": {
+      "comps": [9],
+      "pivot": [962, 392], "parent": "hips", "attach": [1128, 360], "z": 2
+    },
+    "head": {
+      "comps": [3],
+      "pivot": [1000, 182], "parent": "torso", "attach": [985, 246], "z": 3
+    },
+    "arm_f_up": {
+      "comps": [20],
+      "clip": [[[1060, 420], [1140, 420], [1172, 500], [1160, 530], [1125, 530], [1060, 470]]],
+      "pivot": [1095, 447], "parent": "torso", "attach": [1010, 282], "z": 6
+    },
+    "arm_f_lo": {
+      "comps": [16],
+      "pivot": [718, 448], "parent": "arm_f_up", "attach": [1145, 512], "z": 7
+    },
+    "weapon": {
+      "comps": [25],
+      "pivot": [1503, 768], "tip": [1503, 377], "parent": "arm_f_lo", "attach": [780, 556], "z": 5, "scale": 1.25
+    },
+    "lantern": {
+      "comps": [24],
+      "pivot": [1428, 392], "tip": [1428, 600], "parent": "weapon", "attach": [1503, 486], "z": 4
+    },
+    "arm_b_up": {
+      "comps": [21],
+      "clip": [[[1150, 420], [1232, 420], [1250, 500], [1240, 540], [1205, 540], [1150, 470]]],
+      "pivot": [1190, 447], "parent": "torso", "attach": [990, 276], "z": -3, "modulate": [0.78, 0.74, 0.72, 1.0]
+    },
+    "arm_b_lo": {
+      "comps": [19],
+      "pivot": [1012, 449], "tip": [1100, 552], "parent": "arm_b_up", "attach": [1225, 522], "z": -4, "modulate": [0.78, 0.74, 0.72, 1.0]
+    },
+    "leg_f_up": {
+      "comps": [36],
+      "clip": [[[880, 650], [1000, 650], [1000, 792], [975, 802], [925, 797], [880, 784]]],
+      "pivot": [938, 685], "parent": "hips", "attach": [1140, 395], "z": -1
+    },
+    "leg_f_lo": {
+      "comps": [36],
+      "clip": [[[880, 770], [930, 768], [945, 755], [1000, 760], [1000, 815], [965, 930], [880, 935]]],
+      "pivot": [950, 788], "parent": "leg_f_up", "z": -2
+    },
+    "foot_f": {
+      "comps": [36],
+      "clip": [[[860, 1005], [860, 925], [880, 905], [925, 898], [965, 905], [1000, 925], [1000, 1005]]],
+      "pivot": [925, 928], "sole": [932, 995], "parent": "leg_f_lo", "z": -2
+    },
+    "leg_b_up": {
+      "comps": [37],
+      "clip": [[[980, 650], [1110, 650], [1110, 797], [1080, 806], [1025, 801], [980, 788]]],
+      "pivot": [1035, 690], "parent": "hips", "attach": [1115, 392], "z": -6, "modulate": [0.72, 0.68, 0.66, 1.0]
+    },
+    "leg_b_lo": {
+      "comps": [37],
+      "clip": [[[975, 775], [1030, 772], [1045, 760], [1110, 765], [1110, 820], [1072, 940], [975, 945]]],
+      "pivot": [1051, 792], "parent": "leg_b_up", "z": -7, "modulate": [0.72, 0.68, 0.66, 1.0]
+    },
+    "foot_b": {
+      "comps": [37],
+      "clip": [[[965, 1020], [965, 935], [985, 915], [1030, 908], [1070, 915], [1110, 935], [1110, 1020]]],
+      "pivot": [1032, 936], "sole": [1036, 1011], "parent": "leg_b_lo", "z": -7, "modulate": [0.72, 0.68, 0.66, 1.0]
+    },
+    "cape": {
+      "comps": [26],
+      "mirror": true,
+      "pivot": [310, 505], "tip": [80, 800], "parent": "torso", "attach": [925, 258], "rest": -62, "z": -12,
+      "chain": {"stiffness": 40, "damping": 6, "drag": 0.0003, "gravity": 0.15, "max": 30}
+    }
+  }
+}
