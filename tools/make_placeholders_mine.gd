@@ -5,13 +5,12 @@ extends SceneTree
 ## **이미 있는 파일은 건너뛴다** — 기획자가 진짜 그림을 같은 이름으로 넣어 두었으면 그대로 둔다. 임시 그림을 다시 만들려면 --force.
 ## 만드는 것:
 ##   art/bosses/boss_iron_pump_now.png (1536×1024 투명, 왼쪽을 보는 녹슨 펌프: 몸통·피스톤·관·심장(핵))
-##   art/bosses/boss_iron_pump_past.png (1536×1024, 반짝이는 새 펌프 + 등불 공방)
 ##   art/enemies/enemy_small_pump.png (1536×1024 투명, 왼쪽을 보는 작은 펌프 — art_faces_right=false)
 ##   art/objects/object_cracked_wall.png (512×1024 투명, 세로로 금 간 나무 벽 조각 — 벽의 크기에 맞춰 늘려 그린다)
 ##   art/objects/object_dew_cup.png / object_scripture_page.png (512×512 투명 아이콘)
 ##   art/backgrounds/bg_flooded_mine.png / bg_flooded_mine_boss.png (1536×1024, 붉은 녹과 수액빛)
-##   art/memories/memory_pump_1.png / _2.png / _3.png (1536×1024, 바랜 색)
-##   art/memories/ending_third_way.png (1536×864, 16:9)
+##   (art/memories/memory_pump_1~3.png · boss_iron_pump_past.png 는 진짜 그림이 들어와 더 만들지 않는다)
+##   (art/memories/ending_third_way.png 는 더 만들지 않는다 — ENDINGS.md 의 진엔딩 그림 ending_true_1~5.png 로 바뀜)
 ## 그림은 절반 크기로 계산한 뒤 두 배로 키운다 (부드럽고 4배 빠르다).
 
 var _rng := RandomNumberGenerator.new()
@@ -23,18 +22,15 @@ func _init() -> void:
 	var t0 := Time.get_ticks_msec()
 	_force = "--force" in OS.get_cmdline_user_args() or "--force" in OS.get_cmdline_args()
 	_make("res://art/bosses/boss_iron_pump_now.png", 1536, 1024, true, func(u: float, v: float) -> Color: return _pump(u, v, true))
-	_make("res://art/bosses/boss_iron_pump_past.png", 1536, 1024, false, _pump_past)
+	# boss_iron_pump_past.png · memory_pump_1~3.png 는 기획자의 진짜 그림이 들어왔고, ending_third_way.png 는 ENDINGS.md 의 진엔딩 그림 5장
+	# (ending_true_1~5.png)으로 바뀌어 없어졌다 (2026-10-20) — 만들지 않는다 (--force 로도 덮어쓰지 않게)
 	_make("res://art/enemies/enemy_small_pump.png", 1536, 1024, true, _small_pump)
 	_make("res://art/objects/object_cracked_wall.png", 512, 1024, true, _cracked_wall)
 	_make("res://art/objects/object_dew_cup.png", 512, 512, true, _dew_cup)
 	_make("res://art/objects/object_scripture_page.png", 512, 512, true, _scripture_page)
 	_make("res://art/backgrounds/bg_flooded_mine.png", 1536, 1024, false, _bg_flooded)
 	_make("res://art/backgrounds/bg_flooded_mine_boss.png", 1536, 1024, false, _bg_flooded_boss)
-	_make("res://art/memories/memory_pump_1.png", 1536, 1024, false, _memory_1)
-	_make("res://art/memories/memory_pump_2.png", 1536, 1024, false, _memory_2)
-	_make("res://art/memories/memory_pump_3.png", 1536, 1024, false, _memory_3)
-	_make("res://art/memories/ending_third_way.png", 1536, 864, false, _ending)
-	print("임시 그림 %d장 생성 (12장 중, 나머지는 이미 있어 건너뜀) (%.1f초)" % [_made, (Time.get_ticks_msec() - t0) / 1000.0])
+	print("임시 그림 %d장 생성 (7장 중, 나머지는 이미 있어 건너뜀) (%.1f초)" % [_made, (Time.get_ticks_msec() - t0) / 1000.0])
 	quit()
 
 
