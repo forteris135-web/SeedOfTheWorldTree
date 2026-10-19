@@ -45,6 +45,7 @@ var _air_h := 0.0        # 바닥 위로 떠 있는 높이 (뼈대 단위)
 var _wing_chains: Array = []   # 땅 막기할 날개 사슬 [[어깨, 손목], [접은 날개] …] (뼈 번호)
 var _wing_dir: Array = []      # 사슬마다 들어 올리는 회전 방향 (+1 / −1)
 var _wing_lift := {}           # 뼈 번호 → 지금 들어 올린 각도 (라디안)
+var _wing_side := {}           # 뼈 번호 → 들어 올리는 쪽 (+1 / −1, 다 풀릴 때까지 지킨다)
 var _prev_state := -1
 var _state_t := 0.0
 var _from := {}          # 상태에 들어설 때 보이던 자세 (예비·쓰러짐이 여기서 출발)
@@ -276,7 +277,7 @@ func _make_leaves(burst: bool) -> CPUParticles2D:
 	p.texture = load("res://art/rigs/%s/%s.png" % [RIG_ID, "leaf_b" if burst else "leaf_a"])
 	p.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	p.amount = 18 if burst else 10
-	p.lifetime = 1.6 if burst else 2.2
+	p.lifetime = 1.1 if burst else 2.0
 	p.one_shot = burst
 	p.explosiveness = 0.9 if burst else 0.0
 	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
@@ -284,14 +285,14 @@ func _make_leaves(burst: bool) -> CPUParticles2D:
 	p.direction = Vector2(0, -1) if burst else Vector2(-0.3, 1)
 	p.spread = 70.0 if burst else 50.0
 	p.gravity = Vector2(0, 120 if burst else 60)
-	p.initial_velocity_min = 60.0 if burst else 20.0
-	p.initial_velocity_max = 220.0 if burst else 70.0
+	p.initial_velocity_min = 40.0 if burst else 20.0
+	p.initial_velocity_max = 140.0 if burst else 60.0
 	p.angular_velocity_min = -160.0
 	p.angular_velocity_max = 160.0
 	p.angle_min = -180.0
 	p.angle_max = 180.0
-	p.scale_amount_min = 0.18
-	p.scale_amount_max = 0.32
+	p.scale_amount_min = 0.1
+	p.scale_amount_max = 0.2
 	p.damping_min = 20.0
 	p.damping_max = 40.0
 	var fade := Gradient.new()
@@ -316,7 +317,13 @@ func _process(delta: float) -> void:
 	var k := rig.game_scale * art_scale
 
 	# ---- 방향: 폭이 +1 → 0 → −1 을 지나며 몸을 튼다 (0 을 지나는 순간 딛은 발을 세상에 남긴다) ----
-	_face.damp(float(_boss.facing), 11.0, delta)
+	var want_face := float(_boss.facing)
+	if st == GrayLeafBird.State.EAT and _boss._target_pile and is_instance_valid(_boss._target_pile):
+		# 잎을 삼키는 동안은 잎 더미 쪽으로 고개를 숙인다 (논리는 소녀 쪽을 보고 있어도 — 이때는 공격이 없다)
+		var dxp: float = _boss._target_pile.global_position.x - _boss.global_position.x
+		if absf(dxp) > 10.0:
+			want_face = signf(dxp)
+	_face.damp(want_face, 11.0, delta)
 	var fs := signf(_face.v) if _face.v != 0.0 else _last_face_sign
 	if fs != _last_face_sign:
 		motion.flip_feet()
@@ -458,9 +465,10 @@ func _on_enter(st: int) -> void:
 			fade = 0.0   # 세 박자 곡선이 지금 자세에서 출발한다
 		GrayLeafBird.State.FALLEN:
 			fade = 0.08
-			_crash_t = -1.0
 			motion.kick("impact", 140.0)
 			_leaf_pop(16)
+			# 무너져 땅에 있던 채로 쓰러지면 공중 단계 없이 바로 무너져 눕는다 (땅에 닿는 순간이 따로 오지 않는다)
+			_crash_t = 0.0 if _boss.global_position.y >= _boss.ground_y - 8.0 else -1.0
 		GrayLeafBird.State.BROKEN:
 			fade = 0.15
 			motion.kick("impact", 90.0)
@@ -753,8 +761,8 @@ func _apply_folds() -> void:
 
 ## 날개 땅 막기: 펼친 날개·접은 날개가 바닥선 아래로 들어가면 어깨(그다음 손목)를 '들어 올리는 쪽'으로 돌려 날개 끝을 바닥 위에 눕힌다
 ## (축 없는 뼈라 RigMotion 의 무기 땅 막기를 못 쓴다 — 같은 방법을 여기서). 날개는 설계도에서 '부드러운 부위'라 몸을 받쳐 띄우지 않는다.
-## 돌리는 쪽은 날개마다 고정 (가까운 날개는 앞으로 뻗어 있어 − 가 들기, 먼 날개·접은 날개는 뒤로 뻗어 + 가 들기) — 두 해 사이를 오가며
-## 날개가 한 프레임에 뒤집히지 않게. 든 각도는 필요하면 바로 늘리고, 필요 없어지면 천천히(WING_RELEASE) 푼다.
+## 돌리는 쪽: 가장 깊은 점이 관절보다 앞이면 −, 뒤면 + (빨리 들리는 쪽). 한 번 들기 시작하면 다 풀릴 때까지 그 쪽을 지킨다 —
+## 두 해 사이를 오가며 날개가 한 프레임에 뒤집히지 않게. 든 각도는 필요하면 바로 늘리고, 필요 없어지면 천천히(WING_RELEASE) 푼다.
 const WING_MARGIN := 2.0
 const WING_RELEASE := 5.0
 
@@ -763,40 +771,56 @@ func _clamp_wings(delta: float) -> void:
 	var changed := false
 	for ci in _wing_chains.size():
 		var chain: PackedInt32Array = _wing_chains[ci]
-		var dir: float = _wing_dir[ci]
+		var spr: Sprite2D = _spr.get(rig.names[chain[0]])
+		if spr and not spr.visible:
+			for jb in chain:
+				_wing_lift[jb] = 0.0   # 안 보이는 날개(접은 그림이 대신 보일 때)는 막지 않는다 — 다시 보이는 순간 바로 막힌다
+			continue
 		for c in chain.size():
 			var jb := chain[c]
-			var need := 0.0
-			var deepest := -INF
-			var q := Vector2.ZERO
-			for j in range(c, chain.size()):
-				var t := bx * rig.xf[chain[j]]
-				for hp in rig.hulls[chain[j]]:
-					var w := t * hp
-					if w.y > deepest:
-						deepest = w.y
-						q = w
-			var pj := bx * rig.xf[jb].origin
-			if deepest > -WING_MARGIN and pj.y < -WING_MARGIN:
-				var rr := (q - pj).length()
-				if rr > 1.0:
-					var want := clampf((-WING_MARGIN - pj.y) / rr, -1.0, 1.0)
-					var cur := (q - pj).angle()
-					var s1 := asin(want)
-					var best := INF
-					for sol in [s1, PI - s1]:
-						var d := wrapf(sol - cur, -PI, PI)
-						if d * dir >= -0.001 and absf(d) < best:
-							best = absf(d)
-					if best < INF:
-						need = minf(best, 1.5)
 			var held: float = _wing_lift.get(jb, 0.0)
-			var lift := maxf(need, held - WING_RELEASE * delta) if delta > 0.0 else need
-			_wing_lift[jb] = lift
-			if lift > 0.0001:
-				rig.rot[jb] += dir * lift
+			var dir: float = _wing_side.get(jb, float(_wing_dir[ci]))
+			var total := 0.0
+			for iter in 3:
+				var deepest := -INF
+				var q := Vector2.ZERO
+				for j in range(c, chain.size()):
+					var t := bx * rig.xf[chain[j]]
+					for hp in rig.hulls[chain[j]]:
+						var w := t * hp
+						if w.y > deepest:
+							deepest = w.y
+							q = w
+				var pj := bx * rig.xf[jb].origin
+				if deepest <= -WING_MARGIN or pj.y >= -WING_MARGIN:
+					break
+				if held < 0.01 and iter == 0 and total == 0.0:
+					dir = -1.0 if q.x > pj.x else 1.0
+					_wing_side[jb] = dir
+				var rr := (q - pj).length()
+				if rr <= 1.0:
+					break
+				var want := clampf((-WING_MARGIN - pj.y) / rr, -1.0, 1.0)
+				var cur := (q - pj).angle()
+				var s1 := asin(want)
+				var best := INF
+				for sol in [s1, PI - s1]:
+					var d := wrapf(sol - cur, -PI, PI)
+					if d * dir >= -0.001 and absf(d) < best:
+						best = absf(d)
+				if best == INF or total + best > 2.2:
+					break
+				total += best + 0.01
+				rig.rot[jb] += dir * (best + 0.01)
 				rig.compute_from(jb)
 				changed = true
+			# 풀릴 때는 천천히: 이번에 필요한 것보다 더 들려 있던 몫을 조금씩 내린다
+			var lift := maxf(total, held - WING_RELEASE * delta) if delta > 0.0 else total
+			if lift > total + 0.0001:
+				rig.rot[jb] += dir * (lift - total)
+				rig.compute_from(jb)
+				changed = true
+			_wing_lift[jb] = lift
 		for jb in chain:
 			if rig.squash_y[jb] < 1.0:
 				rig.squash_y[jb] = 1.0
@@ -854,9 +878,9 @@ func _draw_glow() -> void:
 	if _boss == null:
 		return
 	var pulse := 0.6 + 0.4 * sin(_t * 3.0)
-	var c := Vector2(0, _floor_off - 90.0)
-	_glow.draw_circle(c, 170.0, Color(0.75, 0.95, 0.85, 0.05 * pulse))
-	_glow.draw_circle(c, 110.0, Color(0.8, 1.0, 0.9, 0.07 * pulse))
+	var c := Vector2(0, _floor_off - 120.0)
+	_glow.draw_circle(c, 120.0, Color(0.75, 0.95, 0.85, 0.05 * pulse))
+	_glow.draw_circle(c, 75.0, Color(0.8, 1.0, 0.9, 0.07 * pulse))
 
 
 func _puff(n: int, ox: float, strength := 1.0) -> void:

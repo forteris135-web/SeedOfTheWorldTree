@@ -3,7 +3,7 @@ extends Node2D
 ##   Godot --path . --resolution 1600x900 res://tools/bird_film.tscn -- [--seq hover,feathers,wind,...] [--every 0.08] [--zoom 0.9] [--cols 5] [--crop 0.7] [--joints]
 ## 보스 씬을 바닥(y=1000) 위에 띄우고 보스 스크립트를 **그대로** 돌리며(판정·시간은 실제 게임과 같다) 상태를 차례로 건다.
 ## 결과: screenshots/bird_<동작>.png (필름 띠, 칸마다 왼쪽 위에 시각·상태), 가운데 칸은 screenshots/bird_<동작>_mid.png.
-## 동작: intro hover leafrain feathers wind descend idle walk eat stagger sweep peck takeoff turn broken fallen purify
+## 동작: intro hover leafrain feathers wind descend idle walk eat stagger sweep peck takeoff turn broken fallen fallen_ground purify
 ## (fallen 은 쓰러져 누운 뒤 정화 대기까지, purify 는 그 뒤 손길을 얹은 장면)
 
 const FLOOR_Y := 1000.0
@@ -174,6 +174,8 @@ func _run() -> void:
 				_hover(2000)
 			"fallen", "purify":
 				_hover(2000)
+			"fallen_ground":
+				_ground(2000)
 		# 자리 잡기
 		var t := 0.0
 		while t < settle:
@@ -242,6 +244,14 @@ func _run() -> void:
 				_boss.hp = 1.0
 				_boss.receive_hit(HitData.make(5.0, 0.0, _player), null)
 				dur = 3.0
+			"fallen_ground":
+				# 무너져 땅에 있다가 쓰러짐 (공중 단계 없음)
+				_boss._break()
+				for i in 40:
+					await get_tree().physics_frame
+				_boss.hp = 1.0
+				_boss.receive_hit(HitData.make(5.0, 0.0, _player), null)
+				dur = 2.0
 		var frames: Array = []
 		var next := 0.0
 		t = 0.0
