@@ -125,7 +125,7 @@ var _soul_notice_timer := 0.0
 var _soul_notice_soul := ""
 ## 빛 가루: 늘어난 양이 떠오르는 글자들 [{"amount": int, "t": 남은 시간}]
 var _dust_pops: Array = []
-var _dust_glow := 0.0       # 늘어난 순간 칸이 부풀고 밝아졌다 가라앉음
+var _dust_glow := 0.0       # 늘어난 순간 칸이 빛나고 그림이 커졌다 가라앉음
 var _dust_shown := 0.0      # 칸에 보이는 숫자 (차오르는 중엔 Progress.dust 보다 작다)
 var _dust_rate := 0.0       # 차오르는 빠르기 (개 / 초)
 var _box_outer: StyleBoxFlat

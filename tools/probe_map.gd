@@ -211,6 +211,20 @@ func _test_zoom_pan() -> void:
 	ev.pressed = true
 	map._input(ev)
 	_check(map._center.distance_to(open_c) < 1.0, "손길 버튼(E·U / △·Y) → 지금 방으로")
+	# 누르고 있는 이동 키: 키보드·패드는 지도를 움직이고, 터치는 끌기로만 (화면 스틱을 누른 채 지도를 열어도 흘러가지 않게)
+	var dev := InputDevice.current
+	map.reset_view()
+	InputDevice._set_device(InputDevice.Kind.TOUCH, -1)
+	Input.action_press("move_right")
+	var ct0: Vector2 = map._center
+	map._held_input(0.25)
+	var touch_moved: float = map._center.distance_to(ct0)
+	InputDevice._set_device(InputDevice.Kind.KEYBOARD, -1)
+	map._held_input(0.25)
+	var key_moved: float = map._center.x - ct0.x
+	Input.action_release("move_right")
+	InputDevice._set_device(dev, -1)
+	_check(touch_moved < 0.01 and key_moved > 100.0, "이동 키를 누르고 있으면: 터치 장치는 그대로(%.1f), 키보드는 오른쪽으로 (%.0f 세계 px)" % [touch_moved, key_moved])
 	await _frames(3)
 	_draws = 0
 	map._view.draw.connect(func() -> void: _draws += 1)

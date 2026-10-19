@@ -332,7 +332,11 @@ func _process(delta: float) -> void:
 
 ## 누르고 있는 키·스틱·어깨 버튼: 이동과 확대 (멈춘 동안에도 Input 은 읽힌다)
 func _held_input(delta: float) -> void:
-	var move := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var move := Vector2.ZERO
+	# 터치로 놀 때는 끌기로만 움직인다: 지도를 열 때 왼손이 화면 스틱을 누르고 있으면 그 이동 동작이 계속 눌린 채라
+	# 지도가 혼자 흘러가 버린다 (터치 스틱은 멈춘 동안에도 손가락 끌기를 받는다)
+	if InputDevice.current != InputDevice.Kind.TOUCH:
+		move = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var zoom_dir := 0.0
 	for dev in Input.get_connected_joypads():
 		var rs := Vector2(Input.get_joy_axis(dev, JOY_AXIS_RIGHT_X), Input.get_joy_axis(dev, JOY_AXIS_RIGHT_Y))
