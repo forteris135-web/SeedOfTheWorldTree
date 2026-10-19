@@ -122,7 +122,7 @@ var _stream: Node2D             # 빨아들이기 띠 (세상 좌표)
 var _light: PointLight2D
 var _red_sprites: Array[Sprite2D] = []
 
-static var _glow_tex: Texture2D
+var _glow_tex: Texture2D
 
 
 func _ready() -> void:
