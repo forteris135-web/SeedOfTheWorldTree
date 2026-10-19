@@ -1,5 +1,6 @@
 extends Node
 ## 세이브. 달빛풀에서 쉴 때 기기 안(user://save.json)에 저장한다. 타이틀의 "이어하기"가 읽는다.
+## 보스 러시 중(BossRush.active)에는 저장 파일에 아무것도 쓰지도 지우지도 않는다 (러시는 떼어 둔 진행을 끝나고 되돌린다).
 
 const PATH := "user://save.json"
 
@@ -9,6 +10,8 @@ func has_save() -> bool:
 
 
 func save(grass_id: String, scene_path: String) -> void:
+	if BossRush.active:
+		return
 	var data := {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -35,6 +38,8 @@ func save(grass_id: String, scene_path: String) -> void:
 ## 메뉴의 '지금 저장하기': 마지막으로 쉰 달빛풀에서 이어지도록 저장한다.
 ## 아직 달빛풀에서 쉰 적이 없으면 지금 방의 처음 자리에서 이어진다.
 func save_now() -> String:
+	if BossRush.active:
+		return ""
 	var g: Dictionary = Progress.last_grass
 	var scene: String = g.get("scene", "")
 	if scene == "":
@@ -91,6 +96,8 @@ func load_game() -> String:
 
 
 func new_game() -> void:
+	if BossRush.active:
+		return
 	Progress.reset()
 	for k in Purity.regions:
 		Purity.regions[k] = false

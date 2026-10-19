@@ -14,3 +14,4 @@ export/
 
 # Python 도구 부산물
 __pycache__/
+audio/_temp_music/

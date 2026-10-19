@@ -1,0 +1,30 @@
+{
+  "_설명": "타이틀의 '음악 감상' 곡 목록 (엔딩을 본 뒤에만 열린다). 위에서부터 차례대로 보인다(이야기 순서). id = audio/music/<id>.wav, name = 화면에 보이는 곡 이름, where = 곡 이름 아래의 작은 글자(쓰이는 곳). 이름은 초안이라 기획자가 고치면 된다. 곡을 늘리면 scripts/autoload/music.gd 의 TRACKS 에도 넣는다.",
+  "title": "음악 감상",
+  "now_playing": "지금 흐르는 곡",
+  "stopped": "멈춤",
+  "loop": "반복",
+  "back": "돌아가기",
+  "hint_pad": "위·아래·좌·우로 고르고 결정으로 듣기 · 같은 곡을 다시 고르면 멈춤 · 회피 / 메뉴: 돌아가기",
+  "hint_touch": "곡을 누르면 흐르고, 흐르는 곡을 다시 누르면 멈춘다",
+  "tracks": [
+    {"id": "title", "name": "세계수의 씨앗", "where": "타이틀"},
+    {"id": "field_canopy", "name": "잿빛 수관", "where": "수관"},
+    {"id": "boss_bird", "name": "잿빛 잎새의 새", "where": "첫째 수호자"},
+    {"id": "recollection", "name": "기나긴 꿈", "where": "회상"},
+    {"id": "field_canopy_restored", "name": "되살아난 수관", "where": "정화한 수관"},
+    {"id": "field_village", "name": "가지 위의 마을", "where": "마을"},
+    {"id": "field_mine", "name": "녹슨 채굴장", "where": "채굴장"},
+    {"id": "boss_knight", "name": "등불 기사", "where": "둘째 수호자"},
+    {"id": "field_sap_lake", "name": "말라 가는 호수", "where": "수액의 호수"},
+    {"id": "boss_sap_queen", "name": "수액의 여왕", "where": "호수의 수호자"},
+    {"id": "field_flooded_mine", "name": "잠긴 채굴장", "where": "펌프실로 가는 길"},
+    {"id": "boss_iron_pump", "name": "무쇠 펌프", "where": "채굴장의 심장"},
+    {"id": "field_abyss", "name": "뿌리의 심연", "where": "심연"},
+    {"id": "field_moon_garden", "name": "달빛 정원", "where": "뿌리지기가 가꾼 곳"},
+    {"id": "boss_rootkeeper_p1", "name": "뿌리지기", "where": "첫 수호자"},
+    {"id": "boss_rootkeeper_p2", "name": "다시 일어서는 뿌리지기", "where": "첫 수호자 · 둘째 악장"},
+    {"id": "rest_moonlight_grass", "name": "달빛풀 아래에서", "where": "쉼터"},
+    {"id": "selenia_humming", "name": "셀레니아의 허밍", "where": "엔딩"}
+  ]
+}

@@ -2,6 +2,8 @@ extends Room
 class_name BossRoom
 ## 보스가 있는 방. 안으로 들어서면 문이 닫히고 싸움이 시작된다.
 ## 정화하면: 회상 → 영혼이 깃듦 → 지역에 색이 돌아옴 → 능력 획득.
+## 보스 러시 중(BossRush.active, 이 방이 러시의 보스 방)에는 '러시 모드': 소녀가 싸움터 안에서 바로 시작하고, 등장 연출이 짧고,
+## 쓰러뜨리면 기록만 남긴 채 다음 보스 방으로 넘어간다 — 깃발·정화·회상·빛 가루·능력 없음, 소녀가 쓰러지면 결과 화면.
 
 @export var boss_name := "잿빛 잎새의 새"
 @export var boss_subtitle := "수관의 수호자"
@@ -14,6 +16,8 @@ class_name BossRoom
 @export var final_boss := false
 ## 보스곡 이름 (audio/music/)
 @export var boss_track := "boss_bird"
+## 2페이즈 보스곡 (비우면 바꾸지 않는다). 뿌리지기는 무너졌다 다시 일어서는 순간(RISE) boss_rootkeeper_p2 로 바뀐다.
+@export var boss_track_2 := ""
 ## 보스를 정화하면 떨어지는 재화 '빛 가루' (2026-10-19 기획자 요청 9번). 처음 한 번만 — 깃발 "dust_<defeat_flag>" 로 막는다.
 @export var dust_reward := 200
 
@@ -24,9 +28,12 @@ class_name BossRoom
 @onready var boss_hud = $BossHUD
 
 var fight_started := false
+## 보스 러시 모드 (scripts/world/boss_rush.gd)
+var _rush := false
 
 
 func _ready() -> void:
+	_rush = BossRush.active and BossRush.index_of_scene(scene_file_path) >= 0
 	super._ready()
 	var arena := $Arena as ReferenceRect
 	boss.arena = Rect2(arena.position, arena.size)
@@ -44,7 +51,7 @@ func _ready() -> void:
 		$Choices.visible = Progress.has("after_" + defeat_flag)
 		for c in $Choices.get_children():
 			c.process_mode = Node.PROCESS_MODE_INHERIT if $Choices.visible else Node.PROCESS_MODE_DISABLED
-	if Progress.has(defeat_flag):
+	if Progress.has(defeat_flag) and not _rush:
 		boss.queue_free()
 		trigger.queue_free()
 		if Progress.has("after_" + defeat_flag):
@@ -53,12 +60,16 @@ func _ready() -> void:
 			# 회상에서 막 돌아왔다: 영혼이 깃들고 색이 돌아온다
 			Progress.set_flag("after_" + defeat_flag)
 			_after_memory()
+	if _rush:
+		_rush_setup()
 	if "--bosstest" in OS.get_cmdline_user_args():
 		_bosstest()
 
 
 func _process(delta: float) -> void:
 	super._process(delta)
+	if _rush and fight_started:
+		BossRush.tick(delta)
 	# 순간이동 등으로 영역을 건너뛰어도, 문 안쪽에 들어와 있으면 싸움이 시작된다
 	if not fight_started and player and is_instance_valid(trigger) and not Progress.has(defeat_flag) \
 			and player.global_position.x > trigger.position.x and player.state != Player.State.DEAD:
@@ -76,6 +87,9 @@ func _on_trigger(body: Node) -> void:
 	boss_hud.show_boss()
 	Music.play(boss_track, 0.8, true)
 	Juice.shake(5.0)
+	if _rush:
+		BossRush.fight_started()
+		_rush_shorten_intro()
 
 
 func _on_boss_telegraph(kind: String) -> void:
@@ -96,11 +110,15 @@ func _on_boss_telegraph(kind: String) -> void:
 		"wall": hud.flash("뿌리 벽!")
 		"rise":
 			hud.show_message("뿌리지기가 다시 일어선다…", 3.0)
-			# 주제곡이 격렬하게 터진다 (기획서 10장)
-			Music.play("theme_battle", 0.6, true)
+			# 2페이즈 곡이 터진다 (기획서 10장)
+			if boss_track_2 != "":
+				Music.play(boss_track_2, 0.6, true)
 
 
 func _on_player_died() -> void:
+	if _rush:
+		_rush_player_died()
+		return
 	await get_tree().create_timer(2.6).timeout
 	if player == null or not is_instance_valid(player):
 		return
@@ -122,7 +140,7 @@ func _on_player_died() -> void:
 	gate_out.open()
 	boss_hud.hide_boss()
 	_set_battle_camera(false)
-	Music.play_region(region)
+	Music.play_region(region, room_id)
 	for p in get_tree().get_nodes_in_group("projectile"):
 		p.queue_free()
 	player.revive(rest_point)
@@ -164,6 +182,9 @@ func _clear_hostile_projectiles() -> void:
 
 
 func _on_boss_fallen() -> void:
+	if _rush:
+		_rush_boss_fallen()
+		return
 	# 쓰러뜨린 뒤 남은 잎·깃털에 소녀가 쓰러지면 싸움이 처음으로 돌아가 승리가 사라졌다 (2026-10-19 검수: 새·펌프·여왕) → 모두 거둔다
 	_clear_hostile_projectiles()
 	Sfx.play("boss_fall", 0.0, 0.0)
@@ -178,6 +199,8 @@ func _on_boss_fallen() -> void:
 ## 보스의 빛 가루: 처음 정화할 때 한 번만 보스 자리에서 흩뿌린다. 돌려주는 값은 뿌린 양 (이미 받았으면 0).
 func _drop_boss_dust() -> int:
 	var flag := "dust_" + defeat_flag
+	if _rush:
+		return 0   # 보스 러시에는 보상이 없다
 	if dust_reward <= 0 or Progress.has(flag) or boss == null or not is_instance_valid(boss):
 		return 0
 	Progress.set_flag(flag)
@@ -186,6 +209,8 @@ func _drop_boss_dust() -> int:
 
 
 func _on_boss_purified() -> void:
+	if _rush:
+		return   # 보스 러시: 정화의 손길을 얹어도 깃발·회상 없이 그대로 (다음 방으로는 저절로 넘어간다)
 	_drop_boss_dust()
 	Progress.set_flag(defeat_flag)
 	Purity.regions[region] = true
@@ -246,6 +271,96 @@ func _after_memory() -> void:
 			c.process_mode = Node.PROCESS_MODE_INHERIT
 	await get_tree().create_timer(3.6).timeout
 	player.input_enabled = true
+
+
+# ---------- 보스 러시 모드 ----------
+
+## 러시로 들어왔다: 소녀를 싸움터 문 안쪽 바닥에 세운다 (BossRoom._process 가 곧바로 싸움을 건다), 러시 시계를 띄운다.
+func _rush_setup() -> void:
+	var i := BossRush.index_of_scene(scene_file_path)
+	# 보스마다 가득 찬 채로: 체력·이슬·가드는 소녀가 새로 만들어지며 채워지고, 영혼 기술 쿨다운도 비운다
+	# (러시용 사전이라 떼어 둔 진행에는 닿지 않는다)
+	Progress.soul_cooldowns.clear()
+	if player:
+		var at := Vector2(BossRush.start_x(i), $Markers/GroundLine.position.y - BossRush.FOOT_OFFSET)
+		player.position = at
+		player.velocity = Vector2.ZERO
+		player.facing = 1
+		player.last_safe_position = at
+		rest_point = at
+		_spawn = at
+		var cam := player.get_node_or_null("Camera2D")
+		if cam:
+			cam.reset_smoothing()
+	if get_node_or_null("BossRushHUD") == null:
+		var hud := BossRushHUD.new()
+		hud.name = "BossRushHUD"
+		add_child(hud)
+
+
+## 등장 연출을 짧게 (여왕·펌프는 곡의 박자에 맞추므로 그대로 — BossRush.BOSSES 의 intro)
+func _rush_shorten_intro() -> void:
+	var t := BossRush.intro_time(BossRush.index_of_scene(scene_file_path))
+	if t <= 0.0 or not is_instance_valid(boss) or not ("_timer" in boss):
+		return
+	if boss.has_method("state_name") and boss.state_name() == "INTRO":
+		boss.set("_timer", minf(float(boss.get("_timer")), t))
+
+
+## 러시: 보스가 쓰러졌다 → 기록 → 숨 고르기 → 보스가 빛으로 흩어짐 → 다음 보스 방 (마지막이면 결과 화면).
+func _rush_boss_fallen() -> void:
+	_clear_hostile_projectiles()
+	Sfx.play("boss_fall", 0.0, 0.0)
+	Music.stop(0.4)
+	boss_hud.hide_bar()
+	_set_battle_camera(false)
+	var split := BossRush.boss_down()
+	if player and is_instance_valid(player):
+		player._invuln_timer = 999.0   # 다음 방으로 넘어갈 때까지 다치지 않는다
+	var hud := get_node_or_null("CombatHUD")
+	if hud:
+		hud.show_message(BossRush.text("fallen", {"time": BossRush.format_time(split)}), BossRush.ADVANCE_BEAT + BossRush.ADVANCE_FADE)
+	# 일시정지 중에는 기다리지 않는다 (멈춘 채 장면이 바뀌지 않게). 타이머는 이 방의 함수에 묶는다 — 그사이 '포기하기'로
+	# 방이 사라지면 연결도 함께 사라진다 (await 로 기다리면 사라진 방에서 다시 깨어나려 한다)
+	get_tree().create_timer(BossRush.ADVANCE_BEAT, false).timeout.connect(_rush_fade_out)
+
+
+func _rush_fade_out() -> void:
+	boss_hud.lower_band(BossRush.ADVANCE_FADE)
+	if is_instance_valid(boss):
+		var tw := create_tween()
+		tw.tween_property(boss, "modulate", Color(3, 3, 3, 0), BossRush.ADVANCE_FADE)
+	get_tree().create_timer(BossRush.ADVANCE_FADE, false).timeout.connect(_rush_next)
+
+
+func _rush_next() -> void:
+	BossRush.advance()
+
+
+## 러시: 소녀가 쓰러졌다 → 결과 화면 (어디까지 왔는지, 시간). 보스를 이미 쓰러뜨려 넘어가는 중이면 그대로 넘어간다.
+func _rush_player_died() -> void:
+	if BossRush.advancing:
+		return
+	BossRush.running = false
+	get_tree().create_timer(2.6, false).timeout.connect(_rush_dead_result)
+
+
+func _rush_dead_result() -> void:
+	BossRush.finish("dead")
+
+
+## 시험용 (tools/probe_bossrush): 보스를 곧바로 쓰러뜨린다. 싸움이 아직이면 먼저 건다. 등장·무너짐처럼 맞지 않는 순간은 지나길 기다린다.
+func debug_force_defeat() -> void:
+	if not is_instance_valid(boss):
+		return
+	if not fight_started and player:
+		_on_trigger(player)
+	var tries := 0
+	while is_instance_valid(boss) and boss.state_name() != "FALLEN" and tries < 900:
+		boss.hp = 1.0
+		boss.receive_hit(HitData.make(500.0, 0.0, player), null)
+		await get_tree().physics_frame
+		tries += 1
 
 
 ## Claude Code용 자동 시험: 싸움을 걸고 상태 흐름을 찍는다.

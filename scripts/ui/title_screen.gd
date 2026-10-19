@@ -1,6 +1,12 @@
 extends Control
+class_name TitleScreen
 ## 타이틀 화면. 타이틀 일러스트 위로 천천히 움직이는 카메라, 떠다니는 빛, 제목과 메뉴.
-## 음악(주제곡)은 13단계에서 넣는다. 클리어 후에는 엔딩 버전 곡·그림으로 바뀐다(기획서 2장).
+## 음악: 클리어 전 title, 엔딩을 본 뒤 selenia_humming (Music.title_track). 클리어 후에는 그림·부제가 마지막으로 본 엔딩에 따라 바뀐다
+## (ENDINGS.md 5장: 희생 → title_after_sacrifice, 되돌림 → title_after_return, 제3의 길 → title_after_true).
+## 엔딩을 본 뒤에만 메뉴에 '보스 러시'(BossRush)와 '음악 감상'(MusicRoom)이 생긴다 (2026-10-20 기획자 요청).
+
+## 클리어 전 타이틀 그림
+const DEFAULT_ART := "res://art/characters/title_selenia.png"
 
 @onready var art: TextureRect = $Art
 @onready var menu: VBoxContainer = $Layout/Menu
@@ -12,11 +18,28 @@ var _items: Array[Button] = []
 var _index := 0
 var _time := 0.0
 var _started := false
+## 설정 화면 (일시정지 메뉴의 설정 부분을 그대로 쓴다: 음량·터치 크기·키 바꾸기 등)
+var _settings: PauseMenu
+## 음악 감상 (엔딩을 본 뒤)
+var _music_room: MusicRoom
+var _cleared := false
 
 
 func _ready() -> void:
+	if BossRush.active:
+		BossRush.restore()   # 혹시 러시가 끝나지 않은 채 왔으면 떼어 둔 진행부터 되돌린다
+	var seen := cleared_state()
+	_cleared = seen["cleared"]
+	var gone := false
 	if not SaveGame.has_save():
 		menu.get_node("Continue").queue_free()
+		gone = true
+	if not _cleared:
+		# 보스 러시·음악 감상은 엔딩을 본 뒤에만 (허밍은 엔딩 전에는 들리지 않는다)
+		menu.get_node("BossRush").queue_free()
+		menu.get_node("MusicRoom").queue_free()
+		gone = true
+	if gone:
 		await get_tree().process_frame
 	for c in menu.get_children():
 		if c is Button:
@@ -24,18 +47,14 @@ func _ready() -> void:
 			c.pressed.connect(_on_item_pressed.bind(c))
 			c.mouse_entered.connect(func() -> void: _select(_items.find(c)))
 	_select(0)
-	var seen := cleared_state()
 	if seen["cleared"]:
-		# 클리어 후: 밝은 일러스트, 바뀐 부제, 엔딩 버전 곡. 제3의 길(확장판)을 보았으면 부제와 곡이 또 바뀐다.
-		art.texture = load("res://art/characters/title_selenia_alt_b.png")
-		if seen["third"]:
-			subtitle.text = "— 등불 하나면 충분해."
-			Music.play(_ending_track_name("third"), 2.0)
-		else:
-			subtitle.text = "— 그리고 세계는 다시 숨을 쉰다."
-			Music.play("theme_ending", 2.0)
-	else:
-		Music.play("theme_full", 2.0)
+		# 클리어 후: 마지막으로 본 엔딩의 타이틀 그림과 부제 (ENDINGS.md 5장 — 그림·부제는 endings*.json 의 title_image / title_subtitle)
+		var look := title_look(seen)
+		art.texture = load(look["image"])
+		if look["subtitle"] != "":
+			subtitle.text = look["subtitle"]
+	# 타이틀 곡: 클리어 전 title, 엔딩을 본 뒤 셀레니아의 허밍(엔딩에선 한 번만 흐르는 곡을 여기선 반복) — ENDINGS.md 5장
+	_play_title_music(2.0)
 	InputDevice.device_changed.connect(func(_k): _refresh_hint())
 	_refresh_hint()
 	# 느리게 다가가는 카메라
@@ -65,23 +84,45 @@ func _ready() -> void:
 
 ## 엔딩을 보았는가: 지금 진행(Progress) 또는 저장 파일의 깃발. 앱을 새로 켠 뒤에도 클리어한 타이틀이 보이게
 ## 저장 파일을 **읽기만** 한다 (진행은 '이어하기'를 고를 때 SaveGame.load_game 이 되돌린다).
-## {"cleared": 엔딩을 하나라도 봄, "third": 제3의 길을 봄}
+## {"cleared": 엔딩을 하나라도 봄, "third": 제3의 길을 봄, "ending": 마지막으로 본 엔딩 (sacrifice / return / third, 모르면 "")}
+## 마지막으로 본 엔딩: 지금 진행에 엔딩을 본 기록이 있으면 그것, 없으면 저장 파일 (깃발 last_ending_*, 옛 저장은 "ending" 값).
 static func cleared_state() -> Dictionary:
-	var out := {"cleared": Progress.has("cleared"), "third": Progress.has("cleared_third")}
+	var out := {"cleared": Progress.has("cleared"), "third": Progress.has("cleared_third"), "ending": ""}
+	if out["cleared"]:
+		out["ending"] = PostEnding.last_ending()
+		if out["ending"] == "" and Progress.ending in EndingScene.ENDINGS:
+			out["ending"] = Progress.ending
 	if SaveGame.has_save():
 		var data = JSON.parse_string(FileAccess.get_file_as_string(SaveGame.PATH))
 		if typeof(data) == TYPE_DICTIONARY and typeof(data.get("flags", null)) == TYPE_DICTIONARY:
 			var f: Dictionary = data["flags"]
 			out["cleared"] = out["cleared"] or bool(f.get("cleared", false))
 			out["third"] = out["third"] or bool(f.get("cleared_third", false))
+			if out["ending"] == "" and bool(f.get("cleared", false)):
+				for n in EndingScene.ENDINGS:
+					if bool(f.get("last_ending_" + n, false)):
+						out["ending"] = n
+				if out["ending"] == "" and str(data.get("ending", "")) in EndingScene.ENDINGS:
+					out["ending"] = str(data.get("ending", ""))
 	return out
 
 
-## 제3의 길 곡(theme_ending_third.wav)이 있으면 그것, 없으면 theme_ending (엔딩 씬과 같은 규칙).
-static func _ending_track_name(which: String) -> String:
-	if which == "third" and ResourceLoader.exists(Music.DIR + "theme_ending_third.wav"):
-		return "theme_ending_third"
-	return "theme_ending"
+## 클리어 후 타이틀의 그림·부제: 마지막으로 본 엔딩에 따라 (ENDINGS.md 5장). 클리어 전에는 기본 그림.
+## {"image": 그림 경로, "subtitle": 부제 (""이면 장면 파일의 기본 부제)}
+static func title_look(seen: Dictionary) -> Dictionary:
+	if not seen.get("cleared", false):
+		return {"image": DEFAULT_ART, "subtitle": ""}
+	var e: Dictionary = EndingScene.ending_data(str(seen.get("ending", "")))
+	var img := str(e.get("title_image", ""))
+	if img == "" or not ResourceLoader.exists(img):
+		# 어느 엔딩인지 모르는 옛 저장: 예전처럼 밝은 일러스트
+		return {"image": "res://art/characters/title_selenia_alt_b.png", "subtitle": "— 그리고 세계는 다시 숨을 쉰다."}
+	return {"image": img, "subtitle": str(e.get("title_subtitle", ""))}
+
+
+## 타이틀 곡을 튼다 (처음, 그리고 음악 감상에서 돌아올 때)
+func _play_title_music(fade: float) -> void:
+	Music.play(Music.title_track(_cleared), {"fade": fade, "loop": true})
 
 
 func _process(delta: float) -> void:
@@ -99,7 +140,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _started:
+	if _started or settings_open() or music_room_open():
 		return
 	if event.is_action_pressed("move_down") or event.is_action_pressed("ui_down"):
 		_select((_index + 1) % _items.size())
@@ -120,11 +161,18 @@ func _on_item_pressed(b: Button) -> void:
 
 
 func _activate(i: int) -> void:
-	if _started or i < 0:
+	if _started or i < 0 or settings_open() or music_room_open():
 		return
 	var b := _items[i]
 	Sfx.play("select")
 	match b.name:
+		"Settings":
+			open_settings()
+		"BossRush":
+			_started = true
+			BossRush.start()
+		"MusicRoom":
+			open_music_room()
 		"Continue":
 			_started = true
 			var scene := SaveGame.load_game()
@@ -136,6 +184,49 @@ func _activate(i: int) -> void:
 		"InputTest":
 			_started = true
 			Game.go_to("res://scenes/debug/input_test.tscn", 0.5, 0.6)
+
+
+## 설정 화면을 연다 (시험도 부른다).
+func open_settings() -> PauseMenu:
+	if _settings == null or not is_instance_valid(_settings):
+		_settings = PauseMenu.new()
+		add_child(_settings)
+	_settings.open(true)
+	return _settings
+
+
+func settings_open() -> bool:
+	return _settings != null and is_instance_valid(_settings) and _settings.is_open()
+
+
+## 음악 감상을 연다 (시험도 부른다). 닫으면 타이틀 곡으로 돌아간다.
+func open_music_room() -> MusicRoom:
+	if _music_room == null or not is_instance_valid(_music_room):
+		_music_room = MusicRoom.new()
+		add_child(_music_room)
+		_music_room.closed.connect(_play_title_music.bind(1.5))
+	_music_room.open()
+	return _music_room
+
+
+func music_room_open() -> bool:
+	return _music_room != null and is_instance_valid(_music_room) and _music_room.is_open()
+
+
+## 메뉴에 그 항목이 있는가 (시험용: "BossRush", "MusicRoom" …)
+func has_item(item_name: String) -> bool:
+	for b in _items:
+		if is_instance_valid(b) and b.name == item_name:
+			return true
+	return false
+
+
+## 메뉴 항목을 이름으로 고른다 (시험용)
+func activate_item(item_name: String) -> void:
+	for i in _items.size():
+		if _items[i].name == item_name:
+			_activate(i)
+			return
 
 
 func _refresh_hint() -> void:

@@ -1,10 +1,12 @@
 // 임시 음악 합성기. 기획자의 주제곡이 오기 전까지 쓰는 자리 채움 곡들을 코드로 작곡·합성한다.
-// 사용: swift tools/gen_music.swift   → audio/music/*.wav (22050Hz, 모노, 16비트)
+// 사용: swift tools/gen_music.swift   → audio/_temp_music/*.wav (22050Hz, 모노, 16비트)
+// 2026-10-19: 기획자의 정식 곡 18곡이 audio/music/ 에 들어왔다. 이 합성기는 기록으로만 남기고, 정식 곡을 덮어쓰지 않게
+// 결과는 audio/_temp_music/ 에 쓴다 (게임은 이 폴더를 쓰지 않는다).
 // 주제곡: C단조, 느린 4/4, A(8마디) + B(12마디, 마지막은 G7에 걸침). 엔딩 버전은 C장조로 끝난다.
 import Foundation
 
 let RATE = 22050.0
-let OUT = "audio/music/"
+let OUT = "audio/_temp_music/"
 
 enum Inst { case piano, pad, bass, bell, strings, kick, snare, pluck, drone }
 
@@ -165,6 +167,8 @@ func writeWav(_ samples: [Double], _ name: String) {
     var pcm = [Int16](repeating: 0, count: count)
     for i in 0..<count { pcm[i] = Int16(max(-1.0, min(1.0, samples[i] * gain)) * 32767.0) }
     pcm.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
+    try? FileManager.default.createDirectory(atPath: OUT, withIntermediateDirectories: true)
+    FileManager.default.createFile(atPath: OUT + ".gdignore", contents: Data())   // Godot 이 가져오지 않게
     try! data.write(to: URL(fileURLWithPath: OUT + name + ".wav"))
     print("\(name).wav  \(String(format: "%.1f", Double(count) / RATE))초")
 }

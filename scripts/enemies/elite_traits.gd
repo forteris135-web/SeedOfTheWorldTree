@@ -206,14 +206,14 @@ static func check_rage(e: EnemyBase) -> bool:
 	return true
 
 
-## 분노의 낮은 울림 (Sfx 는 높낮이를 못 바꿔서 여기서 따로 튼다. 음량 설정은 Master 버스로 따라간다).
+## 분노의 낮은 울림 (Sfx 는 높낮이를 못 바꿔서 여기서 따로 튼다. 효과음 음량을 따르게 SFX 버스로 보낸다).
 static func _play_rage_sound(e: EnemyBase) -> void:
 	var st: AudioStream = load(RAGE_SOUND)
 	if st == null:
 		return
 	var p := AudioStreamPlayer.new()
 	p.stream = st
-	p.bus = "Master"
+	p.bus = Sfx.BUS
 	p.volume_db = -2.0
 	p.pitch_scale = 1.3
 	e.add_child(p)

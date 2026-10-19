@@ -1,15 +1,160 @@
 {
-  "_설명": "확장판 · 제3의 길 엔딩 자막 (EXPANSION.md 7장 초안). 마지막 줄이 주제 문장 (각 엔딩에서 한 번). 그림 ending_third_way 는 임시.",
+  "_설명": "확장판 · 제3의 길(진엔딩) 장면 데이터 (조건은 EXPANSION.md 7장, 연출·대사·그림은 ENDINGS.md 3-1장). 형식은 endings.json 의 _형식과 같다. 대사는 초안. 주제 문장은 여기서 쓰지 않는다 (되돌림의 끝에서 단 한 번). 허밍은 장면 3(펌프가 거꾸로 도는 순간)부터.",
   "third": {
     "title": "제3의 길",
-    "image": "res://art/memories/ending_third_way.png",
-    "lines": [
-      "다섯 영혼이 함께 손을 얹자, 심연의 거대한 펌프가 천천히 거꾸로 돌기 시작했다.",
-      "사람들에게서 마력이 나무로 조금씩 돌아갔다. 마을의 큰 등불들은 꺼졌지만, 사람들은 작은 등불을 하나씩만 남겼다.",
-      "세계수는 천천히 숨을 되찾았다. 잿빛 잎에 다시 초록이 돌아오고, 너무 깊이 잠기지 않은 이들은 시간이 지나 사람으로 돌아왔다.",
-      "등불지기와 티아는 채굴장의 훼손된 경전에서 덧쓰인 '번영'을 지우고, 다시 '생명'이라 적었다.",
-      "셀레니아는 사람들 곁에 남았다. 달빛풀 아래, 작은 등불을 든 티아가 말했다. 언니, 등불 하나면 충분해.",
-      "오직 생명만이 언제나 목적이고, 번영은 수단인 것을 왜 잊고 있었을까?"
-    ]
+    "title_image": "res://art/characters/title_after_true.png",
+    "title_subtitle": "— 등불 하나면 충분해.",
+    "humming_scene": 3,
+    "credits_images": [
+      "res://art/memories/ending_true_5.png",
+      "res://art/memories/memory_bird_1.png",
+      "res://art/memories/memory_knight_1.png",
+      "res://art/memories/memory_queen_1.png",
+      "res://art/memories/memory_pump_1.png",
+      "res://art/memories/memory_root_1.png",
+      "res://art/memories/ending_true_4.png"
+    ],
+    "scenes": [
+      {
+        "id": "true_1",
+        "name": "등불을 내려다보다",
+        "image": "res://art/memories/ending_true_1.png",
+        "view": [0.55, 0.62, 1.4],
+        "view_to": [0.6, 0.66, 1.28],
+        "bright": 0.3,
+        "bright_to": 0.45,
+        "sfx": [["end_rumble", -16.0, 0.4], ["pump_creak", -14.0, 3.0], ["pump_creak", -16.0, 6.5]],
+        "effects": [{"type": "glow", "id": "lantern", "at": [0.49, 0.74], "radius": 0.07, "color": [1.0, 0.8, 0.5], "alpha": 0.45, "pulse": 0.2}],
+        "beats": [
+          {"text": "셀레니아는 허리의 등불을 내려다보았다."},
+          {"text": "그리고 심연 가장 깊은 곳, 거대한 펌프 앞으로 걸어가 두 손을 바퀴에 얹었다."}
+        ]
+      },
+      {
+        "id": "true_2",
+        "name": "다섯 영혼이 함께하다",
+        "image": "res://art/memories/ending_true_1.png",
+        "view": [0.5, 0.5, 1.03],
+        "view_to": [0.5, 0.5, 1.0],
+        "bright": 0.4,
+        "beats": [
+          {"text": "셀레니아 곁에, 다섯 영혼이 차례로 나타났다.", "sfx": [["soul", -12.0, 0.5]]},
+          {"text": "잎새의 새의 바람이 셀레니아의 망토를 감쌌다.", "bright": 0.55, "sfx": [["gust", -10.0, 0.2], ["soul", -14.0, 0.6]],
+           "effects": [{"type": "glow", "id": "bird", "at": [0.26, 0.24], "radius": 0.2, "color": [0.75, 1.0, 0.85], "alpha": 0.0, "alpha_to": 0.4, "time": 1.5, "pulse": 0.2}]},
+          {"text": "등불 기사의 빛으로, 티아의 작은 등불이 환하게 밝아졌다.", "bright": 0.65, "sfx": [["bloom", -12.0, 0.4]],
+           "effects": [{"type": "glow", "id": "knight", "at": [0.27, 0.55], "radius": 0.15, "color": [1.0, 0.85, 0.45], "alpha": 0.0, "alpha_to": 0.4, "time": 1.5, "pulse": 0.2},
+                       {"type": "glow", "id": "lantern", "at": [0.49, 0.74], "radius": 0.12, "color": [1.0, 0.82, 0.5], "alpha": 0.45, "alpha_to": 0.85, "time": 1.8, "pulse": 0.2}]},
+          {"text": "수액의 여왕이 펌프의 관 속으로 맑은 수액을 흘려보냈다.", "bright": 0.75, "sfx": [["ring_hum", -14.0, 0.3]],
+           "effects": [{"type": "glow", "id": "queen", "at": [0.38, 0.6], "radius": 0.13, "color": [0.45, 0.85, 0.95], "alpha": 0.0, "alpha_to": 0.45, "time": 1.5, "pulse": 0.2},
+                       {"type": "glow", "id": "pipe", "at": [0.9, 0.3], "radius": 0.16, "color": [0.55, 0.9, 1.0], "alpha": 0.0, "alpha_to": 0.35, "time": 2.5}]},
+          {"text": "무쇠 펌프의 톱니가 낮게 울리며 답했다.", "bright": 0.85, "sfx": [["pump_creak", -10.0, 0.3]],
+           "effects": [{"type": "glow", "id": "pump", "at": [0.81, 0.45], "radius": 0.14, "color": [1.0, 0.6, 0.35], "alpha": 0.0, "alpha_to": 0.45, "time": 1.5, "pulse": 0.25}]},
+          {"text": "뿌리지기의 뿌리들이 펌프를 감싸, 함께 밀었다.", "bright": 0.95, "sfx": [["root_rise", -12.0, 0.3]],
+           "effects": [{"type": "glow", "id": "root", "at": [0.62, 0.22], "radius": 0.18, "color": [0.8, 0.65, 1.0], "alpha": 0.0, "alpha_to": 0.4, "time": 1.5, "pulse": 0.2}]}
+        ]
+      },
+      {
+        "id": "true_3",
+        "name": "펌프가 거꾸로 돌다",
+        "image": "res://art/memories/ending_true_1.png",
+        "view": [0.64, 0.74, 1.3],
+        "view_to": [0.6, 0.62, 1.12],
+        "bright": 1.0,
+        "effects": [
+          {"type": "spin", "at": [0.655, 0.775], "radius": 0.2},
+          {"type": "pump_beats", "count": 8, "every": 2, "db": -18.0},
+          {"type": "motes", "color": [1.0, 0.9, 0.65], "amount": 30}
+        ],
+        "beats": [
+          {"text": "무거운 바퀴가 아주 천천히, 거꾸로 돌기 시작했다."},
+          {"text": "엇박으로 무너졌던 펌프의 소리가, 다시 고른 리듬을 되찾았다."},
+          {"text": "마력이 관을 따라 조금씩 뿌리로 돌아갔다. 약속이 다시 맺어지는 소리였다."}
+        ]
+      },
+      {
+        "id": "true_4",
+        "name": "세계수의 목소리",
+        "image": "res://art/memories/ending_true_1.png",
+        "view": [0.55, 0.45, 1.05],
+        "view_to": [0.55, 0.4, 1.12],
+        "bright": 0.42,
+        "tint": [1.0, 0.88, 0.62],
+        "effects": [{"type": "motes", "color": [1.0, 0.85, 0.5], "amount": 40}],
+        "beats": [
+          {"speaker": "세계수의 목소리", "text": "…기억해 주었구나. 오래된 약속을."},
+          {"speaker": "세계수의 목소리", "text": "받은 것을 돌려보내는 손이, 곧 나를 지키는 손이니라.", "echo": "— 경전의 잃어버린 구절", "echo_when": "read_scripture_4", "time": 8.0}
+        ]
+      },
+      {
+        "id": "true_5",
+        "name": "작은 등불의 마을",
+        "image": "res://art/memories/ending_true_2.png",
+        "view": [0.52, 0.45, 1.12],
+        "view_to": [0.5, 0.5, 1.02],
+        "bright": 1.0,
+        "effects": [{"type": "glow", "id": "big_lamps", "at": [0.55, 0.38], "radius": 0.55, "color": [1.0, 0.75, 0.4], "alpha": 0.4, "alpha_to": 0.0, "time": 6.0}],
+        "beats": [
+          {"text": "마을의 큰 등불들이 천천히 어두워졌다. 그러나 완전히 꺼지지는 않았다.", "bright": 0.85},
+          {"text": "집집마다 작은 등불 하나씩만 남았다. 작은 빛들이 별자리처럼 따뜻하게 이어졌다."},
+          {"speaker": "오웬", "text": "스승님들이 바라던 대로 돌아가는군요."}
+        ]
+      },
+      {
+        "id": "true_6",
+        "name": "천천히 돌아오는 초록",
+        "image": "res://art/memories/ending_true_2.png",
+        "view": [0.3, 0.62, 1.25],
+        "view_to": [0.36, 0.55, 1.12],
+        "bright": 0.92,
+        "effects": [{"type": "ash", "tint": "village", "time": 14.0, "origin": [0.15, 0.85], "slow": true}],
+        "beats": [
+          {"text": "잿빛 잎에 초록이 천천히 스며들었다. 한꺼번에가 아니라, 한 잎씩."},
+          {"text": "침식된 이들의 몸에서 수액빛이 잦아들고, 몇몇은 사람의 손을 조금씩 되찾았다."},
+          {"text": "이미 꽃이 된 자리는, 작은 정원으로 남았다."}
+        ]
+      },
+      {
+        "id": "true_7",
+        "name": "경전을 고쳐 쓰다",
+        "image": "res://art/memories/ending_true_3.png",
+        "view": [0.42, 0.55, 1.15],
+        "view_to": [0.45, 0.6, 1.05],
+        "bright": 0.95,
+        "beats": [
+          {"text": "채굴장의 훼손된 경전 앞. 늙은 등불지기와 티아가 덧쓰인 '번영'을 지우고, 다시 '생명'이라 적었다.", "time": 9.0,
+           "effects": [{"type": "scripture", "at": [0.73, 0.14], "before": "땅 위에 자라는 모든 ", "wrong": "번영", "right": "생명", "after": "은 나의 잎이요 가지라.", "strike_at": 2.5, "write_at": 4.5}]},
+          {"speaker": "늙은 등불지기", "text": "이번엔, 잊지 않으마."}
+        ]
+      },
+      {
+        "id": "true_8",
+        "name": "달빛풀 아래",
+        "image": "res://art/memories/ending_true_4.png",
+        "view": [0.36, 0.55, 1.22],
+        "view_to": [0.4, 0.5, 1.06],
+        "bright": 1.0,
+        "effects": [{"type": "glow", "id": "lantern", "at": [0.345, 0.7], "radius": 0.09, "color": [1.0, 0.82, 0.5], "alpha": 0.4, "pulse": 0.25}],
+        "beats": [
+          {"text": "마을 끝 달빛풀 아래, 티아와 셀레니아가 나란히 앉았다. 티아의 작은 등불이 둘 사이에서 빛났다."},
+          {"speaker": "티아", "text": "언니, 등불 하나면 충분해. 아빠가 그랬어."},
+          {"text": "셀레니아의 허밍이 선명하게 들렸다."}
+        ]
+      },
+      {
+        "id": "true_9",
+        "name": "마지막 한 컷",
+        "image": "res://art/memories/ending_true_5.png",
+        "view": [0.42, 0.5, 1.16],
+        "view_to": [0.5, 0.45, 1.0],
+        "bright": 0.55,
+        "bright_to": 1.12,
+        "effects": [{"type": "motes", "color": [1.0, 0.92, 0.75], "amount": 24}],
+        "beats": [
+          {"text": "새벽빛 속의 세계수. 초록이 돌아오기 시작한 가지마다 작은 등불이 빛나고, 뿌리 쪽에는 달빛풀이 피어 있었다.", "time": 10.0},
+          {"text": "", "time": 3.0, "effects": [{"type": "blur", "time": 2.6, "white": true}]}
+        ]
+      }
+    ],
+    "post": {"village_tint": [0.88, 0.85, 0.82]}
   }
 }

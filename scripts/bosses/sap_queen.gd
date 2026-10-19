@@ -3,6 +3,9 @@ class_name SapQueen
 ## 확장판 보스 '수액의 여왕' (EXPANSION.md 3장). 말라 가는 호수를 홀로 지키던 나비 정령. 날아다니는 보스.
 ## **3박자 리듬**: 모든 패턴이 '하나(예고)·둘(준비)·셋(공격)'으로 온다. 보스곡(boss_sap_queen, 3/4 138bpm)과 박자가 맞는다:
 ##   한 박 BEAT = 60/138 = 0.435초, 예고 2박(0.87초) 뒤 셋째 박에 공격. 패턴은 마디 첫 박에서 시작한다(메트로놈 _clock).
+##   **기획자의 정식 곡을 잰 값** (tools/measure_tempo.gd, 2026-10-19): 137.99bpm(=138), 3/4 (낮은 음 시작점이 세 박마다 2.2배 셈),
+##   첫 강박 0.123초(DOWNBEAT), 216.56초 동안 박 자리 어긋남 8ms 아래. 시계 0 = 곡의 첫 강박. 곡 한 바퀴는 166마디(216.52초)로
+##   펼쳐서(loop_span) 반복해 처음으로 돌아가도 박자 격자가 곡의 강박에 다시 맞는다 (넘어가는 순간 시계가 0.04초 기다림).
 ##   **메트로놈은 보스곡의 재생 위치를 따라간다** (Music.playback_time). 히트스톱·일시정지 동안에도 음악은 흐르므로 보스가 음악에
 ##   맞춘다: 예고·공격·내려앉음의 끝은 모두 '시계 몇 초'로 정해 두고(_phase_end), 일시정지처럼 시계가 크게 건너뛰면 남은 예정을
 ##   마디 단위로 미룬다(_shift_deadlines — 멈춘 사이 공격이 지나가 버리거나 풀자마자 맞지 않게). 곡이 없으면 실제 시간으로 센다.
@@ -34,9 +37,11 @@ signal telegraph(kind: String)
 ## 박이 바뀔 때 (0 하나, 1 둘, 2 셋) — 그림·시험이 듣는다
 signal beat(index: int)
 
-## 박자 (보스곡 138bpm, 3/4)
+## 박자 (보스곡 138bpm, 3/4 — 정식 곡에서 잰 값 137.99bpm)
 const BEAT := 60.0 / 138.0
 const BAR := BEAT * 3.0
+## 보스곡의 첫 강박(마디 첫 박)이 곡 안에서 몇 초에 오는가 (정식 곡에서 잰 값). 메트로놈 시계 0 이 이 자리.
+const DOWNBEAT := 0.123
 ## 내려앉아 쉬는 길이(박)와 무너진 길이
 const LANDED_BEATS := 6.0
 ## 되받은 나비 한 마리에 덧붙는 흐트러짐 (저스트 가드 45 와 되받은 나비 자체의 28 은 따로 들어간다 → 지금 한 마리 73).
@@ -105,7 +110,7 @@ var reflected_count := 0
 var _landed_touch := false      # 내려앉기·무너짐·쓰러짐에서 실제로 땅에 닿았는가
 
 var _timer := 0.0
-var _clock := 0.0               # 싸움 시작부터의 메트로놈 (INTRO 시작 = 0 = 보스곡 시작). 보스곡 재생 위치를 따른다
+var _clock := 0.0               # 싸움 시작부터의 메트로놈 (0 = 보스곡의 첫 강박 DOWNBEAT). 보스곡 재생 위치를 따른다
 var _next_at := 0.0             # 다음 패턴을 시작할 시계 시각 (마디 첫 박)
 var _phase_end := 0.0           # 지금 박자 단계(예고·공격·되돌림·내려앉음·갈라짐)가 끝나는 시계 시각
 var _music_prev := -1.0         # 보스곡 재생 위치 (지난 프레임, 반복 넘김을 알아채려고)
@@ -243,22 +248,34 @@ func _left() -> float:
 	return _phase_end - _clock
 
 
-## 보스곡의 재생 위치(초, 반복을 펼친 값). 보스곡이 안 흐르면 -1.
+## 보스곡 재생 위치 → 박자 시계 (초): 첫 강박이 0, 반복은 loops 바퀴만큼 펼친다 (한 바퀴 = loop_span).
+static func clock_from_music(raw: float, loops := 0, length := 0.0) -> float:
+	return raw - DOWNBEAT + loops * loop_span(length)
+
+
+## 곡 한 바퀴를 박자 시계로 몇 초로 칠까: 곡 길이에 가장 가까운 온 마디 수.
+## 곡이 처음으로 돌아가면 다시 첫 강박부터 시작하므로, 격자도 온 마디 뒤에서 이어져야 박자가 맞는다 (정식 곡: 216.56초 → 166마디 216.52초).
+static func loop_span(length: float) -> float:
+	var bars := roundf(length / BAR)
+	return bars * BAR if bars >= 1.0 else length
+
+
+## 보스곡의 박자 시계 값(초, 반복을 펼친 값). 보스곡이 안 흐르면 NAN.
 ## 곡이 처음부터 다시 시작된 것 같으면(반복 넘김이 아닌데 1초 넘게 뒤로 감) 이번 싸움은 실제 시간으로 센다(_music_lost).
 func _music_clock() -> float:
 	var raw: float = Music.playback_time(TRACK)
 	if raw < 0.0:
 		_music_prev = -1.0
-		return -1.0
+		return NAN
 	var length: float = Music.current_length()
 	if _music_prev >= 0.0:
 		if length > 1.0 and raw < _music_prev - length * 0.5:
-			_music_loops += 1   # 곡이 한 바퀴 돌아 처음으로 넘어갔다 (32마디 = 41.7초라 박자는 이어진다)
+			_music_loops += 1   # 곡이 한 바퀴 돌아 처음으로 넘어갔다
 		elif raw < _music_prev - 1.0:
 			_music_lost = true
-			return -1.0
+			return NAN
 	_music_prev = raw
-	return raw + _music_loops * length
+	return clock_from_music(raw, _music_loops, length)
 
 
 ## 메트로놈을 한 프레임 진행한다: 보스곡이 흐르면 그 위치를 따르고(음악이 주인), 아니면 실제 시간(히트스톱의 느려짐을 뺀
@@ -269,7 +286,7 @@ func _advance_clock(delta: float) -> void:
 	var next := expected
 	if not _music_lost:
 		var m := _music_clock()
-		if m >= 0.0:
+		if not is_nan(m):
 			if not _music_synced:
 				_music_synced = true
 				# 곡이 한참 늦게 시작됐다(시계가 이미 멀리 앞섬): 따라가려면 오래 멈춰야 하니 이번 싸움은 실제 시간으로

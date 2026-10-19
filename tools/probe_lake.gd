@@ -133,7 +133,7 @@ func _probe_rooms_and_portals() -> void:
 		var entry: Dictionary = Progress.visited_rooms.get(rid, {})
 		_check(entry.get("region", "") == "sap_lake" and entry.get("name", "") != "", "%s: 지도 등록 (%s, 탐사 %d/%d, 포탈 %d)" % [rid, entry.get("name", ""), entry.get("explore_found", -1), entry.get("explore_total", -1), entry.get("portals", []).size()])
 		if rid != "sap_lake_boss":
-			_check(Music.current() == "ambient_sap_lake", "%s: 지역곡 ambient_sap_lake (지금 '%s')" % [rid, Music.current()])
+			_check(Music.current() == "field_sap_lake", "%s: 지역곡 field_sap_lake (지금 '%s')" % [rid, Music.current()])
 		if rid == "hidden_descent":
 			var cm := false
 			for c in _room.get_children():
@@ -173,7 +173,7 @@ func _probe_rooms_and_portals() -> void:
 	_check(mq.get("lines", []).size() == 4 and imgs_ok and mems.has("memory_bird"), "memories_lake.json: memory_queen 4줄 + 그림 있음, 기존 회상 유지")
 	var recs: Dictionary = DialogueData.load_dialogue("res://data/dialogue/records.json")
 	_check(recs.has("dry_channel_mark") and recs.has("fisher_tally") and recs.has("old_promise"), "records_lake.json: 마른 수로의 표식·어부의 눈금 + 기존 기록물 유지")
-	_check(ResourceLoader.exists("res://audio/music/boss_sap_queen.wav") and ResourceLoader.exists("res://audio/music/ambient_sap_lake.wav"), "임시 음악 2곡이 있다")
+	_check(ResourceLoader.exists("res://audio/music/boss_sap_queen.wav") and ResourceLoader.exists("res://audio/music/field_sap_lake.wav"), "정식 곡 2곡(boss_sap_queen, field_sap_lake)이 있다")
 	var st: AudioStream = load("res://audio/music/boss_sap_queen.wav")
 	_check(st is AudioStreamWAV and (st as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_FORWARD, "boss_sap_queen.wav 는 가져올 때 반복(loop forward)으로 읽힌다")
 
@@ -417,7 +417,7 @@ func _probe_queen() -> void:
 		var st: int = boss.state
 		var mt := Music.playback_time(SapQueen.TRACK)
 		if mt >= 0.0 and boss.state != SapQueen.State.WAIT and boss._clock < 40.0:
-			sync_max = maxf(sync_max, absf(boss._clock - mt))
+			sync_max = maxf(sync_max, absf(boss._clock - _qclock(mt)))
 		if st != prev_state:
 			if st in SapQueen.ATTACK_STATES:
 				cur = {"state": SapQueen.State.keys()[st], "clock": boss._clock, "startup": boss.startup_len, "phase": boss.phase}
@@ -602,6 +602,11 @@ func _start_queen_fight() -> SapQueen:
 	return boss
 
 
+## 보스곡 재생 위치(첫 바퀴) → 여왕의 박자 시계 (첫 강박 DOWNBEAT 가 0; 그 전에는 시계가 0 에서 기다린다)
+func _qclock(mt: float) -> float:
+	return maxf(SapQueen.clock_from_music(mt), 0.0)
+
+
 func _real_wait(sec: float) -> void:
 	await get_tree().create_timer(sec, true, false, true).timeout
 
@@ -610,14 +615,14 @@ func _probe_queen_sync() -> void:
 	var boss := await _start_queen_fight()
 	_check(boss.state == SapQueen.State.HOVER, "박자 시험: 싸움 시작 → HOVER")
 	await _wait(0.5)
-	var d0 := absf(boss._clock - Music.playback_time(SapQueen.TRACK))
+	var d0 := absf(boss._clock - _qclock(Music.playback_time(SapQueen.TRACK)))
 	# 소녀 타격 10대만큼의 히트스톱 (Juice.hitstop(0.05, 0.05))
 	for i in 10:
 		Juice.hitstop(0.05, 0.05)
 		await _real_wait(0.15)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	var d1 := absf(boss._clock - Music.playback_time(SapQueen.TRACK))
+	var d1 := absf(boss._clock - _qclock(Music.playback_time(SapQueen.TRACK)))
 	_check(d0 < SapQueen.BEAT * 0.25 and d1 < SapQueen.BEAT * 0.25, "히트스톱 10번 뒤에도 여왕 시계 = 보스곡 위치 (차이 %.3f → %.3f초, 한 박 %.3f)" % [d0, d1, SapQueen.BEAT])
 	# 일시정지 1초 (메뉴·지도): 음악은 계속 흐른다 → 여왕 시계는 음악을 따라 건너뛰고, 남은 예정은 마디 단위로 밀린다
 	await _until(func(): return boss.state == SapQueen.State.HOVER or boss.attack_phase == "startup", 4.0)
@@ -629,7 +634,7 @@ func _probe_queen_sync() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	await get_tree().physics_frame
-	var d2 := absf(boss._clock - Music.playback_time(SapQueen.TRACK))
+	var d2 := absf(boss._clock - _qclock(Music.playback_time(SapQueen.TRACK)))
 	var rem1: float = boss._left() if boss.attack_phase == "startup" else boss._next_at - boss._clock
 	var aligned := minf(fmod(boss._next_at, SapQueen.BAR), SapQueen.BAR - fmod(boss._next_at, SapQueen.BAR)) < 0.01
 	_check(d2 < SapQueen.BEAT * 0.25, "일시정지 1초 뒤에도 여왕 시계 = 보스곡 위치 (차이 %.3f초)" % d2)
