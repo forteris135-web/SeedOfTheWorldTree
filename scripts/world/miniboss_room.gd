@@ -34,6 +34,11 @@ func _ready() -> void:
 		_minitest()
 
 
+## 지도 탐사 요소: 이 방의 중간 보스 (쓰러뜨려야 '모두 찾음'). Room._collect_explore_ids 가 부른다.
+func _miniboss_flags() -> Array:
+	return [defeat_flag] if defeat_flag != "" else []
+
+
 ## 보스 체력 바를 묶고, 쓰러짐·맞음을 듣고, 싸움 전에는 잠재운다.
 func _bind_boss() -> void:
 	_boss.dust_value = 0   # 빛 가루는 방이 준다 (dust_reward, 깃발로 한 번만)
