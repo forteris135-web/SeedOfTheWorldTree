@@ -11,6 +11,7 @@ extends Node
 ##  5) 타이틀: 마지막으로 본 엔딩의 그림·부제·곡(selenia_humming 반복), 앱을 새로 켠 것처럼(진행 비움) 저장 파일만으로도 같음.
 ##  6) 엔딩 뒤 세계: 마지막 달빛풀에 도착(쉬는 자세), 마을 빛(되돌림 · 제3의 길), 티아·등불지기·오웬의 엔딩 뒤 대사, 재회가 남았으면 재회가 먼저.
 ##  7) 건너뛰기를 연타해도 허밍은 정해진 장면에서 시작, 경전 고쳐 쓰기 글자 단계, 경전 구절 메아리(조각을 읽었을 때만).
+##  8) 진짜 장면 바꾸기로 끝까지: 정원의 끝(abyss_boss)의 '마력의 관' 선택지 → 엔딩 장면 → 끝 화면 '이어서 탐험하기' → 달빛 정원에 쉬는 자세로 도착(쉼터 곡).
 ## 마지막 줄 "[probe] 끝: 실패 N".
 
 const THEME := "오직 생명만이"
@@ -86,6 +87,7 @@ func _run() -> void:
 	await _probe_sequence()
 	await _probe_skip_spam()
 	await _probe_post_world()
+	await _probe_full_flow()
 	Music.stop(0.0)
 	Progress.reset()
 
@@ -569,3 +571,66 @@ func _take_shots() -> void:
 	await _frames(2)
 	if SaveGame.has_save():
 		DirAccess.remove_absolute(SaveGame.PATH)
+
+
+# ---------- 8) 진짜 장면 바꾸기로: 선택지 → 엔딩 → 이어서 탐험 ----------
+## 이 시험 노드가 장면 바꾸기에 지워지지 않게, 빈 노드를 '지금 장면'으로 세워 두고 그 자리를 Game.go_to 가 바꾸게 한다.
+func _probe_full_flow() -> void:
+	_setup_progress("return")
+	if SaveGame.has_save():
+		DirAccess.remove_absolute(SaveGame.PATH)
+	var dummy := Node.new()
+	get_tree().root.add_child(dummy)
+	get_tree().current_scene = dummy
+	Game._busy = false
+	get_tree().change_scene_to_file("res://scenes/rooms/abyss_boss.tscn")
+	var room: Node = await _wait_scene("abyss_boss", 10.0)
+	var choice: EndingChoice = room.get_node_or_null("Choices/Pipe") if room else null
+	var player: Player = get_tree().get_first_node_in_group("player")
+	_check(choice != null and room.get_node("Choices").visible and player != null, "정원의 끝: 선택지가 깨어 있다 (뿌리지기 정화 뒤)")
+	if choice == null or player == null:
+		return
+	await _frames(30)
+	Progress.ending = ""
+	choice.interact(player)
+	var ending: Node = await _wait_scene("ending_scene", 12.0)
+	_check(ending is EndingScene and Progress.ending == "return", "'마력의 관을 끊는다' → 엔딩 장면 (되돌림, %s)" % Progress.ending)
+	if not (ending is EndingScene):
+		return
+	var e: EndingScene = ending
+	e.time_scale = SPEED
+	var t0 := Time.get_ticks_msec()
+	while not e.end_menu_ready() and Time.get_ticks_msec() - t0 < 90000:
+		await get_tree().process_frame
+	_check(e.end_menu_ready() and Music.current() == Music.ENDING_TRACK, "엔딩 끝 화면까지, 허밍이 흐르는 중 (%s)" % Music.current())
+	e.time_scale = 1.0
+	e.choose("explore")
+	var garden: Node = await _wait_scene("moon_garden", 12.0)
+	await _frames(20)
+	var p2: Player = get_tree().get_first_node_in_group("player")
+	_check(garden != null and p2 != null and p2.state_name() == "쉬는 중" and Music.current() == Music.REST,
+		"이어서 탐험하기 → 달빛 정원 도착: 소녀 %s, 곡 %s" % [p2.state_name() if p2 else "-", Music.current()])
+	_check(SaveGame.has_save() and load("res://scripts/ui/title_screen.gd").cleared_state()["ending"] == "return", "엔딩이 세이브에 남음 (타이틀은 되돌림 그림)")
+	# 시험 노드는 그대로 두고, 남은 방은 빈 노드로 바꿔 지운다
+	var dummy2 := Node.new()
+	get_tree().root.add_child(dummy2)
+	var cur := get_tree().current_scene
+	get_tree().current_scene = dummy2
+	if cur and cur != self:
+		cur.queue_free()
+	await _frames(3)
+	Game._busy = true
+	if SaveGame.has_save():
+		DirAccess.remove_absolute(SaveGame.PATH)
+
+
+## 지금 장면의 파일 이름에 name 이 들어갈 때까지 기다린다 (없으면 null).
+func _wait_scene(name: String, limit: float) -> Node:
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < limit * 1000.0:
+		await get_tree().process_frame
+		var cs := get_tree().current_scene
+		if cs and cs != self and cs.scene_file_path.contains(name) and cs.is_node_ready():
+			return cs
+	print("[probe]   장면을 기다리다 시간 초과: ", name, " (지금 ", get_tree().current_scene.scene_file_path if get_tree().current_scene else "없음", ")")
+	return null
