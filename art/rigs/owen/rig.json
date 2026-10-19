@@ -506,8 +506,8 @@
       "name": "arm_b_up",
       "parent": "torso",
       "pos": [
-        -26.0,
-        -34.0
+        -2.0,
+        -36.0
       ],
       "rest": -45.0,
       "tex": "res://art/rigs/owen/arm_f_up.png",
@@ -1452,8 +1452,8 @@
       "torso": -14.0,
       "head": -10.0,
       "arm_f_up": -200.0,
-      "arm_f_lo": -30.0,
-      "weapon": -56.0,
+      "arm_f_lo": -48.0,
+      "weapon": -38.0,
       "foot_f": 0.26,
       "foot_b": -0.3
     },

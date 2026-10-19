@@ -33,7 +33,8 @@
     "npc_id": "owen",
     "texture": "res://art/enemies/enemy_owen.png",
     "art_scale": 0.17,
-    "art_faces_right": false
+    "art_faces_right": false,
+    "rig": "owen"
   },
   "herbalist_abyss": {
     "scene": "village_shrine",

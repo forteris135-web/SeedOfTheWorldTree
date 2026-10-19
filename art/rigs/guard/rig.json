@@ -1503,28 +1503,28 @@
       "arm_b_lo": -10.0
     },
     "broken": {
-      "arm_f_up": -60.0,
-      "arm_f_lo": -40.0,
-      "weapon": 4.0,
+      "arm_f_up": -40.0,
+      "arm_f_lo": -20.0,
+      "weapon": 64.0,
       "arm_b_up": -4.0,
       "arm_b_lo": -6.0
     },
     "kneel": {
-      "arm_f_up": -40.0,
-      "arm_f_lo": -30.0,
-      "weapon": -32.0,
+      "arm_f_up": -30.0,
+      "arm_f_lo": -20.0,
+      "weapon": 50.0,
       "arm_b_up": -26.0,
       "arm_b_lo": -30.0
     },
     "rescued": {
       "arm_f_up": -8.0,
       "arm_f_lo": -6.0,
-      "weapon": 2.0
+      "weapon": 22.0
     },
     "npc": {
-      "arm_f_up": -10.0,
-      "arm_f_lo": -10.0,
-      "weapon": 13.0
+      "arm_f_up": -16.0,
+      "arm_f_lo": -14.0,
+      "weapon": 36.0
     },
     "dead_knees": {
       "arm_f_up": -40.0,
