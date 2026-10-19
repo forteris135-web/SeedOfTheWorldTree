@@ -42,7 +42,7 @@
     },
     "cannon": {
       "comps": [1],
-      "pivot": [378, 235], "tip": [78, 318], "parent": "body", "attach": [505, 588], "z": 3
+      "pivot": [378, 235], "tip": [78, 318], "parent": "body", "attach": [508, 612], "z": 3
     },
     "pipe": {
       "comps": [2],

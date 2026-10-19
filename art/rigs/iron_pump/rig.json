@@ -218,8 +218,8 @@
       "name": "cannon",
       "parent": "body",
       "pos": [
-        220.0,
-        -12.0
+        217.0,
+        12.0
       ],
       "rest": -74.54,
       "tex": "res://art/rigs/iron_pump/cannon.png",

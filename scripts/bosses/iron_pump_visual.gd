@@ -71,6 +71,9 @@ var _prev_phase := ""
 var _prev_flash := 0.0
 var _from := {}            # 지금 동작이 시작될 때 보이던 자세 (예고·쓰러짐의 출발)
 var _out := {}             # 이번 프레임 목표 (돌려 쓴다)
+var _info := {}            # 이번 프레임 상태 정보 (돌려 쓴다)
+var _ctx := {"speed": 0.0, "dx": 0.0, "vy": 0.0, "grounded": true}
+var _stream_on := false
 var _face := -1.0
 var _sign := -1.0
 var _prev_x := 0.0
@@ -103,6 +106,9 @@ var _ghost_timer := 0.0
 var _crashed := false
 var _bite_pose := false
 var _steam_t := 0.0
+## 관 팔이 홱 튀는 값 (2페이즈 수액이 샐 때) — 값·속도 (도)
+var _pipe_jerk := 0.0
+var _pipe_jerk_v := 0.0
 
 var _dust: Array[CPUParticles2D] = []
 var _dust_next := 0
@@ -113,6 +119,7 @@ var _drips: CPUParticles2D      # 2페이즈: 이음새마다 새는 수액
 var _inhale: CPUParticles2D     # 빨아들이기
 var _muzzle_smoke: CPUParticles2D
 var _motes: CPUParticles2D      # 정화: 솟아오르는 빛 가루
+var _spray: CPUParticles2D      # 2페이즈: 관 팔 끝에서 뿜는 수액
 var _core_glow: Sprite2D
 var _mouth_glow: Sprite2D
 var _muzzle_glow: Sprite2D
@@ -233,6 +240,8 @@ func _make_effects() -> void:
 	_attach_sock("core", _drips, Vector2(0, 50))
 	_muzzle_smoke = _particles(10, 0.7, Vector2(1, -0.3), 25.0, Vector2(0, -60), 120.0, 320.0, 6.0, 13.0, Color(0.8, 0.9, 0.9, 0.4), false)
 	_muzzle_smoke.top_level = true
+	_spray = _particles(22, 1.0, Vector2(0, -1), 28.0, Vector2(0, 980), 260.0, 520.0, 5.0, 10.0, Color(1.0, 0.72, 0.36, 0.95), true)
+	_spray.top_level = true
 	_motes = _particles(40, 1.8, Vector2(0, -1), 70.0, Vector2(0, -90), 60.0, 200.0, 5.0, 12.0, Color(0.75, 1.0, 0.8, 0.9), true)
 	_motes.top_level = true
 	_motes.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
@@ -389,6 +398,9 @@ func _process(delta: float) -> void:
 	if boss == null or motion == null:
 		return
 	if not boss.visible:
+		if _visible_prev:
+			_stream.queue_redraw()   # 빨아들이던 띠가 다음 싸움에 남아 보이지 않게
+			_inhale.emitting = false
 		_visible_prev = false
 		return
 	delta = minf(delta, 0.05)
@@ -409,6 +421,8 @@ func _process(delta: float) -> void:
 	if ph != _prev_phase:
 		if ph != "":
 			_from = motion.capture()
+		if _prev_phase == "active" and ph == "recovery" and boss.phase == 2:
+			_leak_fx()
 		_prev_phase = ph
 	# 몸 틀기: 1 → 0 → −1 (뒤집는 순간 딛은 발을 세상에 남긴다)
 	_face = Motion.damp(_face, float(boss.facing), TURN_SPEED, delta)
@@ -421,14 +435,23 @@ func _process(delta: float) -> void:
 		motion.flip_feet()
 	scale = Vector2(fx, 1.0)
 	# 목표 자세
-	var info := {"drive": RigMotion.Drive.NORMAL, "feet": RigMotion.Feet.POSE, "tremble": 0.0, "core": 0.45, "beat": 1.0, "ghost": false}
+	var info := _info
+	info["drive"] = RigMotion.Drive.NORMAL
+	info["feet"] = RigMotion.Feet.POSE
+	info["tremble"] = 0.0
+	info["core"] = 0.45
+	info["beat"] = 1.0
+	info["ghost"] = false
 	var pose := _pose_now(st, info)
 	pose = _stutter(pose, delta, info)
 	_beat(delta, st, float(info["beat"]))
 	# 덧붙임: 박 끄덕임(관 팔), 발 디딤 흔들림 — 자세 사전은 원형의 것을 함께 쓰므로 돌려 쓰는 사전에 옮겨 더한다
 	for key in pose:
 		_out[key] = pose[key]
-	_out["pipe"] = float(pose.get("pipe", 0.0)) + sin(_pump_ph) * 7.0 * _beat_amp * float(info["beat"])
+	var pj := Motion.spring(_pipe_jerk, 0.0, _pipe_jerk_v, 180.0, 9.0, delta)
+	_pipe_jerk = pj[0]
+	_pipe_jerk_v = pj[1]
+	_out["pipe"] = float(pose.get("pipe", 0.0)) + sin(_pump_ph) * 7.0 * _beat_amp * float(info["beat"]) + _pipe_jerk
 	_out["lean"] = float(pose.get("lean", 0.0)) + _rock
 	var drive: int = info["drive"]
 	if _snap_t > 0.0:
@@ -441,7 +464,9 @@ func _process(delta: float) -> void:
 	if absf(dxw) > 200.0:
 		dxw = 0.0
 		motion.snap_feet()   # 순간이동 (싸움 다시 시작)
-	motion.update(delta, {"speed": boss.velocity.x * _sign / _k, "dx": dxw * _sign / _k, "vy": 0.0, "grounded": true})
+	_ctx["speed"] = boss.velocity.x * _sign / _k
+	_ctx["dx"] = dxw * _sign / _k
+	motion.update(delta, _ctx)
 	_guard_cannon()
 	_after_update(delta, st, info)
 
@@ -867,7 +892,9 @@ func _after_update(delta: float, st: IronPump.State, info: Dictionary) -> void:
 		_inhale.global_position = pc + span * 0.25
 		_inhale.global_rotation = span.angle()
 		_inhale.lifetime = clampf(span.length() * 0.75 / 690.0, 0.15, 0.9)
-	_stream.queue_redraw()
+	if suck_on or _stream_on:
+		_stream.queue_redraw()   # 켜져 있거나 막 꺼진 프레임만 다시 그린다
+	_stream_on = suck_on
 	# 김·수액
 	_vent.emitting = st == IronPump.State.BROKEN or st == IronPump.State.STAGGER or (st == IronPump.State.FALLEN and _state_t > FALL_CRASH)
 	_drips.emitting = boss.phase == 2 and not down
@@ -893,6 +920,16 @@ func _after_update(delta: float, st: IronPump.State, info: Dictionary) -> void:
 
 
 
+## 2페이즈: 공격이 끝날 때마다 사방에서 수액이 솟는다(SapSpurt, 보스 논리) — 그림은 관 팔이 홱 치켜들며 끝에서 수액을 뿜고 김이 샌다.
+func _leak_fx() -> void:
+	_pipe_jerk_v += 260.0
+	_spray.global_position = _sock_global("outlet")
+	_spray.direction = Vector2(-_sign * 0.6, -1.0)
+	_spray.restart()
+	_spray.emitting = true
+	_vent_burst()
+
+
 func _vent_burst() -> void:
 	_vent.restart()
 	_vent.emitting = true
@@ -916,12 +953,12 @@ func _spark_burst(n: int, at: Vector2) -> void:
 
 ## 장갑 깨짐: 핵 창에서 사방으로 새어 나오는 빛살 (CoreRays 노드의 지역 좌표 = 핵 자리, 뒤집힘은 부모를 따른다)
 func _draw_rays() -> void:
-	var a := 0.35 + 0.25 * sin(_t * 7.0)
-	for i in 7:
-		var ang := -PI * 0.5 + (i - 3) * 0.42 + sin(_t * 2.0 + i) * 0.06
-		var len := 90.0 + 40.0 * sin(_t * 5.0 + i * 1.7)
+	var a := 0.22 + 0.16 * sin(_t * 7.0)
+	for i in 6:
+		var ang := -PI * 0.5 + (i - 2.5) * 0.5 + sin(_t * 2.0 + i) * 0.08
+		var len := 70.0 + 35.0 * sin(_t * 5.0 + i * 1.7)
 		var d := Vector2.from_angle(ang)
-		var side := d.orthogonal() * 7.0
+		var side := d.orthogonal() * 4.5
 		_rays.draw_colored_polygon(PackedVector2Array([side, d * len, -side]), Color(1.6, 1.1, 0.55, a))
 
 

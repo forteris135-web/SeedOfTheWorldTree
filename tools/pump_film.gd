@@ -196,8 +196,8 @@ func _sequence(name: String) -> void:
 				_marks.queue_redraw()
 			var img: Image = await _grab()
 			var pp: Dictionary = _vis.probe_pose()
-			print("[펌프필름] %-10s %4.2f초 %-8s %-9s 발바닥 %s 가장 낮은 몸 %+.1f 몸 내려놓기 %+.1f 꼭대기 %.0f 입 %s 대포 %.0f %s" % [name, t, _boss.state_name(), _boss.attack_phase,
-				_fmt(pp["soles"]), pp["lowest"], pp["settle_low"], pp["top"], str(Vector2i(pp["mouth"] - _boss.global_position)), pp["cannon"], pp["low_bone"]])
+			print("[펌프필름] %-10s %4.2f초 %-8s %-9s 발바닥 %s 가장 낮은 몸 %+.1f 몸 내려놓기 %+.1f 꼭대기 %.0f 입 %s 대포 %.0f 대포끝 %s %s" % [name, t, _boss.state_name(), _boss.attack_phase,
+				_fmt(pp["soles"]), pp["lowest"], pp["settle_low"], pp["top"], str(Vector2i(pp["mouth"] - _boss.global_position)), pp["cannon"], str(Vector2i(pp["muzzle"] - _boss.global_position)), pp["low_bone"]])
 			if want_tile:
 				tiles.append(img)
 				next_tile += every
