@@ -33,6 +33,7 @@ func _ready() -> void:
 	add_child(floor)
 	await get_tree().process_frame
 	var stand := await _seq_stand()
+	await _seq_walk_starts()
 	for name in ["walk", "piston", "spray", "suck", "bite_parry", "stagger", "broken", "p2"]:
 		await _seq(name)
 	await _seq_dead(stand)
@@ -182,6 +183,25 @@ func _seq(name: String) -> void:
 		_check(int(acc["shots"]) == 3 and float(acc["err"]) <= 90.0, "분사: %d발, 대포 끝과 수액 방울 생기는 자리 거리 최대 %.0fpx" % [acc["shots"], acc["err"]])
 	if name == "bite_parry":
 		_check(parried, "빨아들이기: 물기가 나왔고 되받을 수 있었다 (되받음 %s)" % parried)
+
+
+## 걷기 시작 시점을 여러 가지로 (박·숨 위상이 다를 때) — 시작 위상이 어긋나면 디딘 뒷발이 멀어져 엉덩이가 내려앉고 무릎이 땅에 박혔다
+func _seq_walk_starts() -> void:
+	var worst := -INF
+	var at := ""
+	for off in [0, 9, 21, 33, 51]:
+		await _spawn()
+		_step(off)
+		_player.global_position = Vector2(-1500, FLOOR_Y - 2)
+		var t := 0.0
+		while t < 1.5:
+			_step()
+			t += STEP
+			var r := _measure()
+			if float(r[1]) > worst:
+				worst = r[1]
+				at = "시작 %d프레임 뒤 %.2f초 %s" % [off, t, _vis.probe_pose()["low_bone"]]
+	_check(worst <= SINK_TOL, "걷기 시작(다섯 시점): 몸이 땅 아래로 최대 %+.1fpx (%s)" % [worst, at])
 
 
 func _seq_dead(stand: Dictionary) -> void:

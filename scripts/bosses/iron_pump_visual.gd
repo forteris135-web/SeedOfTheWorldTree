@@ -24,6 +24,8 @@ const BEAT := 60.0 / 128.0
 ## 몸 틀기 빠르기 (1/s)와 도는 도중 가장 좁아지는 폭 (1 = 그대로)
 const TURN_SPEED := 7.0
 const TURN_MIN_WIDTH := 0.5
+## 걷기 시작 위상 (아래 _process 설명)
+const GAIT_START_PHASE := 0.19
 ## 피스톤 예고 중 '치켜들고 멈칫' 이 끝나고 내리치기 시작하는 진행도 (예고 끝 몫에서 팔이 떨어져 실행 순간에 땅에 닿는다)
 const SLAM_DROP := 0.82
 ## 쓰러짐 순서 (FALLEN 이 된 뒤 초): 경련 → 다리가 꺾임 → 몸이 땅에 부딪힘 → 다 누움
@@ -75,6 +77,7 @@ var _out := {}             # 이번 프레임 목표 (돌려 쓴다)
 var _info := {}            # 이번 프레임 상태 정보 (돌려 쓴다)
 var _ctx := {"speed": 0.0, "dx": 0.0, "vy": 0.0, "grounded": true}
 var _stream_on := false
+var _was_gait := false
 var _face := -1.0
 var _sign := -1.0
 var _prev_x := 0.0
@@ -465,6 +468,12 @@ func _process(delta: float) -> void:
 	if _snap_t > 0.0:
 		_snap_t -= delta
 		drive = RigMotion.Drive.QUICK
+	# 걷기 시작: 걸음 위상을 '앞발이 내딛는 중간, 뒷발은 디딘 걸음의 한가운데(= 제자리)'에서 시작한다 (RigMotion 걸음의 발 들기 몫 약 0.38 의 절반).
+	# 아무 위상에서나 시작하면 서 있던 뒷발이 한 걸음 넘게 디딘 채 몸 뒤로 멀어져 엉덩이가 확 내려앉고 앞다리 무릎이 땅에 박혔다.
+	var gait: bool = info["feet"] == RigMotion.Feet.GAIT
+	if gait and not _was_gait:
+		motion._phase = GAIT_START_PHASE
+	_was_gait = gait
 	motion.set_target(_out, drive, info["feet"])
 	# 몸이 간 거리 (뼈대 단위, 보는 쪽 + 앞)
 	var dxw := boss.global_position.x - _prev_x
