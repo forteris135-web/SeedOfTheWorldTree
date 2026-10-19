@@ -1,8 +1,7 @@
-[gd_scene load_steps=8 format=3 uid="uid://c1seedbossroot"]
+[gd_scene load_steps=7 format=3 uid="uid://c1seedbossroot"]
 
 [ext_resource type="Script" path="res://scripts/bosses/root_keeper.gd" id="1_boss"]
 [ext_resource type="Script" path="res://scripts/bosses/root_keeper_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://art/bosses/parts/boss_rootkeeper_body.png" id="3_tex"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 
@@ -27,9 +26,6 @@ shape = SubResource("CapsuleShape2D_body")
 [node name="Marks" type="Node2D" parent="."]
 
 [node name="Sprite" type="Sprite2D" parent="."]
-position = Vector2(0, -215)
-scale = Vector2(0.3, 0.3)
-texture = ExtResource("3_tex")
 script = ExtResource("2_visual")
 
 [node name="Light" type="PointLight2D" parent="."]
