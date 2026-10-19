@@ -156,6 +156,7 @@ func _absorb(by_player: bool) -> void:
 		Progress.add_dust(value)
 		absorbed.emit(value)
 	if by_player:
+		Fx.spawn("pickup_sparkle", global_position)   # 이펙트 리뉴얼: 흡수 반짝임
 		var now := Time.get_ticks_msec()
 		if now - _last_sfx_ms >= SFX_GAP_MS:
 			_last_sfx_ms = now

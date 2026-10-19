@@ -490,6 +490,7 @@ func _break(permanent: bool) -> void:
 	Sfx.play("broke", -3.0)
 	_set_state(State.BROKEN)
 	_timer = INF if permanent else broken_time
+	Fx.spawn("break_burst", global_position + Vector2(0, -hurt_height * 0.3))   # 이펙트 리뉴얼: 무너짐 금빛 별
 	broke.emit()
 
 
@@ -603,6 +604,7 @@ func _finish_fall() -> void:
 			if is_instance_valid(_fall_by):
 				npc.greet(_fall_by)
 	else:
+		Fx.spawn("death_dust", _fall_at + Vector2(0, -24))   # 이펙트 리뉴얼: 쓰러져 사라질 때 잿빛 먼지
 		_spawn_sprout(_fall_at)
 	queue_free()
 
