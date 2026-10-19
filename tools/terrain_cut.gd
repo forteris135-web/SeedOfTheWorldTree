@@ -15,8 +15,11 @@ extends SceneTree
 ##            walk 를 주면 자동으로 잰 '걷는 구간' 대신 그 값(조각 안 x, 원래 크기 px)을 쓴다.
 ##            clip 을 주면 고른 덩어리의 상자를 그 사각형(시트 px) 안으로 줄인다 (붙은 옆 그림을 곧게 잘라 낼 때 — 다각형 자르기는 없다).
 ##            atlas: false 면 atlas 에 넣지 않는다 (몸통 결 재료로만 쓰는 큰 그림).
+##            ignore 를 주면 ([[x,y,w,h], …] 시트 px) 발 딛는 선을 잴 때 그 상자 안을 투명으로 본다 (발판 위 버섯·등불·난간 — 그림은 그대로).
 ##   fill   : 이음매 없는 몸통 결 만들기 {from:[조각 이름], size, patch, cover, min_ratio, hue:[도], sat:[], val:[], vertical, bright}
 ##            from 조각들에서 나무껍질 색(hue·sat·val 범위)만 있는 작은 네모(patch)를 찾아 이어 붙여 size×size 무늬를 만든다.
+##            hue 가 [330, 40] 처럼 거꾸로면 0도를 넘어 감는 범위다.
+##   glow   : (있을 때만) {lum, cell, min_px, max} — 조각마다 아주 밝은 자리(수정·버섯·등불)를 찾아 meta.glow 에 적는다 (어두운 방의 작은 빛)
 ##   exports: [{name, src, sheet?, out:"res://...png", max:긴 변 px}] — 지형 밖에서 쓰는 단독 그림 (기록물 양피지 등)
 ##   extras : 금 간 벽처럼 조각을 가공한 그림 (cracked: 틈 빛을 끈 그림 / 틈 빛만 / 원래 그림)
 ##
@@ -66,6 +69,8 @@ func _init() -> void:
 			print("  ! 조각 실패: ", p.get("name"))
 			continue
 		var meta := _measure(img, p)
+		if cut.has("glow") and str(p.get("role", "")) in GLOW_ROLES:
+			meta["glow"] = _glow_spots(img, cut["glow"])
 		_pieces[p["name"]] = {"img": img, "meta": meta}
 		if bool(p.get("atlas", true)):
 			_order.append(p["name"])   # atlas: false 인 조각은 몸통 결 재료로만 쓰고 atlas 에는 넣지 않는다
@@ -259,8 +264,11 @@ func _cut(p: Dictionary, cut: Dictionary) -> Image:
 				var o := (y * cw + x) * 4
 				out[o] = src[q * 4]; out[o + 1] = src[q * 4 + 1]; out[o + 2] = src[q * 4 + 2]; out[o + 3] = src[q * 4 + 3]
 	var piece := Image.create_from_data(cw, ch, false, Image.FORMAT_RGBA8, out)
+	var used0 := piece.get_used_rect()
 	piece = _trim(piece)
 	var s := float(p.get("scale", 1.0))
+	# 조각의 시트 자리(왼쪽 위)·배율을 기억해 둔다 — 시트 px 로 적은 ignore 상자를 조각 px 로 옮길 때 쓴다
+	p["_origin"] = [minx + used0.position.x, miny + used0.position.y, s if s < 0.999 else 1.0]
 	if s < 0.999:
 		piece = _resize(piece, maxi(1, roundi(piece.get_width() * s)), maxi(1, roundi(piece.get_height() * s)))
 	return piece
@@ -331,6 +339,19 @@ func _measure(img: Image, p: Dictionary) -> Dictionary:
 	var h := img.get_height()
 	var d := img.get_data()
 	var run := int(p.get("run", 12))
+	# ignore: 발 딛는 선·걷는 구간을 잴 때 투명으로 보는 상자들 (시트 px) — 발판 위에 선 버섯·등불·난간처럼
+	# 발이 닿지 않는 장식이 윗선을 끌어올리지 않게. 그림은 그대로 남는다 (재는 데만 뺀다).
+	if p.has("ignore") and p.has("_origin"):
+		var o: Array = p["_origin"]
+		for r in p["ignore"]:
+			var k := float(o[2])
+			var ix0 := clampi(int((float(r[0]) - float(o[0])) * k), 0, w)
+			var iy0 := clampi(int((float(r[1]) - float(o[1])) * k), 0, h)
+			var ix1 := clampi(int((float(r[0]) + float(r[2]) - float(o[0])) * k), 0, w)
+			var iy1 := clampi(int((float(r[1]) + float(r[3]) - float(o[1])) * k), 0, h)
+			for y in range(iy0, iy1):
+				for x in range(ix0, ix1):
+					d[(y * w + x) * 4 + 3] = 0
 	var dense := PackedInt32Array(); dense.resize(w)
 	var thick := PackedInt32Array(); thick.resize(w)
 	for x in w:
@@ -445,6 +466,56 @@ func _measure(img: Image, p: Dictionary) -> Dictionary:
 	th.sort()
 	meta["depth"] = th[th.size() / 2] if not th.is_empty() else 0
 	return meta
+
+
+# ---------------------------------------------------------------- 빛나는 자리 (어두운 방의 작은 빛)
+## cut.glow 가 있을 때만: 조각에서 아주 밝은 픽셀(수정·버섯·등불)이 모인 자리를 찾아 meta.glow = [[x, y], …] (조각 px) 로 적는다.
+## 게임(TerrainArt)은 어두운 방에서 그 자리에 작은 빛(PointLight2D)을 단다 — 옛 코드 지형의 '버섯 빛'과 같은 몫.
+##   glow: {lum: 밝기 기준(0~1), cell: 격자 칸 px, min_px: 칸 안 밝은 픽셀 수, max: 조각 하나에 최대 몇 자리}
+const GLOW_ROLES := ["branch", "slab", "ground", "hang"]
+
+
+func _glow_spots(img: Image, g: Dictionary) -> Array:
+	var w := img.get_width()
+	var h := img.get_height()
+	var d := img.get_data()
+	var lum := float(g.get("lum", 0.82))
+	var cell := int(g.get("cell", 40))
+	var min_px := int(g.get("min_px", 30))
+	var gw := int(ceil(float(w) / cell))
+	var gh := int(ceil(float(h) / cell))
+	var cnt := PackedInt32Array(); cnt.resize(gw * gh)
+	var sx := PackedFloat32Array(); sx.resize(gw * gh)
+	var sy := PackedFloat32Array(); sy.resize(gw * gh)
+	for y in h:
+		for x in w:
+			var q := (y * w + x) * 4
+			if d[q + 3] < 200:
+				continue
+			var l := (0.299 * d[q] + 0.587 * d[q + 1] + 0.114 * d[q + 2]) / 255.0
+			if l < lum:
+				continue
+			var c := (y / cell) * gw + (x / cell)
+			cnt[c] += 1
+			sx[c] += x
+			sy[c] += y
+	var cells: Array = []
+	for c in gw * gh:
+		if cnt[c] >= min_px:
+			cells.append([cnt[c], sx[c] / cnt[c], sy[c] / cnt[c]])
+	cells.sort_custom(func(a, b): return a[0] > b[0])
+	var out: Array = []
+	for c in cells:
+		var p := Vector2(c[1], c[2])
+		var near := false
+		for o in out:
+			if p.distance_to(Vector2(o[0], o[1])) < cell * 2.5:
+				near = true
+		if not near:
+			out.append([roundi(p.x), roundi(p.y)])
+		if out.size() >= int(g.get("max", 6)):
+			break
+	return out
 
 
 # ---------------------------------------------------------------- 가공 그림
@@ -575,7 +646,9 @@ func _make_fill(f: Dictionary) -> Image:
 				continue
 			var c := Color8(d[q * 4], d[q * 4 + 1], d[q * 4 + 2])
 			var hd := c.h * 360.0
-			if hd >= float(hue[0]) and hd <= float(hue[1]) and c.s >= float(sat[0]) and c.s <= float(sat[1]) and c.v >= float(val[0]) and c.v <= float(val[1]):
+			# hue 가 [330, 40] 처럼 거꾸로면 0도를 넘어 감는다 (붉은 갈색~자줏빛 껍질)
+			var hue_ok := (hd >= float(hue[0]) and hd <= float(hue[1])) if float(hue[0]) <= float(hue[1]) else (hd >= float(hue[0]) or hd <= float(hue[1]))
+			if hue_ok and c.s >= float(sat[0]) and c.s <= float(sat[1]) and c.v >= float(val[0]) and c.v <= float(val[1]):
 				ok[q] = 1
 		# 적분 영상으로 네모 안의 '껍질' 비율을 빠르게 센다
 		var integ := PackedInt32Array(); integ.resize((w + 1) * (h + 1))

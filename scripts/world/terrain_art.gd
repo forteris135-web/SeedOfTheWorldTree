@@ -75,6 +75,10 @@ var _layer_fill := false
 var pick := ""
 var pick_flip := false
 var pick_w := 0.0
+## 어두운 방의 작은 빛: 지역 설명에 params.glow 가 있고 어두운 방이면, 놓인 조각의 빛나는 자리(pieces.json 의 glow — 수정·버섯·등불)를 모은다.
+## 다 만든 뒤 옛 코드 지형의 '버섯 빛'과 같은 규칙(TerrainStyle.add_glow_light: 노드 하나에 하나, 방 하나에 8개까지)으로 빛을 단다.
+var _glow_on := false
+var _glow_spots := PackedVector2Array()
 
 
 func _init(s: TerrainSkin = null, h: Node2D = null) -> void:
@@ -192,6 +196,8 @@ func _begin(seed_extra: int) -> void:
 	_rng.seed = int(host.global_position.x * 7.0 + host.global_position.y * 13.0) + seed_extra
 	_clip_phase = fmod(host.global_position.x * 0.013 + host.global_position.y * 0.007, TAU)
 	_mod = skin.tint
+	_glow_on = (skin.data.get("params", {}) as Dictionary).has("glow") and TerrainStyle.is_dark(host)
+	_glow_spots = PackedVector2Array()
 	var room := TerrainStyle.room_of(host)
 	_has_room = room != null and "bounds" in room
 	if _has_room:
@@ -203,6 +209,9 @@ func _begin(seed_extra: int) -> void:
 func _finish(t0: int) -> void:
 	_layer_fill = true
 	_make_fill_item()
+	if _glow_on and not _glow_spots.is_empty():
+		var gc: Array = skin.param("glow", "color", [1.0, 0.8, 0.55])
+		TerrainStyle.add_glow_light.call_deferred(host, Array(_glow_spots), {"mushroom_glow": Color(float(gc[0]), float(gc[1]), float(gc[2]))})
 	build_usec += Time.get_ticks_usec() - t0
 	build_count += 1
 	tri_count += triangle_count()
@@ -425,6 +434,8 @@ func piece(name: String, u0: float, u1: float, x0: float, x1: float, y_at: Calla
 			pts[k] = Vector2(x, y)
 			uvs[k] = Vector2(uvx, (r.position.y + v) / skin.atlas_size.y)
 			cols[k] = Color(mod.r, mod.g, mod.b, mod.a * a * al[ri])
+	if _glow_on and skin.pieces[name].has("glow"):
+		_collect_glow(name, u0, u1, x0, x1, kx, y_at, sy, flip, warp, hang, opts, walk_y, lift, clip_l, clip_r, fade_l, fade_r)
 	var idx := PackedInt32Array()
 	idx.resize((ncol - 1) * (nrow - 1) * 6)
 	var w := 0
@@ -436,6 +447,29 @@ func piece(name: String, u0: float, u1: float, x0: float, x1: float, y_at: Calla
 			idx[w + 3] = p + 1; idx[w + 4] = q + 1; idx[w + 5] = q
 			w += 6
 	_tris(BUF_ATLAS, pts, uvs, cols, idx)
+
+
+## 놓인 조각의 빛나는 자리(조각 px)를 노드 좌표로 옮겨 모은다 (어두운 방의 작은 빛). 잘리거나 사라지는 자리·band 아래는 뺀다.
+func _collect_glow(name: String, u0: float, u1: float, x0: float, x1: float, kx: float, y_at: Callable, sy: float, flip: bool, warp: bool, hang: bool, opts: Dictionary, walk_y: float, lift: float, clip_l: float, clip_r: float, fade_l: float, fade_r: float) -> void:
+	var band: float = opts.get("band", -1.0)
+	for g in skin.pieces[name]["glow"]:
+		var gu := float(g[0])
+		var gv := float(g[1])
+		if gu < u0 or gu > u1:
+			continue
+		var x := x0 + (gu - u0) * kx
+		if flip:
+			x = x1 - (gu - u0) * kx
+		if x < clip_l - 4.0 or x > clip_r + 4.0 or (fade_l > 0.0 and x - x0 < fade_l) or (fade_r > 0.0 and x1 - x < fade_r):
+			continue
+		var line := walk_y
+		if warp and not hang:
+			line = skin.top_at(name, gu)
+		if band >= 0.0 and gv > line + band:
+			continue
+		var by: float = y_at.call(x)
+		var y := (by + float(opts["y_off"]) + gv * sy) if hang else (by - lift + (gv - line) * sy)
+		_glow_spots.append(Vector2(x, y))
 
 
 ## band 아래로 서서히 사라지는 알파 (band 가 없으면 1)
@@ -557,6 +591,11 @@ func branch_run(xa: float, xb: float, y_at: Callable, left_free: bool, right_fre
 		role = "branch" if skin.has_role("branch") else "slab"
 		if not skin.has_role(role):
 			return
+	# log 역할(덧붙인 역할 — 지역에 있을 때만): 한쪽 방향이 아닌 얇은 발판(벽장 바닥·넓은 단)은 굵은 통나무로 —
+	# 한쪽 방향 발판은 가는 가지로 남아 '아래에서 뛰어 오를 수 있는 곳'과 구분된다. 없는 지역(수관 등)은 그대로.
+	var solid_log: bool = not one_way and skin.has_role("log")
+	if solid_log:
+		role = "log"
 	var avoid := _stacked_picks(w)
 	if left_free and right_free:
 		var fit := _fit_single(skin.list(role), w, thick, avoid)
@@ -576,7 +615,7 @@ func branch_run(xa: float, xb: float, y_at: Callable, left_free: bool, right_fre
 			pick_flip = flip
 			pick_w = w
 			return
-	_chain(skin.list("branch") if skin.has_role("branch") else skin.list(role), xa, xb, y_at, left_free, right_free, thick, tuck_l, tuck_r, avoid)
+	_chain(skin.list(role) if solid_log or not skin.has_role("branch") else skin.list("branch"), xa, xb, y_at, left_free, right_free, thick, tuck_l, tuck_r, avoid)
 	pick_w = w
 
 

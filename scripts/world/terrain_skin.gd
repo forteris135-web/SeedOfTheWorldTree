@@ -56,8 +56,21 @@ static func for_region(region: String) -> TerrainSkin:
 
 
 ## 지형 노드가 쓸 그림 옷: override 가 있으면 그 지역, 없으면 조상 Room 의 region.
+## 지역 설명의 "room_skins": {방 id: 다른 그림 옷 이름} 에 그 방이 있으면 그 그림 옷을 쓴다
+## (같은 지역 안에서 방마다 다른 시트 — 심연의 달빛 정원·정원의 끝은 data/terrain/abyss_garden.json). 잿빛 팔레트는 지역 것 그대로.
 static func for_node(node: Node, override := "") -> TerrainSkin:
-	return for_region(override if override != "" else TerrainStyle.region_of(node))
+	if override != "":
+		return for_region(override)
+	var skin := for_region(TerrainStyle.region_of(node))
+	if skin != null and skin.data.has("room_skins"):
+		var room := TerrainStyle.room_of(node)
+		if room != null and "room_id" in room:
+			var other := str((skin.data["room_skins"] as Dictionary).get(str(room.get("room_id")), ""))
+			if other != "":
+				var s2 := for_region(other)
+				if s2 != null:
+					return s2
+	return skin
 
 
 ## 시험용: 기억한 것을 비운다 (그림을 다시 자른 뒤 등).
