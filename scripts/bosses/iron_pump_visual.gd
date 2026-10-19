@@ -317,6 +317,10 @@ func _particles(n: int, life: float, dir: Vector2, spread: float, grav: Vector2,
 func _on_state_changed(st: IronPump.State) -> void:
 	match st:
 		IronPump.State.INTRO:
+			# 싸움 시작(또는 다시 시작): 보는 쪽·자세를 바로 맞춘다 (지난 싸움에서 돌아선 채 남은 값으로 등장하며 몸을 틀지 않게)
+			_face = float(boss.facing)
+			_sign = signf(_face)
+			scale = Vector2(_face, 1.0)
 			_snap_to("dormant")
 			_core = 0.0
 			_beat_t = 0.0
@@ -434,7 +438,7 @@ func _process(delta: float) -> void:
 	var s := signf(fx)
 	if s != _sign:
 		_sign = s
-		motion.flip_feet()
+		_flip_legs()
 		motion.kick("crouch", 1.0)
 		_puff(10, global_position)
 	scale = Vector2(s * lerpf(TURN_MIN_WIDTH, 1.0, smoothstep(0.0, 1.0, absf(fx))), 1.0)
@@ -489,6 +493,23 @@ func _guard_cannon() -> void:
 		fixed = true
 	if fixed:
 		rig.apply()
+
+
+## 돌아서는 순간: 딛은 발은 세상 자리에 남기되(flip_feet), 앞다리·뒷다리가 서로의 발을 이어받는다
+## (옆모습의 앞다리는 돌아서면 뒷다리가 된다 — 그대로 두면 앞다리가 몸 뒤의 발까지 닿지 못해 두 발이 허공에 떴다).
+func _flip_legs() -> void:
+	motion.flip_feet()
+	if motion.legs.size() < 2:
+		return
+	var a: RigMotion.Leg = motion.legs[0]
+	var b: RigMotion.Leg = motion.legs[1]
+	var ax := a.x
+	a.x = b.x
+	b.x = ax
+	for leg in [a, b]:
+		leg.h = 0.0
+		leg.swing = false
+		leg.knee_set = false
 
 
 ## 상태 → 목표 자세. info 에 보간 방식·발 방식·떨림·핵 밝기·박 세기를 적는다.

@@ -36,6 +36,7 @@ func _ready() -> void:
 	for name in ["walk", "piston", "spray", "suck", "bite_parry", "stagger", "broken", "p2"]:
 		await _seq(name)
 	await _seq_dead(stand)
+	await _seq_reset()
 	await _cost()
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
@@ -219,6 +220,25 @@ func _seq_dead(stand: Dictionary) -> void:
 	same = same and a.root_pos.is_equal_approx(b.root_pos)
 	_check(same, "멈춘 펌프가 쓰러진 자세(관절 %d개)를 그대로 이어받는다" % a.rot.size())
 	remains.free()
+
+
+## 소녀가 쓰러져 싸움이 처음으로 돌아갔다가(reset_fight) 다시 시작해도 그림이 바로 제자리에 선다 (오른쪽을 보다 죽어도 왼쪽으로 등장)
+func _seq_reset() -> void:
+	await _spawn()
+	_player.global_position = Vector2(600, FLOOR_Y - 2)
+	_boss._timer = 0.3
+	_step(int(2.0 / STEP))   # 소녀 쪽으로 돌아서 피스톤 하나
+	var turned: bool = _boss.facing == 1
+	_boss.reset_fight()
+	_step(10)
+	_boss.start_fight(_player)
+	_step(2)
+	var face: float = _vis.probe_pose()["face"]
+	var start_facing := float(_boss.facing)
+	_step(int(2.4 / STEP))
+	var r := _measure()
+	_check(turned and absf(face - start_facing) < 0.01 and float(r[0]) <= FEET_TOL and float(r[1]) <= SINK_TOL and not r[3],
+		"다시 시작: 돌아섰던 펌프(%s)가 바로 보스 방향으로 등장 (보는 쪽 %.2f), 발바닥 %.1fpx, 몸 깊이 %+.1fpx" % [turned, face, r[0], r[1]])
 
 
 func _cost() -> void:
