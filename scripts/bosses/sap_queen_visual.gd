@@ -623,7 +623,8 @@ func _process(delta: float) -> void:
 	_flap_rate = Motion.damp(_flap_rate, rate, 5.0, delta)
 	_flap_rot = Motion.damp(_flap_rot, frot, 6.0, delta)
 	_flap_fold = Motion.damp(_flap_fold, ffold, 6.0, delta)
-	_fold = Motion.damp(_fold, fold, 7.0, delta)
+	# 접힌 날개는 보통 천천히 펴지지만, 내려앉는 순간엔 균형을 잡듯 확 펼친다
+	_fold = Motion.damp(_fold, fold, 14.0 if (st == SapQueen.State.LANDED and fold < _fold) else 7.0, delta)
 	_tremble = Motion.damp(_tremble, tremble, 10.0, delta)
 	_flap_phase += _flap_rate * delta
 	# 돌아서기: 몸 폭은 TURN_BODY_MIN 까지만 줄고(그 순간 좌우가 바뀐다), 날개는 나머지 몫만큼 더 접혀 0 을 지난다
