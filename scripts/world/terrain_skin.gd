@@ -108,6 +108,18 @@ func _load(r: String, d: Dictionary) -> bool:
 	return true
 
 
+## 방마다 다른 정화 후 기준 색 (data 의 "room_tint": {방 id: [r, g, b]} — 배경이 밤처럼 어두운 방은 지형을 조금 밝게,
+## 낮처럼 환한 방은 조금 어둡게 해 앞 지형이 배경과 갈라져 읽히게). 없으면 tint.
+func tint_for(room: Node) -> Color:
+	var rt: Dictionary = data.get("room_tint", {})
+	if room != null and not rt.is_empty() and "room_id" in room:
+		var id := str(room.get("room_id"))
+		if rt.has(id):
+			var t: Array = rt[id]
+			return Color(float(t[0]), float(t[1]), float(t[2]))
+	return tint
+
+
 func has_role(role: String) -> bool:
 	return roles.has(role) and not (roles[role] as Array).is_empty()
 
