@@ -30,14 +30,16 @@ class_name EnemyRigVisual
 var art_faces_right := true
 ## 걸음 보폭 배율 — 뼈대는 크기와 함께 보폭도 커지므로 쓰지 않는다 (예전 값 호환용).
 var stride_scale := 1.0
-## 타격 끝 무기 각도 / 앞으로 내리는 무기 각도 상한 (예전 값 호환용). 뼈대는 '무기 땅 막기'가 칼끝을 땅 위에 둔다.
-## arm_front_limit 이 INF 가 아니면(거대화) 땅 막기 여유를 더 둔다.
+## 타격 끝 무기 각도 / 앞으로 내리는 무기 각도 상한 (예전 값 호환용 — EliteTraits 가 쓴다). 뼈대는 이 값을 쓰지 않고
+## '무기 땅 막기'(RigMotion, 설계도 ground_guard)가 어떤 크기에서도 칼끝을 땅 위에 둔다.
 var arm_front := 1.1
 var arm_front_limit := INF
 const ARM_FRONT := 1.1
 ## 몸 기울기 배수 (거대화 몹은 앞머리가 땅에 박히지 않게 줄인다)
 var tilt_scale := 1.0
 
+## 공중이면 '공중 자세'로 바꾸는 상태들 (공격·무너짐·쓰러짐은 공중에서도 제 자세)
+const LOCO_STATES := [EnemyBase.State.IDLE, EnemyBase.State.PATROL, EnemyBase.State.CHASE, EnemyBase.State.BACKSTEP, EnemyBase.State.ALERT, EnemyBase.State.LUNGE, EnemyBase.State.HIT]
 ## 잔상 간격(초)·장 수
 const GHOST_INTERVAL := 0.025
 const GHOST_COUNT := 6
@@ -310,8 +312,7 @@ func _process(delta: float) -> void:
 	var breath := 1.0
 	var lock := 0.0
 	motion.tilt_scale = tilt_scale
-	var loco := [EnemyBase.State.IDLE, EnemyBase.State.PATROL, EnemyBase.State.CHASE, EnemyBase.State.BACKSTEP, EnemyBase.State.ALERT, EnemyBase.State.LUNGE, EnemyBase.State.HIT]
-	if airborne and st in loco:
+	if airborne and st in LOCO_STATES:
 		p = motion.pose("air")
 		feet = RigMotion.Feet.AIR
 		breath = 0.0
@@ -398,8 +399,9 @@ func _process(delta: float) -> void:
 				drive = RigMotion.Drive.QUICK
 				breath = 0.0
 			EnemyBase.State.BROKEN:
-				# 무너짐: 구원 가능한 자는 무릎을 꿇고 기다린다. 아니면 무릎이 꺾여 처졌다가(흐트러짐 시간 뒤) 일어난다.
-				if _enemy.savable and _enemy.hp <= 0.0:
+				# 무너짐: 구원 가능한 자는 무릎을 꿇고 기다린다 (일어나지 않는다 — EnemyBase 도 구원 가능한 자는 무너진 채 둔다).
+				# 아니면 두 무릎이 꺾여 처졌다가(흐트러짐 시간 뒤) 일어난다.
+				if _enemy.savable:
 					p = motion.pose("kneel")
 				else:
 					p = motion.pose("broken").duplicate()
@@ -452,7 +454,6 @@ func _process(delta: float) -> void:
 		_fall_pivot_set = false
 	motion.ground_lock = lock
 	motion.breath = breath
-	# 땅 막기 여유: 거대화(arm_front_limit 이 정해짐)는 조금 더
 	motion.set_target(p, drive, feet)
 	motion.update(delta, {"speed": speed_rig, "dx": dx_rig, "vy": _enemy.velocity.y / maxf(gscale, 0.0001), "grounded": on_floor or not airborne})
 

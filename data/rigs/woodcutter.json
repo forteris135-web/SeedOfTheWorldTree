@@ -34,7 +34,10 @@
     "alert": {"arm_f_up": -70, "arm_f_lo": -10, "weapon": -10},
     "lunge": {"arm_f_up": 62, "arm_f_lo": -10, "weapon": -6},
     "backstep": {"arm_f_up": -56, "arm_f_lo": -10, "weapon": -10},
-    "npc": {"arm_f_up": -44, "arm_f_lo": -4, "weapon": -16}
+    "npc": {"arm_f_up": -44, "arm_f_lo": -4, "weapon": -16},
+    "land": {"arm_f_up": -104, "arm_f_lo": -6, "weapon": -6},
+    "leap": {"arm_f_up": -196, "arm_f_lo": -30, "weapon": -14},
+    "slam_fall": {"arm_f_up": -180, "arm_f_lo": -20, "weapon": -8}
   },
   "parts": {
     "hips": {

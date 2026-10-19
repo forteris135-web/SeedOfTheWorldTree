@@ -50,7 +50,9 @@
    `G --path . --resolution 1600x900 res://tools/rig_preview.tscn -- --enemy res://scenes/enemies/<몹>.tscn --zoom 3 --seq idle,walk,attack,hit,broken,dead,dead_back,kneel --every 0.05 --crop 0.45`
    → `screenshots/rig_<몹>_<동작>.png` (0.05초 간격 칸). 예고 → 타격 → 되돌림이 세 박자로 읽히는지, 발이 미끄러지지 않는지.
 8. **검사**: `G --headless --path . res://tools/probe_rigs.tscn` (실패 0), 그리고 그 몹의 방 시험.
-9. 4~7 을 **틈이 없고 움직임이 자연스러울 때까지** 되풀이한다. 스크린샷은 `screenshots/` 라 저장소에 올리지 않는다.
+9. 4~7 을 **틈이 없고 움직임이 자연스러울 때까지** 되풀이한다. 스크린샷은 `screenshots/` 라 저장소에 올리지 않는다
+   (예전 스크린샷 몇 장이 이미 git 에 들어 있어 방 시험이 그것을 고쳐 쓴다 — `git add` 는 `art/rigs data/rigs scripts …` 처럼 폴더를 집어서,
+   커밋 전에 `git checkout -- screenshots/`).
 
 ---
 
@@ -141,6 +143,7 @@ hips (뿌리, 골반·허리 띠)
 원형 자세 이름 (그림 쪽이 상태에 맞춰 고른다): `idle walk backstep alert air lunge windup strike ready hit broken kneel rescued
 dead_knees dead_lie dead_back dead_back_lie shoot scatter_a scatter_b charge stuck leap slam_fall land npc`.
 뼈대마다 다른 값은 설계도 `poses` 에 그 채널만 적는다 (나무꾼은 칼이 길어서 팔을 더 앞으로).
+어느 자세에도(base 포함) 나오지 않는 뼈는 늘 쉬는 각도에 있다 (다리는 IK, `chain` 부위는 흔들림이 움직인다) — 움직일 뼈는 `poses.base` 에 0 으로라도 적는다.
 
 **움직임 원칙** (RigMotion 머리말): 자세는 절대 '툭' 바뀌지 않는다 — 상태가 바뀌면 이전 목표가 관성을 갖고 흘러가며 섞이고
 모든 채널이 스프링/감쇠로 쫓는다 (delta 기반). 휘두르기 `three_beat(from, windup, strike, ready, 국면, 진행도)`:
@@ -193,6 +196,10 @@ func _process(delta: float) -> void:
 	rig.set_flash(boss.flash_amount() * 0.75)
 ```
 보스 자세는 `RigPoses.SETS` 에 원형을 더하거나(새·기사·뿌리지기) 설계도 `poses` 에 자세 이름을 새로 지어 넣는다 (`motion.pose("wing_beat")`).
+- 여러 장면을 잇는 연속기(3연격·도약 내려찍기)는 `motion.sample_clip([[0.0, "windup"], [0.35, "strike_1", "strike"], [0.5, "windup_2", "out"], …], 지난 시간)`.
+- 날갯짓·등불 흔들림 같은 주기 움직임은 자세 사전을 `duplicate()` 해서 채널에 `sin(위상) * 세기` 를 더한 뒤 `set_target` 에 넘긴다
+  (위상은 `_phase += rate * delta` 누적기로 — 빠르기가 바뀌어도 끊기지 않는다). 숨쉬기를 끄려면 `motion.breath = 0.0`.
+- 날거나 떠 있는 보스는 `Feet.AIR` (다리를 접어 매단다), 내려앉으면 `Feet.POSE`. 다리가 없는 몸은 `legs` 를 비워 두면 발 디딤을 건너뛴다.
 판정(히트박스)·시간은 보스 스크립트 그대로 두고, 무기 끝 자리가 필요하면 `rig.bone_point("weapon", 끝 자리)` 로 읽는다.
 
 ---

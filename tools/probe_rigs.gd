@@ -24,8 +24,9 @@ func _ready() -> void:
 	_check(ids.size() > 0, "art/rigs 에 뼈대가 하나 이상 있다")
 	for id in ids:
 		_probe_rig(id)
-	_probe_enemy_fall("res://scenes/enemies/woodcutter.tscn")
-	_probe_enemy_fall("res://scenes/enemies/ash_giant.tscn")
+	for path in _rig_enemy_scenes():
+		_probe_enemy_fall(path, false)
+		_probe_enemy_fall(path, true)
 	_probe_cost(ids)
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
@@ -35,6 +36,32 @@ func _check(ok: bool, text: String) -> void:
 	print("[probe] %s %s" % ["OK " if ok else "FAIL", text])
 	if not ok:
 		_fail += 1
+
+
+## 부위 뼈대 그림(EnemyRigVisual)을 쓰는 몹 씬들 (scenes/enemies/ 에서 저절로 찾는다 — 새 몹을 바꾸면 따로 적지 않아도 검사된다)
+func _rig_enemy_scenes() -> Array:
+	var out: Array = []
+	var d := DirAccess.open("res://scenes/enemies")
+	if d == null:
+		return out
+	for f in d.get_files():
+		if not f.ends_with(".tscn"):
+			continue
+		var path := "res://scenes/enemies/" + f
+		var ps: PackedScene = load(path)
+		if ps == null:
+			continue
+		var st := ps.get_state()
+		for i in st.get_node_count():
+			if str(st.get_node_name(i)) != "Visual":
+				continue
+			for k in st.get_node_property_count(i):
+				if st.get_node_property_name(i, k) == "script":
+					var sc = st.get_node_property_value(i, k)
+					if sc is Script and (sc as Script).resource_path.ends_with("enemy_rig_visual.gd"):
+						out.append(path)
+	out.sort()
+	return out
 
 
 func _rig_ids() -> Array:
@@ -125,6 +152,11 @@ func _probe_rig(id: String) -> void:
 		var nm := rig.names[i]
 		if nm.begins_with("leg_") or nm.begins_with("foot_") or nm in ["torso", "head"] or nm.begins_with("arm_"):
 			body.append(i)
+	if body.is_empty():
+		# 사람 모양이 아닌 뼈대(새·기계): 무기 사슬과 늘어진 천을 뺀 모든 부위
+		for i in m._lock_bones:
+			if not (data["bones"][i] as Dictionary).has("chain"):
+				body.append(i)
 	var scen := [
 		["idle", 90, false], ["walk", 150, true], ["attack", 0, false], ["broken", 120, false], ["hit", 40, false], ["kneel", 120, false],
 	]
@@ -217,10 +249,19 @@ func _measure(m: RigMotion, rig: PartRig, body: PackedInt32Array, guard: PackedI
 
 
 ## 실제 몹 씬으로 쓰러짐: 넘어진 끝에 몸이 땅 위에 눕는가 (가라앉거나 뜨지 않음)
-func _probe_enemy_fall(path: String) -> void:
+## from_front: 앞에서 맞아 뒤로 쓰러짐(엉덩방아 → 등), 아니면 뒤에서 맞아 앞으로(꿇고 엎어짐)
+func _probe_enemy_fall(path: String, from_front: bool) -> void:
 	var e: EnemyBase = (load(path) as PackedScene).instantiate()
+	if e.savable:
+		e.free()
+		print("[probe]   %s: 구원 가능한 자는 쓰러지지 않는다 (무릎 꿇기는 자세 검사에서 본다)" % path.get_file())
+		return
 	e.gravity = 0.0
 	add_child(e)
+	if e.is_queued_for_deletion():
+		print("[probe]   %s: 이미 물리친 중간 보스라 나오지 않는다 (건너뜀)" % path.get_file())
+		e.free()
+		return
 	e.set_physics_process(false)
 	var vis = e.get_node("Visual")
 	vis.set_process(false)
@@ -231,7 +272,14 @@ func _probe_enemy_fall(path: String) -> void:
 		e._physics_process(STEP)
 		vis._process(STEP)
 	e.hp = 1.0
-	e.receive_hit(HitData.make(5.0, 10.0, null), null)
+	var src: Node2D = null
+	if from_front:
+		src = Node2D.new()
+		add_child(src)
+		src.global_position = e.global_position + Vector2(120, 0)   # 몹은 오른쪽(facing 1)을 본다
+	e.receive_hit(HitData.make(5.0, 10.0, src), null)
+	if src:
+		src.free()
 	var low_end := 0.0
 	var feet_dev := 0.0
 	var rig: PartRig = vis.rig
@@ -246,7 +294,7 @@ func _probe_enemy_fall(path: String) -> void:
 		vis._process(STEP)
 		if i == 36:
 			low_end = rig.lowest_y(vis.motion._lock_bones) * gs
-	_check(absf(low_end) <= 6.0, "%s: 쓰러져 누운 몸의 가장 낮은 점이 땅 ±6px (%+.1fpx)" % [path.get_file(), low_end])
+	_check(absf(low_end) <= 6.0, "%s: %s 쓰러져 누운 몸의 가장 낮은 점이 땅 ±6px (%+.1fpx)" % [path.get_file(), "뒤로" if from_front else "앞으로", low_end])
 	e.free()
 
 

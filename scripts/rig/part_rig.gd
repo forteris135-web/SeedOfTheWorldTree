@@ -289,6 +289,12 @@ func set_variant(bone_name: String, variant: String) -> void:
 	_sprite_local[s] = Transform2D(float(v[2]), Vector2(k, k), 0.0, Vector2.ZERO)
 
 
+## 보는 쪽과 크기를 한 번에 (뼈대는 오른쪽을 보는 그림 — 왼쪽이면 scale.x 를 뒤집는다).
+## 움직임(RigMotion)을 쓰면 뒤집는 프레임에 motion.flip_feet() 도 불러야 딛은 발이 세상에 남는다.
+func set_facing(right: bool, k := 1.0) -> void:
+	scale = Vector2(k if right else -k, k)
+
+
 func sprite_of(bone_name: String) -> Sprite2D:
 	var i := bone_index(bone_name)
 	return _sprites[_bone_sprite[i]] if i >= 0 and _bone_sprite[i] >= 0 else null

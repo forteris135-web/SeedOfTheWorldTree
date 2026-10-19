@@ -8,6 +8,7 @@ extends Node2D
 ##       부위마다 그림 + 관절(빨강 pivot, 파랑 축 끝, 노랑 자식 관절, 초록 발바닥): screenshots/rig_<id>_parts.png
 ##   Godot --path . res://tools/rig_preview.tscn -- --enemy res://scenes/enemies/woodcutter.tscn [--seq idle,walk,attack,hit,broken,dead,kneel] [--joints]
 ##       동작: idle / walk / backstep / alert / attack / hit / broken / dead(뒤에서 맞아 앞으로) / dead_back(앞에서 맞아 뒤로) / kneel(구원형)
+##             / slam (잿가지 거인 내려찍기)
 ##       실제 몹 씬을 바닥 위에 세우고 동작을 차례로 돌려 0.05초(--every) 간격 필름 띠: screenshots/rig_<씬 이름>_<동작>.png
 ##       (상태는 EnemyBase 를 직접 바꿔 돌린다 — 판정·시간은 실제 게임과 같다)
 ##   공통: --zoom 2.5 (카메라 배율), --every 0.05 (필름 칸 간격, 초), --cols 5, --crop 0.5 (필름 칸에 남길 화면 몫)
@@ -283,11 +284,13 @@ func _run_enemy(scene_path: String) -> void:
 			var mk := _add_marks(vis.rig, vis.motion)
 			vis.set_meta("marks", mk)
 		_cam.position = Vector2(e.global_position.x + 60.0, FLOOR_Y - 90.0 * float(vis.get("art_scale") if vis.get("art_scale") != null else 1.0))
+		var cam_y0 := _cam.position.y
 		var frames: Array = []
 		var t := 0.0
 		var next := 0.0
 		var dur := 1.4
 		var vx := 0.0
+		var real_physics := false   # 몹 스크립트의 _physics_process 를 그대로 돌린다 (AI 를 쓰지 않는 동작만)
 		match seq:
 			"idle":
 				dur = 1.2
@@ -329,11 +332,25 @@ func _run_enemy(scene_path: String) -> void:
 			"alert":
 				e._alert()
 				dur = 0.9
+			"slam":
+				# 잿가지 거인의 뛰어올라 내려찍기 (그 몹 스크립트의 물리를 그대로 돌린다)
+				if "_slamming" in e:
+					e._set_state(EnemyBase.State.STRIKE)
+					e._timer = 1.6
+					e._slamming = true
+					e._airborne = false
+					e.anim_hint = "leap"
+					e.velocity = Vector2(300.0, -980.0)
+					real_physics = true
+				dur = 1.9
 		while t < dur and is_instance_valid(e):
 			await get_tree().physics_frame
 			if not is_instance_valid(e):
 				break
-			_sim(e, 1.0 / 60.0, vx)
+			if real_physics:
+				e._physics_process(1.0 / 60.0)
+			else:
+				_sim(e, 1.0 / 60.0, vx)
 			if not is_instance_valid(e) or e.is_queued_for_deletion():
 				break
 			# 공격 흐름: 예고 → 타격 → 회복 → 대기
@@ -349,8 +366,10 @@ func _run_enemy(scene_path: String) -> void:
 			elif e.state == EnemyBase.State.HIT and e._timer <= 0.0:
 				e._set_state(EnemyBase.State.IDLE)
 				e._timer = 999.0
-			if seq == "walk" or seq == "backstep":
+			if seq in ["walk", "backstep", "slam"]:
 				_cam.position.x = e.global_position.x + 60.0
+			if seq == "slam":
+				_cam.position.y = minf(cam_y0, e.global_position.y - 40.0)   # 뛰어오르면 따라 올라간다
 			t += 1.0 / 60.0
 			if t >= next:
 				next += every

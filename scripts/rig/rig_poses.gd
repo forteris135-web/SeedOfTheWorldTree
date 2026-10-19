@@ -84,7 +84,7 @@ const HUMANOID := {
 	## 뛰어올라 내려찍기 (거인): 도약 → 낙하(무기를 머리 위로) → 착지(깊게 웅크리며 땅을 친다)
 	"leap": {"hip_y": 0.0, "torso": -8.0, "head": -10.0, "arm_f_up": -196.0, "arm_f_lo": -40.0, "weapon": -16.0, "arm_b_up": -150.0, "arm_b_lo": -20.0},
 	"slam_fall": {"torso": -4.0, "head": -6.0, "arm_f_up": -186.0, "arm_f_lo": -30.0, "weapon": -10.0, "arm_b_up": -130.0, "arm_b_lo": -20.0},
-	"land": {"hip_x": 0.1, "hip_y": 0.32, "lean": 4.0, "torso": 36.0, "head": 14.0, "arm_f_up": -44.0, "arm_f_lo": -4.0, "weapon": 0.0, "arm_b_up": 36.0, "arm_b_lo": -10.0,
+	"land": {"hip_x": 0.1, "hip_y": 0.32, "lean": 4.0, "torso": 36.0, "head": 14.0, "arm_f_up": -90.0, "arm_f_lo": -4.0, "weapon": 0.0, "arm_b_up": 36.0, "arm_b_lo": -10.0,
 		"foot_f": 0.42, "foot_b": -0.4, "step_thr": 0.3},
 	## 구원되어 서 있는 사람 (RescuedPerson): 힘을 빼고 선다
 	"npc": {"torso": 2.0, "head": 4.0, "arm_f_up": -10.0, "arm_f_lo": -10.0, "weapon": -4.0, "arm_b_up": 4.0, "arm_b_lo": -10.0, "hip_y": 0.03},

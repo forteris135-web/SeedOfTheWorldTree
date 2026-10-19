@@ -1242,6 +1242,21 @@
       "arm_f_up": -44.0,
       "arm_f_lo": -4.0,
       "weapon": -16.0
+    },
+    "land": {
+      "arm_f_up": -104.0,
+      "arm_f_lo": -6.0,
+      "weapon": -6.0
+    },
+    "leap": {
+      "arm_f_up": -196.0,
+      "arm_f_lo": -30.0,
+      "weapon": -14.0
+    },
+    "slam_fall": {
+      "arm_f_up": -180.0,
+      "arm_f_lo": -20.0,
+      "weapon": -8.0
     }
   }
 }

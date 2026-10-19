@@ -93,6 +93,8 @@ const GUARD_LIMITS := [1.3, 0.45, 0.45]   # 어깨, 팔꿈치, 손목(무기) (�
 const STRIKE_LAG := {"arm_f_lo": 0.1, "weapon": 0.2, "head": 0.15, "arm_b_up": 0.05, "arm_b_lo": 0.12}
 ## 허리·몸통·무게중심은 예비동작 끝에서 먼저 풀리기 시작한다: 타격에 들어설 때 이미 EARLY_UNWIND 몫만큼 앞으로 와 있다.
 const EARLY_KEYS := ["torso", "lean", "hip_x"]
+## 타격 중에도 스프링으로 따라가는 무거운 채널 (몸통·허리·무게중심)
+const HEAVY_KEYS := ["torso", "lean", "hip_x", "hip_y"]
 const EARLY_UNWIND := 0.4
 
 var rig: PartRig
@@ -380,6 +382,36 @@ func three_beat(from: Dictionary, windup: Dictionary, strike: Dictionary, ready:
 			return mix(from, ready, Motion.settle(Motion.ease_in(p, 2.0), 1.5, 2.5))
 
 
+## 여러 장면을 잇는 동작 (보스 연속기·도약·되튕김 등). frames = [[시각(초), 자세(이름 또는 사전), 이음 방식], …] (시각 순서).
+## 이음 방식: "smooth"(기본, 천천히 출발·도착) / "in"(점점 빨리 — 떨어짐·내려침) / "out"(빨리 출발해 멈칫 — 들어 올림) /
+## "strike"(타격 곡선, 끝에서 지나침) / "hold"(앞 자세 그대로 멈춰 있다가 다음 시각에 바로). t 가 마지막 시각을 넘으면 마지막 자세.
+func sample_clip(frames: Array, t: float) -> Dictionary:
+	if frames.is_empty():
+		return pose("base")
+	var first = frames[0][1]
+	if t <= float(frames[0][0]):
+		return _as_pose(first)
+	for i in range(1, frames.size()):
+		var t1 := float(frames[i][0])
+		if t <= t1:
+			var t0 := float(frames[i - 1][0])
+			var u := clampf((t - t0) / maxf(t1 - t0, 0.0001), 0.0, 1.0)
+			var how := str(frames[i][2]) if frames[i].size() > 2 else "smooth"
+			var w := u
+			match how:
+				"in": w = Motion.ease_in(u, 2.0)
+				"out": w = Motion.ease_out(u, 2.5)
+				"strike": w = strike_curve(u)
+				"hold": w = 0.0
+				_: w = Motion.ease_in_out(u)
+			return mix(_as_pose(frames[i - 1][1]), _as_pose(frames[i][1]), w)
+	return _as_pose(frames[frames.size() - 1][1])
+
+
+func _as_pose(p) -> Dictionary:
+	return p if p is Dictionary else pose(str(p))
+
+
 ## 타격 곡선 0→1: 정지에서 가속해 가운데쯤 가장 빠르고, 끝에서 over 만큼 지나쳤다 돌아온다.
 static func strike_curve(q: float, over := 0.16) -> float:
 	var c := clampf(q, 0.0, 1.0)
@@ -482,7 +514,7 @@ func _drive_chan(c: Chan, tgt: float, k: String, delta: float) -> void:
 			c.spring(tgt, 90.0 * slow, 17.0, delta)
 		Drive.FAST:
 			# 타격: 곡선이 시간 기반이라 팔은 바짝 따라간다. 몸통·허리는 무거워 조금 늦게 (팔보다 먼저 출발하므로 늦어도 같이 끝난다)
-			if k in ["torso", "lean", "hip_x", "hip_y"]:
+			if HEAVY_KEYS.has(k):
 				c.spring(tgt, 520.0, 44.0, delta)   # 스프링: 예비에서 쌓인 속도를 이어 받아 '툭' 하지 않는다
 			else:
 				c.damp(tgt, 40.0 if k == "head" else 90.0, delta)
@@ -499,6 +531,10 @@ func _drive_chan(c: Chan, tgt: float, k: String, delta: float) -> void:
 
 
 func _apply_body() -> void:
+	# 모든 뼈를 쉬는 각도에서 출발 (뿌리는 바로 아래에서 기울이고, 자세 채널이 덮어쓰고, 다리는 IK, 천은 흔들림이 정한다).
+	# 이렇게 해야 땅 막기처럼 '더하는' 고침이 프레임마다 쌓이지 않는다.
+	for i in rig.rot.size():
+		rig.rot[i] = rig.rest[i]
 	var lean := deg_to_rad(float(fin["lean"]) * tilt_scale)
 	rig.rot[root] = rig.rest[root] + lean
 	var ry := stand_root_y + float(fin["hip_y"]) * L - _swing_bob
@@ -530,8 +566,6 @@ func _apply_body() -> void:
 		ry = lerpf(ry, maxf(ry, rk.y), kw)
 		rx = lerpf(rx, rk.x, kw)
 	rig.root_pos = Vector2(rx, ry)
-	for c in _chains:
-		rig.rot[c[0]] = rig.rest[c[0]]   # 늘어진 천은 쉬는 각도에서 출발 (자세 채널이 있으면 아래에서 덮어쓴다)
 	for bk in _bone_keys:
 		var i: int = bk[1]
 		if i == root:
@@ -785,7 +819,15 @@ func _ground_guard() -> void:
 			var s2 := PI - s1
 			var d1 := wrapf(s1 - cur, -PI, PI)
 			var d2 := wrapf(s2 - cur, -PI, PI)
-			var dd := d1 if absf(d1) < absf(d2) else d2
+			# 두 방향 중 무기 끝이 몸 앞쪽(+x)에 남는 쪽을 고른다 (칼은 앞 땅에 얹힌다 — 등 뒤로 넘기지 않는다).
+			# 앞쪽 해가 한계(lim)를 넘고 뒤쪽 해는 안 넘으면 뒤쪽.
+			var lim0: float = GUARD_LIMITS[c]
+			var x1 := (pj + (q - pj).rotated(d1)).x
+			var x2 := (pj + (q - pj).rotated(d2)).x
+			var dd := d1 if x1 >= x2 else d2
+			var other := d2 if x1 >= x2 else d1
+			if absf(dd) > lim0 and absf(other) <= lim0:
+				dd = other
 			var lim: float = GUARD_LIMITS[c]
 			var used := clampf(dd, -lim, lim)
 			rig.rot[jb] += used

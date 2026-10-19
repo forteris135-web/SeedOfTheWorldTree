@@ -747,6 +747,7 @@ func _cut() -> bool:
 			if not vd.has("pivot"):
 				vd["pivot"] = part["pivot"]
 			var vkey := str(vd.get("sheet", key))
+			vd["sheet"] = vkey   # 시트를 안 적은 변형은 부위와 같은 시트
 			var vex := _extract(vd)
 			if vex.is_empty():
 				return false
@@ -804,7 +805,11 @@ func _cut() -> bool:
 			world[name] = Transform2D(rest_local, Vector2.ZERO)
 		else:
 			var pinf: Dictionary = info[par]
-			var at := _to_rig(par, part.get("attach", part["pivot"]))
+			var own_pivot = part.get("pivot", parts[str(part["from"])]["pivot"] if part.has("from") else null)
+			if not part.has("attach") and own_pivot == null:
+				push_error("부위에 attach 도 pivot 도 없다: " + str(name))
+				return false
+			var at := _to_rig(par, part.get("attach", own_pivot))
 			pos = (at - pinf["p"]).rotated(pinf["sr"])
 			if part.has("rest"):
 				rest_world = deg_to_rad(float(part["rest"]))
