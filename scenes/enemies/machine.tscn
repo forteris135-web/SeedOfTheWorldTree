@@ -1,8 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://c1seedmachine"]
+[gd_scene load_steps=6 format=3 uid="uid://c1seedmachine"]
 
 [ext_resource type="Script" path="res://scripts/enemies/machine.gd" id="1_enemy"]
-[ext_resource type="Script" path="res://scripts/enemies/enemy_sprite_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://art/enemies/enemy_machine.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_mech_visual.gd" id="2_visual"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 
@@ -42,10 +41,12 @@ shape = SubResource("CapsuleShape2D_body")
 
 [node name="Visual" type="Node2D" parent="."]
 script = ExtResource("2_visual")
-texture = ExtResource("3_tex")
-art_faces_right = false
-art_scale = 0.2
-foot_offset = 30.0
+rig_id = "machine"
+spin_bone = "drill"
+glow_sockets = PackedStringArray("lamp_b")
+glow_parts = PackedStringArray("lamp_a", "lamp_b", "lamp_c", "drill")
+glow_size = 40.0
+spark_socket = "drill_tip"
 
 [node name="Hurtbox" type="Area2D" parent="."]
 position = Vector2(0, -5)

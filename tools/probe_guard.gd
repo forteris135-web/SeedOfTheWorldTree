@@ -6,6 +6,7 @@ extends Node
 ##  (b) 정면에서 연속 block_limit(3)번 막은 뒤 네 번째는 방패가 들려 맞고 흐트러짐 +block_break_poise 인지, 잠깐 열렸다가 다시 막는지
 ##  (c) 돌진 속도·피해·길이, 박힘 길이, 박힘 뒤 쉬는 시간, 박힘 중 흐트러짐 2배
 ##  (d) 두 씬의 그림 방향 플래그와 능력치가 그림 판단·너프 값과 같은지
+##  (e) 부위 뼈대 그림(GuardRigVisual)이면: 방패(weapon 뼈)가 그림이 보는 쪽(visible_facing)에 그려지는지 — 좌우 모두, 세 씬 모두
 
 const EXPECT_GUARD := {"max_hp": 100.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.45, "art_faces_right": true}
 const EXPECT_SAVABLE := {"max_hp": 110.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.45, "art_faces_right": false}
@@ -32,6 +33,7 @@ func _run() -> void:
 	await _probe_block_limit()
 	await _probe_charge()
 	_probe_stuck_poise()
+	await _probe_shield_side()
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
 
@@ -107,6 +109,10 @@ func _probe_scene_values() -> void:
 		var exp: Dictionary = pair[1]
 		var got := {"max_hp": g.max_hp, "max_poise": g.max_poise, "damage": g.damage, "turn_delay": g.turn_delay, "art_faces_right": vis.art_faces_right}
 		print("[probe] %s: %s" % [pair[0].get_file(), got])
+		if vis is EnemyRigVisual:
+			# 부위 뼈대는 늘 오른쪽을 보는 그림으로 잘린다 (예전 한 장 그림의 방향 플래그는 뜻이 없다) — 방패 쪽은 (e) 가 직접 본다
+			exp = exp.duplicate()
+			exp["art_faces_right"] = true
 		for k in exp.keys():
 			_check(is_equal_approx(float(got[k]), float(exp[k])) if typeof(exp[k]) != TYPE_BOOL else got[k] == exp[k], "%s %s = %s (기대 %s)" % [pair[0].get_file(), k, got[k], exp[k]])
 		for k in EXPECT_SCRIPT.keys():
@@ -259,3 +265,29 @@ func _probe_stuck_poise() -> void:
 	var r: String = g.receive_hit(_hit_from_player(10.0), null)
 	_check(r == "hit" and is_equal_approx(g.poise, 20.0), "박힌 동안엔 정면이라도 맞고 흐트러짐 2배 ('%s', %.0f)" % [r, g.poise])
 	g.free()
+
+
+## (e) 방패가 그림이 보는 쪽에 그려지는가 (부위 뼈대 그림만). 소녀를 오른쪽·왼쪽에 두고 그림이 자리 잡은 뒤
+## 방패 뼈(weapon)의 가운데가 몸 가운데보다 보는 쪽에 있어야 한다 — 방패 판정(그림이 보는 방향 기준)과 그림이 맞는지.
+func _probe_shield_side() -> void:
+	for path in ["res://scenes/enemies/guard.tscn", "res://scenes/enemies/guard_savable.tscn", "res://scenes/enemies/elite_guard.tscn"]:
+		for side in [1, -1]:
+			_player.global_position = Vector2(450.0 * side, 0)
+			var g = load(path).instantiate()
+			g.global_position = Vector2.ZERO
+			add_child(g)
+			var vis: Node2D = g.get_node("Visual")
+			if not (vis is EnemyRigVisual):
+				g.free()
+				return
+			g.walk_speed = 0.0
+			g.attack_range = 0.0      # 제자리에서 바라보기만 (공격하러 오지 않게)
+			g.lunge_extra = 0.0
+			await _wait_until(func(): return g.facing == side and vis.is_facing_settled(), 3.0)
+			await _wait(0.3)
+			var rig: PartRig = vis.rig
+			var shield_x: float = rig.to_global(rig.bone_point("weapon", Vector2(0, rig.bone_len[rig.bone_index("weapon")] * 0.5))).x - g.global_position.x
+			_check(vis.visible_facing() == side and shield_x * side > 10.0,
+				"%s 소녀가 %s: 그림 방향 %d, 방패 가운데가 몸 앞 %.0f px (보는 쪽에 그려짐)" % [path.get_file(), "오른쪽" if side > 0 else "왼쪽", vis.visible_facing(), shield_x * side])
+			g.free()
+			await get_tree().physics_frame

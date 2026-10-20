@@ -1,0 +1,80 @@
+{
+  "_설명": "등불 기사(보스) 자세 모음. (windup/strike/ready/kneel 은 몹 공용 이름 — 그림은 thrust_* 등 기사 자세를 쓰고, 이 넷은 뼈대 검사(probe_rigs)용 순한 자세다. 기사는 구원형이 아니라 몹의 무릎 꿇기(kneel)를 쓰지 않는다.) scripts/bosses/lantern_knight_visual.gd 가 상태마다 골라 섞는다. 사람 모양(humanoid)을 물려받고 아래 값이 덮어쓴다. 채널 약속: hand_x/hand_y = 앞손(창의 뒤 손잡이) 자리, hand_bx/hand_by = 창을 놓은 뒷손 자리 — 둘 다 몸통 틀(허리 관절 원점, 몸통과 함께 기욺, +x 앞, +y 아래, 시트 px). spear = 창의 세상 각도(도; 0 창끝 아래, -90 앞 수평, -180 위, +90 뒤 수평). grip_b = 뒷손이 창을 쥐는 정도(0~1). slide = 창이 손 안에서 미끄러진 거리(창 그림 px, + 창끝 쪽으로 내지름). plant = 1 이면 창 밑동을 땅의 plant_x(몸 앞 시트 px)에 짚는다. 팔 뼈 각도(arm_*)는 쓰지 않는다 — 그림이 손 자리로 IK 를 푼다.",
+  "extends": "humanoid",
+  "base": {"hip_y": 0.05, "torso": 4, "head": 2, "hand_x": 60, "hand_y": 18, "hand_bx": 40, "hand_by": -30, "spear": -128, "grip_b": 1, "slide": 40, "plant": 0, "plant_x": 160, "foot_f": 0.16, "foot_b": -0.16},
+
+  "idle": {"torso": 6, "head": 4, "lean": 1, "hip_y": 0.06, "hand_x": 58, "hand_y": 18, "spear": -128, "slide": 40},
+  "walk": {"torso": 11, "head": 3, "lean": 2, "hip_y": 0.08, "hand_x": 64, "hand_y": 14, "spear": -124, "step_thr": 0.2, "slide": 40},
+  "idle_p2": {"torso": 14, "head": 9, "lean": 3, "hip_y": 0.12, "hand_x": 78, "hand_y": 4, "spear": -112, "foot_f": 0.22, "foot_b": -0.22, "slide": 40},
+  "walk_p2": {"torso": 18, "head": 7, "lean": 4, "hip_y": 0.16, "hand_x": 84, "hand_y": -2, "spear": -108, "slide": 40},
+
+  "thrust_w": {"hip_x": -0.12, "hip_y": 0.14, "lean": -4, "torso": -8, "head": -6, "hand_x": -40, "hand_y": 10, "hand_bx": 30, "hand_by": -20, "spear": -98, "slide": -40,
+    "foot_f": 0.2, "foot_b": -0.2, "step_thr": 0.12, "step_dur": 0.2},
+  "thrust_s": {"hip_x": 0.2, "hip_y": 0.3, "lean": 8, "torso": 18, "head": 8, "hand_x": 120, "hand_y": -20, "spear": -92, "slide": -15,
+    "foot_f": 0.5, "foot_b": -0.2, "step_thr": 0.1, "step_dur": 0.1, "step_lift": 0.05},
+  "thrust_h": {"hip_x": 0.2, "hip_y": 0.3, "lean": 5, "torso": 12, "head": 8, "hand_x": 120, "hand_y": -20, "spear": -92, "slide": -15,
+    "foot_f": 0.5, "foot_b": -0.2, "step_thr": 0.1, "step_dur": 0.1, "step_lift": 0.05},
+  "thrust_r": {"hip_x": 0.08, "hip_y": 0.1, "lean": 3, "torso": 12, "head": 5, "hand_x": 70, "hand_y": 16, "spear": -118, "slide": 0,
+    "foot_f": 0.36, "foot_b": -0.26, "step_thr": 0.3},
+
+  "flame_w": {"hip_x": -0.1, "hip_y": 0.12, "lean": -6, "torso": -18, "head": -10, "hand_x": -50, "hand_y": -60, "spear": -300, "grip_b": 1,
+    "foot_f": 0.24, "foot_b": -0.32, "step_thr": 0.12, "slide": 110},
+  "flame_s": {"hip_x": 0.16, "hip_y": 0.2, "lean": 10, "torso": 30, "head": 12, "hand_x": 110, "hand_y": -10, "spear": -70,
+    "foot_f": 0.46, "foot_b": -0.3, "step_thr": 0.1, "step_dur": 0.12, "slide": 50},
+
+  "slam_crouch": {"hip_y": 0.28, "lean": 6, "torso": 24, "head": 10, "hand_x": 70, "hand_y": 30, "spear": -105, "foot_f": 0.22, "foot_b": -0.22, "step_thr": 0.4},
+  "slam_air": {"hip_y": 0.0, "lean": -4, "torso": -14, "head": -10, "hand_x": 20, "hand_y": -250, "spear": -235, "grip_b": 1, "slide": 100},
+  "slam_s": {"hip_x": 0.06, "hip_y": 0.34, "lean": 8, "torso": 20, "head": 14, "hand_x": 110, "hand_y": -40, "spear": -45,
+    "foot_f": 0.3, "foot_b": -0.3, "step_thr": 0.5, "slide": -100},
+  "slam_r": {"hip_y": 0.16, "lean": 4, "torso": 16, "head": 6, "hand_x": 80, "hand_y": 14, "spear": -112, "step_thr": 0.3},
+
+  "throw_w": {"hip_x": -0.08, "hip_y": 0.1, "lean": -4, "torso": -14, "head": -10, "hand_x": -20, "hand_y": -110, "spear": -232, "foot_f": 0.22, "foot_b": -0.3, "step_thr": 0.15, "slide": 110},
+  "throw_s": {"hip_x": 0.12, "hip_y": 0.12, "lean": 6, "torso": 18, "head": 2, "hand_x": 110, "hand_y": -60, "spear": -122, "foot_f": 0.4, "foot_b": -0.28, "step_thr": 0.12, "slide": 50},
+
+  "wave_w": {"hip_x": -0.1, "hip_y": 0.14, "lean": -6, "torso": -20, "head": -10, "hand_x": -60, "hand_y": -110, "spear": -235, "foot_f": 0.26, "foot_b": -0.34, "step_thr": 0.12, "slide": 110},
+  "wave_s": {"hip_x": 0.2, "hip_y": 0.16, "lean": 8, "torso": 20, "head": 4, "hand_x": 120, "hand_y": -70, "spear": -98, "foot_f": 0.5, "foot_b": -0.3, "step_thr": 0.1, "step_dur": 0.12, "slide": 60},
+
+  "cut_w": {"hip_x": -0.06, "hip_y": 0.1, "lean": -4, "torso": -12, "head": -8, "hand_x": 10, "hand_y": -150, "spear": -195, "step_thr": 0.15, "slide": 100},
+  "cut_s": {"hip_x": 0.14, "hip_y": 0.18, "lean": 8, "torso": 26, "head": 8, "hand_x": 100, "hand_y": -20, "spear": -88, "foot_f": 0.42, "foot_b": -0.3, "step_thr": 0.12, "slide": 40},
+  "upper_w": {"hip_x": 0.04, "hip_y": 0.22, "lean": 8, "torso": 26, "head": 10, "hand_x": 90, "hand_y": 50, "spear": -68, "foot_f": 0.36, "foot_b": -0.3, "step_thr": 0.15, "slide": -60},
+  "upper_s": {"hip_x": 0.1, "hip_y": 0.02, "lean": -6, "torso": -16, "head": -14, "hand_x": 60, "hand_y": -200, "spear": -170, "foot_f": 0.4, "foot_b": -0.28, "step_thr": 0.15, "slide": 80},
+
+  "charge_w": {"hip_x": -0.12, "hip_y": 0.18, "lean": 4, "torso": 16, "head": 4, "hand_x": 20, "hand_y": 30, "spear": -88, "slide": -10, "foot_f": 0.26, "foot_b": -0.36, "step_thr": 0.2},
+  "charge_s": {"hip_x": 0.06, "hip_y": 0.26, "lean": 12, "torso": 26, "head": 8, "hand_x": 80, "hand_y": 34, "spear": -86, "slide": 30},
+  "stuck": {"hip_x": 0.14, "hip_y": 0.18, "lean": 10, "torso": 30, "head": 12, "hand_x": 110, "hand_y": 30, "spear": -86, "slide": 30, "foot_f": 0.4, "foot_b": -0.38, "step_thr": 0.4},
+
+  "spin_up": {"hip_y": 0.08, "torso": -2, "head": -6, "hand_x": 45, "hand_y": -260, "hand_bx": -70, "hand_by": -150, "spear": -128, "grip_b": 0, "slide": -75, "foot_f": 0.24, "foot_b": -0.24, "step_thr": 0.3},
+
+  "stagger": {"hip_x": -0.12, "hip_y": 0.12, "lean": -6, "torso": -20, "head": -22, "hand_x": 30, "hand_y": -40, "spear": -158, "grip_b": 0.4, "foot_f": 0.2, "foot_b": -0.32, "step_thr": 0.15, "slide": 60},
+  "parried": {"hip_x": -0.16, "hip_y": 0.12, "lean": -8, "torso": -24, "head": -26, "hand_x": 30, "hand_y": -150, "hand_bx": -60, "hand_by": -60, "spear": -205, "grip_b": 0, "foot_f": 0.2, "foot_b": -0.36, "step_thr": 0.15, "slide": 80},
+
+  "broken": {"hip_y": 0.32, "torso": 26, "head": 30, "lean": 4, "hand_x": 120, "hand_y": -40, "spear": -174, "slide": 70, "plant": 1, "plant_x": 175, "grip_b": 1, "foot_f": 0.24, "foot_b": -0.26, "step_thr": 0.4},
+
+  "fall_knee": {"hip_y": 0.42, "lean": 3, "torso": 10, "head": 22, "spear": -172, "slide": 75, "plant": 1, "plant_x": 175, "grip_b": 1, "kneel_b": 1, "foot_f": 0.3, "foot_b": -0.4, "step_thr": 0.6},
+  "fall_lean": {"hip_y": 0.46, "lean": 6, "torso": 18, "head": 38, "spear": -168, "slide": 95, "plant": 1, "plant_x": 190, "grip_b": 1, "kneel_b": 1, "foot_f": 0.3, "foot_b": -0.4, "step_thr": 0.6},
+  "fall_lie": {"hip_y": 0.46, "lean": 82, "torso": 6, "head": 4, "pitch": 1, "hand_x": 10, "hand_y": -240, "hand_bx": -10, "hand_by": -200, "grip_b": 0, "plant": 0,
+    "kneel_f": 0.97, "kneel_b": 1, "foot_f": 0.3, "foot_b": -0.4, "step_thr": 0.6},
+  "purified": {"hip_y": 0.38, "lean": 0, "torso": -6, "head": -20, "pitch": 0, "hand_x": 48, "hand_y": -70, "hand_bx": 52, "hand_by": -78, "grip_b": 0, "plant": 0,
+    "kneel_b": 1, "kneel_f": 0, "foot_f": 0.3, "foot_b": -0.4, "step_thr": 0.6},
+  "intro_crouch": {"hip_y": 0.34, "lean": 4, "torso": 16, "head": 20, "spear": -170, "slide": 60, "plant": 1, "plant_x": 170, "grip_b": 1, "kneel_b": 0, "foot_f": 0.24, "foot_b": -0.28, "step_thr": 0.5},
+  "intro_kneel": {"hip_y": 0.42, "lean": 4, "torso": 20, "head": 40, "spear": -176, "slide": 80, "plant": 1, "plant_x": 170, "grip_b": 1, "kneel_b": 1, "foot_f": 0.3, "foot_b": -0.4, "step_thr": 0.6},
+
+  "windup": {"hip_x": -0.08, "hip_y": 0.12, "lean": -4, "torso": -8, "head": -6, "foot_f": 0.18, "foot_b": -0.2, "step_thr": 0.3},
+  "strike": {"hip_x": 0.1, "hip_y": 0.16, "lean": 8, "torso": 22, "head": 8, "foot_f": 0.2, "foot_b": -0.18, "step_thr": 0.3},
+  "ready": {"hip_x": 0.04, "hip_y": 0.1, "lean": 3, "torso": 12, "head": 5, "foot_f": 0.18, "foot_b": -0.18, "step_thr": 0.3},
+  "hit": {"hip_x": -0.06, "hip_y": 0.1, "torso": -12, "head": -14},
+  "kneel": {"hip_y": 0.3, "torso": 24, "head": 26, "kneel_b": 0, "foot_f": 0.24, "foot_b": -0.26, "step_thr": 0.4},
+
+  "_motion": {
+    "strike_lag": {"spear": 0.16, "head": 0.15, "hand_x": 0.05, "hand_y": 0.05},
+    "early": ["torso", "lean", "hip_x"],
+    "heavy": ["torso", "lean", "hip_x", "hip_y"],
+    "impact": {"torso": -1.0, "head": -1.4},
+    "parry": {"spear": -1.0},
+    "recoil": {"torso": -0.3},
+    "parry_bounce": ["spear", "hand_x", "hand_y", "torso"],
+    "breath": {"torso": [1.4, 0.0], "head": [1.2, 0.7]},
+    "swing": {},
+    "swing_abs": {"torso": 1.5}
+  }
+}

@@ -1,8 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://c1seedsmallpump"]
+[gd_scene load_steps=6 format=3 uid="uid://c1seedsmallpump"]
 
 [ext_resource type="Script" path="res://scripts/enemies/small_pump.gd" id="1_enemy"]
-[ext_resource type="Script" path="res://scripts/enemies/enemy_sprite_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://art/enemies/enemy_small_pump.png" id="3_tex"]
+[ext_resource type="Script" path="res://scripts/enemies/enemy_mech_visual.gd" id="2_visual"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 
@@ -42,10 +41,15 @@ shape = SubResource("CapsuleShape2D_body")
 
 [node name="Visual" type="Node2D" parent="."]
 script = ExtResource("2_visual")
-texture = ExtResource("3_tex")
-art_faces_right = false
-art_scale = 0.19
-foot_offset = 40.0
+rig_id = "small_pump"
+arm_kind = "gun"
+aim_bone = "arm_f_up"
+glow_sockets = PackedStringArray("core")
+glow_color = Color(1, 0.78, 0.42, 1)
+glow_size = 44.0
+steam_socket = "valve"
+aim_always_range = 900.0
+muzzle_bone = "spray"
 
 [node name="Hurtbox" type="Area2D" parent="."]
 position = Vector2(0, -5)

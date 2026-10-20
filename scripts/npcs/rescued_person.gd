@@ -28,13 +28,23 @@ var texture: Texture2D
 var art_faces_right := true
 var art_scale := 0.17
 var facing := 1
+## 부위 뼈대로 서는 경우 (art/rigs/<rig_id>, 구원형 몹의 뼈대 — EnemyRigVisual.npc_look 이나 relocations.json 의 "rig")
+var rig_id := ""
+var rig_scale := 1.0
 ## 집 모드 (RescuedHomes 가 세운다).
 var home := false
 ## 시험·마을 시험이 Npc 처럼 읽을 수 있게.
 var npc_id: String:
 	get: return rescue_id
 
-var _sprite: Sprite2D
+## 보이는 모습: 그림 한 장(Sprite2D) 또는 부위 뼈대(PartRig). 색·크기·자리 연출은 둘 다 같은 Node2D 값으로 한다.
+var _sprite: Node2D
+var _rig: PartRig
+var _motion: RigMotion
+var _breath_acc := 0.0
+## 숨쉬기를 움직이는 간격 (초) / 움직임 층에 넘기는 빈 문맥 (매 프레임 새 사전을 만들지 않게)
+const BREATH_STEP := 1.0 / 15.0
+const NO_CTX := {}
 var _prompt: Label
 var _near: Player
 var _data := {}
@@ -57,15 +67,30 @@ func _ready() -> void:
 	var entry := RescuedHomes.home_of(rescue_id)
 	_has_home = not entry.is_empty()
 	RescuedHomes.apply_look(self, entry)
-	_sprite = Sprite2D.new()
-	_sprite.texture = texture
-	_sprite.scale = Vector2(art_scale, art_scale)
-	_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	if texture:
-		_sprite.position = Vector2(0, -texture.get_height() * art_scale / 2.0 + 20.0 * art_scale)
-	_sprite.flip_h = (facing > 0) != art_faces_right
+	if rig_id != "" and FileAccess.file_exists("res://art/rigs/%s/rig.json" % rig_id):
+		# 부위 뼈대: 원점이 발(땅)이라 그대로 세운다. 힘을 뺀 'npc' 자세로 숨 쉰다.
+		_rig = PartRig.new()
+		add_child(_rig)
+		if _rig.build(rig_id):
+			_motion = RigMotion.new(_rig)
+			_motion.set_target(_motion.pose("npc"))
+			_motion.snap_feet()
+			_motion.update(0.0, {})
+			_sprite = _rig
+		else:
+			_rig.queue_free()
+			_rig = null
+	if _sprite == null:
+		var spr := Sprite2D.new()
+		spr.texture = texture
+		spr.scale = Vector2(art_scale, art_scale)
+		spr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		if texture:
+			spr.position = Vector2(0, -texture.get_height() * art_scale / 2.0 + 20.0 * art_scale)
+		add_child(spr)
+		_sprite = spr
+	_face(facing > 0)
 	_sprite.modulate = REST_TINT
-	add_child(_sprite)
 	var h := _height()
 	_prompt = Label.new()
 	_prompt.add_theme_font_size_override("font_size", 22)
@@ -123,15 +148,25 @@ func _process(delta: float) -> void:
 		if _bubble_timer <= 0.0:
 			_bubble.visible = false
 	if _near:
-		_sprite.flip_h = ((_near.global_position.x > global_position.x) != art_faces_right)
-	# 숨쉬기
-	if not _leaving:
+		_face(_near.global_position.x > global_position.x)
+	# 숨쉬기 (뼈대는 RigMotion 이 숨 쉰다). 가만히 서서 숨만 쉬므로 초당 15번만 움직인다 (집에 다섯이 모이면 매 프레임
+	# 0.8ms 를 썼다 — 2026-10-20 검수, 모바일 비용)
+	if _motion:
+		_breath_acc += delta
+		if _breath_acc >= BREATH_STEP:
+			_motion.update(_breath_acc, NO_CTX)
+			_breath_acc = 0.0
+	elif not _leaving:
 		_sprite.scale.y = art_scale * (1.0 + sin(_t * 1.8) * 0.012)
 
 
 ## 구원 직후: 빛이 번지고 첫 말, 감사의 말이 끝나면 보상 안내.
 func greet(by: Player) -> void:
 	_greeting = true
+	# 구원한 소녀 쪽을 보고 인사한다 (정화는 말 걸기 영역보다 먼 곳에서도 되어, 등을 보인 채 감사 인사를 하던 일이 있었다)
+	if is_instance_valid(by):
+		facing = 1 if by.global_position.x >= global_position.x else -1
+		_face(facing > 0)
 	# 보통은 구원 순간(적의 rescued 신호)에 이미 적혀 있다. 감시 밖의 적이었다면 여기서 적는다.
 	RescuedHomes.mark_reward_due(rescue_id)
 	var tw := create_tween()
@@ -243,7 +278,8 @@ func _vanish() -> void:
 	_light_motes(VANISH_TIME, 1.0)
 	var tw := create_tween().set_parallel(true)
 	tw.tween_property(_sprite, "modulate", GLOW, VANISH_TIME).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(_sprite, "scale", Vector2(art_scale * 1.06, art_scale * 1.1), VANISH_TIME).set_trans(Tween.TRANS_SINE)
+	var k := rig_scale if _rig else art_scale
+	tw.tween_property(_sprite, "scale", Vector2(signf(_sprite.scale.x) * absf(k) * 1.06, k * 1.1), VANISH_TIME).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(_sprite, "position:y", _sprite.position.y - 26.0, VANISH_TIME).set_trans(Tween.TRANS_SINE)
 	await tw.finished
 
@@ -257,7 +293,17 @@ func appear() -> void:
 
 
 func _height() -> float:
+	if _rig:
+		return float(_rig.data.get("height", 1000.0)) * _rig.game_scale * rig_scale
 	return texture.get_height() * art_scale if texture else 200.0
+
+
+## 오른쪽(right)을 보게 한다: 그림 한 장은 좌우 뒤집기, 뼈대는 늘 오른쪽을 보는 그림이라 scale.x 부호로.
+func _face(right: bool) -> void:
+	if _rig:
+		_rig.scale = Vector2(rig_scale if right else -rig_scale, rig_scale)
+	elif _sprite is Sprite2D:
+		(_sprite as Sprite2D).flip_h = right != art_faces_right
 
 
 ## 빛 가루(둥글고 부드러운 입자, 발광) + 잠깐의 더하기 혼합 번쩍임.

@@ -597,11 +597,24 @@ func _finish_fall() -> void:
 		if scene:
 			var npc := scene.instantiate()
 			npc.rescue_id = rescue_id
-			npc.texture = vis.get("texture") if vis else null
-			npc.art_faces_right = vis.get("art_faces_right") if vis else true
-			npc.art_scale = vis.get("art_scale") if vis else 0.17
+			if vis and vis.has_method("npc_look"):
+				# 부위 뼈대 그림(EnemyRigVisual): 사람으로 돌아온 모습도 같은 뼈대로 (없으면 그림 한 장)
+				var look: Dictionary = vis.npc_look()
+				npc.texture = look.get("texture")
+				npc.art_faces_right = bool(look.get("art_faces_right", true))
+				npc.art_scale = float(look.get("art_scale", 0.17))
+				npc.rig_id = str(look.get("rig", ""))
+				npc.rig_scale = float(look.get("rig_scale", 1.0))
+			else:
+				npc.texture = vis.get("texture") if vis else null
+				npc.art_faces_right = vis.get("art_faces_right") if vis else true
+				npc.art_scale = vis.get("art_scale") if vis else 0.17
 			npc.facing = -_fall_facing
 			npc.global_position = _fall_at
+			if vis and vis.has_method("npc_look"):
+				# 뼈대 사람은 원점이 발바닥이다 → 몸 충돌(캡슐)의 바닥에 세운다 (hurt_height 절반은 캡슐 바닥보다 5px 아래라
+				# 무릎 꿇은 몹이 사람으로 바뀌는 순간 땅속으로 툭 떨어졌다 — 2026-10-20 검수)
+				npc.global_position.y = _fall_at.y - hurt_height * 0.5 + float(vis.npc_look().get("floor_y", hurt_height * 0.5))
 			get_parent().add_child(npc)
 			if is_instance_valid(_fall_by):
 				npc.greet(_fall_by)
@@ -639,6 +652,11 @@ func _set_state(new_state: State) -> void:
 
 func flash_amount() -> float:
 	return _flash
+
+
+## 지금 상태의 남은 시간 (읽기만 — 그림이 폴짝 웅크림 같은 때를 맞출 때. 속 값 _timer 를 직접 읽지 않게)
+func state_timer() -> float:
+	return _timer
 
 
 func state_name() -> String:

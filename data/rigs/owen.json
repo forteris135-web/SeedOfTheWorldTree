@@ -1,0 +1,188 @@
+{
+  "_설명": "침식된 광부 오웬(구원 가능한 자) 부위 뼈대 설계도. 시트 CFEDD044: 왼쪽 = 다 맞춘 모습(헬멧 등불·곡괭이·허리 등불), 오른쪽 = 부위들(헬멧 머리 4가지·곡괭이·팔다리·망토). 기본 머리 = 눈을 내리깐 얼굴(구원된 오웬이 이 얼굴로 선다), 변형 eroded = 흰 눈(싸울 때), calm = 눈 감은 얼굴(무릎 꿇고 정화를 기다릴 때). tools/rig_cut.gd 가 읽어 art/rigs/owen/ 을 만든다. 좌표는 모두 원본 시트 px. 쓰는 법: RIGS.md",
+  "id": "owen",
+  "sheet": "res://익스펜션/그림/리뉴얼-몹/CFEDD044-6D7C-4377-93BE-3AA453491995.PNG",
+  "faces": "left",
+  "segment": {"alpha": 0.5, "erode": 2, "min_pixels": 300, "soft_alpha": 0.03, "min_small": 60},
+  "out_scale": 1.0,
+  "game_scale": 0.56,
+  "archetype": "humanoid",
+  "chains": {
+    "leg_f": ["leg_f_up", "leg_f_lo", "foot_f"],
+    "leg_b": ["leg_b_up", "leg_b_lo", "foot_b"],
+    "arm_f": ["arm_f_up", "arm_f_lo", "weapon"],
+    "arm_b": ["arm_b_up", "arm_b_lo"]
+  },
+  "legs": ["leg_f", "leg_b"],
+  "weapon_chain": "arm_f",
+  "ground_guard": ["weapon", "arm_f_lo"],
+  "soft": ["skirt"],
+  "ghost": ["torso", "arm_f_up", "arm_f_lo", "weapon", "arm_b_up", "arm_b_lo"],
+  "sockets": {"eye": {"bone": "head", "at": [566, 58]}, "lamp": {"bone": "head", "at": [545, 31]}, "grip_b": {"bone": "weapon", "at": [628, 296]}},
+  "poses": {
+    "_설명": "곡괭이(weapon) 축 = 앞손에서 곡괭이 머리 쪽. 각도 = 원하는 세상 각도 − (lean + torso + arm_f_up + arm_f_lo). 세상 각도: 0 = 아래, −90 = 앞 수평, −180 = 위, −270 = 뒤 수평. 뒷손은 그림(OwenRigVisual)이 IK 로 자루 끝을 잡는다. 휘두르기 = 머리 위 뒤로 들어 올려 멈칫 → 앞 아래로 내리찍기 → 출렁이며 준비.",
+    "base": {"sleeve": 0},
+    "idle": {"torso": 14, "head": 2, "arm_f_up": -30, "arm_f_lo": -40, "weapon": -44, "arm_b_up": -20, "arm_b_lo": -40},
+    "walk": {"torso": 18, "head": 0, "hip_y": 0.07, "arm_f_up": -34, "arm_f_lo": -40, "weapon": -42, "arm_b_up": -20, "arm_b_lo": -40},
+    "backstep": {"torso": 2, "head": -4, "hip_y": 0.1, "arm_f_up": -40, "arm_f_lo": -40, "weapon": -30},
+    "alert": {"torso": -8, "head": -8, "hip_y": 0.03, "arm_f_up": -70, "arm_f_lo": -50, "weapon": -10},
+    "air": {"torso": 4, "head": -4, "arm_f_up": -60, "arm_f_lo": -30, "weapon": -20, "arm_b_up": -40, "arm_b_lo": -30},
+    "lunge": {"torso": 26, "head": 6, "lean": 6, "hip_y": 0.12, "hip_x": 0.08, "arm_f_up": -20, "arm_f_lo": -40, "weapon": -60},
+    "windup": {"hip_x": -0.1, "hip_y": 0.1, "lean": -4, "torso": -14, "head": -10, "arm_f_up": -200, "arm_f_lo": -48, "weapon": -38, "foot_f": 0.26, "foot_b": -0.3},
+    "strike": {"hip_x": 0.16, "hip_y": 0.2, "lean": 6, "torso": 30, "head": 10, "arm_f_up": -95, "arm_f_lo": -10, "weapon": 39, "foot_f": 0.5, "foot_b": -0.32},
+    "ready": {"hip_x": 0.06, "hip_y": 0.12, "torso": 18, "head": 4, "arm_f_up": -60, "arm_f_lo": -30, "weapon": -8, "foot_f": 0.4, "foot_b": -0.28},
+    "hit": {"hip_x": -0.06, "hip_y": 0.1, "torso": -14, "head": -16, "arm_f_up": -20, "arm_f_lo": -30, "weapon": -30, "arm_b_up": 30, "arm_b_lo": -10},
+    "broken": {"arm_f_up": -40, "arm_f_lo": -20, "weapon": -40},
+    "kneel": {"arm_f_up": -30, "arm_f_lo": -20, "weapon": -60, "arm_b_up": -20, "arm_b_lo": -40, "foot_f": 0.42, "hip_y": 0.32},
+    "rescued": {"arm_f_up": -8, "arm_f_lo": -20, "weapon": -40, "foot_f": 0.42, "hip_y": 0.3},
+    "npc": {"torso": 4, "head": 10, "arm_f_up": -10, "arm_f_lo": -30, "weapon": 48, "arm_b_up": 4, "arm_b_lo": -14}
+  },
+  "parts": {
+    "hips": {
+      "comps": [5],
+      "clip": [[[600, 126], [686, 126], [686, 180], [600, 180]]],
+      "pivot": [638, 150],
+      "z": -1
+    },
+    "torso": {
+      "comps": [5],
+      "clip": [[[600, 88], [686, 88], [686, 150], [600, 150]]],
+      "pivot": [638, 142],
+      "parent": "hips",
+      "z": 0
+    },
+    "head": {
+      "comps": [2],
+      "pivot": [578, 80],
+      "parent": "torso",
+      "attach": [640, 100],
+      "z": 8,
+      "variants": {"eroded": {"comps": [8], "pivot": [715, 63]}, "calm": {"comps": [4], "pivot": [645, 73]}}
+    },
+    "arm_f_up": {
+      "comps": [31],
+      "pivot": [800, 160],
+      "parent": "torso",
+      "attach": [614, 108],
+      "z": 5
+    },
+    "sleeve": {
+      "comps": [9],
+      "clip": [[[800, 46], [850, 46], [868, 90], [866, 116], [842, 118], [800, 78]]],
+      "pivot": [806, 58],
+      "tip": [858, 112],
+      "parent": "arm_f_up",
+      "attach": [800, 160],
+      "z": 6
+    },
+    "arm_f_lo": {
+      "comps": [32],
+      "pivot": [788, 243],
+      "parent": "arm_f_up",
+      "attach": [760, 200],
+      "z": 7
+    },
+    "weapon": {
+      "comps": [26],
+      "pivot": [610, 268],
+      "tip": [577, 222],
+      "parent": "arm_f_lo",
+      "attach": [784, 302],
+      "z": 4,
+      "clip": [[[540, 232], [560, 200], [600, 182], [642, 176], [644, 188], [606, 210], [600, 228], [646, 300], [640, 312], [626, 310], [586, 246], [572, 262], [566, 300], [552, 300], [540, 270]]]
+    },
+    "arm_b_up": {
+      "from": "arm_f_up",
+      "parent": "torso",
+      "attach": [640, 106],
+      "z": -7,
+      "modulate": [0.74, 0.7, 0.66, 1]
+    },
+    "arm_b_lo": {
+      "from": "arm_f_lo",
+      "parent": "arm_b_up",
+      "attach": [760, 200],
+      "z": -6,
+      "modulate": [0.74, 0.7, 0.66, 1]
+    },
+    "leg_f_up": {
+      "comps": [28],
+      "clip": [[[642, 164], [714, 164], [714, 200], [672, 222], [646, 220]]],
+      "pivot": [690, 182],
+      "parent": "hips",
+      "attach": [626, 166],
+      "z": 2
+    },
+    "leg_f_lo": {
+      "comps": [28],
+      "clip": [[[644, 196], [690, 192], [700, 240], [692, 262], [708, 292], [650, 296], [646, 250]]],
+      "pivot": [662, 207],
+      "parent": "leg_f_up",
+      "z": 1
+    },
+    "foot_f": {
+      "comps": [28],
+      "clip": [[[642, 322], [642, 300], [656, 284], [676, 274], [700, 272], [718, 279], [728, 296], [730, 322]]],
+      "pivot": [690, 287],
+      "sole": [686, 318],
+      "parent": "leg_f_lo",
+      "z": 1
+    },
+    "leg_b_up": {
+      "comps": [34],
+      "clip": [[[860, 160], [926, 160], [928, 236], [900, 246], [868, 242]]],
+      "pivot": [885, 180],
+      "parent": "hips",
+      "attach": [652, 166],
+      "z": -4,
+      "modulate": [0.8, 0.77, 0.74, 1]
+    },
+    "leg_b_lo": {
+      "comps": [34],
+      "clip": [[[866, 224], [912, 222], [938, 262], [936, 288], [896, 290], [868, 260]]],
+      "pivot": [888, 238],
+      "parent": "leg_b_up",
+      "z": -5,
+      "modulate": [0.8, 0.77, 0.74, 1]
+    },
+    "foot_b": {
+      "comps": [34],
+      "clip": [[[864, 322], [864, 300], [878, 284], [900, 274], [925, 272], [948, 279], [962, 296], [966, 322]]],
+      "pivot": [915, 287],
+      "sole": [912, 318],
+      "parent": "leg_b_lo",
+      "z": -6,
+      "modulate": [0.8, 0.77, 0.74, 1]
+    },
+    "skirt": {
+      "comps": [42],
+      "pivot": [1176, 184],
+      "tip": [1262, 300],
+      "parent": "hips",
+      "attach": [628, 150],
+      "rest": 6,
+      "z": 3,
+      "chain": {"stiffness": 70, "damping": 8, "drag": 0.0002, "gravity": 0.3, "max": 20}
+    },
+    "lantern": {
+      "comps": [12],
+      "pivot": [1018, 113],
+      "tip": [1018, 192],
+      "parent": "hips",
+      "attach": [660, 150],
+      "rest": 0,
+      "z": 3,
+      "chain": {"stiffness": 36, "damping": 3.5, "drag": 0.0005, "gravity": 0.9, "max": 45}
+    },
+    "cape": {
+      "comps": [14],
+      "pivot": [1050, 40],
+      "tip": [1290, 150],
+      "parent": "torso",
+      "attach": [662, 100],
+      "rest": 55,
+      "z": -10,
+      "chain": {"stiffness": 40, "damping": 6, "drag": 0.0003, "gravity": 0.35, "max": 60}
+    }
+  }
+}

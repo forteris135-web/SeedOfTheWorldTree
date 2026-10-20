@@ -19,13 +19,13 @@ var _rng := RandomNumberGenerator.new()
 
 func _init() -> void:
 	var t0 := Time.get_ticks_msec()
-	_make("res://art/bosses/boss_sap_queen_now.png", true, _queen_now)
+	# 여왕(지금)은 부위 뼈대로 바뀌어 임시 그림을 만들지 않는다 — boss_sap_queen_now.png 는 tools/queen_film.tscn -- --render 의 조립 그림 (2026-10-20)
 	# boss_sap_queen_past.png · memory_queen_1~3.png 는 기획자의 진짜 그림이 들어왔다 (2026-10-20) — 만들지 않는다 (덮어쓰기 방지)
 	_make("res://art/enemies/enemy_sap_fisher.png", true, func(u: float, v: float) -> Color: return _fisher(u, v, false))
 	_make("res://art/enemies/enemy_sap_fisher_savable.png", true, func(u: float, v: float) -> Color: return _fisher(u, v, true))
 	# 배경 세 장은 기획자 그림으로 바뀌었다 (익스펜션/그림/배경 4-1 → bg_sap_lake_1, 4-2 → bg_sap_lake_boss, 5 → bg_hidden_descent).
 	# 진짜 그림을 덮어쓰지 않게 다시 만들지 않는다 (_bg_* · _memory_* · _queen_past 함수는 참고용으로 남겨 둔다).
-	print("임시 그림 3장 생성 완료 (%.1f초)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+	print("임시 그림 2장 생성 완료 (%.1f초)" % ((Time.get_ticks_msec() - t0) / 1000.0))
 	quit()
 
 

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c1seedqueenfilm"]
+
+[ext_resource type="Script" path="res://tools/queen_film.gd" id="1_film"]
+
+[node name="QueenFilm" type="Node2D"]
+script = ExtResource("1_film")

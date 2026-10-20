@@ -43,6 +43,8 @@ func _ready() -> void:
 	]
 	for c in cases:
 		await _shoot(c[0], c[1], c[2], c[3], c[4])
+	# 2026-10-20 부위 뼈대: 공격이 아닌 상태들도 실제 방에서 찍는다 (서 있기·걷기·무너짐·다시 일어섬·쓰러져 엎드림·정화)
+	await _states()
 	print("[probe] 끝: 실패 %d" % _fail)
 	await get_tree().create_timer(0.3).timeout
 	get_tree().quit(1 if _fail > 0 else 0)
@@ -81,6 +83,69 @@ func _shoot(pattern: String, phase: int, dx: float, t_tele: float, t_act: float)
 		_fail += 1
 	await _until(func() -> bool: return _boss.state_name() == "STANCE" and _boss.attack_phase == "", 6.0)
 	_boss._timer = 99.0
+
+
+## 상태 사진: screenshots/root_state_<이름>.png. 쓰러짐·정화는 싸움이 끝나는 것이라 맨 마지막에.
+func _states() -> void:
+	for n in get_tree().get_nodes_in_group("root_effect"):
+		n.queue_free()
+	_boss.phase = 1
+	_boss.hp = _boss.max_hp
+	_boss._chain = -1
+	_boss._events.clear()
+	_boss._set_state(_boss.State.STANCE)
+	_boss.velocity = Vector2.ZERO
+	_boss.global_position = Vector2(2300, _boss.ground_y)
+	_boss.facing = -1
+	_player.global_position = Vector2(2300 - 480, 1432)
+	_player.velocity = Vector2.ZERO
+	_player.facing = 1
+	_boss._timer = 99.0
+	await get_tree().create_timer(1.2).timeout
+	_save("root_state_idle.png")
+	# 걷기: 소녀가 멀어지면 다가온다 (보스 스스로)
+	_player.global_position = Vector2(2300 - 1100, 1432)
+	await get_tree().create_timer(0.9).timeout
+	_boss._timer = 99.0
+	_save("root_state_walk.png")
+	_player.global_position = Vector2(_boss.global_position.x - 480, 1432)
+	await get_tree().create_timer(0.6).timeout
+	_boss._timer = 99.0
+	# 무너짐
+	_boss.poise = _boss.max_poise - 1.0
+	_boss.receive_hit(HitData.make(1.0, 50.0, _player), null)
+	await get_tree().create_timer(0.9).timeout
+	_save("root_state_broken.png")
+	await _until(func() -> bool: return _boss.state_name() == "STANCE", 5.0)
+	_boss._timer = 99.0
+	# 2페이즈: 무너졌다 다시 일어섬 (앞부분 무너짐 / 엎드려 숨 고름 / 일어서는 중)
+	_boss.hp = _boss.max_hp * 0.51
+	_boss._poise_immune = 0.0
+	_boss.receive_hit(HitData.make(30.0, 0.0, _player), null)
+	await get_tree().create_timer(0.85).timeout
+	_save("root_state_rise_a.png")
+	await get_tree().create_timer(0.9).timeout
+	_save("root_state_rise_b.png")
+	await get_tree().create_timer(0.8).timeout
+	_save("root_state_rise_c.png")
+	await _until(func() -> bool: return _boss.state_name() == "STANCE", 5.0)
+	_boss._timer = 99.0
+	await get_tree().create_timer(0.8).timeout
+	_boss._timer = 99.0
+	_save("root_state_idle_p2.png")
+	# 쓰러짐 → 정화 기다림 → 정화
+	_boss.hp = 1.0
+	_boss.receive_hit(HitData.make(5.0, 0.0, _player), null)
+	await get_tree().create_timer(0.5).timeout
+	_save("root_state_fallen_a.png")
+	await get_tree().create_timer(1.6).timeout
+	_save("root_state_fallen_b.png")
+	print("[probe] 상태 사진: 쓰러진 뒤 %s" % _boss.state_name())
+	if _boss.state_name() != "FALLEN":
+		_fail += 1
+	_boss.purified_by(_player)
+	await get_tree().create_timer(1.0).timeout
+	_save("root_state_purified.png")
 
 
 func _until(cond: Callable, limit: float) -> bool:

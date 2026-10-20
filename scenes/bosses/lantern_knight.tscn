@@ -1,10 +1,7 @@
-[gd_scene load_steps=10 format=3 uid="uid://c1seedbossknight"]
+[gd_scene load_steps=7 format=3 uid="uid://c1seedbossknight"]
 
 [ext_resource type="Script" path="res://scripts/bosses/lantern_knight.gd" id="1_boss"]
 [ext_resource type="Script" path="res://scripts/bosses/lantern_knight_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://art/bosses/parts/boss_knight_body.png" id="3_tex"]
-[ext_resource type="Texture2D" path="res://art/bosses/parts/boss_knight_spear.png" id="3_spear"]
-[ext_resource type="Texture2D" path="res://art/bosses/parts/boss_knight_hands.png" id="3_hands"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 
@@ -27,19 +24,8 @@ max_hp = 1650.0
 position = Vector2(0, -165)
 shape = SubResource("CapsuleShape2D_body")
 
-[node name="Sprite" type="Sprite2D" parent="."]
-position = Vector2(0, -190)
-scale = Vector2(0.4, 0.4)
-texture = ExtResource("3_tex")
+[node name="Sprite" type="Node2D" parent="."]
 script = ExtResource("2_visual")
-spear_texture = ExtResource("3_spear")
-hands_texture = ExtResource("3_hands")
-grip = Vector2(1000, 467)
-spear_origin = Vector2(246, 0)
-hands_origin = Vector2(887, 358)
-spear_tip = Vector2(1526, 8)
-spear_lantern = Vector2(1378, 370)
-spear_butt = Vector2(250, 1022)
 
 [node name="Light" type="PointLight2D" parent="."]
 position = Vector2(0, -200)
