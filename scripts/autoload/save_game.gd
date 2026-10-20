@@ -78,6 +78,7 @@ func load_game() -> String:
 	Progress.visited_rooms = _rooms_from_json(data.get("visited_rooms", {}))
 	MapOffsetFix.fix_saved(Progress.visited_rooms)   # 확장판이 옮긴 방들의 옛 지도 자리 바로잡기
 	Progress.ending = data.get("ending", "")
+	_fill_last_ending()   # 옛 저장 파일: 마지막 엔딩 깃발(last_ending_*)이 없으면 저장된 엔딩 값으로 채운다
 	Progress.collected = data.get("collected", {})   # 옛 저장 파일에는 없다 → 빈 사전
 	Progress.dust = int(data.get("dust", 0))
 	Progress.dust_changed.emit(Progress.dust)
@@ -93,6 +94,27 @@ func load_game() -> String:
 		Progress.last_grass = {"id": gid, "scene": scene, "name": Progress.grasses.get(gid, {}).get("name", gid)}
 	Progress.next_spawn = "Grass:" + gid
 	return scene
+
+
+## 엔딩 뒤의 세계(PostEnding)와 마을 사람들의 엔딩 뒤 대사는 깃발 last_ending_<이름> 을 본다.
+## 그 깃발이 생기기 전의 빌드로 클리어한 저장 파일에는 cleared + ending_<이름> + "ending" 값만 있다 →
+## 엔딩을 본 기록이 있는데 last_ending_* 가 하나도 없으면, 저장된 "ending" 값(없으면 ending_<이름> 깃발)으로 채운다.
+## (그 시절 엔딩 장면은 "ending" 값이 비어 있으면 되돌림을 보여 주었다.) 다음 저장 때 깃발이 함께 저장된다.
+static func _fill_last_ending() -> void:
+	if not Progress.has("cleared"):
+		return
+	for n in EndingScene.ENDINGS:
+		if Progress.has("last_ending_" + n):
+			return
+	var which := str(Progress.ending)
+	if not (which in EndingScene.ENDINGS):
+		which = ""
+		for n in EndingScene.ENDINGS:
+			if Progress.has("ending_" + n):
+				which = n   # 여럿이면 마지막 차례의 것 (어느 것을 마지막에 봤는지는 알 수 없다)
+		if which == "":
+			which = "return"
+	Progress.flags["last_ending_" + which] = true
 
 
 func new_game() -> void:

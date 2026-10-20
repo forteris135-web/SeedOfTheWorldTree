@@ -159,7 +159,7 @@ static func apply_look(npc: RescuedPerson, entry: Dictionary) -> void:
 		npc.rig_scale = float(entry.get("rig_scale", 1.0))
 	var path := str(entry.get("texture", ""))
 	if path != "" and ResourceLoader.exists(path):
-		npc.texture = load(path)
+		npc.texture_path = path   # 뼈대를 못 세울 때만 읽힌다 (RescuedPerson._ready)
 		npc.art_scale = float(entry.get("art_scale", npc.art_scale))
 		npc.art_faces_right = bool(entry.get("art_faces_right", npc.art_faces_right))
 

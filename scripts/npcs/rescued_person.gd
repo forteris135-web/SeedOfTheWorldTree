@@ -25,6 +25,8 @@ const GLOW := Color(2.6, 2.4, 1.9, 0.0)
 
 var rescue_id := ""
 var texture: Texture2D
+## 그림 한 장의 경로 (뼈대를 못 세울 때만 읽는다; 있으면 texture 보다 먼저). EnemyRigVisual.npc_look / relocations.json 의 texture.
+var texture_path := ""
 var art_faces_right := true
 var art_scale := 0.17
 var facing := 1
@@ -81,6 +83,8 @@ func _ready() -> void:
 			_rig.queue_free()
 			_rig = null
 	if _sprite == null:
+		if texture_path != "" and ResourceLoader.exists(texture_path):
+			texture = load(texture_path)
 		var spr := Sprite2D.new()
 		spr.texture = texture
 		spr.scale = Vector2(art_scale, art_scale)

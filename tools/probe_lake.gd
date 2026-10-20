@@ -650,12 +650,24 @@ func _probe_queen_sync() -> void:
 # ---------- 7) 나비 되받기: 실제 경로 ----------
 func _probe_queen_reflect() -> void:
 	var boss := await _start_queen_fight()
+	# 이 시험은 물리 틱으로 기다린다. 그런데 저스트 가드 창(Player._now, 0.24초)과 여왕의 박자 시계(보스곡 재생 위치)는 벽시계로 흘러서,
+	# 기계가 바쁘면(전체 회귀 중) 가드를 누르고 나비가 닿기까지 벽시계로 0.24초가 넘어 보통 가드가 되고 되받지 못했다
+	# ('흐트러짐 +0' 으로 흔들림, 2026-10-20 검수). 그래서 누른 시각을 나비가 닿기 직전에 다시 맞추고(창 길이는 그대로),
+	# 여왕 시계도 물리 틱으로 센다 (곡에 맞춘 박자는 _probe_queen_sync 가 따로 본다). 되받기 흐트러짐 계산은 그대로 본다.
+	boss._music_lost = true
 	var totals := []
 	var states := []
 	for k in 2:
 		await _until(func(): return boss.state in [SapQueen.State.HOVER, SapQueen.State.DUST, SapQueen.State.BUTTERFLIES, SapQueen.State.WAVE], 8.0)
 		if Input.is_action_pressed("guard"):
 			Input.action_release("guard")
+		# 재는 동안 여왕의 진짜 공격(가루·물결·나비 떼)이 끼어들면 소녀가 맞거나 그 공격을 저스트 가드해서 셈이 흔들린다 →
+		# 지금 하던 패턴이 끝나 HOVER 가 되면 다음 패턴을 미루고, 날아다니던 여왕 투사체를 거둔다 (되받는 길은 진짜 그대로).
+		await _until(func(): return boss.state == SapQueen.State.HOVER, 8.0)
+		boss._next_at = boss._clock + 60.0
+		for q in get_tree().get_nodes_in_group("projectile"):
+			if is_instance_valid(q) and q.get("from_player") != true:
+				q.queue_free()
 		await _wait(0.4)
 		if k == 0:
 			boss.poise = 0.0
@@ -688,7 +700,12 @@ func _probe_queen_reflect() -> void:
 		p.global_position = _player.global_position + Vector2(f * 80.0, -60.0)
 		p.launch(Vector2(-f, 0), boss, false)
 		var rc0: int = boss.reflected_count
-		await _until(func(): return jg[0], 0.6)
+		var waited := 0.0
+		while waited < 0.6 and not jg[0]:
+			if is_instance_valid(p) and p.global_position.distance_to(_player.global_position) < 160.0:
+				_player._guard_pressed_at = _player._now()   # 벽시계 창을 나비가 닿기 직전에 다시 맞춘다
+			await get_tree().physics_frame
+			waited += get_physics_process_delta_time()
 		await _until(func(): return boss.reflected_count > rc0 or boss.state == SapQueen.State.BROKEN, 3.0)
 		_player.just_guarded.disconnect(cb)
 		Input.action_release("guard")

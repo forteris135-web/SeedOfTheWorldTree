@@ -41,7 +41,8 @@ git pull origin main
 - 방 시험: `tools/test.sh <방> <플래그> [초]` — Godot 경로는 스크립트가 흔한 자리를 찾고, 없으면 `GODOT=/Applications/Godot.app/Contents/MacOS/Godot tools/test.sh ...`.
   - 자주 쓰는 것: `canopy_01 --autotest`, `canopy_boss --bosstest 200`(mine_boss·abyss_boss 도), `canopy_hidden --minitest`, `canopy_01 --portaltest`, `--grasstest`, `--savetest`, `--nooktest`, `--remaptest`, `--secrettest`(canopy_01·03·04, mine_01, village_01, abyss_02), `--rescuetest`(canopy_01, village_01, mine_02, abyss_02), `village_01 --villagetest`, `canopy_boss --camtest`.
 - 독립 시험(probe): `godot --headless --path . res://tools/probe_player.tscn` (guard·hud·levels·enemies·bosses·map_scene 도 같은 식), `-s res://tools/probe_selenia.gd`, `-s res://tools/probe_texts.gd`. `probe_levels` 는 5분쯤 걸린다. 끝줄 "[probe] 끝: 실패 0" 이면 통과.
-- 지형 점검(Godot 없이 Python3 만): `python3 tools/audit_rooms.py` → 17개 방 "오류 0" 이어야 한다. 소녀 수치(점프·속도)를 바꾸면 이 파일 맨 위 상수도 맞춘다.
+- 전체 회귀: `GODOT=<Godot 실행 파일> tools/regress.sh` — 방 시험·보스 다섯 곳·방 41개 로드·probe 전부·지형 감사·포탈 연결 검사 (로그 `.regress/`, 줄마다 `err 0`·FAIL 없음이어야 통과).
+- 지형 점검(Godot 없이 Python3 만): `python3 tools/audit_rooms.py` (와 `--locked`) → 41개 방 "오류 0" 이어야 한다. 소녀 수치(점프·속도)를 바꾸면 이 파일 맨 위 상수도 맞춘다.
 - 그림이 있는 시험: `-- --screenshot`, `-- --rigtest`(연습장) 는 맥에서만 스크린샷이 찍힌다(`screenshots/`).
 - **절대 돌리지 말 것**: `tools/make_rooms.py`(옛 방 생성기 — 다시 돌리면 포탈·비밀·디딤 가지·one_way 가 날아간다). 방은 `.tscn` 을 직접 고친다.
 
@@ -55,8 +56,9 @@ git pull origin main
 - `scripts/enemies/` 적(`enemy_base.gd` 공통 상태 기계, `enemy_rig_visual.gd`·`enemy_mech_visual.gd` 부위 뼈대 그림·모션 — RIGS.md, 종류별 스크립트), `scripts/bosses/` 보스 셋 + `boss_room.gd`
 - `scripts/world/` 방(`room.gd` — 방 바탕 + 모든 `--…test`), 발판·경사·가시·포탈·달빛풀·비밀 벽/천장·아이템
 - `scripts/ui/` HUD·보스 HUD·터치·지도·메뉴·키 바꾸기·이동 메뉴·타이틀·회상·엔딩
-- `scripts/autoload/` Progress(진행·능력·성장·고른 영혼), SaveGame, Settings, Keymap, InputDevice, Sfx, Music, Juice, Purity, Dialogue, Game
-- `scenes/rooms/` 방 17개, `data/dialogue/` 대사·기록물·회상·엔딩 JSON, `audio/sfx/`(합성 효과음, `tools/gen_sfx.gd`), `audio/music/`(기획자의 정식 곡 18곡, 곡 표는 GAME_DESIGN.md 10장; 옛 합성 도구 `tools/gen_music.swift` 는 `audio/_temp_music/` 에 씀), `music/theme/` 원본(절대 덮어쓰지 않음)
+- `scripts/autoload/` Progress(진행·능력·성장·고른 영혼), SaveGame, Settings, Keymap, InputDevice, Sfx, Music, Juice, **Fx**(공용 이펙트 — `scripts/fx/README.md`), Purity, Dialogue, Game
+- `scenes/rooms/` 방 41개(확장판 포함), `data/dialogue/` 대사·기록물·회상·엔딩 JSON, `audio/sfx/`(합성 효과음, `tools/gen_sfx.gd`), `audio/music/`(기획자의 정식 곡 18곡, 곡 표는 GAME_DESIGN.md 10장; 옛 합성 도구 `tools/gen_music.swift` 는 `audio/_temp_music/` 에 씀), `music/theme/` 원본(절대 덮어쓰지 않음)
+- 설명서: `RIGS.md`(몹·보스 부위 뼈대 그림·모션), `TERRAIN.md`(그림 조각 지형·그림 옷·잿빛 팔레트), `ENDINGS.md`(엔딩 지시서 — 기획자 원본), `scripts/fx/README.md`(이펙트).
 - `tools/` 시험·생성·내보내기 스크립트. `tools/add_secrets.py`·`tools/make_portals.py`·`tools/add_portals.py` 도 자리 표 기록용이지 다시 돌릴 용도가 아니다.
 
 ## 8. 아직 안 한 것 (남은 단계)

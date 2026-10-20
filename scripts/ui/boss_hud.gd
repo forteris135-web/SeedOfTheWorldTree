@@ -22,7 +22,13 @@ const ROOT_DARK := Color(0.10, 0.065, 0.04)
 const ROOT_LIGHT := Color(0.31, 0.22, 0.14)
 
 var _boss: Node
+## 막대·이름을 그리는 캔버스 (보이는 동안 매 프레임 다시 그린다 — 사각형 몇 개와 글자뿐)
 var _canvas: Control
+## 흙·뿌리 띠를 그리는 캔버스. 띠는 다 올라오면 그대로라, 띠 높이·화면 크기가 바뀔 때만 다시 그린다
+## (매 프레임 다시 그리면 선 162줄·원 40개를 다시 기록해 보스전 내내 한 프레임 약 2ms — 2026-10-20 성능 검수).
+var _band_canvas: Control
+var _band_drawn_h := -1.0
+var _band_drawn_size := Vector2.ZERO
 var _name := ""
 var _subtitle := ""
 var _hp := 1.0
@@ -46,6 +52,12 @@ var _rim: PackedFloat32Array = PackedFloat32Array()
 
 func _ready() -> void:
 	layer = 16
+	_band_canvas = Control.new()
+	_band_canvas.name = "Band"
+	_band_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_band_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_band_canvas.draw.connect(_on_draw_band)
+	add_child(_band_canvas)
 	_canvas = Control.new()
 	_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -115,7 +127,12 @@ func _process(delta: float) -> void:
 	_title = maxf(_title - delta, 0.0)
 	_flash = maxf(_flash - delta, 0.0)
 	_hp_trail = move_toward(_hp_trail, _hp, delta * (0.35 if _hp < _hp_trail else 3.0))
-	if _band > 0.0 or _bar > 0.0 or _title > 0.0:
+	# 띠: 높이(또는 화면 크기)가 바뀐 프레임에만 (다 내려가면 마지막 한 번 지우기)
+	var bh := _band_height()
+	if bh != _band_drawn_h or _band_canvas.size != _band_drawn_size:
+		_band_canvas.queue_redraw()
+	# 막대·이름: 보이는 동안 매 프레임
+	if _bar > 0.0 or _title > 0.0:
 		_canvas.queue_redraw()
 	elif _canvas.is_visible_in_tree():
 		_canvas.queue_redraw()   # 마지막 한 번 지우기
@@ -146,7 +163,24 @@ func _make_soil_shapes() -> void:
 		_rim.append(rng.randf_range(0.0, 1.0))
 
 
+## 지금 띠의 화면 높이(px) — 올라오는 동안 부드럽게 (0 이면 띠 없음)
+func _band_height() -> float:
+	if _band <= 0.001:
+		return 0.0
+	return band_full_px() * smoothstep(0.0, 1.0, _band)
+
+
+func _on_draw_band() -> void:
+	var size := _band_canvas.size
+	var bh := _band_height()
+	_band_drawn_h = bh
+	_band_drawn_size = size
+	if bh > 0.0:
+		_draw_band(Rect2(0.0, size.y - bh, size.x, bh), 1.0)
+
+
 func _draw_band(rect: Rect2, a: float) -> void:
+	var cv := _band_canvas
 	var w := rect.size.x
 	var h := rect.size.y
 	# 흙: 위에서 아래로 어두워지는 띠 (가로 줄 여러 장)
@@ -156,7 +190,7 @@ func _draw_band(rect: Rect2, a: float) -> void:
 		var t1 := float(i + 1) / strips
 		var c := SOIL_TOP.lerp(SOIL_BOTTOM, pow(t0, 0.8))
 		c.a = a * (0.55 + 0.45 * minf(t0 * 6.0, 1.0))   # 맨 위 줄은 살짝 비치게
-		_canvas.draw_rect(Rect2(rect.position.x, rect.position.y + h * t0, w, h * (t1 - t0) + 1.0), c)
+		cv.draw_rect(Rect2(rect.position.x, rect.position.y + h * t0, w, h * (t1 - t0) + 1.0), c)
 	# 윗선: 울퉁불퉁한 흙 가장자리 (위로 살짝 솟은 혹들)
 	var rim := PackedVector2Array()
 	var n := _rim.size()
@@ -168,7 +202,7 @@ func _draw_band(rect: Rect2, a: float) -> void:
 	rim.append(Vector2(rect.end.x, rect.position.y + 2.0))
 	rim.append(Vector2(rect.end.x, rect.position.y + 12.0))
 	rim.append(Vector2(rect.position.x, rect.position.y + 12.0))
-	_canvas.draw_colored_polygon(rim, Color(SOIL_TOP.lightened(0.08), 0.9 * a))
+	cv.draw_colored_polygon(rim, Color(SOIL_TOP.lightened(0.08), 0.9 * a))
 	# 뿌리: 위에서 아래로 가늘어지며 내려간다 (어두운 심 + 밝은 가장자리)
 	for r in _roots:
 		var pts: PackedVector2Array = r["pts"]
@@ -182,12 +216,12 @@ func _draw_band(rect: Rect2, a: float) -> void:
 			var tk := float(k) / maxf(scaled.size() - 2, 1)
 			var wk := lerpf(wmax, 1.2, tk)
 			var fade := a * (1.0 - 0.55 * tk)
-			_canvas.draw_line(scaled[k], scaled[k + 1], Color(light, fade), wk, true)
-			_canvas.draw_line(scaled[k], scaled[k + 1], Color(ROOT_DARK, fade), maxf(wk * 0.45, 0.8), true)
+			cv.draw_line(scaled[k], scaled[k + 1], Color(light, fade), wk, true)
+			cv.draw_line(scaled[k], scaled[k + 1], Color(ROOT_DARK, fade), maxf(wk * 0.45, 0.8), true)
 	# 자갈
 	for p in _pebbles:
 		var c := SOIL_TOP.lerp(SOIL_BOTTOM, p.y)
-		_canvas.draw_circle(Vector2(rect.position.x + p.x * w, rect.position.y + p.y * h), p.z, Color(c.lightened(0.12), 0.8 * a))
+		cv.draw_circle(Vector2(rect.position.x + p.x * w, rect.position.y + p.y * h), p.z, Color(c.lightened(0.12), 0.8 * a))
 
 
 func _draw_bar(band: Rect2, a: float) -> void:
@@ -226,12 +260,9 @@ func _draw_bar(band: Rect2, a: float) -> void:
 
 func _on_draw() -> void:
 	var size := _canvas.size
-	if _band > 0.001:
-		var bh := band_full_px() * smoothstep(0.0, 1.0, _band)
-		var band := Rect2(0.0, size.y - bh, size.x, bh)
-		_draw_band(band, 1.0)
-		if _bar > 0.01:
-			_draw_bar(band, _bar)
+	var bh := _band_height()
+	if bh > 0.0 and _bar > 0.01:
+		_draw_bar(Rect2(0.0, size.y - bh, size.x, bh), _bar)
 	if _title > 0.0:
 		var font := ThemeDB.fallback_font
 		var t := clampf(_title / 0.6, 0.0, 1.0) if _title < 0.6 else clampf((3.0 - _title) / 0.6, 0.0, 1.0)

@@ -1,4 +1,4 @@
-[gd_scene load_steps=29 format=3 uid="uid://c1seedmineboss"]
+[gd_scene load_steps=28 format=3 uid="uid://c1seedmineboss"]
 
 [ext_resource type="Script" path="res://scripts/bosses/boss_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -12,7 +12,6 @@
 [ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
 [ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
 [ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
-[ext_resource type="PackedScene" uid="uid://c1seedroomexit" path="res://scenes/world/room_exit.tscn" id="16_exit"]
 [ext_resource type="PackedScene" uid="uid://c1seedbossknight" path="res://scenes/bosses/lantern_knight.tscn" id="17_boss"]
 [ext_resource type="Script" path="res://scripts/world/fog_gate.gd" id="19_gate"]
 [ext_resource type="PackedScene" uid="uid://c1seedbosshud" path="res://scenes/ui/boss_hud.tscn" id="20_boss_hud"]

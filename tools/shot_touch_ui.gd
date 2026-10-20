@@ -68,6 +68,7 @@ func _shot(c: Dictionary) -> void:
 	# 공격 버튼을 누르고 있는 모습 (가짜 손가락)
 	if touch:
 		touch._touches[99] = {"role": "attack_light", "origin": Vector2.ZERO, "pos": Vector2.ZERO}
+		touch._dirty = true   # 터치 버튼은 상태가 바뀔 때만 다시 그린다
 	await _frames(4)
 	await RenderingServer.frame_post_draw
 	var img := vp.get_texture().get_image()

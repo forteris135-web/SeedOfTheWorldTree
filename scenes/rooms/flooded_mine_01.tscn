@@ -1,4 +1,4 @@
-[gd_scene load_steps=22 format=3 uid="uid://c1seedfloodmine01"]
+[gd_scene load_steps=21 format=3 uid="uid://c1seedfloodmine01"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -11,7 +11,6 @@
 [ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
 [ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
 [ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
-[ext_resource type="PackedScene" uid="uid://c1seedrecord" path="res://scenes/world/record.tscn" id="30_record"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 [ext_resource type="PackedScene" uid="uid://c1seedsappool" path="res://scenes/world/sap_pool.tscn" id="54_sap_pool"]
 [ext_resource type="PackedScene" uid="uid://c1seedsmallpump" path="res://scenes/enemies/small_pump.tscn" id="55_small_pump"]

@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://c1seedfloodmineboss"]
+[gd_scene load_steps=25 format=3 uid="uid://c1seedfloodmineboss"]
 
 [ext_resource type="Script" path="res://scripts/bosses/iron_pump_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -11,7 +11,6 @@
 [ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
 [ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
 [ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
-[ext_resource type="PackedScene" uid="uid://c1seedrecord" path="res://scenes/world/record.tscn" id="30_record"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 [ext_resource type="PackedScene" uid="uid://c1seedbosshud" path="res://scenes/ui/boss_hud.tscn" id="25_boss_hud"]
 [ext_resource type="Script" path="res://scripts/world/fog_gate.gd" id="26_gate"]

@@ -3,7 +3,7 @@ extends SceneTree
 ## 기획자가 준 투명 배경 시트에서 조각을 잘라 한 장(atlas)에 모으고, 조각마다 '발 딛는 선'을 재서 적어 둔다.
 ##
 ## 실행 (맥):
-##   /Users/wj/Projects/SeedWT/godot --headless --path . -s res://tools/terrain_cut.gd -- canopy
+##   godot --headless --path . -s res://tools/terrain_cut.gd -- canopy   (병렬 작업 폴더면 /Users/wj/Projects/SeedWT/godot 래퍼)
 ##   그 뒤 tools/cloud_bootstrap.sh (또는 godot --headless --import) 로 새 그림을 들여온다.
 ##
 ## 읽는 것: data/terrain/<지역>.json 의 "cut" 부분

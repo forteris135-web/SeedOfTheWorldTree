@@ -79,6 +79,12 @@ var _pie := PackedVector2Array()   # 쿨다운 부채꼴 점 (매 프레임 새�
 var _canvas: Control
 var _shown := true
 var _player: Player
+## 다시 그릴 때만 그린다 (2026-10-20 성능 검수: 매 프레임 다시 그리면 버튼마다 원·호 두 줄·그림을 늘 다시 기록해 그리기 호출 88개,
+## 아이폰에서 한 프레임 약 2ms). 손가락이 바뀌면 _dirty, 그 밖엔 화면에 보이는 상태를 모은 값(_view_state)이 바뀔 때만.
+var _dirty := true
+var _last_view: Array = []
+## 상황 버튼의 반짝임과 쿨다운 부채꼴은 이 간격(ms)으로만 움직인다 (초당 20번 — 느린 반짝임이라 눈으로는 같다)
+const ANIM_STEP_MS := 50
 
 
 func _ready() -> void:
@@ -106,7 +112,33 @@ func _process(_delta: float) -> void:
 	if _player == null or not is_instance_valid(_player):
 		_player = get_tree().get_first_node_in_group("player") as Player
 	if _shown:
-		_canvas.queue_redraw()
+		var view := _view_state()
+		if _dirty or view != _last_view:
+			_dirty = false
+			_last_view = view
+			_canvas.queue_redraw()
+
+
+## 화면에 보이는 터치 버튼 상태 (이 값이 바뀌면 다시 그린다): 화면 크기·버튼 크기 설정·러시, 영혼(그림·색·다음 영혼·쿨다운 비율과 남은 초),
+## 낙하 켜짐, 상황 버튼(보임·그림·반짝임), 쉬는 중. 손가락(눌림·스틱)은 _dirty 로 따로.
+func _view_state() -> Array:
+	var v: Array = [_canvas.size, Settings.touch_scale_factor(), BossRush.active]
+	if not _has_player():
+		v.append(null)
+		return v
+	var interact: bool = _player.can_interact
+	v.append_array([_player.soul, _player.next_soul(), button_enabled("plunge"), button_enabled("soul"),
+		snappedf(_player.soul_cooldown_ratio(), 1.0 / 96.0), _player.soul_cooldown_text(),
+		_player.state == Player.State.REST, interact])
+	if interact:
+		v.append(interact_kind())
+		v.append(Time.get_ticks_msec() / ANIM_STEP_MS)   # 반짝임
+	return v
+
+
+## 상황 버튼 반짝임의 시간 (초당 20칸으로 끊는다)
+func _pulse_time() -> float:
+	return float(Time.get_ticks_msec() / ANIM_STEP_MS * ANIM_STEP_MS) / 150.0
 
 
 func _on_device_changed(kind: InputDevice.Kind) -> void:
@@ -115,6 +147,7 @@ func _on_device_changed(kind: InputDevice.Kind) -> void:
 		return
 	_shown = show
 	_canvas.visible = show
+	_dirty = true
 	if not show:
 		_release_all()
 
@@ -268,6 +301,7 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag:
 		if _touches.has(event.index):
 			_touches[event.index]["pos"] = event.position
+			_dirty = true
 			_update_stick()
 
 
@@ -292,6 +326,7 @@ func _begin_touch(index: int, pos: Vector2) -> void:
 		Input.action_press(action)
 		_send_action_event(action, true)
 	_touches[index] = {"role": role, "action": action, "origin": pos, "pos": pos}
+	_dirty = true
 
 
 ## 지도·메뉴처럼 _unhandled_input 으로 듣는 동작은 진짜 입력 이벤트로도 보낸다.
@@ -310,6 +345,7 @@ func _end_touch(index: int) -> void:
 	var t_of_index: Dictionary = _touches[index]
 	var role: String = t_of_index["role"]
 	_touches.erase(index)
+	_dirty = true
 	if role == "stick":
 		_update_stick()
 		return
@@ -361,6 +397,7 @@ func _set_axis(neg: String, pos: String, value: float) -> void:
 
 func _release_all() -> void:
 	_touches.clear()
+	_dirty = true
 	for a in ALL_ACTIONS:
 		Input.action_release(a)
 
@@ -462,7 +499,7 @@ func _on_draw() -> void:
 			fill = FILL_PRESSED
 			ring_col = Color(1.0, 0.95, 0.8, 0.95)
 		elif name == "interact":
-			fill = Color("8fd3ff" if resting else "ffd46a", 0.35 + 0.1 * sin(Time.get_ticks_msec() / 150.0))
+			fill = Color("8fd3ff" if resting else "ffd46a", 0.35 + 0.1 * sin(_pulse_time()))
 		elif not enabled:
 			# 낙하: 땅에서는 꺼진 버튼 (어둡고 흐릿하게)
 			fill = Color(0.02, 0.02, 0.04, 0.22)

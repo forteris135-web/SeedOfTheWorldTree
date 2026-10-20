@@ -19,9 +19,10 @@ class_name EnemyRigVisual
 @export var warm_eye := false
 ## 머리 위 작은 체력·흐트러짐 막대 (중간 보스는 화면 아래 보스 막대가 있어 끈다)
 @export var show_overhead_bar := true
-## 구원되어 사람으로 돌아온 모습 (RescuedPerson). npc_rig 이 있으면 그 뼈대로, 없으면 texture 한 장(npc_art_scale 배율)으로.
+## 구원되어 사람으로 돌아온 모습 (RescuedPerson). npc_rig 이 있으면 그 뼈대로, 없으면 그림 한 장 texture_path(npc_art_scale 배율)로.
+## 그림은 경로만 들고 있고 뼈대를 못 세울 때만 RescuedPerson 이 읽는다 (1536×1024 그림을 방에 있는 내내 들고 있지 않게).
 @export var npc_rig := ""
-@export var texture: Texture2D
+@export_file("*.png") var texture_path := ""
 @export var npc_art_scale := 0.17
 @export var npc_faces_right := false
 ## 무기 팔의 종류 (EliteTraits 가 읽는다): 검(들었다 내려침) / 대롱(겨눔 — 쫓기·예고·쏘기·회복·물러남 동안 aim_bone 이 소녀를 겨눈다)
@@ -216,7 +217,7 @@ func is_facing_settled() -> bool:
 ## floor_y: 발이 닿는 땅 = 몸 충돌 캡슐의 바닥 (적 원점 기준) — 뼈대 사람을 여기에 세운다.
 func npc_look() -> Dictionary:
 	var fy := _floor_y if _floor_known else (_find_floor_y() if _enemy else 0.0)
-	return {"rig": npc_rig, "rig_scale": art_scale, "texture": texture, "art_faces_right": npc_faces_right, "art_scale": npc_art_scale, "floor_y": fy}
+	return {"rig": npc_rig, "rig_scale": art_scale, "texture_path": texture_path, "art_faces_right": npc_faces_right, "art_scale": npc_art_scale, "floor_y": fy}
 
 
 # ---------- 이펙트 자리 (몹 논리의 Fx 한 줄이 EnemyBase.fx_point 로 읽는다 — 이펙트가 뼈대의 무기를 따라가게) ----------

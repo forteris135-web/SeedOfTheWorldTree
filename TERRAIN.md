@@ -220,7 +220,7 @@
 ## 8. 도구
 
 - **시트 보기**: `godot --headless --path . --script tools/sheet_catalog.gd -- 익스펜션/그림/지형/<시트>.PNG --out <폴더>` → 상자 번호 미리보기·`catalog.json`.
-- **자르기**: `/Users/wj/Projects/SeedWT/godot --headless --path . -s res://tools/terrain_cut.gd -- <그림 옷>`
+- **자르기**: `godot --headless --path . -s res://tools/terrain_cut.gd -- <그림 옷>` (맥의 병렬 작업 폴더면 래퍼 `/Users/wj/Projects/SeedWT/godot`)
   → `art/terrain/<그림 옷>/` 와 `screenshots/terrain_<그림 옷>_pieces.png` (빨간 선 = 발 딛는 선, 초록 = 걷는 구간 끝). 그다음 **꼭** `godot --headless --import` (안 하면 옛 그림).
   `cut.pieces[]` 선택지: `name`, `role`, `src`[x,y,w,h](대략적인 상자 — 가장 많이 든 덩어리 + 절반 넘게 든 덩어리), `sheet`(다른 시트), `scale`, `keep`("largest"),
   `clip`[x,y,w,h](사각형으로 좁히기), `walk`[x0,x1], `top_line`[[x,y]…](발 딛는 선 꺾은선, 시트 px), `ignore`[[x,y,w,h]…](선을 잴 때 투명으로 볼 상자),
@@ -250,7 +250,7 @@
     뒤 그림자 스위치, 방별 값 차례(room_depth 가 마지막), 비밀 천장 옹이 위에 매단 장식 없음, 아랫면 단서 폭
 - `probe_terrain -- --cost` (창 있는 실행): 실제 렌더러 비용.
 - **지형 감사**: `python3 -I tools/audit_rooms.py` 와 `--locked` 오류 0 (충돌은 바꾸지 않는다).
-- 전체 회귀: `/Users/wj/Projects/SeedWT/regress.sh <프로젝트 폴더>`.
+- 전체 회귀: `GODOT=<Godot 실행 파일> tools/regress.sh` (로그 `.regress/`; 맥의 병렬 작업 폴더에서는 같은 내용의 `/Users/wj/Projects/SeedWT/regress.sh <프로젝트 폴더>` 가 래퍼로 돌린다).
 
 ---
 

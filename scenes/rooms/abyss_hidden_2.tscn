@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://c1seedabysshid2"]
+[gd_scene load_steps=16 format=3 uid="uid://c1seedabysshid2"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -11,10 +11,7 @@
 [ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
 [ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
 [ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
-[ext_resource type="PackedScene" uid="uid://c1seedrecord" path="res://scenes/world/record.tscn" id="30_record"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
-[ext_resource type="PackedScene" uid="uid://c1seeddewcup" path="res://scenes/world/dew_cup.tscn" id="53_dew_cup"]
-[ext_resource type="PackedScene" uid="uid://c1seedwoodcuttersav" path="res://scenes/enemies/woodcutter_savable.tscn" id="57_woodcutter_sav"]
 [ext_resource type="Texture2D" path="res://art/backgrounds/bg_abyss_2.png" id="11_bg"]
 
 [sub_resource type="Environment" id="Environment_glow"]

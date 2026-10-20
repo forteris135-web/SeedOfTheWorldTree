@@ -1,8 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://c1seedgardenersav"]
+[gd_scene load_steps=6 format=3 uid="uid://c1seedgardenersav"]
 
 [ext_resource type="Script" path="res://scripts/enemies/gardener.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://scripts/enemies/gardener_enemy_rig_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://art/enemies/enemy_gardener_savable.png" id="3_tex"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 
@@ -39,7 +38,7 @@ script = ExtResource("2_visual")
 rig_id = "gardener_savable"
 warm_eye = true
 npc_rig = "gardener_savable"
-texture = ExtResource("3_tex")
+texture_path = "res://art/enemies/enemy_gardener_savable.png"
 arm_kind = "gun"
 
 [node name="Hurtbox" type="Area2D" parent="."]

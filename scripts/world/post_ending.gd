@@ -7,10 +7,14 @@ extends RefCounted
 
 
 ## 마지막으로 본 엔딩 이름 (sacrifice / return / third), 아직 엔딩을 안 봤으면 "".
+## 깃발이 없는 옛 진행은 타이틀(TitleScreen.cleared_state)과 같이 클리어 기록 + 저장된 엔딩 값으로 고른다
+## (보통은 SaveGame.load_game 이 깃발을 채워 둔다).
 static func last_ending() -> String:
 	for n in EndingScene.ENDINGS:
 		if Progress.has("last_ending_" + n):
 			return n
+	if Progress.has("cleared") and Progress.ending in EndingScene.ENDINGS:
+		return Progress.ending
 	return ""
 
 

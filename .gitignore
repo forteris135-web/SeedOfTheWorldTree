@@ -15,3 +15,20 @@ export/
 # Python 도구 부산물
 __pycache__/
 audio/_temp_music/
+
+# 시험이 찍는 스크린샷 (회귀 시험이 돌 때마다 다시 써서 작업 폴더를 더럽힌다).
+# 기획자가 직접 넣는 스크린샷(다른 이름)은 그대로 올라간다 — screenshots/README.md
+screenshots/debug_*
+screenshots/rig_*
+screenshots/qa_*
+screenshots/touch_*
+screenshots/knight_film_*
+screenshots/pump_film_*
+screenshots/pump_shot_*
+screenshots/rk_*
+screenshots/probe_*
+screenshots/terrain_*
+screenshots/*/
+
+# 회귀 시험 로그 (tools/regress.sh)
+.regress/

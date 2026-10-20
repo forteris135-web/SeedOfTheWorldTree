@@ -1,8 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://c1seedowen"]
+[gd_scene load_steps=6 format=3 uid="uid://c1seedowen"]
 
 [ext_resource type="Script" path="res://scripts/enemies/enemy_base.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://scripts/enemies/owen_rig_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://art/enemies/enemy_owen.png" id="3_tex"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 
@@ -35,7 +34,7 @@ script = ExtResource("2_visual")
 rig_id = "owen"
 warm_eye = true
 npc_rig = "owen"
-texture = ExtResource("3_tex")
+texture_path = "res://art/enemies/enemy_owen.png"
 
 [node name="Hurtbox" type="Area2D" parent="."]
 position = Vector2(0, -5)

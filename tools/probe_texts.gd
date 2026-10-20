@@ -6,13 +6,17 @@ extends SceneTree
 ##  2) suspicious 발판·경사에 빛(SuspiciousHint)과 빛 가루(CPUParticles2D)가 생기고, 일반 발판엔 없는지
 ##  3) 빛의 맥동이 매끄러운지 (프레임 간 알파 변화량의 최대치)
 ##  4) 수상한 발판의 이끼 색이 일반보다 창백한지
+## 주의: -s 로 돌리는 스크립트는 자동 로드(Progress 등)가 이름으로 등록되기 **전에** 컴파일된다. 여기서 Platform·TerrainPolygon 같은
+## 클래스 이름을 타입으로 쓰면 그 사슬(Platform → … → thorns.gd → player.gd 의 Progress)이 그때 컴파일되다 실패해
+## player.gd 가 끝까지 스크립트 없이 남는다(소녀 뼈대가 매 프레임 오류). 그래서 지형 스크립트는 _initialize 에서 load() 로 읽는다.
 
 var _frames := 0
 var _alphas: Array[float] = []
-var _secret: Platform
+var _platform_script: Script      # res://scripts/world/platform.gd (Platform) — 실행 중에 읽는다
+var _secret   # Platform
 var _fail := 0
 var _room: Node
-var _poly: TerrainPolygon
+var _poly   # TerrainPolygon
 
 
 func _check(ok: bool, what: String) -> void:
@@ -24,12 +28,13 @@ func _check(ok: bool, what: String) -> void:
 func _initialize() -> void:
 	var settings := root.get_node_or_null("Settings")
 	_check(settings != null, "Settings 자동 로드가 있다")
+	_platform_script = load("res://scripts/world/platform.gd")
 	var scene: PackedScene = load("res://scenes/rooms/canopy_01.tscn")
 	var room := scene.instantiate()
 	# 통합자가 켤 예정인 값을 미리 켜 본다 (씬 파일은 손대지 않음)
 	_secret = room.get_node("Terrain/Secret")
 	_secret.suspicious = true
-	var poly := TerrainPolygon.new()
+	var poly = load("res://scripts/world/terrain_polygon.gd").new()
 	poly.polygon = PackedVector2Array([Vector2(0, 0), Vector2(300, -60), Vector2(300, 80), Vector2(0, 80)])
 	poly.suspicious = true
 	poly.position = Vector2(3000, 1500)
@@ -44,7 +49,7 @@ func _initialize() -> void:
 func _checks() -> void:
 	var settings := root.get_node_or_null("Settings")
 	var room := _room
-	var poly := _poly
+	var poly = _poly
 
 	# 1) 라벨
 	var labels: Array[Label] = []
@@ -72,14 +77,14 @@ func _checks() -> void:
 	# 2) 수상한 단서 노드
 	_check(_secret._hint != null and _secret._motes != null, "비밀 발판에 빛과 빛 가루가 생김 (입자 %d개)" % (_secret._motes.amount if _secret._motes else 0))
 	_check(_secret._motes != null and _secret._motes.amount <= 8, "입자 수가 적다 (8개 이하)")
-	var floor1: Platform = room.get_node("Terrain/Floor1")
+	var floor1 = room.get_node("Terrain/Floor1")
 	_check(floor1._hint == null and floor1._motes == null, "일반 발판에는 단서가 없다")
 	_check(poly._hint != null and poly._motes != null, "수상한 경사에도 빛과 빛 가루가 생김")
 	_check(poly._hint._edges.size() == 1, "경사의 위 변 %d개에 빛" % poly._hint._edges.size())
 
 	# 4) 이끼 색
-	var normal := floor1._moss()
-	var pale := _secret._moss()
+	var normal: Color = floor1._moss()
+	var pale: Color = _secret._moss()
 	_check(pale.get_luminance() > normal.get_luminance() + 0.1, "수상한 이끼가 더 창백하다 (밝기 %.2f → %.2f)" % [normal.get_luminance(), pale.get_luminance()])
 
 	# 5) 소녀 위에 덧그려지지 않도록 빛 띠의 z_index 는 0
@@ -87,30 +92,30 @@ func _checks() -> void:
 
 	# 6) 면 고르기: 아랫면(천장)·옆면(벽)에서는 빛 띠와 빛 가루가 그 면 바깥쪽으로 간다
 	var terrain := room.get_node("Terrain")
-	var ceil := Platform.new()
+	var ceil = _platform_script.new()
 	ceil.size = Vector2(400, 100)
 	ceil.decorate = false
 	ceil.suspicious_face = 1   # 아래
 	ceil.suspicious = true
 	ceil.position = Vector2(3400, 1200)
 	terrain.add_child(ceil)
-	var e := ceil._hint._edges[0]
+	var e = ceil._hint._edges[0]
 	var dir: Vector2 = e[1] - e[0]
 	var nrm := Vector2(dir.y, -dir.x).normalized()
 	_check(nrm.y > 0.9, "아랫면: 법선이 아래를 향함 (%.1f, %.1f)" % [nrm.x, nrm.y])
-	var outer: Vector2 = (e[0] + e[1]) * 0.5 + nrm * Platform.HINT_HEIGHT
+	var outer: Vector2 = (e[0] + e[1]) * 0.5 + nrm * float(_platform_script.HINT_HEIGHT)
 	_check(outer.y > ceil.size.y, "아랫면: 빛 띠 바깥 꼭짓점 y=%.0f > h=%.0f" % [outer.y, ceil.size.y])
 	_check(ceil._motes.gravity.y > 0.0 and ceil._motes.position.y > ceil.size.y, "아랫면: 빛 가루가 아래로 떨어짐 (gravity.y=%.1f, 자리 y=%.0f)" % [ceil._motes.gravity.y, ceil._motes.position.y])
 	_check(ceil._motes.emission_rect_extents.x > ceil._motes.emission_rect_extents.y, "아랫면: 입자 범위가 가로로 넓음 (%.0f×%.0f)" % [ceil._motes.emission_rect_extents.x, ceil._motes.emission_rect_extents.y])
 
-	var wall := Platform.new()
+	var wall = _platform_script.new()
 	wall.size = Vector2(100, 400)
 	wall.decorate = false
 	wall.suspicious_face = 3   # 오른쪽
 	wall.suspicious = true
 	wall.position = Vector2(3800, 1200)
 	terrain.add_child(wall)
-	var e2 := wall._hint._edges[0]
+	var e2 = wall._hint._edges[0]
 	var dir2: Vector2 = e2[1] - e2[0]
 	var nrm2 := Vector2(dir2.y, -dir2.x).normalized()
 	_check(nrm2.x > 0.9, "오른쪽 벽: 법선이 오른쪽을 향함 (%.1f, %.1f)" % [nrm2.x, nrm2.y])
@@ -118,7 +123,7 @@ func _checks() -> void:
 	_check(wall._motes.emission_rect_extents.y > wall._motes.emission_rect_extents.x, "오른쪽 벽: 입자 범위가 세로로 김 (%.0f×%.0f)" % [wall._motes.emission_rect_extents.x, wall._motes.emission_rect_extents.y])
 	# 왼쪽 면도 법선 확인
 	wall.suspicious_face = 2
-	var e3 := wall._hint._edges[0]
+	var e3 = wall._hint._edges[0]
 	var dir3: Vector2 = e3[1] - e3[0]
 	var nrm3 := Vector2(dir3.y, -dir3.x).normalized()
 	_check(nrm3.x < -0.9, "왼쪽 벽: 법선이 왼쪽을 향함 (%.1f, %.1f)" % [nrm3.x, nrm3.y])

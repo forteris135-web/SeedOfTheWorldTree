@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://c1seedcanopy01"]
+[gd_scene load_steps=25 format=3 uid="uid://c1seedcanopy01"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -14,7 +14,6 @@
 [ext_resource type="Script" path="res://scripts/world/light_shafts.gd" id="13_shafts"]
 [ext_resource type="Script" path="res://scripts/world/fog_layer.gd" id="14_fog"]
 [ext_resource type="Script" path="res://scripts/world/falling_leaves.gd" id="15_leaves"]
-[ext_resource type="PackedScene" uid="uid://c1seedroomexit" path="res://scenes/world/room_exit.tscn" id="16_exit"]
 [ext_resource type="PackedScene" uid="uid://c1seedthorns" path="res://scenes/world/thorns.tscn" id="17_thorns"]
 [ext_resource type="PackedScene" uid="uid://c1seedgardener" path="res://scenes/enemies/gardener.tscn" id="18_gardener"]
 [ext_resource type="PackedScene" uid="uid://c1seedwoodcuttersav" path="res://scenes/enemies/woodcutter_savable.tscn" id="19_woodcutter_sav"]

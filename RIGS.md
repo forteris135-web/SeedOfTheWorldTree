@@ -83,7 +83,7 @@
 4. **자르기**: `G --headless --path . --script tools/rig_cut.gd -- <id>` → `art/rigs/<id>/`.
    완성 그림을 두 겹(몸통·치마처럼)으로 잘라 자른 선이 그림 속을 가로지르면 부위에 `"feather"` 를 적고
    `G --headless --path . --script tools/rig_feather.gd -- <id>` 를 이어 돌린다 (선분 둘레 알파를 0 → 1 로 녹인다, 뿌리지기 설계도 참고).
-   그다음 **반드시** `GODOT=/Users/wj/Projects/SeedWT/godot tools/cloud_bootstrap.sh` (새 그림 가져오기·밉맵).
+   그다음 **반드시** `GODOT=<Godot 실행 파일> tools/cloud_bootstrap.sh` (새 그림 가져오기·밉맵; 맥의 병렬 작업 폴더면 래퍼 `/Users/wj/Projects/SeedWT/godot`).
 5. **부위 확인** (창으로): `G --path . res://tools/rig_preview.tscn -- <id> --parts`
    → `screenshots/rig_<id>_parts.png`: 부위마다 같은 크기 칸에 맞춰 키운 그림(칸 아래 이름·z·배율) + 빨강 = 관절(pivot), 파랑 = 축 끝(tip), 노랑 = 자식이 붙는 자리, 초록 = 발바닥.
    자식의 노랑 점이 부모 그림의 관절 자리에 있어야 한다.

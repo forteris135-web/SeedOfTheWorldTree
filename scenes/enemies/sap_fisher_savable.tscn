@@ -1,8 +1,7 @@
-[gd_scene load_steps=7 format=3 uid="uid://c1seedsapfishersav"]
+[gd_scene load_steps=6 format=3 uid="uid://c1seedsapfishersav"]
 
 [ext_resource type="Script" path="res://scripts/enemies/sap_fisher.gd" id="1_enemy"]
 [ext_resource type="Script" path="res://scripts/enemies/sap_fisher_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://art/enemies/enemy_sap_fisher_savable.png" id="3_tex"]
 [ext_resource type="Script" path="res://scripts/combat/hitbox.gd" id="4_hitbox"]
 [ext_resource type="Script" path="res://scripts/combat/hurtbox.gd" id="5_hurtbox"]
 
@@ -39,7 +38,7 @@ script = ExtResource("2_visual")
 rig_id = "sap_fisher_savable"
 warm_eye = true
 npc_rig = "sap_fisher_savable"
-texture = ExtResource("3_tex")
+texture_path = "res://art/enemies/enemy_sap_fisher_savable.png"
 npc_art_scale = 0.22
 npc_faces_right = true
 

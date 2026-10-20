@@ -10,6 +10,7 @@ extends Node
 ##     허밍 전에는 음악 없음, 주제 문장 횟수, 크레딧 그림, 끝 화면의 타이틀 그림, 깃발·저장(cleared·ending·last_ending), '이어서 탐험하기' → 마지막 달빛풀.
 ##  5) 타이틀: 마지막으로 본 엔딩의 그림·부제·곡(selenia_humming 반복), 앱을 새로 켠 것처럼(진행 비움) 저장 파일만으로도 같음.
 ##  6) 엔딩 뒤 세계: 마지막 달빛풀에 도착(쉬는 자세), 마을 빛(되돌림 · 제3의 길), 티아·등불지기·오웬의 엔딩 뒤 대사, 재회가 남았으면 재회가 먼저.
+##     옛 빌드의 저장 파일(last_ending 깃발 없이 cleared·ending_*·"ending" 값만)을 이어해도 엔딩 뒤 마을 빛·대사가 나온다.
 ##  7) 건너뛰기를 연타해도 허밍은 정해진 장면에서 시작, 경전 고쳐 쓰기 글자 단계, 경전 구절 메아리(조각을 읽었을 때만).
 ##  8) 진짜 장면 바꾸기로 끝까지: 정원의 끝(abyss_boss)의 '마력의 관' 선택지 → 엔딩 장면 → 끝 화면 '이어서 탐험하기' → 달빛 정원에 쉬는 자세로 도착(쉼터 곡).
 ## 마지막 줄 "[probe] 끝: 실패 N".
@@ -87,6 +88,7 @@ func _run() -> void:
 	await _probe_sequence()
 	await _probe_skip_spam()
 	await _probe_post_world()
+	await _probe_old_save_world()
 	await _probe_full_flow()
 	Music.stop(0.0)
 	Progress.reset()
@@ -481,6 +483,52 @@ func _probe_post_world() -> void:
 	_check(str(keeper.pick_talk().get("when", "")).begins_with("boss_knight_defeated,!lampkeeper_confessed"), "엔딩 뒤에도 등불지기의 고백이 남았으면 고백이 먼저")
 	keeper.queue_free()
 	await _frames(2)
+	Progress.reset()
+
+
+## 옛 빌드로 클리어한 저장 파일: 마지막 엔딩 깃발(last_ending_*)이 없다. 이어하면 엔딩 뒤 세계가 켜져야 한다.
+func _probe_old_save_world() -> void:
+	var pur_backup: Dictionary = Purity.regions.duplicate()
+	var story := {"cleared": true, "owen_rescued": true, "reunion_done": true, "lampkeeper_confessed": true}
+	# [저장 모양, 기대하는 마지막 엔딩, 티아 대사에 들어 있어야 할 말]
+	var cases := [
+		[{"flags": {"ending_return": true}, "ending": "return"}, "return", "별이 보여"],        # 10-18 빌드
+		[{"flags": {"ending_sacrifice": true}, "ending": "sacrifice"}, "sacrifice", "금빛 씨앗"],   # 확장판 이전 main
+		[{"flags": {"ending_return": true}, "ending": ""}, "return", "별이 보여"],              # "ending" 값이 빈 저장 → ending_* 깃발
+	]
+	for c in cases:
+		var shape: Dictionary = c[0]
+		var flags: Dictionary = story.duplicate()
+		flags.merge(shape["flags"])
+		var f := FileAccess.open(SaveGame.PATH, FileAccess.WRITE)
+		f.store_string(JSON.stringify({"version": 1, "flags": flags, "ending": shape["ending"], "grass": "moon_garden", "scene": GARDEN,
+			"grasses": {"moon_garden": {"scene": GARDEN, "name": "달빛 정원"}}}))
+		f.close()
+		Progress.reset()
+		SaveGame.load_game()
+		Progress.next_spawn = ""
+		var want: String = c[1]
+		_check(PostEnding.last_ending() == want and Progress.has("last_ending_" + want),
+			"옛 저장(%s, ending '%s') 이어하기: 마지막 엔딩 %s, 깃발 last_ending_%s %s" % [shape["flags"].keys(), shape["ending"], PostEnding.last_ending(), want, Progress.has("last_ending_" + want)])
+		var v := await _village_state()
+		var tint_ok: bool = (v["tint"] == null) if want == "sacrifice" else (v["tint"] != null and (v["tint"] as Color).b > (v["tint"] as Color).r)
+		_check(tint_ok and str(v["tia"]).contains(c[2]), "옛 저장(%s) 마을: 빛 %s, 티아 '%s'" % [want, v["tint"], v["tia"]])
+		# 다시 저장하면 깃발이 함께 저장된다
+		SaveGame.save("moon_garden", GARDEN)
+		var data = JSON.parse_string(FileAccess.get_file_as_string(SaveGame.PATH))
+		_check(typeof(data) == TYPE_DICTIONARY and bool(data.get("flags", {}).get("last_ending_" + want, false)), "옛 저장(%s)을 다시 저장하면 last_ending_%s 깃발이 남는다" % [want, want])
+	# 클리어하지 않은 옛 저장에는 깃발을 만들지 않는다
+	var f2 := FileAccess.open(SaveGame.PATH, FileAccess.WRITE)
+	f2.store_string(JSON.stringify({"version": 1, "flags": {"owen_rescued": true}, "ending": "", "grass": "moon_garden", "scene": GARDEN}))
+	f2.close()
+	Progress.reset()
+	SaveGame.load_game()
+	Progress.next_spawn = ""
+	_check(PostEnding.last_ending() == "" and not Progress.has("last_ending_return"), "클리어 전 옛 저장: 엔딩 뒤 세계 없음")
+	if SaveGame.has_save():
+		DirAccess.remove_absolute(SaveGame.PATH)
+	for k in pur_backup:
+		Purity.regions[k] = pur_backup[k]
 	Progress.reset()
 
 

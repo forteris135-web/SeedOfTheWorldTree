@@ -604,7 +604,7 @@ func _finish_fall() -> void:
 			if vis and vis.has_method("npc_look"):
 				# 부위 뼈대 그림(EnemyRigVisual): 사람으로 돌아온 모습도 같은 뼈대로 (없으면 그림 한 장)
 				var look: Dictionary = vis.npc_look()
-				npc.texture = look.get("texture")
+				npc.texture_path = str(look.get("texture_path", ""))
 				npc.art_faces_right = bool(look.get("art_faces_right", true))
 				npc.art_scale = float(look.get("art_scale", 0.17))
 				npc.rig_id = str(look.get("rig", ""))
