@@ -3,7 +3,7 @@ extends Node2D
 ## 지역 그림 옷(TerrainSkin) atlas 의 조각 하나를 세워 두는 장식 (판정 없음 — 겉모습만).
 ## 채굴장의 크레인·비계 틀·등불 선반, 잠긴 채굴장의 기계 벽·기계 문·관 기둥·바위처럼 기획자가 따로 그려 준 그림을 방에 놓는다.
 ## 방 파일에서 Props(지형 Terrain 보다 앞 순서 = 뒤에 그려짐) 아래에 두면 지형·소녀 뒤 배경 장식이 된다.
-## 재질은 배경 그림과 같은 ash_purify_far (앞뒤 가르기 — 아지랑이 뒤로 물러나 발판으로 오해받지 않는다, TERRAIN.md 5장).
+## 재질은 ash_purify_prop: 배경 그림(ash_purify_far)과 같고 아지랑이를 그림 옷 depth 의 prop_haze 만큼 더 — 아지랑이 뒤로 물러나 발판으로 오해받지 않는다 (TERRAIN.md 5장).
 ##
 ## - piece: 조각 이름 (data/terrain/<지역>.json 의 cut.pieces 이름 — 보통 역할 decor, 다른 역할 조각도 된다)
 ## - anchor: 조각 안 기준점 (0~1). 기본 (0.5, 1) = 밑동 가운데 → 노드 자리가 밑동(바닥에 닿는 곳)
@@ -43,7 +43,7 @@ var _skin: TerrainSkin
 
 
 func _ready() -> void:
-	material = preload("res://shaders/ash_purify_far.tres")   # 배경 장식: 배경 그림과 같은 재질 (앞뒤 가르기 — 발판으로 오해받지 않게 아지랑이 뒤로)
+	material = preload("res://shaders/ash_purify_prop.tres")   # 배경 장식 재질: 배경 그림과 같고 아지랑이를 depth 의 prop_haze 만큼 더 (발판으로 오해받지 않게 — TERRAIN.md 5장)
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 

@@ -79,6 +79,7 @@ func _ready() -> void:
 	Purity.progress.connect(_on_purity_progress)
 	Purity.apply_region(region)
 	Purity.apply_depth(TerrainSkin.depth_of(self))   # 앞뒤 가르기 (배경 아지랑이·앞 지형·뒤 그림자 — 방의 그림 옷 데이터)
+	TerrainSkin.keep_region(region)   # 다른 지역 그림 옷은 기억에서 뺀다 (메모리)
 	_register_on_map()
 	Progress.collected_changed.connect(_on_explore_changed)
 	Progress.flag_changed.connect(_on_explore_flag_changed)

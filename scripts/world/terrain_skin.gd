@@ -83,8 +83,9 @@ static func for_room(room: Node, region := "") -> TerrainSkin:
 	return skin
 
 
-## 방의 앞뒤 가르기 값 (Purity.apply_depth 에 넣는다 — TERRAIN.md 5장): 지역 그림 옷의 "depth" 에 방 그림 옷(room_skins)의 "depth" 를,
-## 다시 그 위에 "room_depth": {방 id: {…}} 를 덮어쓴다 ("ash"·"alive" 안은 열쇠마다 합친다). 그림 옷이 없으면 빈 사전(아무것도 안 함).
+## 방의 앞뒤 가르기 값 (Purity.apply_depth 에 넣는다 — TERRAIN.md 5장): 지역 그림 옷의 "depth" ← 방 그림 옷(room_skins)의 "depth"
+## ← "room_depth": {방 id: {…}} (지역 그림 옷 것, 그다음 방 그림 옷 것) 차례로 덮어쓴다 — 방별 값(room_depth)은 어느 파일에 적든 늘 마지막이다.
+## ("ash"·"alive" 안은 열쇠마다 합친다). 그림 옷이 없으면 빈 사전(아무것도 안 함).
 static func depth_of(room: Node) -> Dictionary:
 	var out := {}
 	if room == null or not ("region" in room):
@@ -92,11 +93,13 @@ static func depth_of(room: Node) -> Dictionary:
 	var reg := for_region(str(room.get("region")))
 	var own := for_room(room)
 	var rid := str(room.get("room_id")) if "room_id" in room else ""
-	for s in ([reg] if own == reg else [reg, own]):
-		if s == null:
-			continue
-		_merge_depth(out, s.data.get("depth", {}))
-		_merge_depth(out, (s.data.get("room_depth", {}) as Dictionary).get(rid, {}))
+	var skins: Array = [reg] if own == reg else [reg, own]
+	for s in skins:
+		if s != null:
+			_merge_depth(out, s.data.get("depth", {}))
+	for s in skins:
+		if s != null:
+			_merge_depth(out, (s.data.get("room_depth", {}) as Dictionary).get(rid, {}))
 	return out
 
 
@@ -113,6 +116,20 @@ static func _merge_depth(out: Dictionary, add: Dictionary) -> void:
 ## 시험용: 기억한 것을 비운다 (그림을 다시 자른 뒤 등).
 static func clear_cache() -> void:
 	_cache.clear()
+
+
+## 방에 들어올 때 (Room._ready): 그 지역 그림 옷과 그 room_skins 그림 옷만 남기고 나머지는 기억에서 뺀다 —
+## 지역을 다 돌고 나면 atlas·몸통 결이 메모리에 계속 남지 않게 (약 50MB). 지금·앞 방의 노드가 쥔 그림 옷은 그 방이 지워질 때 풀리고,
+## 나중에 다시 필요하면 for_region 이 다시 읽는다.
+static func keep_region(region: String) -> void:
+	var keep := {region: true}
+	var s = _cache.get(region)
+	if s is TerrainSkin:
+		for v in ((s as TerrainSkin).data.get("room_skins", {}) as Dictionary).values():
+			keep[str(v)] = true
+	for k in _cache.keys():
+		if not keep.has(k):
+			_cache.erase(k)
 
 
 func _load(r: String, d: Dictionary) -> bool:

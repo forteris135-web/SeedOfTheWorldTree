@@ -22,10 +22,11 @@ uniform vec3 haze_color_alive : source_color = vec3(0.8, 0.8, 0.8);
 uniform vec2 contrast = vec2(1.0, 1.0);                 // 대비 배수 (밝기 0.5 를 기준으로; 배경은 1 보다 작게, 앞 지형은 크게)
 uniform vec2 value = vec2(1.0, 1.0);                    // 밝기 배수
 uniform vec2 sat = vec2(1.0, 1.0);                      // 채도 배수
-// 옛 값 (지금은 쓰지 않지만 다른 곳에서 넣어도 오류가 나지 않게 남겨 둔다)
-uniform vec3 ash_tint : source_color = vec3(0.66, 0.70, 0.78);
-uniform float ash_contrast = 0.7;
-uniform float ash_brightness = 0.82;
+// 앞뒤 가르기를 쓰는 재질만 켠다 (far·fore 의 .tres). 가운데 겹(안개 두 겹·잎·기록물·물 그림 — 화면 가득한 겹이 여럿)은 꺼져 있어
+// 아무것도 안 하는 계산을 건너뛴다 (아이폰 칠하기 비용).
+uniform bool depth_on = false;
+// 정화 전에도 원래 색을 이만큼 남긴다 (0 = 다 잿빛). 가시 재질(ash_purify_thorn)만 쓴다 — 붉은 수정 가시가 잿빛 배경에 묻혀 위험이 안 읽히지 않게.
+uniform float ash_keep : hint_range(0.0, 1.0) = 0.0;
 
 const float ROWS = 8.0;
 
@@ -78,10 +79,13 @@ void fragment() {
 	float spread = 1.0 - smoothstep(radius - softness, radius + softness, d);
 	float k = clamp(max(purity, spread), 0.0, 1.0);
 	vec3 col = c.rgb;
-	if (k < 0.999) {
-		col = mix(ash_of(c.rgb), c.rgb, k);   // 정화된 곳은 표를 찾지 않는다 (가벼움)
+	float kc = max(k, ash_keep);
+	if (kc < 0.999) {
+		col = mix(ash_of(c.rgb), c.rgb, kc);   // 정화된 곳은 표를 찾지 않는다 (가벼움)
 	}
-	col = depth_of(col, k);
+	if (depth_on) {
+		col = depth_of(col, k);
+	}
 	col += vec3(1.0, 0.85, 0.5) * edge * 0.25 * float(radius > 0.001 && radius < 3.0);
 	COLOR = vec4(col, c.a);
 }

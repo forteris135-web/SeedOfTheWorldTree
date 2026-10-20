@@ -36,6 +36,12 @@ const SAMPLE := 12.0
 const OUT := 8.0
 ## 이어 붙이는 겹침 (월드 px)
 const OVERLAP := 40.0
+## 이어 붙인 가지에서 앞 토막이 뒤 토막 아래로 더 이어지며 서서히 사라지는 길이 (월드 px — _chain)
+const CHAIN_TAIL := 56.0
+## 방 경계 밖 치마 (그림만 — _skirts): 경계에 닿은 사각형 덩어리는 그쪽으로 이만큼 몸통 결을 더 깐다 (아이패드 4:3 의 숨은 방 위아래 약 180px,
+## 19.5:9 아이폰의 좁은 방 양옆 약 220px, 16:9 의 900px 높이 방 아래 약 20px 가 배경 띠로 비치지 않게). 밝기는 SKIRT_FADE 동안 깊은 곳 밝기로.
+const SKIRT := 480.0
+const SKIRT_FADE := 160.0
 ## 덮인 쪽으로 밀어 넣는 길이 (이웃 지형 속으로 숨김)
 const TUCK := 28.0
 ## 얇은 발판 한 조각 맞추기 범위
@@ -65,25 +71,36 @@ var _bufs: Array = []
 var _rng := RandomNumberGenerator.new()
 var _shapes: Array = []
 var _own_poly := PackedVector2Array()
-var _room_box := Rect2()      # 방 경계 + 40 (몸통 결은 여기까지 깐다 — 화면 끝에 빈틈이 안 보이게)
+var _room_box := Rect2()      # 방 경계 + 40 (벽·천장 조각은 여기까지)
 var _room_exact := Rect2()    # 방 경계 그대로 (장식은 이 안만)
+var _fill_box := Rect2()      # 방 경계 + SKIRT (몸통 결은 여기까지 깐다 — 화면이 방보다 크거나 흔들려도 경계 밖 배경이 비치지 않게)
 var _has_room := false
 var _mod := Color(1, 1, 1, 1)
 ## 몸통 결을 따로 그리는 캔버스 항목 (부모 묶음 맨 아래 겹). 비어 있으면 이 노드의 _draw 가 몸통 결도 그린다.
 var _fill_ci := RID()
-## 뒤 그림자 항목 (부모 묶음 가장 아래 겹 — 앞뒤 가르기). cast_shadow 를 끄면 안 만든다 (웅덩이 물 그림 등).
+## 뒤 그림자 항목 (부모 묶음 가장 아래 겹 — 앞뒤 가르기). cast_shadow 를 끄면 안 만든다 (웅덩이 물 그림, 옆·아래를 향한 가시).
+## 그 방의 그림자 진하기(depth 의 ash.shadow·alive.shadow)가 둘 다 0 이거나 전체 스위치(shadows_on)가 꺼져 있어도 안 만든다 (_shadow_wanted).
 var _shadow_ci := RID()
 var cast_shadow := true
+## 뒤 그림자 전체 스위치 (아이폰이 무거우면 끈다 — TERRAIN.md 10장): data/terrain/_settings.json 의 "shadows": false.
+## 코드·시험에서는 이 값을 직접 true/false 로 바꿔도 된다 (그다음 만드는 지형부터). null = 아직 파일을 안 읽음.
+static var shadows_enabled = null
+const SETTINGS_PATH := "res://data/terrain/_settings.json"
 var _clip_phase := 0.0
 var _layer_fill := false
 ## 한 조각으로 맞춘 가지의 선택 (가까이 쌓인 같은 크기 발판이 똑같은 그림이 되지 않게 이웃이 본다)
 var pick := ""
 var pick_flip := false
 var pick_w := 0.0
+## 시험용: 이어 붙인 가지의 이음매마다 앞 토막의 꼬리 길이 (px — _chain, 이음이 없으면 비어 있음)
+var chain_tails := PackedFloat32Array()
 ## 어두운 방의 작은 빛: 지역 설명에 params.glow 가 있고 어두운 방이면, 놓인 조각의 빛나는 자리(pieces.json 의 glow — 수정·버섯·등불)를 모은다.
 ## 다 만든 뒤 옛 코드 지형의 '버섯 빛'과 같은 규칙(TerrainStyle.add_glow_light: 노드 하나에 하나, 방 하나에 8개까지)으로 빛을 단다.
 var _glow_on := false
 var _glow_spots := PackedVector2Array()
+## 아직 안 부서진 이웃 부서지는 지형(비밀 벽·비밀 천장·금 간 벽)의 사각형 (노드 기준). neighbors() 는 이것들을 빼지만
+## (부서진 뒤에도 뒤 땅의 띠가 이어지게), 매단 장식은 그 위에 걸지 않는다 — 기둥과 옹이 사이에 잎이 한 줄로 걸려 이음선이 되지 않게.
+var _breaks: Array = []
 
 
 func _init(s: TerrainSkin = null, h: Node2D = null) -> void:
@@ -151,12 +168,57 @@ func _make_group_items() -> void:
 		_fill_ci = _group_item(FILL_DRAW_INDEX, host.material)
 		_add_buf(_fill_ci, BUF_FILL)
 		_add_buf(_fill_ci, BUF_FILL_V)
-	if cast_shadow and (_bufs[BUF_ATLAS]["idx"] as PackedInt32Array).size() >= 3:
+	if (_bufs[BUF_ATLAS]["idx"] as PackedInt32Array).size() >= 3 and _shadow_wanted():
 		_shadow_ci = _group_item(SHADOW_DRAW_INDEX, SHADOW_MAT)
 		_add_buf(_shadow_ci, BUF_ATLAS)
 	if _fill_ci.is_valid() or _shadow_ci.is_valid():
 		_place_group_items()
 		set_notify_transform(true)
+
+
+## 뒤 그림자 전체 스위치 (shadows_enabled 가 null 이면 data/terrain/_settings.json 의 "shadows" 를 한 번 읽는다 — 없으면 켬)
+static func shadows_on() -> bool:
+	if shadows_enabled == null:
+		shadows_enabled = true
+		if FileAccess.file_exists(SETTINGS_PATH):
+			var d = JSON.parse_string(FileAccess.get_file_as_string(SETTINGS_PATH))
+			if d is Dictionary:
+				shadows_enabled = bool(d.get("shadows", true))
+	return bool(shadows_enabled)
+
+
+## 이 그림이 뒤 그림자를 만들어야 하는가: cast_shadow · 전체 스위치 · 그 방의 그림자 진하기(정화 전·후 중 하나라도 0 보다 큼).
+## 진하기 0 은 셰이더가 안 보이게 할 뿐 칠하기 비용은 그대로라, 아예 항목을 만들지 않는다. 방 밖(시험 장면 등)은 켬.
+func shadow_wanted() -> bool:
+	return _shadow_wanted()
+
+
+func _shadow_wanted() -> bool:
+	if not cast_shadow or not shadows_on():
+		return false
+	var room := TerrainStyle.room_of(host) if host else null
+	if room == null or not ("region" in room):
+		return true
+	var d := TerrainSkin.depth_of(room)
+	if d.is_empty():
+		return false
+	return float((d.get("ash", {}) as Dictionary).get("shadow", 0.0)) > 0.001 or float((d.get("alive", {}) as Dictionary).get("shadow", 0.0)) > 0.001
+
+
+## 시험용: 이 노드가 내는 그리기 명령 수 — 자기 항목(조각·색, 몸통 결이 묶음에 없으면 몸통 결까지) + 묶음 항목(몸통 결·세로 결·뒤 그림자)
+func draw_call_count() -> Dictionary:
+	var own := 0
+	var group := 0
+	for i in 4:
+		if (_bufs[i]["pts"] as PackedVector2Array).size() < 3:
+			continue
+		if (i == BUF_FILL or i == BUF_FILL_V) and _fill_ci.is_valid():
+			group += 1
+		else:
+			own += 1
+	if _shadow_ci.is_valid():
+		group += 1
+	return {"own": own, "group": group}
 
 
 func _group_item(draw_index: int, mat: Material) -> RID:
@@ -169,7 +231,33 @@ func _group_item(draw_index: int, mat: Material) -> RID:
 	rs.canvas_item_set_default_texture_filter(ci, RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS)
 	rs.canvas_item_set_default_texture_repeat(ci, RenderingServer.CANVAS_ITEM_TEXTURE_REPEAT_ENABLED)
 	rs.canvas_item_set_visible(ci, is_visible_in_tree())
+	rs.canvas_item_set_modulate(ci, _group_modulate())
 	return ci
+
+
+## 묶음 항목은 부모 묶음 밑에 따로 있어 host 의 modulate 를 물려받지 않는다 → host·이 노드의 modulate 를 직접 넣는다.
+func _group_modulate() -> Color:
+	return (host.modulate * modulate) if host else modulate
+
+
+## host 의 modulate 가 바뀐 뒤 묶음 항목(몸통 결·뒤 그림자)에도 같은 값을 넣는다.
+func sync_group_modulate() -> void:
+	var m := _group_modulate()
+	for ci in [_fill_ci, _shadow_ci]:
+		if ci.is_valid():
+			RenderingServer.canvas_item_set_modulate(ci, m)
+
+
+## 지형 노드(발판 등)를 서서히 사라지게 할 때 쓴다: node.modulate.a 와 그 그림의 묶음 항목(몸통 결·뒤 그림자)을 함께 바꾼다
+## (modulate 만 바꾸면 윗면 조각만 사라지고 몸통 네모·그림자는 그대로 남는다 — TERRAIN.md 4장).
+## Tween 에서: tween_method(func(a: float) -> void: TerrainArt.set_host_alpha(a, node), 1.0, 0.0, 시간)
+static func set_host_alpha(a: float, node: CanvasItem) -> void:
+	if not is_instance_valid(node):
+		return
+	node.modulate.a = a
+	for c in node.get_children():
+		if c is TerrainArt:
+			(c as TerrainArt).sync_group_modulate()
 
 
 func _place_group_items() -> void:
@@ -216,11 +304,13 @@ func _begin(seed_extra: int) -> void:
 	_glow_spots = PackedVector2Array()
 	var room := TerrainStyle.room_of(host)
 	_mod = skin.tint_for(room)
+	_breaks = unbroken_breakables(host)
 	_has_room = room != null and "bounds" in room
 	if _has_room:
 		var b: Rect2 = room.get("bounds")
 		_room_exact = Rect2(b.position - host.global_position + (room as Node2D).global_position, b.size)
 		_room_box = _room_exact.grow(40.0)
+		_fill_box = _room_exact.grow(SKIRT)
 
 
 func _finish(t0: int) -> void:
@@ -260,6 +350,45 @@ static func neighbors(node: Node2D, local_box: Rect2) -> Array:
 			if pb.intersects(box):
 				out.append(poly)
 	return out
+
+
+## 아직 안 부서진 형제 부서지는 지형(secret_id 가 있는 발판 — 비밀 벽·비밀 천장·금 간 벽)의 사각형들 (node 기준 좌표).
+## 방에 들어올 때 이미 부서진 것(Progress 에 남은 것)은 뺀다.
+static func unbroken_breakables(node: Node2D) -> Array:
+	var out := []
+	var parent := node.get_parent() if node else null
+	if parent == null:
+		return out
+	var prog := node.get_node_or_null("/root/Progress")
+	for s in parent.get_children():
+		if s == node or not (s is Platform) or not ("secret_id" in s):
+			continue
+		if bool(s.get("_broken")):
+			continue
+		var id := str(s.get("secret_id"))
+		if id != "" and prog != null and prog.has_method("is_collected") and bool(prog.is_collected(id)):
+			continue
+		out.append(Rect2((s as Node2D).global_position - node.global_position, s.size))
+	return out
+
+
+## x 에서 아랫면(높이 y) 바로 밑이 안 부서진 부서지는 지형에 덮였으면 그 사각형의 오른끝 x, 아니면 −INF
+func _break_below(x: float, y: float) -> float:
+	for r in _breaks:
+		var rr: Rect2 = r
+		if absf(rr.position.y - y) <= 8.0 and x >= rr.position.x - 1.0 and x <= rr.end.x + 1.0:
+			return rr.end.x
+	return -INF
+
+
+## x 오른쪽으로 아랫면(높이 y) 밑에 처음 나오는 안 부서진 부서지는 지형의 왼끝 x (없으면 INF)
+func _break_after(x: float, y: float) -> float:
+	var best := INF
+	for r in _breaks:
+		var rr: Rect2 = r
+		if absf(rr.position.y - y) <= 8.0 and rr.position.x > x:
+			best = minf(best, rr.position.x)
+	return best
 
 
 ## 그 자리가 다른 지형에 덮였거나 방 밖인가 (장식을 그리지 않을 곳)
@@ -513,7 +642,7 @@ func fill_polygon(poly: PackedVector2Array, vertical: bool, shade: Callable) -> 
 	for p in poly:
 		bb = bb.expand(p)
 	if _has_room:
-		bb = bb.intersection(_room_box)
+		bb = bb.intersection(_fill_box)
 		if bb.size.x <= 0.0 or bb.size.y <= 0.0:
 			return
 	var gpos := host.global_position
@@ -640,7 +769,8 @@ func branch_run(xa: float, xb: float, y_at: Callable, left_free: bool, right_fre
 	# 이어 붙이기: 정한 조각 / 통나무 / (판이 안 맞으면) 가지
 	if forced == "" and not solid_log and skin.has_role("branch"):
 		names = skin.list("branch")
-	_chain(names, xa, xb, y_at, left_free, right_free, thick, tuck_l, tuck_r, avoid)
+		role = "branch"
+	_chain(names, xa, xb, y_at, left_free, right_free, thick, tuck_l, tuck_r, avoid, role)
 	pick_w = w
 
 
@@ -727,10 +857,18 @@ func _fit_single(names: Array, w: float, thick: float, avoid := []) -> Dictionar
 
 ## 같은 가지에서 왼끝 + 가운데 토막들 + 오른끝을 이어 붙인다 (긴 발판, 또는 끝이 이웃에 붙은 발판).
 ## avoid: 가까이 쌓인 같은 크기 이웃의 [조각, 뒤집기] (다른 조각을 고르고, 같은 조각뿐이면 반대로 뒤집는다)
-func _chain(names: Array, xa: float, xb: float, y_at: Callable, left_free: bool, right_free: bool, thick: float, tuck_l := false, tuck_r := false, avoid := []) -> void:
-	# 걷는 구간이 긴 가지들 중에서 고른다
+## 이음매: 뒤 토막은 앞 토막 끝에서 OVERLAP 동안 서서히 나타나고, 앞 토막은 거기서 CHAIN_TAIL 만큼 더 이어 그리며 서서히 사라진다
+##  (뒤 토막이 이미 불투명한 자리라 두 토막이 다 있는 곳은 늘 불투명 — 뒤 토막에 없는 늘어진 뿌리·혹만 곧게 잘리지 않고 녹아 사라진다).
+## 가운데 토막은 앞 토막과 다른 구간을 고르고(같은 무늬가 줄지어 보이지 않게), 그래도 겹치면 좌우로 뒤집는다.
+## params.<역할>.chain: 이어 붙일 때 쓸 조각 목록 (없으면 걷는 구간 200px 넘는 조각 모두),
+## params.<역할>.skip: {조각: [[u0, u1], …]} 토막 경계가 가로지르지 않을 구간 (조각 px — 그림에 달린 폭포 기둥 등)
+func _chain(names: Array, xa: float, xb: float, y_at: Callable, left_free: bool, right_free: bool, thick: float, tuck_l := false, tuck_r := false, avoid := [], role := "branch") -> void:
+	# 걷는 구간이 긴 가지들 중에서 고른다 (params.<역할>.chain 이 있으면 그 목록에서)
 	var cands: Array = []
+	var only: Array = skin.param(role, "chain", [])
 	for n in names:
+		if not only.is_empty() and not only.has(n):
+			continue
 		var walk := skin.walk_of(n)
 		if walk.y - walk.x >= 200.0:
 			cands.append(n)
@@ -764,35 +902,86 @@ func _chain(names: Array, xa: float, xb: float, y_at: Callable, left_free: bool,
 	pick_flip = flip
 	var lcap := right_free if flip else left_free
 	var rcap := left_free if flip else right_free
-	var segs := _plan(a, b, k, walk, size.x, cap, lcap, rcap, walk.x + cap * 0.5, walk.y - cap * 0.5, 220.0, 420.0)
+	var skip: Array = (skin.param(role, "skip", {}) as Dictionary).get(name, [])
+	var prev := [-INF, 0.0, false]
+	var pick_win := func(lo: float, span: float, lu: float) -> Array:
+		return _chain_window(lo, span, lu, prev, skip, OVERLAP / k, CHAIN_TAIL / k)
+	var segs := _plan(a, b, k, walk, size.x, cap, lcap, rcap, walk.x + cap * 0.5, walk.y - cap * 0.5, 220.0, 420.0, OVERLAP, pick_win)
 	for i in segs.size():
 		var sg: Array = segs[i]
+		var u0: float = sg[0]
+		var u1: float = sg[1]
+		var mir: bool = sg.size() > 3 and bool(sg[3])
 		var x0: float = sg[2]
-		var x1: float = x0 + (sg[1] - sg[0]) * k
+		var x1: float = x0 + (u1 - u0) * k
 		var opts := {}
 		if left_free:
 			opts["clip_l"] = xa
 		if right_free:
 			opts["clip_r"] = xb
-		var sx0 := a + b - x1 if flip else x0
-		var sx1 := a + b - x0 if flip else x1
 		if i > 0:
 			opts["fade_r" if flip else "fade_l"] = OVERLAP
+		# 이음 꼬리 (위 설명): 뒤 토막들이 덮는 곳 안에서만 — 뒤 토막은 저마다 앞 토막이 불투명한 곳에서 나타나므로 x1 부터 마지막 토막 끝까지
+		# 빈틈없이 불투명하다 (드러난 끝 밖은 뒤 토막과 똑같이 clip 이 자른다). 조각 밖으로는 나가지 않게.
+		if i < segs.size() - 1:
+			var next_end := -INF
+			for j in range(i + 1, segs.size()):
+				var nx: Array = segs[j]
+				next_end = maxf(next_end, float(nx[2]) + (float(nx[1]) - float(nx[0])) * k)
+			var room_u := (u0 if mir else size.x - u1) * k
+			var tail := minf(CHAIN_TAIL, minf(next_end - x1 - 4.0, room_u))
+			chain_tails.append(maxf(tail, 0.0))
+			if tail > 4.0:
+				if mir:
+					u0 -= tail / k
+				else:
+					u1 += tail / k
+				x1 += tail
+				opts["fade_l" if flip else "fade_r"] = tail
+		var sx0 := a + b - x1 if flip else x0
+		var sx1 := a + b - x0 if flip else x1
 		# 이웃 지형에 덮인 끝: 이웃 속으로 밀어 넣은 TUCK 만큼 서서히 사라진다 (몸통은 맨 아래 겹이라 그대로면 이웃 위에 잘린 끝이 보인다)
 		if tuck_l and sx0 <= a + 1.0:
 			opts["fade_l"] = maxf(float(opts.get("fade_l", 0.0)), TUCK)
 		if tuck_r and sx1 >= b - 1.0:
 			opts["fade_r"] = maxf(float(opts.get("fade_r", 0.0)), TUCK)
-		if flip:
-			piece(name, sg[0], sg[1], sx0, sx1, y_at, k, true, opts)
-		else:
-			piece(name, sg[0], sg[1], x0, x1, y_at, k, false, opts)
+		piece(name, u0, u1, sx0, sx1, y_at, k, flip != mir, opts)
 
 
-## 이어 붙일 토막 계획: [[u0, u1, 놓일 x0], …]. 발 딛는 선이 a..b 를 빈틈없이 덮고, 토막끼리 OVERLAP 만큼 겹친다.
+## 이어 붙이는 가운데 토막의 구간 고르기 → [시작 u, 뒤집기]. 몇 번 뽑아 가장 나은 것:
+##  앞 토막과 같은 구간일수록 나쁘고(무늬가 줄지어 보인다), 토막 경계(나타나는 zin · 사라지는 zout 구간, 조각 px)가 skip 구간을 가로지르면 나쁘다.
+##  고른 구간이 앞 토막과 절반 넘게 겹치면 앞 토막과 반대로 뒤집는다. prev = [앞 시작 u, 앞 길이, 앞 뒤집기] (고른 값으로 바뀐다)
+func _chain_window(lo: float, span: float, lu: float, prev: Array, skip: Array, zin: float, zout: float) -> Array:
+	var hi0 := maxf(lo, lo + span - lu)
+	var best := lo
+	var best_cost := INF
+	var best_ov := 0.0
+	for t in 6:
+		var s0 := _rng.randf_range(lo, hi0)
+		var ov := 0.0
+		if float(prev[0]) > -INF:
+			ov = maxf(0.0, minf(s0 + lu, float(prev[0]) + float(prev[1])) - maxf(s0, float(prev[0]))) / maxf(lu, 1.0)
+		var cost := ov + _rng.randf() * 0.05
+		for r in skip:
+			var r0 := float(r[0])
+			var r1 := float(r[1])
+			if (s0 < r1 and s0 + zin > r0) or (s0 + lu - 2.0 < r1 and s0 + lu + zout > r0):
+				cost += 2.0
+		if cost < best_cost:
+			best_cost = cost
+			best = s0
+			best_ov = ov
+	var mir := best_ov > 0.5 and not bool(prev[2])
+	prev[0] = best
+	prev[1] = lu
+	prev[2] = mir
+	return [best, mir]
+
+
+## 이어 붙일 토막 계획: [[u0, u1, 놓일 x0(, 뒤집기)], …]. 발 딛는 선이 a..b 를 빈틈없이 덮고, 토막끼리 OVERLAP 만큼 겹친다.
 ##  lcap: 왼끝 조각(조각의 0 ~ walk.x+cap, walk.x 가 a 에 옴) / rcap: 오른끝 조각(walk.y-cap ~ 끝, walk.y 가 b 에 옴)
-##  가운데 토막은 lo..hi(조각 px) 안에서 길이 len_min~len_max 로 무작위로 고른다.
-func _plan(a: float, b: float, k: float, walk: Vector2, full_w: float, cap: float, lcap: bool, rcap: bool, lo: float, hi: float, len_min: float, len_max: float, ov := OVERLAP) -> Array:
+##  가운데 토막은 lo..hi(조각 px) 안에서 길이 len_min~len_max 로 무작위로 고른다 (pick_win 이 있으면 그것이 [시작 u, 뒤집기]를 고른다).
+func _plan(a: float, b: float, k: float, walk: Vector2, full_w: float, cap: float, lcap: bool, rcap: bool, lo: float, hi: float, len_min: float, len_max: float, ov := OVERLAP, pick_win := Callable()) -> Array:
 	var segs: Array = []
 	var cur := a
 	var first := true
@@ -813,9 +1002,16 @@ func _plan(a: float, b: float, k: float, walk: Vector2, full_w: float, cap: floa
 		lw = minf(lw, span * k)
 		if lw > need:
 			lw = need
+		# 이어 붙인 가지: 구간 폭에 막혀 남은 길이가 아주 짧으면(마지막 토막이 겹침뿐이 되어 앞 토막 꼬리가 들어갈 자리가 없다) 이 토막을 줄여 넉넉히 남긴다
+		if pick_win.is_valid() and need - lw > 0.5 and need - lw < len_min * k * 0.4:
+			lw = maxf(need - len_min * k * 0.4, minf(need, ov + 8.0))
 		var lu := lw / k
-		var s0 := _rng.randf_range(lo, maxf(lo, lo + span - lu))
-		segs.append([s0, s0 + lu, start])
+		if pick_win.is_valid():
+			var w: Array = pick_win.call(lo, span, lu)
+			segs.append([float(w[0]), float(w[0]) + lu, start, bool(w[1])])
+		else:
+			var s0 := _rng.randf_range(lo, maxf(lo, lo + span - lu))
+			segs.append([s0, s0 + lu, start])
 		cur = start + lw
 		first = false
 	if rcap:
@@ -910,6 +1106,16 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 			polys = next
 	for pp in polys:
 		fill_polygon(pp, vertical, shade)
+	# 1a) 방 경계 밖 치마 (그림만, 충돌 없음): 경계에 닿은 사각형 덩어리는 그쪽으로 SKIRT px 더 — 자기 가장자리 밝기에서 깊은 곳 밝기로
+	if _has_room and _is_axis_rect(poly):
+		var own := Rect2(poly[0], Vector2.ZERO)
+		for p in poly:
+			own = own.expand(p)
+		var skirt_shade := func(p: Vector2) -> float:
+			var q := p.clamp(own.position, own.end)
+			return lerpf(float(shade.call(q)), deep_b, smoothstep(0.0, SKIRT_FADE, p.distance_to(q)))
+		for sk in _skirts(own):
+			fill_polygon(sk, vertical, skirt_shade)
 	# 1b) 벽·기둥·천장 (그 역할 조각이 있는 그림 옷만 — 아래 '벽·천장·기둥' 묶음). 바닥 띠·매단 장식이 그 위에 얹힌다.
 	#     pillar: 세로로 긴 장식 덩어리 전체를 기둥 그림으로 감싼다 (감싼 덩어리에는 wall 을 따로 세우지 않는다)
 	#     wall: 드러난 높은 옆면을 따라 세로로 / ceiling: 드러난 아랫면을 따라 가로로
@@ -951,6 +1157,46 @@ func build_mass(poly: PackedVector2Array, decorate: bool, vertical: bool) -> voi
 					_hang_at(Vector2(top_pt.x + nrm.x * 6.0, y), nrm.x, _rng.randf_range(0.6, 0.85))
 				first = false
 				y += _rng.randf_range(260.0, 480.0)
+
+
+## 방 경계 밖 치마 사각형들 (노드 기준): 사각형 r 의 변이 방 경계에 닿았고(경계 밖으로 나가 있어도) 그 바깥이 이웃 지형에 덮이지 않았으면
+## 그쪽으로 경계 + SKIRT 까지, 두 변이 다 그러면 그 모서리도. 이웃이 이어지는 쪽(바닥 옆의 벽 등)은 깔지 않는다 — 겹친 치마끼리 밝기가 달라 보이지 않게.
+func _skirts(r: Rect2) -> Array:
+	var b := _room_exact
+	var free_side := func(a: Vector2, c: Vector2) -> bool:
+		for t in [0.2, 0.5, 0.8]:
+			if TerrainStyle.is_covered(_shapes, a.lerp(c, t)):
+				return false
+		return true
+	var l: bool = r.position.x <= b.position.x + 2.0 and free_side.call(Vector2(r.position.x - OUT, r.position.y), Vector2(r.position.x - OUT, r.end.y))
+	var rt: bool = r.end.x >= b.end.x - 2.0 and free_side.call(Vector2(r.end.x + OUT, r.position.y), Vector2(r.end.x + OUT, r.end.y))
+	var t: bool = r.position.y <= b.position.y + 2.0 and free_side.call(Vector2(r.position.x, r.position.y - OUT), Vector2(r.end.x, r.position.y - OUT))
+	var bt: bool = r.end.y >= b.end.y - 2.0 and free_side.call(Vector2(r.position.x, r.end.y + OUT), Vector2(r.end.x, r.end.y + OUT))
+	var x0 := minf(b.position.x - SKIRT, r.position.x)
+	var x1 := maxf(b.end.x + SKIRT, r.end.x)
+	var y0 := minf(b.position.y - SKIRT, r.position.y)
+	var y1 := maxf(b.end.y + SKIRT, r.end.y)
+	var out := []
+	var add := func(ax: float, ay: float, bx: float, by: float) -> void:
+		if bx - ax > 0.5 and by - ay > 0.5:
+			out.append(PackedVector2Array([Vector2(ax, ay), Vector2(bx, ay), Vector2(bx, by), Vector2(ax, by)]))
+	if l:
+		add.call(x0, r.position.y, r.position.x, r.end.y)
+	if rt:
+		add.call(r.end.x, r.position.y, x1, r.end.y)
+	if t:
+		add.call(r.position.x, y0, r.end.x, r.position.y)
+	if bt:
+		add.call(r.position.x, r.end.y, r.end.x, y1)
+	if l and t:
+		add.call(x0, y0, r.position.x, r.position.y)
+	if rt and t:
+		add.call(r.end.x, y0, x1, r.position.y)
+	if l and bt:
+		add.call(x0, r.end.y, r.position.x, y1)
+	if rt and bt:
+		add.call(r.end.x, r.end.y, x1, y1)
+	return out
 
 
 # ---------------------------------------------------------------- 벽·천장·기둥 (세로·가로로 이어 까는 조각)
@@ -1423,7 +1669,14 @@ func _hang_run(a: Vector2, b: Vector2, density: float) -> void:
 	var gap := float(skin.param("hang", "gap", 1.0))
 	while x < b.x - 30.0:
 		var y := lerpf(a.y, b.y, clampf((x - a.x) / maxf(len, 1.0), 0.0, 1.0))
-		var w := _hang_at(Vector2(x, y), 0.0, _rng.randf_range(0.65, 0.95), b.x - x)
+		# 안 부서진 부서지는 지형(비밀 천장 옹이 등)이 붙은 자리는 건너뛴다 (그 앞 장식도 거기까지만)
+		if not _breaks.is_empty():
+			var skip_to := _break_below(x, y)
+			if skip_to > -INF:
+				x = skip_to + _rng.randf_range(10.0, 60.0)
+				continue
+		var max_w := minf(b.x - x, _break_after(x, y) - x - 26.0) if not _breaks.is_empty() else b.x - x   # _hang_at 은 20px 더 넓어질 수 있다
+		var w := _hang_at(Vector2(x, y), 0.0, _rng.randf_range(0.65, 0.95), max_w)
 		x += (maxf(w, 60.0) * _rng.randf_range(0.35, 0.7) + _rng.randf_range(0.0, 160.0) / density) * gap
 
 
@@ -1569,6 +1822,9 @@ func build_thorns(t: Node2D, size: Vector2, facing: int) -> void:
 				x1 += over2
 			piece(n, 0.0, ps.x, x0, x1, func(_x): return y_top, k, _rng.randf() < 0.5, {"y_off": 0.0, "mod": Color(_mod.r * m.r, _mod.g * m.g, _mod.b * m.b, 1.0)})
 			x += w * _rng.randf_range(0.45, 0.7)
-	# 아래·옆을 향한 가시: 틀을 돌려 밑동이 반대쪽 면에 붙게 한다
+	# 아래·옆을 향한 가시: 틀을 돌려 밑동이 반대쪽 면에 붙게 한다.
+	# 뒤 그림자는 그림 기준 아래로 옮겨지는데(terrain_shadow 의 offset) 돌린 틀에서는 위·옆으로 가 버리므로 드리우지 않는다.
 	transform = Thorns.frame_of(size, facing)
+	if facing != 0:
+		cast_shadow = false
 	_finish(t0)

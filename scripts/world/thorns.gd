@@ -34,7 +34,7 @@ func _ready() -> void:
 	shape.position = hr.get_center()
 	add_child(shape)
 	body_entered.connect(_on_body_entered)
-	material = preload("res://shaders/ash_purify_fore.tres")   # 앞 지형 재질 (앞뒤 가르기 — TERRAIN.md 5장)
+	material = preload("res://shaders/ash_purify_thorn.tres")   # 가시 재질 = 앞 지형 재질 + 잿빛에서도 원래 색 조금 (depth 의 thorn_keep — TERRAIN.md 5장)
 	var skin := TerrainSkin.for_node(self, style_region)
 	if skin != null and skin.has_role("thorn"):
 		_art = TerrainArt.new(skin, self)

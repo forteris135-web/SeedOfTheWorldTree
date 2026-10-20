@@ -2,7 +2,7 @@ extends StaticBody2D
 class_name Platform
 ## 지형 조각 (발판·바닥·벽·천장). 원점은 왼쪽 위, 충돌은 size 사각형 (one_way 면 아래에서 통과).
 ## 겉모습은 두 가지:
-##  - 그림 조각 지형 (지역에 그림 옷이 있으면 — 지금은 수관): TerrainArt 가 기획자 그림 조각을 이어 붙여 한 번 만든다.
+##  - 그림 조각 지형 (지역에 그림 옷이 있으면 — 지금은 41방 모두): TerrainArt 가 기획자 그림 조각을 이어 붙여 한 번 만든다.
 ##    설명서는 TERRAIN.md. 이때 아래 '코드로 그리기'(몸통·겹·색 setter)는 쓰지 않는다.
 ##  - 코드로 그리기 (그림이 아직 없는 지역): 굽은 가지 모양의 어두운 실루엣 + 나무껍질 결 + 윗면 이끼·잎 + 늘어진 덩굴.
 ##    (기획서 9장: 지형은 어두운 실루엣에 배경의 주된 색을 살짝 입히고, 윗면에 가는 빛 테두리)
@@ -247,14 +247,39 @@ func _suspicious_edge() -> PackedVector2Array:
 	var w := size.x
 	var h := size.y
 	match suspicious_face:
-		1:   # 아래 (천장의 아랫면)
-			return PackedVector2Array([Vector2(w, h), Vector2(0, h)])
+		1:   # 아래 (천장의 아랫면) — 바로 밑에 붙은 부서지는 지형(비밀 천장 옹이)이 있으면 그 폭(+여유)만
+			var span := _breakable_span_below()
+			return PackedVector2Array([Vector2(span.y, h), Vector2(span.x, h)])
 		2:   # 왼쪽
 			return PackedVector2Array([Vector2(0, h), Vector2(0, 0)])
 		3:   # 오른쪽
 			return PackedVector2Array([Vector2(w, 0), Vector2(w, h)])
 		_:   # 위
 			return PackedVector2Array([Vector2(0, 0), Vector2(w, 0)])
+
+
+## 아랫면 단서의 가로 구간 [x0, x1]: 바로 밑에 붙은 형제 부서지는 지형(secret_id — 비밀 천장 옹이)의 폭 + SPAN_PAD.
+## 그림 가지는 충돌 아래로 늘어져, 발판 전체 길이의 빛 줄이면 늘어진 뿌리 한가운데를 가로질러 옹이를 가리키지 못한다. 없으면 전체 폭.
+const SPAN_PAD := 24.0
+func _breakable_span_below() -> Vector2:
+	var lo := INF
+	var hi := -INF
+	var parent := get_parent()
+	if parent != null and is_inside_tree():
+		for s in parent.get_children():
+			if s == self or not (s is Platform) or not ("secret_id" in s):
+				continue
+			var off: Vector2 = (s as Node2D).global_position - global_position
+			if absf(off.y - size.y) > 6.0:
+				continue
+			var x0 := maxf(off.x, 0.0)
+			var x1 := minf(off.x + (s as Platform).size.x, size.x)
+			if x1 > x0:
+				lo = minf(lo, x0)
+				hi = maxf(hi, x1)
+	if lo == INF:
+		return Vector2(0.0, size.x)
+	return Vector2(maxf(lo - SPAN_PAD, 0.0), minf(hi + SPAN_PAD, size.x))
 
 
 ## 수상한 단서: 고른 면의 온기 빛(더하기 혼합) + 그 면 바깥으로 천천히 흐르는 빛 가루 몇 개.

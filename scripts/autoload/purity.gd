@@ -6,10 +6,13 @@ extends Node
 signal progress(value: float)
 signal region_changed(region: String, purified: bool)
 
-## 공용 재질: 가운데 겹(안개·잎·기록물…) / 더하기(빛) / 배경 그림(far) / 앞 지형(fore) / 앞 지형 뒤 그림자 — 정화 값(purity·center·radius·ash_lut)은 모두 함께 받는다
-const MATERIALS := [preload("res://shaders/ash_purify.tres"), preload("res://shaders/ash_purify_add.tres"), preload("res://shaders/ash_purify_far.tres"), preload("res://shaders/ash_purify_fore.tres"), preload("res://shaders/terrain_shadow.tres")]
+## 공용 재질: 가운데 겹(안개·잎·기록물…) / 더하기(빛) / 배경 그림(far) / 배경 장식(prop — 배경 그림과 같고 아지랑이를 prop_haze 만큼 더) /
+## 앞 지형(fore) / 가시(thorn — 앞 지형과 같고 잿빛에서도 원래 색을 조금 남김) / 앞 지형 뒤 그림자 — 정화 값(purity·center·radius·ash_lut)은 모두 함께 받는다
+const MATERIALS := [preload("res://shaders/ash_purify.tres"), preload("res://shaders/ash_purify_add.tres"), preload("res://shaders/ash_purify_far.tres"), preload("res://shaders/ash_purify_prop.tres"), preload("res://shaders/ash_purify_fore.tres"), preload("res://shaders/ash_purify_thorn.tres"), preload("res://shaders/terrain_shadow.tres")]
 const FAR_MAT := preload("res://shaders/ash_purify_far.tres")
+const PROP_MAT := preload("res://shaders/ash_purify_prop.tres")
 const FORE_MAT := preload("res://shaders/ash_purify_fore.tres")
+const THORN_MAT := preload("res://shaders/ash_purify_thorn.tres")
 const SHADOW_MAT := preload("res://shaders/terrain_shadow.tres")
 
 ## 지역별 정화 여부. (세이브는 14단계에서)
@@ -27,7 +30,7 @@ func is_purified(region: String) -> bool:
 	return regions.get(region, false)
 
 
-## 지역별 잿빛 색조 (data/terrain/<지역>.json 에 "ash" 팔레트가 없을 때 기본 팔레트를 이 색으로 만든다).
+## 지역별 잿빛 색조 (data/terrain/<지역>.json 에 "ash" 팔레트가 없을 때 기본 팔레트를 이 색으로 만든다 — ash_spec. 셰이더에는 넣지 않는다).
 const ASH_TINTS := {"canopy": Vector3(0.66, 0.70, 0.78), "village": Vector3(0.78, 0.72, 0.66), "mine": Vector3(0.70, 0.62, 0.58), "abyss": Vector3(0.62, 0.60, 0.76), "sap_lake": Vector3(0.60, 0.70, 0.78), "flooded_mine": Vector3(0.72, 0.60, 0.56)}
 
 
@@ -41,7 +44,6 @@ var _luts := {}
 ## 방이 시작될 때: 그 지역의 상태(와 잿빛 팔레트)를 바로 적용한다.
 func apply_region(region: String) -> void:
 	var p := 1.0 if is_purified(region) else 0.0
-	_set_param("ash_tint", ASH_TINTS.get(region, Vector3(0.66, 0.70, 0.78)))
 	_set_param("ash_lut", ash_lut(region))
 	_set_param("purity", p)
 	_set_param("radius", 0.0)
@@ -49,10 +51,12 @@ func apply_region(region: String) -> void:
 
 
 ## 앞뒤 가르기 기본값 — 아무것도 안 함. 방의 그림 옷 데이터("depth", TerrainSkin.depth_of)가 덮어쓴다 (TERRAIN.md 5장).
-##   ash / alive (정화 전 / 후): haze·haze_color·contrast·sat·value = 배경 그림, fore_contrast·fore_value·fore_sat = 앞 지형, shadow = 뒤 그림자 진하기
-##   shadow_lod (그림자 흐림, 밉맵 단계), shadow_offset [x, y] (px), shadow_color_ash / shadow_color_alive
-const DEPTH_STATE := {"haze": 0.0, "haze_color": "#cccccc", "contrast": 1.0, "sat": 1.0, "value": 1.0, "fore_contrast": 1.0, "fore_value": 1.0, "fore_sat": 1.0, "shadow": 0.0}
-const DEPTH_DEFAULT := {"shadow_lod": 3.5, "shadow_offset": [0.0, 4.0], "shadow_color_ash": "#0b0c10", "shadow_color_alive": "#0e0905"}
+##   ash / alive (정화 전 / 후): haze·haze_color·contrast·sat·value = 배경 그림, prop_haze = 배경 장식(TerrainProp)에 더 얹는 아지랑이
+##   (배경 그림보다 진한 크레인·교수대의 들보가 발판으로 보이지 않게), fore_contrast·fore_value·fore_sat = 앞 지형, shadow = 뒤 그림자 진하기
+##   shadow_lod (그림자 흐림, 밉맵 단계), shadow_offset [x, y] (px), shadow_color_ash / shadow_color_alive,
+##   thorn_keep (가시가 정화 전에도 원래 색을 남기는 비율 0~1 — 붉은 수정 가시처럼 잿빛에서 위험이 안 읽히는 지역만)
+const DEPTH_STATE := {"haze": 0.0, "haze_color": "#cccccc", "contrast": 1.0, "sat": 1.0, "value": 1.0, "prop_haze": 0.0, "fore_contrast": 1.0, "fore_value": 1.0, "fore_sat": 1.0, "shadow": 0.0}
+const DEPTH_DEFAULT := {"shadow_lod": 3.5, "shadow_offset": [0.0, 4.0], "shadow_color_ash": "#0b0c10", "shadow_color_alive": "#0e0905", "thorn_keep": 0.0}
 ## 지금 방에 넣은 값 (시험용)
 var depth := {}
 
@@ -69,15 +73,21 @@ func apply_depth(spec: Dictionary) -> void:
 			g[k] = spec[k]
 	depth = {"ash": a, "alive": b, "shared": g}
 	var v2 := func(key: String) -> Vector2: return Vector2(float(a[key]), float(b[key]))
+	for m in [FAR_MAT, PROP_MAT, FORE_MAT, THORN_MAT]:
+		m.set_shader_parameter("depth_on", true)
+	for m in [FAR_MAT, PROP_MAT]:
+		m.set_shader_parameter("haze_color_ash", _col(a["haze_color"]))
+		m.set_shader_parameter("haze_color_alive", _col(b["haze_color"]))
+		m.set_shader_parameter("contrast", v2.call("contrast"))
+		m.set_shader_parameter("sat", v2.call("sat"))
+		m.set_shader_parameter("value", v2.call("value"))
 	FAR_MAT.set_shader_parameter("haze", v2.call("haze"))
-	FAR_MAT.set_shader_parameter("haze_color_ash", _col(a["haze_color"]))
-	FAR_MAT.set_shader_parameter("haze_color_alive", _col(b["haze_color"]))
-	FAR_MAT.set_shader_parameter("contrast", v2.call("contrast"))
-	FAR_MAT.set_shader_parameter("sat", v2.call("sat"))
-	FAR_MAT.set_shader_parameter("value", v2.call("value"))
-	FORE_MAT.set_shader_parameter("contrast", v2.call("fore_contrast"))
-	FORE_MAT.set_shader_parameter("sat", v2.call("fore_sat"))
-	FORE_MAT.set_shader_parameter("value", v2.call("fore_value"))
+	PROP_MAT.set_shader_parameter("haze", Vector2(clampf(float(a["haze"]) + float(a["prop_haze"]), 0.0, 1.0), clampf(float(b["haze"]) + float(b["prop_haze"]), 0.0, 1.0)))
+	for m in [FORE_MAT, THORN_MAT]:
+		m.set_shader_parameter("contrast", v2.call("fore_contrast"))
+		m.set_shader_parameter("sat", v2.call("fore_sat"))
+		m.set_shader_parameter("value", v2.call("fore_value"))
+	THORN_MAT.set_shader_parameter("ash_keep", clampf(float(g["thorn_keep"]), 0.0, 1.0))
 	SHADOW_MAT.set_shader_parameter("strength", v2.call("shadow"))
 	SHADOW_MAT.set_shader_parameter("lod", float(g["shadow_lod"]))
 	var off: Array = g["shadow_offset"]

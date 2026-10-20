@@ -22,9 +22,9 @@
   "params": {
     "ground": {"band": 74, "fade": 46, "cap": 130, "overlap": 100, "caps": ["pool_a", "plat_a"]},
     "slab": {"max_w": 210},
-    "branch": {"thin_poly": 110},
+    "branch": {"thin_poly": 110, "chain": ["plat_long", "plat_d"], "skip": {"plat_d": [[262, 318]]}},
     "thorn": {"tint": [0.9, 0.78, 0.66], "reach_min": 0.9, "reach_max": 1.35, "sink": 22},
-    "water": {"deep": "#7aa9bf", "deep_ash": "#8a9894", "alpha": [0.14, 0.48], "alpha_ash": [0.2, 0.55], "tint": [0.86, 0.97, 1.0], "tint_ash": [0.9, 0.92, 0.9], "art_alpha": 0.4, "art_alpha_ash": 0.3, "band": 0.62, "wave_alpha": 0.5, "wave_h": 24, "line": [0.75, 0.95, 1.0]},
+    "water": {"deep": "#7aa9bf", "deep_ash": "#8a9894", "alpha": [0.14, 0.48], "alpha_ash": [0.2, 0.55], "murk": {"color": "#2a4b5c", "color_ash": "#3b4341", "top": 0.55, "full": 26}, "tint": [0.86, 0.97, 1.0], "tint_ash": [0.9, 0.92, 0.9], "art_alpha": 0.4, "art_alpha_ash": 0.3, "band": 0.62, "wave_alpha": 0.5, "wave_h": 24, "line": [0.75, 0.95, 1.0]},
     "wall": {"width": 128, "art_faces": 1, "flip_random": true, "out": 12, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.04, "v_hi": 0.96, "top_inset": 36}
   },
   "ash": {

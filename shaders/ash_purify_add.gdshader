@@ -7,9 +7,6 @@ uniform vec2 center = vec2(0.5, 0.5);
 uniform float radius = 0.0;
 uniform float softness = 0.3;
 uniform sampler2D ash_lut : filter_linear, repeat_disable;
-uniform vec3 ash_tint : source_color = vec3(0.66, 0.70, 0.78);
-uniform float ash_contrast = 0.7;
-uniform float ash_brightness = 0.82;
 
 const float ROWS = 8.0;
 

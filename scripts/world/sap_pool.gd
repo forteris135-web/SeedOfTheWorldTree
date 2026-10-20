@@ -78,6 +78,13 @@ var _waves: TerrainArt
 var _wp := {}           # params.water 를 읽어 둔 값
 var _last_look := Vector3(-1, -1, -1)
 var _phase := 0.0
+## 물 뒤 탁한 막 (params.water.murk 가 있는 그림 옷만): 지형 묶음 맨 아래(뒤 그림자보다 뒤)에 까는 RenderingServer 항목 —
+## 물 아래로 먼 배경 그림이 밝게 비쳐 돌·호수 바닥 사이가 옅은 유리 상자처럼 보이지 않게 한다 (지형 뒤라 돌·바닥은 그대로 비친다).
+var _murk_ci := RID()
+var _murk_y := INF
+const MURK_DRAW_INDEX := -300000
+var _deep_top := PackedInt32Array()      # 물빛 겹의 수면 줄 꼭짓점 (위 진하기가 정화 전·후로 달라 _tick_art 가 바꾼다)
+var _deep_top_a := PackedFloat32Array()  # 그 꼭짓점의 물가 알파
 
 
 func _ready() -> void:
@@ -142,6 +149,7 @@ func _process(delta: float) -> void:
 	_clear = lerpf(_clear, _clear_target, 1.0 - exp(-1.2 * delta))
 	if _art:
 		_art.position.y = surface_top()
+		_place_murk()
 		_tick_art()
 	queue_redraw()
 
@@ -252,6 +260,7 @@ func _build_art() -> void:
 		"wave_h": float(skin.param("water", "wave_h", 24.0)),
 		"line": _col(skin.param("water", "line", [0.75, 0.95, 1.0])),
 		"line_alpha": float(skin.param("water", "line_alpha", 0.55)),
+		"murk": skin.param("water", "murk", null),
 	}
 	_phase = fmod(global_position.x * 0.0137, TAU)
 	_art = Node2D.new()
@@ -269,6 +278,7 @@ func _build_art() -> void:
 	var water_d := maxf(floor_y - surf0, 20.0) + (FILL_RISE if region != "" else 0.0)
 	_deep = _new_art("Deep", skin, int(size.x) * 3 + 1)
 	_lay_deep(water_d, left_open, right_open)
+	_make_murk(water_d, left_open, right_open)
 	_deep._finish(t0)
 	_body = _new_art("Body", skin, int(size.x) * 7 + 3)
 	_lay_body(skin, water_d, left_open, right_open)
@@ -342,8 +352,7 @@ func _floor_below() -> float:
 ## 물빛: 수면(0)에서 water_d(바닥 윗면)까지 위가 옅고 깊을수록 진한 그라데이션, 그 아래 FLOOR_SINK px 동안 사라진다.
 ## 양 끝은 막혔으면 지형 속으로 짧게, 열렸으면(물가) SHORE_FADE px 동안 서서히. 흰색으로 만들고 색·진하기는 _tick_art 가 modulate 로 입힌다.
 func _lay_deep(water_d: float, left_open: bool, right_open: bool) -> void:
-	var al: Array = _wp["alpha"]
-	var top_a := clampf(float(al[0]) / maxf(float(al[1]), 0.01), 0.0, 1.0)
+	var top_a := _deep_top_ratio(0.0)
 	var a := -SHORE_OUT if left_open else -TUCK
 	var b := size.x + (SHORE_OUT if right_open else TUCK)
 	var fl := SHORE_FADE if left_open else TUCK + 4.0
@@ -352,6 +361,43 @@ func _lay_deep(water_d: float, left_open: bool, right_open: bool) -> void:
 	var xa := PackedFloat32Array([0.0, 1.0, 1.0, 0.0])
 	var ys := PackedFloat32Array([0.0, water_d, water_d + FLOOR_SINK])
 	var ya := PackedFloat32Array([top_a, 1.0, 0.0])
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	_deep_top = PackedInt32Array()
+	_deep_top_a = PackedFloat32Array()
+	for xi in 4:
+		for yi in 3:
+			if yi == 0:
+				_deep_top.append(pts.size())
+				_deep_top_a.append(xa[xi])
+			pts.append(Vector2(xs[xi], ys[yi]))
+			cols.append(Color(1, 1, 1, xa[xi] * ya[yi]))
+	var idx := PackedInt32Array()
+	for xi in 3:
+		for yi in 2:
+			var p := xi * 3 + yi
+			idx.append_array(PackedInt32Array([p, p + 1, p + 3, p + 1, p + 4, p + 3]))
+	_deep._tris(TerrainArt.BUF_PLAIN, pts, PackedVector2Array(), cols, idx)
+
+
+## 물 뒤 탁한 막 (위 _murk_ci 설명). params.water.murk = {"color": 정화 후 색, "color_ash": 정화 전 색, "top": 수면 바로 아래 진하기, "full": 다 진해지는 깊이(px)}.
+## 가로는 물빛 겹과 같은 물가 사라짐, 세로는 수면에서 top → full px 아래 1 → 바닥 윗면 아래 FLOOR_SINK 까지 (바닥 뒤라 거기서 끝나도 안 보인다).
+func _make_murk(water_d: float, left_open: bool, right_open: bool) -> void:
+	_free_murk()
+	var mk = _wp.get("murk", null)
+	var terrain := _terrain()
+	if not (mk is Dictionary) or not (terrain is CanvasItem):
+		return
+	var top_a := clampf(float(mk.get("top", 0.4)), 0.0, 1.0)
+	var full := clampf(float(mk.get("full", 30.0)), 1.0, maxf(water_d, 1.0))
+	var a := -SHORE_OUT if left_open else -TUCK
+	var b := size.x + (SHORE_OUT if right_open else TUCK)
+	var fl := SHORE_FADE if left_open else TUCK + 4.0
+	var fr := SHORE_FADE if right_open else TUCK + 4.0
+	var xs := PackedFloat32Array([a, minf(a + fl, (a + b) * 0.5), maxf(b - fr, (a + b) * 0.5), b])
+	var xa := PackedFloat32Array([0.0, 1.0, 1.0, 0.0])
+	var ys := PackedFloat32Array([0.0, full, water_d + FLOOR_SINK])
+	var ya := PackedFloat32Array([top_a, 1.0, 1.0])
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	for xi in 4:
@@ -363,7 +409,60 @@ func _lay_deep(water_d: float, left_open: bool, right_open: bool) -> void:
 		for yi in 2:
 			var p := xi * 3 + yi
 			idx.append_array(PackedInt32Array([p, p + 1, p + 3, p + 1, p + 4, p + 3]))
-	_deep._tris(TerrainArt.BUF_PLAIN, pts, PackedVector2Array(), cols, idx)
+	var rs := RenderingServer
+	_murk_ci = rs.canvas_item_create()
+	rs.canvas_item_set_parent(_murk_ci, (terrain as CanvasItem).get_canvas_item())
+	rs.canvas_item_set_draw_index(_murk_ci, MURK_DRAW_INDEX)
+	rs.canvas_item_set_material(_murk_ci, preload("res://shaders/ash_purify.tres").get_rid())
+	rs.canvas_item_add_triangle_array(_murk_ci, idx, pts, cols)
+	rs.canvas_item_set_visible(_murk_ci, is_visible_in_tree())
+	_murk_y = INF
+	_place_murk()
+
+
+## 막의 자리 (그림 수면을 따라 — 차오르면 같이 올라간다). 바뀔 때만 보낸다.
+func _place_murk() -> void:
+	if not _murk_ci.is_valid() or _art == null:
+		return
+	var terrain := _terrain()
+	if not (terrain is CanvasItem):
+		return
+	var y := _art.position.y
+	if absf(y - _murk_y) < 0.05:
+		return
+	_murk_y = y
+	var xf := (terrain as CanvasItem).get_global_transform().affine_inverse() * get_global_transform() * Transform2D(0.0, Vector2(0.0, y))
+	RenderingServer.canvas_item_set_transform(_murk_ci, xf)
+
+
+func _free_murk() -> void:
+	if _murk_ci.is_valid():
+		RenderingServer.free_rid(_murk_ci)
+	_murk_ci = RID()
+
+
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_EXIT_TREE, NOTIFICATION_PREDELETE:
+			_free_murk()
+		NOTIFICATION_VISIBILITY_CHANGED:
+			if _murk_ci.is_valid():
+				RenderingServer.canvas_item_set_visible(_murk_ci, is_visible_in_tree())
+
+
+## 시험용: 물 뒤 탁한 막이 있는가
+func has_murk() -> bool:
+	return _murk_ci.is_valid()
+
+
+## 물빛 겹의 위 진하기 ÷ 깊은 곳 진하기 (정화 정도 c 에서) — alpha / alpha_ash 의 [위, 아래] 를 그대로 따른다.
+## 깊은 곳 진하기는 modulate.a 가, 위는 이 비율 × modulate.a 가 된다.
+func _deep_top_ratio(c: float) -> float:
+	var aa: Array = _wp["alpha_ash"]
+	var al: Array = _wp["alpha"]
+	var r_ash := clampf(float(aa[0]) / maxf(float(aa[1]), 0.01), 0.0, 1.0)
+	var r_al := clampf(float(al[0]) / maxf(float(al[1]), 0.01), 0.0, 1.0)
+	return lerpf(r_ash, r_al, c)
 
 
 ## 결: water 조각들의 가운데 토막(조각 양 끝의 비탈은 피함)을 이어 깐다. 조각의 위(수면 테두리)~band 까지만 쓰고
@@ -451,6 +550,19 @@ func _tick_art() -> void:
 			d = d.lightened(0.08)
 			c = c.lightened(0.08)
 		_deep.modulate = Color(d.r, d.g, d.b, lerpf(float(aa[1]), float(al[1]), _clear))
+		# 위 진하기: 정화 전 alpha_ash[0] → 정화 후 alpha[0] (꼭짓점 몇 개만 바꿔 다시 그린다 — 바뀔 때만)
+		var buf: Dictionary = _deep._bufs[TerrainArt.BUF_PLAIN]
+		var cols: PackedColorArray = buf["cols"]
+		var ta := _deep_top_ratio(_clear)
+		for j in _deep_top.size():
+			if _deep_top[j] < cols.size():
+				cols[_deep_top[j]] = Color(1, 1, 1, _deep_top_a[j] * ta)
+		buf["cols"] = cols
+		_deep.queue_redraw()
+		if _murk_ci.is_valid():
+			var mk: Dictionary = _wp["murk"]
+			var mc := _col(mk.get("color_ash", "#3c4644")).lerp(_col(mk.get("color", "#2c5266")), _clear)
+			RenderingServer.canvas_item_set_modulate(_murk_ci, Color(mc.r, mc.g, mc.b, 1.0))
 		_body.modulate = Color(c.r, c.g, c.b, lerpf(float(_wp["art_alpha_ash"]), float(_wp["art_alpha"]), _clear))
 		if _waves:
 			_waves.modulate = Color(1, 1, 1, float(_wp["wave_alpha"]) * (0.7 + 0.3 * _clear))

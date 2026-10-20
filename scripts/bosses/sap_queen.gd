@@ -654,7 +654,8 @@ func _sink_stones() -> void:
 			continue
 		var tw := create_tween()
 		tw.tween_property(s, "position:y", _stone_home[s].y + 220.0, 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-		tw.parallel().tween_property(s, "modulate:a", 0.0, 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)   # 그림: 호수 바닥 속에 비치지 않게
+		# 그림: 호수 바닥 속에 비치지 않게 — 몸통 결·뒤 그림자(묶음 맨 아래 겹)도 함께 (TerrainArt.set_host_alpha)
+		tw.parallel().tween_method(func(a: float) -> void: TerrainArt.set_host_alpha(a, s), 1.0, 0.0, 1.4).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 		tw.tween_callback(func() -> void:
 			if is_instance_valid(s):
 				s.collision_layer = 0
@@ -668,7 +669,7 @@ func _raise_stones() -> void:
 			continue
 		s.position = _stone_home[s]
 		s.collision_layer = 1
-		s.modulate.a = 1.0
+		TerrainArt.set_host_alpha(1.0, s)
 		s.visible = true
 
 

@@ -24,7 +24,7 @@ extends Node
 ##        드러난 충돌 끝 밖 발 높이에 그림이 OVERHANG_MAX 넘게 남지 않음, 몸통 결은 묶음 맨 아래 겹, 가시 그림이 판정을 덮고 끝이 0.5h 넘게 솟지 않음.
 ##        (그림 픽셀을 직접 찾아본다: 삼각형 → UV → atlas 알파)
 ##     c) 그림 옷을 끈 방과 켠 방의 충돌 모양(지형·가시·웅덩이)이 똑같다.
-##     d) 가시 네 방향(가로·세로 상자) — 그림 상자·판정 자리. e) 비용: 방에 들어올 때 한 번(평균 60ms 미만), 노드 하나 그리기 호출 4번 이하,
+##     d) 가시 네 방향(가로·세로 상자) — 그림 상자·판정 자리. e) 비용: 방에 들어올 때 한 번(평균 60ms 미만), 노드 하나 그리기 명령(자기 2·묶음 3, 합 5) 이하,
 ##        정화 연출 프레임에 다시 만들지 않음. f) 잿빛 표(지역마다, 모든 줄 밝기 순서, 옛 셰이더보다 어둡지 않음, 데이터 파일에서).
 ##     g) 금 간 벽·비밀 천장 단계·부서짐, 기록물 그림. h) 수액 웅덩이: 물 그림·비침·물가·수면·아래끝, 판정 그대로.
 ##     i) 지역마다 따로 정한 것: 마을 흔들다리 조각, 벽·천장 조각, 심연 room_skins·통나무·어두운 방 작은 빛·장식 달빛풀·잿빛 색, 호수 배경.
@@ -675,6 +675,139 @@ func _probe_art() -> void:
 	await _probe_record()
 	await _probe_pools(ids)
 	await _probe_region_extras()
+	await _probe_review_fixes(ids)
+
+
+## j) 검토 반영 (2026-10-20): 가지 이음매 꼬리, 방 경계 밖 치마, 호수 물 뒤 탁한 막·정화 전 위 진하기, 뒤 그림자 스위치,
+##    방별 값 차례, 비밀 천장 옹이 위 매단 장식 없음, 아랫면 단서 폭
+func _probe_review_fixes(ids: Array) -> void:
+	var joins := 0
+	var short_tails := []
+	var skirt_bad := []
+	var skirts := 0
+	var murk_bad := []
+	var top_bad := []
+	var regions_before: Dictionary = Purity.regions.duplicate()
+	for id in ids:
+		Purity.regions[_region_of_room(id)] = false
+		var room := await _load_room(id)
+		var bounds: Rect2 = room.get("bounds")
+		var terrain := room.get_node("Terrain")
+		var shapes := []
+		for t in terrain.get_children():
+			if t is Platform:
+				shapes.append(Rect2((t as Node2D).global_position, t.size))
+		for t in terrain.get_children():
+			var art = t.get("_art")
+			if not (art is TerrainArt):
+				continue
+			# 가지 이음매: 앞 토막이 뒤 토막 아래로 꼬리를 남기며 사라진다 (곧게 잘린 세로 자국이 없다)
+			for tl in (art as TerrainArt).chain_tails:
+				joins += 1
+				if tl < 20.0:
+					short_tails.append("%s/%s %.0f" % [id, t.name, tl])
+			# 치마: 방 경계 아래에 닿은 사각형 덩어리(밑이 비었으면)는 몸통 결이 경계 + SKIRT 까지
+			if t is Platform and not t._is_thin() and t.get_script() == Platform:
+				var r := Rect2((t as Node2D).global_position, t.size)
+				var below := Vector2(r.get_center().x, r.end.y + 8.0)
+				var free := true
+				for sh in shapes:
+					if (sh as Rect2) != r and (sh as Rect2).has_point(below):
+						free = false
+				if r.end.y >= bounds.end.y - 2.0 and free:
+					var ymax := -INF
+					for bi in [TerrainArt.BUF_FILL, TerrainArt.BUF_FILL_V]:
+						for q in ((art as TerrainArt)._bufs[bi]["pts"] as PackedVector2Array):
+							ymax = maxf(ymax, q.y + r.position.y)
+					skirts += 1
+					if ymax < bounds.end.y + TerrainArt.SKIRT - 1.0:
+						skirt_bad.append("%s/%s 몸통 아래끝 %.0f < %.0f" % [id, t.name, ymax, bounds.end.y + TerrainArt.SKIRT])
+		# 웅덩이: 물 뒤 탁한 막은 그림 옷의 params.water.murk 가 있을 때만, 정화 전 위 진하기 = alpha_ash[0]
+		for pool in room.find_children("*", "SapPool", true, false):
+			var skin := TerrainSkin.for_node(pool)
+			if skin == null or not skin.has_role("water"):
+				continue
+			var want := skin.param("water", "murk", null) is Dictionary
+			if pool.has_murk() != want:
+				murk_bad.append("%s/%s 막 %s (데이터 %s)" % [id, pool.name, pool.has_murk(), want])
+			var deep: TerrainArt = pool.get("_deep")
+			var aa: Array = skin.param("water", "alpha_ash", [0.32, 0.74])
+			var dcols: PackedColorArray = deep._bufs[TerrainArt.BUF_PLAIN]["cols"]
+			var dpts: PackedVector2Array = deep._bufs[TerrainArt.BUF_PLAIN]["pts"]
+			var d_top := 0.0
+			for i in dpts.size():
+				if absf(dpts[i].y) < 0.5:
+					d_top = maxf(d_top, dcols[i].a)
+			if absf(d_top * deep.modulate.a - float(aa[0])) > 0.01:
+				top_bad.append("%s/%s 위 %.3f ≠ %.3f" % [id, pool.name, d_top * deep.modulate.a, float(aa[0])])
+		await _free_room(room)
+	_check(joins > 20 and short_tails.is_empty(), "가지 이음매 %d곳: 앞 토막이 뒤 토막 아래로 20px 넘게 이어지며 사라진다 (곧게 잘린 자국 없음) %s" % [joins, short_tails.slice(0, 6)])
+	_check(skirts > 10 and skirt_bad.is_empty(), "방 경계 아래에 닿은 덩어리 %d곳: 몸통 결이 경계 + %.0fpx 까지 (화면이 방보다 커도 배경 띠가 안 보임) %s" % [skirts, TerrainArt.SKIRT, skirt_bad.slice(0, 6)])
+	_check(murk_bad.is_empty() and top_bad.is_empty(), "웅덩이: 물 뒤 탁한 막은 데이터대로(호수), 정화 전 물빛 위 진하기 = alpha_ash[0] %s %s" % [murk_bad.slice(0, 4), top_bad.slice(0, 4)])
+	# 뒤 그림자 스위치: 끄면 그림자 항목을 아예 만들지 않는다
+	TerrainArt.shadows_enabled = false
+	var room2 := await _load_room("canopy_01")
+	var any_shadow := false
+	for a in room2.find_children("*", "TerrainArt", true, false):
+		if (a as TerrainArt).has_shadow():
+			any_shadow = true
+	await _free_room(room2)
+	TerrainArt.shadows_enabled = null
+	_check(not any_shadow and TerrainArt.shadows_on(), "뒤 그림자 스위치(data/terrain/_settings.json shadows): 끄면 그림자 항목을 만들지 않고, 파일 값(켬)으로 돌아온다")
+	# 방별 값 차례: room_skins 가 있는 방도 지역 그림 옷의 room_depth 가 마지막
+	var abyss := TerrainSkin.for_region("abyss")
+	var garden: Node = load("res://scenes/rooms/moon_garden.tscn").instantiate()
+	var rd: Dictionary = abyss.data.get("room_depth", {})
+	var had := rd.duplicate(true)
+	rd["moon_garden"] = {"ash": {"haze": 0.45}}
+	abyss.data["room_depth"] = rd
+	var hz := float((TerrainSkin.depth_of(garden).get("ash", {}) as Dictionary).get("haze", -1.0))
+	abyss.data["room_depth"] = had
+	garden.free()
+	_check(absf(hz - 0.45) < 0.001, "방별 값 차례: 지역 그림 옷의 room_depth 가 방 그림 옷(room_skins)의 depth 보다 나중 (달빛 정원 아지랑이 %.2f)" % hz)
+	# 비밀 천장 옹이: 위 기둥의 아랫면에 매단 장식(잎 줄)이 옹이 위에 걸리지 않는다 / 아랫면 단서는 옹이 폭으로
+	var hang_bad := []
+	for id in ["canopy_06", "canopy_03", "canopy_07"]:
+		Purity.regions["canopy"] = false
+		var room3 := await _load_room(id)
+		var terrain3 := room3.get_node("Terrain")
+		for c in terrain3.get_children():
+			if not (c is SecretCeiling):
+				continue
+			var kr := Rect2((c as Node2D).global_position, c.size)
+			for t in terrain3.get_children():
+				var art = t.get("_art")
+				if t == c or not (t is Platform) or not (art is TerrainArt) or t._is_thin():
+					continue
+				var r := Rect2((t as Node2D).global_position, t.size)
+				if absf(r.end.y - kr.position.y) > 6.0 or r.end.x <= kr.position.x or r.position.x >= kr.end.x:
+					continue
+				var tris := _atlas_tris(art)
+				var hit := 0
+				var n := 0
+				var x := kr.position.x + 12.0
+				while x < kr.end.x - 12.0:
+					n += 1
+					if _alpha_at(tris, Vector2(x, kr.position.y + 14.0) - (t as Node2D).global_position) > 0.5:
+						hit += 1
+					x += 8.0
+				if n > 0 and hit > n / 4:
+					hang_bad.append("%s/%s 옹이 위 그림 %d/%d" % [id, t.name, hit, n])
+		if id == "canopy_07":
+			var u1: Platform = terrain3.get_node("U1")
+			var edge: PackedVector2Array = u1._suspicious_edge()
+			var len := absf(edge[0].x - edge[1].x)
+			_check(len <= 200.0 + 2.0 * Platform.SPAN_PAD + 1.0 and len >= 200.0, "아랫면 수상한 단서는 밑에 붙은 비밀 천장 옹이 폭(+여유)만 (canopy_07 U1 %.0fpx, 발판 %.0fpx)" % [len, u1.size.x])
+		await _free_room(room3)
+	_check(hang_bad.is_empty(), "비밀 천장 옹이 위(안 부서졌을 때)에 위 덩어리의 매단 장식이 걸리지 않는다 %s" % [hang_bad])
+	Purity.regions = regions_before
+
+
+func _region_of_room(id: String) -> String:
+	for r in ART_REGIONS:
+		if _rooms_of_region(r).has(id):
+			return r
+	return ""
 
 
 ## 그림 옷 지역의 방 이름 전부 (지역 순)
@@ -771,8 +904,8 @@ func _probe_art_rooms(ids: Array) -> void:
 			# 앞뒤 가르기: 앞 지형 재질, 조각이 있으면 뒤 그림자
 			if t.material != FORE_MAT:
 				depth_bad.append("%s 앞 지형 재질 아님" % nm)
-			if (art._bufs[TerrainArt.BUF_ATLAS]["idx"] as PackedInt32Array).size() >= 3 and not art.has_shadow():
-				depth_bad.append("%s 뒤 그림자 없음" % nm)
+			if (art._bufs[TerrainArt.BUF_ATLAS]["idx"] as PackedInt32Array).size() >= 3 and art.has_shadow() != art.shadow_wanted():
+				depth_bad.append("%s 뒤 그림자 %s (있어야 하는가 %s)" % [nm, art.has_shadow(), art.shadow_wanted()])
 			# 한쪽 방향 발판의 빛 점선 단서
 			if t is Platform and t.one_way and (art._bufs[TerrainArt.BUF_PLAIN]["idx"] as PackedInt32Array).size() < 6:
 				dash_bad.append(nm)
@@ -865,6 +998,7 @@ func _probe_art_rooms(ids: Array) -> void:
 
 
 const FAR_MAT := preload("res://shaders/ash_purify_far.tres")
+const PROP_MAT := preload("res://shaders/ash_purify_prop.tres")
 const FORE_MAT := preload("res://shaders/ash_purify_fore.tres")
 const SHADOW_MAT := preload("res://shaders/terrain_shadow.tres")
 
@@ -877,7 +1011,7 @@ func _depth_issues(id: String, room: Node) -> Array:
 		if n.get_script() == preload("res://scripts/world/art_backdrop.gd") and n.material != FAR_MAT:
 			out.append("%s/%s 배경 그림 재질 아님" % [id, n.name])
 	for n in room.find_children("*", "Node2D", true, false):
-		if (n is TerrainProp or n is Waterwheel) and n.material != FAR_MAT:
+		if (n is TerrainProp and n.material != PROP_MAT) or (n is Waterwheel and n.material != FAR_MAT):
 			out.append("%s/%s 배경 장식 재질 아님" % [id, n.name])
 	for pool in room.find_children("*", "SapPool", true, false):
 		for a in pool.find_children("*", "TerrainArt", true, false):
@@ -1243,12 +1377,11 @@ func _probe_art_cost(ids: Array) -> void:
 		for t in room.get_node("Terrain").get_children():
 			var art: TerrainArt = t.get_node_or_null("Art")
 			if art:
-				var bufs := 0
-				for bb in art._bufs:
-					if (bb["idx"] as PackedInt32Array).size() >= 3:
-						bufs += 1
-				if bufs > 4:
-					calls_bad.append("%s/%s" % [id, t.name])
+				# 실제로 보내는 그리기 명령: 자기 항목(조각·색 — 몸통 결이 묶음에 있으면 2개까지) + 묶음 항목(몸통 결·세로 결·뒤 그림자 3개까지)
+				var dc: Dictionary = art.draw_call_count()
+				var own_max := 2 if art.fill_in_layer() else 4
+				if int(dc["own"]) > own_max or int(dc["group"]) > 3 or int(dc["own"]) + int(dc["group"]) > 5:
+					calls_bad.append("%s/%s %s" % [id, t.name, dc])
 		if id == "canopy_01":
 			# 정화 연출 프레임: Room 이 테두리 색·몸통 색을 바꿔도 다시 만들지 않는다
 			var b0 := TerrainArt.build_count
@@ -1263,7 +1396,7 @@ func _probe_art_cost(ids: Array) -> void:
 	var avg := sum / maxf(ids.size(), 1)
 	_check(avg < 60.0, "그림 지형 만들기: 방 하나 평균 %.1fms < 60ms (가장 긴 %s %.1fms)" % [avg, worst_id, worst])
 	_check(tri_max < 40000, "방 하나 삼각형 %d개 < 40000 (아이폰 11 Pro 에 넉넉함)" % tri_max)
-	_check(calls_bad.is_empty(), "노드 하나에 그리기 호출 4번 이하 %s" % [calls_bad])
+	_check(calls_bad.is_empty(), "노드 하나의 그리기 명령: 자기 항목 2개(몸통 결이 묶음에 없으면 4개) · 묶음 항목 3개 · 합 5개 이하 %s" % [calls_bad.slice(0, 6)])
 
 
 ## f) 팔레트 (잿빛 표): 지역마다 64×8, 무채색 줄 밝기 순서, 옛 셰이더보다 어둡지 않음, 데이터 파일에서
