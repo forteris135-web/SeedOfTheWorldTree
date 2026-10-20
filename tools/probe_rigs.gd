@@ -38,7 +38,13 @@ func _ready() -> void:
 		_probe_enemy_fall(path, false)
 		_probe_enemy_fall(path, true)
 	if scenes.size() > 0:
-		await _probe_gun_aim(scenes[0])
+		# 진짜 대롱 몹(정원사 등)을 먼저 — 없으면 첫 뼈대 몹을 대롱 몹처럼 바꿔 본다 (예전엔 늘 잿가지 거인을 바꿔 봤다)
+		var gun_scene: String = scenes[0]
+		for path in scenes:
+			if _scene_arm_kind(path) == "gun":
+				gun_scene = path
+				break
+		await _probe_gun_aim(gun_scene)
 	_probe_cost(ids)
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
@@ -75,6 +81,21 @@ func _rig_enemy_scenes() -> Array:
 						out.append(path)
 	out.sort()
 	return out
+
+
+## 몹 씬의 Visual 노드에 적힌 arm_kind ("gun"/"sword", 안 적혔으면 "")
+func _scene_arm_kind(path: String) -> String:
+	var ps: PackedScene = load(path)
+	if ps == null:
+		return ""
+	var st := ps.get_state()
+	for i in st.get_node_count():
+		if str(st.get_node_name(i)) != "Visual":
+			continue
+		for k in st.get_node_property_count(i):
+			if st.get_node_property_name(i, k) == "arm_kind":
+				return str(st.get_node_property_value(i, k))
+	return ""
 
 
 ## EnemyRigVisual 이거나 그것을 이은 그림 스크립트인가 (기계·어부처럼 자기 파일에서 EnemyRigVisual 을 넓힌 몹도 검사한다)

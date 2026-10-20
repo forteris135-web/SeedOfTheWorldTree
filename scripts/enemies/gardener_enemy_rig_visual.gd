@@ -19,6 +19,8 @@ const HOP_CROUCH_AT := -0.24
 const HOP_STRETCH := 1.8
 
 var _g_hop_air := false
+var _g_walk := {}   # 물러나는 동안 잠깐 빼 둔 원래 걷기·대기 자세 (매 프레임 새 사전을 만들지 않게)
+var _g_idle := {}
 var _g_closed_eyes := false
 var _g_has_closed := false
 
@@ -44,16 +46,19 @@ func _process(delta: float) -> void:
 		motion.kick("squash", -2.2)
 	_g_hop_air = hop_air
 	# 물러남: 걷기·대기 자세를 물러남 자세로 잠깐 바꿔 끼운다 (EnemyRigVisual 이 걷기를 섞을 때 이 자세가 쓰인다)
-	var swap := {}
+	var swapped := false
 	if st == EnemyBase.State.CHASE and _enemy.velocity.x * float(_enemy.facing) < -RETREAT_SPEED:
-		var crouch: bool = on_floor and float(_enemy.get("_timer")) < HOP_CROUCH_AT
+		var crouch: bool = on_floor and _enemy.state_timer() < HOP_CROUCH_AT
 		var rp := motion.pose("retreat_crouch" if crouch else "retreat")
-		swap = {"walk": motion.poses["walk"], "idle": motion.poses["idle"]}
+		_g_walk = motion.poses["walk"]
+		_g_idle = motion.poses["idle"]
 		motion.poses["walk"] = rp
 		motion.poses["idle"] = rp
+		swapped = true
 	super._process(delta)
-	for k in swap:
-		motion.poses[k] = swap[k]
+	if swapped:
+		motion.poses["walk"] = _g_walk
+		motion.poses["idle"] = _g_idle
 	# 구원 가능한 자: 무릎 꿇고 기다리는 동안 눈을 감는다
 	if _g_has_closed:
 		var want := _enemy.savable and st == EnemyBase.State.BROKEN

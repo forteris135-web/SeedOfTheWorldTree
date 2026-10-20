@@ -69,7 +69,7 @@ func _swap_poses(delta: float) -> void:
 	if _orig.has("windup"):
 		motion.poses["windup"] = motion.poses["charge_windup"] if (st == EnemyBase.State.WINDUP and hint == "red") else _orig["windup"]
 	# 방패가 들려 열린 동안
-	var open := float(_enemy.get("_block_open") if "_block_open" in _enemy else 0.0) > 0.0
+	var open: bool = _enemy.is_block_open() if _enemy.has_method("is_block_open") else false
 	if open != _was_open:
 		_was_open = open
 		for n in _open_set:

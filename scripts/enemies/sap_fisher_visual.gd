@@ -61,12 +61,15 @@ var _rope_fresh := true
 var _swing := 0.0
 
 
+## 움직이기 직전 갈고리가 달린 움직임 (공용 RigMotion 은 그대로)
+func _make_motion() -> RigMotion:
+	return HookedRigMotion.new(rig, _pre_motion)
+
+
 func _ready() -> void:
 	super._ready()
 	if not _ready_ok:
 		return
-	motion = HookedRigMotion.new(rig, _pre_motion)
-	_state_from = motion.pose("idle")
 	_setup_whip()
 
 

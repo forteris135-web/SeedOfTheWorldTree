@@ -39,6 +39,7 @@ func _ready() -> void:
 	_knight()
 	_root_keeper()
 	_bird()
+	_weapon_sync()
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
 
@@ -153,7 +154,9 @@ func _knight() -> void:
 	var r := _run(boss, vis, func() -> bool: return boss.state == boss.State.MARCH and boss._timer < 99.0 and boss.attack_phase == "" and _settled(vis), 6.0)
 	_check_active_window(r, 0.18)
 	_report("기사 THRUST", r)
-	_weapon_report("기사 THRUST 창", r, 0.8)
+	# 찌르기는 창을 수평 가까이 든 채 손·몸이 앞으로 나가는 곧은 찌르기 (2026-10-20 검수: 위에서 내려 베는 호로 보였다) → 도는 폭은 작다.
+	# 창끝이 판정 안으로 들어가는지는 _weapon_sync 가 본다.
+	_weapon_report("기사 THRUST 창", r, 0.5)
 	# SLAM (큰 세로 움직임이 있는 공격)
 	boss._timer = 99.0
 	boss._red = true
@@ -198,16 +201,23 @@ func _knight() -> void:
 	# (배율은 그림마다 기준이 달라 온전한 배율(full)에 대한 몫으로 본다: 예전 그림 0.4 → 한 프레임 0.2 = 전체 뒤집기(2×full)의 1/4, 최소 0.2 = full 의 절반)
 	var full: float = absf((_vpose(vis)[1] as Vector2).y)
 	var prev_sx: float = (_vpose(vis)[1] as Vector2).x
+	# (2026-10-20: 폭이 0 까지 줄며 한두 프레임 종잇장 막대로 보였다 → 절반 가까이까지만 줄이고 부호가 바뀌는 그 프레임에 '쿵' 뒤집는다.
+	#  그래서 크게 뛰는 프레임은 부호가 바뀐 프레임만 허락하고, 가장 얇을 때도 온전한 폭의 35% 넘게)
+	var sign_flips := 0
 	for i in 60:
 		boss._physics_process(DT)
 		vis._process(DT)
 		var sx: float = (_vpose(vis)[1] as Vector2).x
 		min_abs = minf(min_abs, absf(sx))
-		if absf(sx - prev_sx) > full * 0.5:   # 전체 뒤집기(2×full)의 1/4 넘게 한 프레임에 뛰면 끊김
+		var flipped_sign := signf(sx) != signf(prev_sx)
+		if flipped_sign:
+			sign_flips += 1
+		elif absf(sx - prev_sx) > full * 0.5:   # 부호가 그대로인데 전체 뒤집기(2×full)의 1/4 넘게 한 프레임에 뛰면 끊김
 			flipped_frames += 1
 		prev_sx = sx
-	print("[probe] 기사 방향 전환: 60프레임 동안 |scale.x| 최소 %.3f (온전한 배율 %.2f 의 절반 아래), 한 프레임에 전체 뒤집기의 1/4 넘게 뛴 횟수 %d → %s" % [min_abs, full, flipped_frames, "몸 틀기 OK" if flipped_frames == 0 and min_abs < full * 0.5 else "끊김!"])
-	if flipped_frames > 0 or min_abs >= full * 0.5:
+	var turn_ok := flipped_frames == 0 and sign_flips >= 1 and min_abs >= full * 0.35 and min_abs < full * 0.7
+	print("[probe] 기사 방향 전환: 60프레임 동안 |scale.x| 최소 %.3f (온전한 배율 %.2f 의 35~70%%), 뒤집힌 프레임 %d, 부호 그대로 크게 뛴 횟수 %d → %s" % [min_abs, full, sign_flips, flipped_frames, "몸 틀기 OK" if turn_ok else "끊김/종잇장!"])
+	if not turn_ok:
 		_fail += 1
 	# 다시 1페이즈로 (아래 시험은 1페이즈 길이 기준)
 	boss.phase = 1
@@ -1210,7 +1220,7 @@ func _bird_fall() -> void:
 	print("[probe]    누운 끝: 몸통 가운데 바닥 위 %.0fpx, 머리 가운데 %.0fpx, 가장 낮은 몸통 점 %+.0fpx·머리 점 %+.0fpx (+ = 바닥 아래), 보스 바닥 %s" % [
 		h.torso, h.head, h.torso_low, h.head_low, boss.is_on_floor()])
 	_ok(h.torso <= stand_h * 0.4 and h.head <= stand_h * 0.4, "새가 쓰러져 정말 눕는다 (몸통·머리 가운데 ≤ %.0fpx)" % (stand_h * 0.4))
-	_ok(minf(h.torso_low, h.head_low) >= -10.0 and maxf(h.torso_low, h.head_low) <= 16.0, "누운 몸이 바닥에 닿는다 (뜨지 않고 조금만 묻힌다)")
+	_ok(minf(h.torso_low, h.head_low) >= -10.0 and maxf(h.torso_low, h.head_low) <= 8.0, "누운 몸이 바닥에 닿는다 (뜨지 않고 조금만 묻힌다 — 8px 안)")
 	# 누워 기다리는 동안 그대로 (몸통이 거의 안 움직인다)
 	r = _bird_run(boss, vis, func() -> bool: return false, 1.0)
 	_ok(r.max_jump < 2.0 and float(r.max_d.get("torso", 0.0)) < 1.0, "정화를 기다리는 동안 누운 채 (몸통 점프 %.2fpx)" % r.max_jump)
@@ -1455,3 +1465,145 @@ func _check_shot(p: Projectile, label: String, base_size: Vector2, base_radius: 
 	_ok(ratio_x >= 1.6 and ratio_x <= 2.1 and ratio_y >= 1.6 and ratio_y <= 2.1, "%s 몸 그림은 예전 그림의 1.6~2.1배" % label)
 	_ok(p.outline_color.a > 0.0 and p.glow > 0.0 and p.trail_count >= 3 and p.trail_count <= 5, "%s 테두리·발광·꼬리(3~5) 있음" % label)
 	_ok(p._glow != null and p._glow.get_parent() == p, "%s 발광 자식 있음" % label)
+
+
+# ---------- 무기 끝 자리 vs 켜진 판정 (2026-10-20 검수: 정점 '시간'만 맞고 창끝·부리가 판정 밖이었다) ----------
+
+## 켜진 히트박스의 보스 기준 사각형 (보는 쪽 + 앞, 위 −). 꺼져 있으면 빈 사각형.
+func _box_rel(boss) -> Rect2:
+	var hb = boss.hitbox
+	if not hb.get("_active"):
+		return Rect2()
+	var shp: CollisionShape2D = hb.get("_shape")
+	var sz: Vector2 = shp.shape.size
+	var c: Vector2 = shp.global_position - boss.global_position
+	var f := float(boss.facing)
+	var x0 := (c.x - sz.x * 0.5) * f
+	var x1 := (c.x + sz.x * 0.5) * f
+	return Rect2(minf(x0, x1), c.y - sz.y * 0.5, absf(x1 - x0), sz.y)
+
+
+func _rel_pt(boss, p: Vector2) -> Vector2:
+	var d: Vector2 = p - boss.global_position
+	return Vector2(d.x * float(boss.facing), d.y)
+
+
+## 공격 한 번을 돌리며 타격 구간(active) 동안 무기 끝(tip)을 잰다 → {first_in(처음 판정에 든 진행도, 없으면 -1), tips: [[p, 자리], …], box}
+func _sync_run(boss, vis, tipf: Callable, grow: float, max_t: float, done: Callable, active_only_step := -1) -> Dictionary:
+	var out := {"first_in": -1.0, "tips": [], "box": Rect2()}
+	var t := 0.0
+	while t < max_t:
+		boss._physics_process(DT)
+		vis._process(DT)
+		t += DT
+		if boss.attack_phase == "active" and (active_only_step < 0 or int(boss.get("combo_step")) == active_only_step):
+			var box := _box_rel(boss)
+			var tp := _rel_pt(boss, tipf.call())
+			var pp: float = boss.phase_progress()
+			out["box"] = box
+			out["tips"].append([pp, tp])
+			if out["first_in"] < 0.0 and box.size.x > 0.0 and box.grow(grow).has_point(tp):
+				out["first_in"] = pp
+		if done.call():
+			break
+	return out
+
+
+func _weapon_sync() -> void:
+	# 등불 기사: 찌르기·3연격 첫 타는 창끝이 판정(가슴~머리 높이) 안으로, 내려찍기는 창끝이 앞쪽 판정 폭 안 땅에 일찍 닿고, 검기는 창이 앞을 지난 뒤 나간다
+	var pr := _spawn(KNIGHT)
+	var boss = pr[0]
+	var vis = pr[1]
+	boss.facing = 1
+	boss.player = null
+	boss._set_state(boss.State.MARCH)
+	boss._timer = 99.0
+	for i in 60:
+		boss._physics_process(DT)
+		vis._process(DT)
+	var tipf := func() -> Vector2: return vis._tip_global()
+	var back := func() -> bool: return boss.state == boss.State.MARCH
+	boss._begin(boss.State.THRUST, 0.55)
+	var r := _sync_run(boss, vis, tipf, 24.0, 3.0, back)
+	_thrust_check("기사 찌르기", r)
+	boss._timer = 99.0
+	for i in 40:
+		boss._physics_process(DT)
+		vis._process(DT)
+	boss.force_attack(boss.State.COMBO3)
+	r = _sync_run(boss, vis, tipf, 24.0, 4.0, back, 0)
+	_thrust_check("기사 3연격 첫 타(찌르기)", r)
+	boss._timer = 99.0
+	for i in 40:
+		boss._physics_process(DT)
+		vis._process(DT)
+	boss._red = true
+	boss._begin(boss.State.SLAM, 1.0)
+	r = _sync_run(boss, vis, tipf, 0.0, 4.0, back)
+	var land := -1.0
+	var land_at := Vector2.ZERO
+	for e in r.tips:
+		var tp: Vector2 = e[1]
+		if tp.y >= -24.0:
+			land = float(e[0])
+			land_at = tp
+			break
+	var bx: Rect2 = r.box
+	_ok(land >= 0.0 and land <= 0.4 and land_at.x >= bx.position.x - 10.0 and land_at.x <= bx.end.x + 10.0,
+		"기사 내려찍기: 창끝이 타격 40%% 안에 판정 폭(%.0f~%.0f) 안 땅에 닿는다 (닿은 진행도 %.2f, 자리 %s)" % [bx.position.x, bx.end.x, land, land_at.round()])
+	boss._timer = 99.0
+	for i in 40:
+		boss._physics_process(DT)
+		vis._process(DT)
+	boss._begin(boss.State.WAVE, 0.65)
+	r = _sync_run(boss, vis, tipf, 0.0, 3.0, back)
+	var at_wave := Vector2(-9999, 0)
+	for e in r.tips:
+		if float(e[0]) >= 0.25:
+			at_wave = e[1]
+			break
+	_ok(at_wave.x > 0.0, "기사 검기: 검기가 나가는 순간(타격 25%%) 창끝이 이미 몸 앞 (창끝 %s)" % at_wave.round())
+	boss.queue_free()
+	# 새: 쪼기 부리가 판정 안으로
+	pr = _spawn(BIRD)
+	boss = pr[0]
+	vis = pr[1]
+	boss.facing = 1
+	boss.player = null
+	boss.set_collision_mask_value(1, true)
+	boss._set_state(boss.State.GROUND_IDLE)
+	boss._timer = 99.0
+	for i in 60:
+		boss._physics_process(DT)
+		vis._process(DT)
+	boss._set_state(boss.State.PECK)
+	boss._timer = 0.45
+	boss._melee_stage = 0
+	boss.attack_phase = "startup"
+	boss.windup_progress = 0.0
+	boss.startup_len = 0.45
+	var beak := func() -> Vector2: return vis.socket_global("beak")
+	r = _sync_run(boss, vis, beak, 20.0, 3.0, func() -> bool: return boss.state == boss.State.GROUND_IDLE)
+	_ok(r.first_in >= 0.0 and r.first_in <= 0.75, "새 쪼기: 부리가 타격 75%% 안에 판정 %s(+20px) 안으로 (처음 %.2f)" % [r.box, r.first_in])
+	boss.queue_free()
+	_clear_projectiles()
+
+
+## 찌르기: 타격 구간 뒤 70% 동안 창끝 높이가 판정 높이(±24px) 안에 머물고, 가장 멀리 나간 창끝이 판정 앞 끝 근처(−80 ~ +40px)
+## (예전엔 창끝이 정강이 높이까지 내려가 판정 밑을, 앞 끝 밖 60px 를 찔렀다)
+func _thrust_check(label: String, r: Dictionary) -> void:
+	var box: Rect2 = r.box
+	var far := -INF
+	var y_ok: bool = r.tips.size() > 0
+	var worst_y := 0.0
+	for e in r.tips:
+		var tp: Vector2 = e[1]
+		far = maxf(far, tp.x)
+		if float(e[0]) >= 0.3:
+			var out := maxf(box.position.y - 24.0 - tp.y, tp.y - (box.end.y + 24.0))
+			if out > 0.0:
+				y_ok = false
+				worst_y = maxf(worst_y, out)
+	var x_ok := far >= box.end.x - 80.0 and far <= box.end.x + 40.0
+	_ok(y_ok and x_ok, "%s: 창끝이 판정 높이(%.0f~%.0f ±24) 안에 머물고 가장 멀리 %.0f (판정 앞 끝 %.0f −80~+40) — 높이 벗어남 %.0fpx" % [label,
+		-box.end.y, -box.position.y, far, box.end.x, worst_y])

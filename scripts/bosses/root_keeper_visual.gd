@@ -14,6 +14,8 @@ extends Sprite2D
 ##   가드 가능 = 주황빛(GUARD_C), 가드 불가 = 진한 붉은색 깜빡임(RED_C, 초당 RootKeeper.TELEGRAPH_BLINK_HZ 번).
 ## 이 노드는 시험이 Sprite2D 로 읽어서 Sprite2D 로 두되 그림(texture)은 없다 — 부위 그림은 자식 PartRig 가 그린다.
 
+## 뿌리 가시: 예비의 이 몫부터 지팡이를 내리꽂는다 (타격 시작 = 가시가 솟는 순간에 땅을 치게)
+const SPIKE_STRIKE_AT := 0.8
 const RIG_ID := "root_keeper"
 ## 예고 색과 세기
 const GUARD_C := Color(1.0, 0.5, 0.15)
@@ -254,8 +256,22 @@ func _process(delta: float) -> void:
 			breath = 1.0 if speed < 20.0 else 0.4
 			plant = 1.0 if speed < 30.0 else 0.0
 		RootKeeper.State.SPIKES:
-			p = _beat("spike_up", "spike_down", "idle", 0.5)
-			drive = _beat_drive()
+			# 가시는 타격 첫 프레임에 솟는다 (root_keeper.gd) → 지팡이 내리꽂기를 예비 끝자락(SPIKE_STRIKE_AT 부터)에 당겨
+			# 타격이 시작될 때 지팡이 끝이 이미 땅을 친다 (예전엔 지팡이가 땅 위 60px 에서 멈추고 가시가 먼저 솟았다 — 2026-10-20 검수)
+			var sq := _boss.phase_progress()
+			if _boss.attack_phase == "startup" and sq >= SPIKE_STRIKE_AT:
+				p = motion.three_beat(_state_from, motion.pose("spike_up"), motion.pose("spike_down"), motion.pose("idle"), "strike",
+					(sq - SPIKE_STRIKE_AT) / (1.0 - SPIKE_STRIKE_AT))
+				drive = RigMotion.Drive.FAST
+			elif _boss.attack_phase == "startup":
+				p = motion.three_beat(_state_from, motion.pose("spike_up"), motion.pose("spike_down"), motion.pose("idle"), "windup", sq / SPIKE_STRIKE_AT)
+				drive = RigMotion.Drive.SOFT
+			elif _boss.attack_phase == "active":
+				p = motion.three_beat(_state_from, motion.pose("spike_up"), motion.pose("spike_down"), motion.pose("idle"), "strike", 1.0)
+				drive = RigMotion.Drive.FAST
+			else:
+				p = _beat("spike_up", "spike_down", "idle", 0.5)
+				drive = _beat_drive()
 			breath = 0.0
 		RootKeeper.State.SWEEP:
 			p = _beat("sweep_up", "sweep_hit", "sweep_ready", 1.0)

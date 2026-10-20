@@ -61,13 +61,16 @@ var _muzzle: Sprite2D
 var _muzzle_t := 0.0
 
 
+## 움직이기 직전 갈고리가 달린 움직임 (공용 RigMotion 은 그대로)
+func _make_motion() -> RigMotion:
+	return HookedRigMotion.new(rig, _pre_motion)
+
+
 func _ready() -> void:
+	turn_min_width = 0.5   # 몸이 긴 기계: 돌아설 때 절반까지만 줄이고 '쿵' 뒤집는다
 	super._ready()
 	if not _ready_ok:
 		return
-	# 움직이기 직전 갈고리가 달린 움직임으로 바꾼다 (공용 RigMotion 은 그대로)
-	motion = HookedRigMotion.new(rig, _pre_motion)
-	_state_from = motion.pose("idle")
 	_spin_i = rig.bone_index(spin_bone) if spin_bone != "" else -1
 	if _spin_i >= 0:
 		_spin_src = rig.sprite_of(spin_bone)

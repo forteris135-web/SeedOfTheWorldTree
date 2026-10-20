@@ -163,6 +163,9 @@
 **부드러운 부위** (설계도 맨 위 `"soft": [이름…]` + `chain` 부위 전부): 무릎 꿇기·엉덩방아·누움에서 땅에 닿아도 **몸을 받쳐 띄우지 않는다**
 (땅 닿기·내려놓기 잴 때 뺀다). 대신 땅 아래로 들어가는 만큼 늘어진 천은 먼저 관절을 돌려 땅 위에 눕히고, 남으면 그림을 관절 기준으로
 땅 쪽으로 눌러 접는다(`squash_y`, 최대 0.35배, 옆으로 조금 퍼짐). 치마·잎 치마(`hips`, `tasset`, `skirt`)·새와 여왕의 날개·뿌리지기의 구멍 메움 조각이 soft.
+자식까지 모두 부드러운 늘어진 천(`chain` — 정원사 등의 씨앗 꼬투리·덩굴, 망토)은 접고도 땅 아래로 보이면(관절까지 묻히는 등) 관절을 축으로
+한 바퀴 16 각도를 견줘 가장 덜 묻히는 쪽(같으면 덜 도는 쪽)으로 빼낸다 — 자식(덩굴 끝)도 함께 잰다. 지난 프레임 각도에 바꿈 벌점을 주어 떨지 않는다
+(2026-10-20: 정원사가 뒤로 쓰러질 때 덩굴이 바닥 아래 32px 까지 지형 위에 비쳤다).
 다리·팔처럼 단단한 부위는 넣지 않는다 (몸이 땅에 박힌다). 날개처럼 그림 쪽이 따로 땅 위로 들어 올리는 soft 부위는 들어 올린 뒤 `set_bone_squash(i, 1.0)` 로 접힘을 푼다 (새).
 
 ### 사람 모양 + 무기 팔 (humanoid) 뼈 이름 약속
@@ -206,7 +209,13 @@ hips (뿌리, 골반·허리 띠)
 dead_knees dead_lie dead_back dead_back_lie shoot scatter_a scatter_b charge stuck leap slam_fall land npc`. 보스는 이름을 자유롭게 짓는다 (`wing_beat`, `thrust_windup` …).
 
 **쓰러짐 두 가지** (EnemyRigVisual, 길이는 EnemyBase 그대로):
-- 앞으로 (등 뒤에서 맞음·정화): `dead_knees`(한 무릎 꿇기) → `dead_lie`(꿇은 무릎을 축으로 `pitch` 1 + `lean` 78 로 엎어짐). 땅 닿기(올리기만)가 머리를 땅 위에.
+- 앞으로 (등 뒤에서 맞음·정화): `dead_knees`(한 무릎 꿇기) → `dead_lie`(두 무릎을 꿇은 채 앞으로 고꾸라져 가슴·머리를 땅에 묻음).
+  그림 쪽이 **내려놓기**를 함께 올리고(땅 닿기 1), RigMotion 은 꿇은 무릎이 있으면 몸 전체(body_xf)를 드는 대신 **엉덩이를 축 무릎을 중심으로
+  허벅지 길이만큼의 원 위로** 옮긴다 → 무릎·정강이는 땅에 남고, 얇은 몸은 허벅지가 눕고 가슴이 두꺼운 몸은 허벅지가 서서 엉덩이가 들린다.
+  다른 쪽 무릎은 허벅지가 닿는 땅 자리로 미끄러져 오고, 정강이·발이 묻히면 그 무릎을 조금씩 띄운다(`knee_rise`), 허벅지가 다 서도 모자라면
+  정강이를 땅 쪽으로 기울여 발끝을 땅에 댄다. 축 무릎은 쉽게 바꾸지 않는다(`KNEEL_PIVOT_HYST`). 몸을 숙이는 몫은 골반(`lean`)보다 허리(`torso`)에 둔다
+  — 골반째 90도 숙이면 앞뒤 엉덩이 관절(옆에서 본 그림이라 앞뒤로 벌어져 있다)이 위아래로 벌어져 뒷다리가 땅에 닿지 못한다.
+  (2026-10-20 검수 전엔 몸 전체를 들어 가슴만 땅에 닿고 엉덩이·무릎·발이 28~47px 떠 '널빤지'처럼 엎드렸다.) 등불 기사의 엎드림도 같은 방법.
 - 뒤로 (앞에서 맞아 밀림 — 흔한 경우): `dead_back`(엉덩방아) → `dead_back_lie`(골반째 `lean` −84 로 뒤로 굴러 등으로 눕기).
   이때 그림 쪽이 **내려놓기**(`motion.ground_settle`)를 올린다: 다리·무기 사슬·부드러운 부위를 뺀 몸의 가장 낮은 점을 **정확히** 땅에 두고
   다리는 IK 로 딛은 발에 맞춘다 → 닿는 점이 엉덩이·뒷손 → 등 → 뒤통수로 옮겨 가며 구르듯 눕는다.
@@ -260,6 +269,12 @@ rig_id = "woodcutter"
 - 발이 닿는 땅 = 몸 충돌 캡슐의 바닥 (저절로 찾는다 — 누운 캡슐의 기계도 EnemyMechVisual 이 찾는다).
 - 공개 함수·값은 예전 그림과 같다 (kick/impact/parried/block/recoil/fall, visible_facing/is_facing_settled, show_overhead_bar,
   arm_front/arm_front_limit/tilt_scale, _label …) — EnemyBase·EliteTraits·경비병 판정이 그대로 동작한다.
+- `npc_look()` 은 구원된 사람을 세울 땅(`floor_y` = 몸 캡슐 바닥)도 돌려준다 — EnemyBase 가 그 자리에 세운다 (hurt_height 절반은 캡슐 바닥보다 5px 아래였다).
+- `turn_min_width`: 돌아설 때 줄이는 폭의 한계 (사람 모양 0 = 폭이 0 을 지나며 몸을 튼다, 몸이 긴 기계 0.5 = 절반까지 줄이고 쿵 뒤집기 — EnemyMechVisual).
+- 움직임 층을 바꿔 쓰려면 `_make_motion()` 을 덮어쓴다 (기계·어부의 HookedRigMotion — 두 번 만들지 않게).
+- 몹 상태의 속 값은 공개 함수로 읽는다: `EnemyBase.state_timer()`, `Guard.is_block_open()`.
+- 화면 밖에서 대기·순찰 중인 몹은 뼈대를 쉰다 (`_cull_quiet` — VisibleOnScreenNotifier2D, 화면 없는 시험에서는 꺼짐). 다른 상태는 화면 밖에서도 움직인다.
+- 한 번 공중이 되면 땅에 닿을 때까지 공중 자세 (폴짝 뛴 꼭대기에서 세로 속도가 잠깐 작아져도 걸음을 시작하지 않는다).
   뼈대는 늘 오른쪽을 보므로 `art_faces_right` 는 참으로 친다 (probe_guard 도 그렇게 잰다).
 - `anim_hint` 별 자세: red(붉은 예고) / charge / stuck / shoot / scatter / leap / fall / land — 이름은 그대로, 자세는 원형에서.
 - 시험이 예전 그림의 속(`_sprite`, `_arm_bone`)을 읽으면 `vis is EnemyRigVisual` 로 갈라 뼈대 값을 읽는다 (tools/probe_enemies.gd 의 `_pose` 참고).
@@ -321,7 +336,7 @@ func _process(delta: float) -> void:
 | 진자 (매단 등불) | 매단 자리의 세상 가속도로 각을 적분하고 `rig.set_bone_rot` (기사) |
 | 망토를 누운 몸에 늘어뜨리기 | `motion.set_chain_setting("cape", 중력, 최대각)` (기사) |
 | 걷기 시작 발 맞추기 | `motion.set_gait_phase(위상[, true])` — 아무 위상에서 시작하면 뒤에 디딘 발이 끌려가 엉덩이가 툭 떨어진다 (기사·펌프) |
-| 돌아서기 | 폭을 0 쪽으로 줄였다가 부호가 바뀌는 프레임에 `flip_feet()`. 옆모습 짐승은 이어서 `swap_leg_sides(0, 1)` (앞다리가 뒷다리가 된다 — 펌프). 납작한 판처럼 보이면 폭을 절반까지만 줄이고 쿵 뒤집기(펌프)·폴짝(새)·정면 투구 변형(기사) |
+| 돌아서기 | 폭을 줄였다가 부호가 바뀌는 프레임에 `flip_feet()`. 옆모습 짐승은 이어서 `swap_leg_sides(0, 1)` (앞다리가 뒷다리가 된다 — 펌프). 폭은 절반 가까이(`TURN_MIN_W` 0.45)까지만 줄이고 그 프레임에 쿵 뒤집는다 — 0 까지 줄이면 한두 프레임 종잇장으로 보였다 (펌프·새·기사, 기사는 그 사이 정면 투구 변형) |
 | 걸음에 맞춘 흔들림 | `motion.gait_phase()` 로 몸·머리를 박마다 흔든다 (기사) |
 | 쓰러진 자세 이어받기 | 같은 뼈대의 다른 PartRig 에 `copy_pose_from(src)` (멈춘 펌프) |
 | 시험이 읽는 값 | 그림에 `probe_pose()` 를 둔다 — probe_bosses 의 `_vpose` 는 배열 `[기울기, 배율, 세로 자리]` 를 읽는다 (기사). 사전을 돌려주는 그림(펌프)은 전용 검사가 읽는다 |
@@ -372,18 +387,18 @@ func _process(delta: float) -> void:
 **검사 (화면 없이, 전체 회귀 `regress.sh` 가 모두 돌린다)**
 | 도구 | 보는 것 |
 |---|---|
-| `tools/probe_rigs.tscn` | 모든 뼈대: 읽히는지, 뼈 계층·부위 그림·다리/땅 막기 이름·원형·soft 이름·변형 그림, 발 ±4px(대기·걷기·공격·무너짐·피격·무릎), 몸·무기가 땅 아래 4px 넘게 안 들어감, NaN, 상자, 비용. 뼈대 몹 씬(이은 Visual 포함)의 앞·뒤 쓰러짐(몸통 ≤ 키의 30%·머리 ≤ 35%·무기 ≤ 45%, 몸통 없는 기계는 배가 땅에), 대롱 겨눔 |
+| `tools/probe_rigs.tscn` | 모든 뼈대: 읽히는지, 뼈 계층·부위 그림·다리/땅 막기 이름·원형·soft 이름·변형 그림, 발 ±4px(대기·걷기·공격·무너짐·피격·무릎), 몸·무기가 땅 아래 4px 넘게 안 들어감, NaN, 상자, 비용. 뼈대 몹 씬(이은 Visual 포함)의 앞·뒤 쓰러짐(몸통 ≤ 키의 30%·머리 ≤ 35%·무기 ≤ 45%, 앞으로는 다리 뼈마다 가장 낮은 점 ≤ 키의 12%·뒤로는 두 다리 중 한 점 ≤ 12%, 몸통 없는 기계는 배가 땅에), 대롱 겨눔(진짜 대롱 몹으로) |
 | `probe_enemies`, `probe_guard` | 몹 공통 동작·받아치기, 경비병 방패가 보는 쪽에 그려지는지·늦게 돌기·막기 한계 |
 | `probe_gardener_herbalist` | 정원사·약초꾼 6종 실제 AI: 발 디딤·겨눔·반동·웅크림·버섯·포자·구원 |
-| `probe_bosses` | 보스 다섯의 패턴 흐름·타격 정점이 판정 구간 안·탄막. 새(`_bird_run`)·뿌리지기(`_root_watch`)는 뼈 값으로, 기사는 `probe_pose` 로 |
-| `probe_knight_rig`, `probe_queen`, `probe_pump_rig`, `probe_root_visual`·`probe_root_fixes` | 보스별 뼈대 전용 검사 (발·몸 깊이·튐·누움·정화·비용) |
+| `probe_bosses` | 보스 다섯의 패턴 흐름·타격 정점이 판정 구간 안·탄막. 새(`_bird_run`)·뿌리지기(`_root_watch`)는 뼈 값으로, 기사는 `probe_pose` 로. **무기 끝 자리 vs 켜진 판정 상자**(`_weapon_sync`): 기사 찌르기·3연격 첫 타 창끝 높이·앞 끝, 내려찍기 창끝이 판정 폭 안 땅에 닿는 때, 검기가 나갈 때 창이 몸 앞, 새 쪼기 부리 |
+| `probe_knight_rig`, `probe_queen`, `probe_pump_rig`, `probe_root_visual`·`probe_root_fixes` | 보스별 뼈대 전용 검사 (발·몸 깊이·튐·누움(기사: 다리 뼈마다 키의 8% 안)·정화·비용) |
 | `probe_lake -- --hidden`, `probe_mine -- --linked`, `probe_npcs` | 어부·여왕 박자, 펌프·멈춘 펌프, 구원된 사람·집 |
 | `tools/test.sh <보스 방> --bosstest 260` (보스 5곳) | 실제 방에서 정화까지 |
 
 **필름 (창으로 — 결과는 screenshots/, 저장소에 올리지 않는다)**
 | 도구 | 찍는 것 |
 |---|---|
-| `tools/rig_preview.tscn` | `--parts` 부위 격자 / 자세 사진 / `--enemy <씬> --seq …` 몹 동작 필름 (상태를 직접 걸어서) |
+| `tools/rig_preview.tscn` | `--parts` 부위 격자 / 자세 사진(`--lock` = 땅 닿기·내려놓기를 켜고 쓰러진 자세를 게임처럼) / `--enemy <씬> --seq …` 몹 동작 필름 (상태를 직접 걸어서) |
 | `tools/rig_film_ai.tscn` | 몹 AI 그대로 (소녀를 정한 거리에): `--seq idle,walk,ram,slam,shoot,whip,attack,hit,broken,dead,dead_back,purify,kneel` |
 | `probe_gardener_herbalist.tscn -- --film <gardener\|herbalist>` / `-- --shots` | 평평한 바닥 실제 AI 필름 / 실제 방 장면 |
 | `tools/bird_film.tscn`, `tools/bird_room_shots.tscn` | 새 동작 필름 / 실제 보스 방 상태별 사진 |
@@ -422,6 +437,13 @@ func _process(delta: float) -> void:
   다각형으로 떼어 chain 부위로 만들면 쓰러질 때 몸을 받치지 않는다 (정원사·약초꾼).
 - **방패 몹 시험**: 앞에서 치면 방패가 막아 쓰러지지 않는다 — 쓰러짐을 찍거나 잴 땐 `_block_open` 을 열어 둔다 (probe_rigs·rig_preview).
 - **매 프레임 새 사전**: 자세 바꿔 끼우기·상수 목록은 `_ready` 에서 만들어 돌려 쓴다 (모바일 비용). 뼈대 하나는 맥에서 0.1~0.2ms, 아이폰은 2~3배로 본다.
+- **판정 상자는 Hitbox 노드 자리만큼 올라가 있다**: 보스 히트박스 노드가 (0, −60) 에 있어 `set_box(Rect2(…, -150, …))` 의 실제 높이는 60px 더 위다.
+  자세를 맞출 땐 숫자가 아니라 `probe_bosses` 의 `_weapon_sync`(또는 켜진 상자를 겹쳐 그린 필름)로 무기 끝이 상자 안에 드는지 본다
+  (2026-10-20: 기사 찌르기 창끝이 정강이 높이·상자 밖, 내려찍기 창이 상자 밖 470px, 검기가 창보다 먼저, 새 부리가 상자 위에서 멈췄다).
+- **타격 시작에 맞는 순간이 오는 공격**(내려찍기 충격파·뿌리 가시·검기 발사): 휘두르기를 타격 앞부분(`minf(p / 0.2~0.3, 1)`)에 몰거나 예비 끝자락에 당겨
+  (뿌리지기 `SPIKE_STRIKE_AT`, 기사 `SLAM_PRE_SPEAR`) 그림의 '닿는 순간'이 판정이 켜지는 때와 겹치게 한다. 판정·시간은 바꾸지 않는다.
+- **골반째 크게 숙이면 뒷다리가 뜬다**: 옆에서 본 그림이라 앞뒤 엉덩이 관절이 가로로 벌어져 있다 — 골반을 90도 숙이면 그 간격이 세로가 되어
+  뒤 엉덩이가 20px 넘게 높아진다. 엎드림은 숙이는 몫을 허리(`torso`)에 둔다.
 - **probe 숫자가 실행마다 조금 다르다**: 보스·몹 AI 가 공격을 무작위로 고르므로 (기사·펌프·정원사 검사) 숫자 차이는 흔들림이다 — 판정은 '실패 0' 으로 본다.
 - **익스펜션/ 은 읽기만**: 원본 시트를 고치거나 옮기지 않는다. 잘린 그림만 `art/rigs/` 에.
 - **probe_rigs**: 새 뼈대를 넣으면 저절로 검사된다. 실패하면 먼저 rig_preview 로 그 자세를 찍어 본다.

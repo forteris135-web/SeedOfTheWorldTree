@@ -41,6 +41,10 @@ var npc_id: String:
 var _sprite: Node2D
 var _rig: PartRig
 var _motion: RigMotion
+var _breath_acc := 0.0
+## 숨쉬기를 움직이는 간격 (초) / 움직임 층에 넘기는 빈 문맥 (매 프레임 새 사전을 만들지 않게)
+const BREATH_STEP := 1.0 / 15.0
+const NO_CTX := {}
 var _prompt: Label
 var _near: Player
 var _data := {}
@@ -145,9 +149,13 @@ func _process(delta: float) -> void:
 			_bubble.visible = false
 	if _near:
 		_face(_near.global_position.x > global_position.x)
-	# 숨쉬기 (뼈대는 RigMotion 이 숨 쉰다)
+	# 숨쉬기 (뼈대는 RigMotion 이 숨 쉰다). 가만히 서서 숨만 쉬므로 초당 15번만 움직인다 (집에 다섯이 모이면 매 프레임
+	# 0.8ms 를 썼다 — 2026-10-20 검수, 모바일 비용)
 	if _motion:
-		_motion.update(delta, {})
+		_breath_acc += delta
+		if _breath_acc >= BREATH_STEP:
+			_motion.update(_breath_acc, NO_CTX)
+			_breath_acc = 0.0
 	elif not _leaving:
 		_sprite.scale.y = art_scale * (1.0 + sin(_t * 1.8) * 0.012)
 

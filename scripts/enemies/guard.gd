@@ -108,6 +108,11 @@ func _physics_process(delta: float) -> void:
 
 
 ## 방패를 들 수 있는 상태인가 (무방비·무너짐·피격·쓰러짐이 아님).
+## 방패가 들려(막지 못하고) 열려 있는가 (그림이 읽는다 — 속 값 _block_open 을 직접 읽지 않게)
+func is_block_open() -> bool:
+	return _block_open > 0.0
+
+
 func _can_block() -> bool:
 	return _mode != "stuck" and _block_open <= 0.0 and state in [State.IDLE, State.PATROL, State.ALERT, State.CHASE, State.LUNGE, State.WINDUP, State.BACKSTEP]
 

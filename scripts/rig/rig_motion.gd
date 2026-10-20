@@ -924,7 +924,15 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 			else:
 				any_swing = true
 	if any_swing:
-		return
+		# 다른 발이 걸음 중이어도, 디딘 발이 다리가 닿지 않을 만큼 멀리 남았으면 걸음 중인 발을 그 자리에 딛고 그 발부터 옮긴다
+		# (약초꾼이 뿌리며 앞으로 밀리는 동안 앞발 걸음이 길게 이어져 뒷발이 '디딘 채' 12px 떴다 — 2026-10-20 검수)
+		if _overreached_leg() == null:
+			return
+		for leg in legs:
+			if leg.swing:
+				leg.swing = false
+				leg.h = 0.0
+				leg.planted_now = true
 	var thr := float(fin.get("step_thr", 0.2)) * L
 	var worst: Leg = null
 	var worst_err := thr
@@ -933,6 +941,13 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 		if err > worst_err:
 			worst_err = err
 			worst = leg
+	# 다리가 닿지 않을 만큼 멀리 남은 디딘 발은 어긋남이 작아도 먼저 옮긴다 (걸음 위상 다시 맞추기와 같은 생각 — 몸이 앞으로
+	# 밀리는 공격(뿌리기·휘두르기)에서 뒷발이 엉덩이 낮춤 한계에 걸려 '디딘 채' 떴다가 끌려가던 것, 2026-10-20 검수)
+	if worst == null:
+		var far := _overreached_leg()
+		if far:
+			worst = far
+			worst_err = maxf(absf(far.x - float(fin.get(far.k_foot, 0.0)) * L), L * 0.3)
 	if worst:
 		worst.swing = true
 		worst.timed = true
@@ -940,6 +955,26 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 		worst.from_x = worst.x
 		worst.dur = clampf(float(fin.get("step_dur", 0.2)), 0.06, 0.5)
 		worst.lift = float(fin.get("step_lift", 0.08)) * L * clampf(worst_err / maxf(L * 0.3, 1.0), 0.5, 1.2)
+
+
+## 디딘 발 중 엉덩이를 한계(DROP_MAX)까지 낮춰도 다리가 닿지 않을 발 (가장 모자란 것). 무릎 꿇은 다리·한 뼈 다리는 뺀다.
+func _overreached_leg() -> Leg:
+	var best: Leg = null
+	var best_short := 0.0
+	for leg in legs:
+		if leg.lo < 0 or leg.swing or float(fin.get(leg.k_kneel, 0.0)) > 0.5:
+			continue
+		# 자세의 발 자리에 이미 가까우면 옮겨도 소용없다 (제자리 걸음으로 들썩이지 않게)
+		if absf(leg.x - float(fin.get(leg.k_foot, 0.0)) * L) < L * 0.08:
+			continue
+		var j := rig.xf[leg.up].origin + Vector2(0.0, L * DROP_MAX * 0.85)
+		var phi := leg.foot_rest_world + deg_to_rad(float(fin.get(leg.k_toe, 0.0)))
+		var a := Vector2(leg.x, -leg.h) - leg.sole.rotated(phi)
+		var short := (a - j).length() - (leg.a + leg.b) * 0.995
+		if short > best_short:
+			best_short = short
+			best = leg
+	return best
 
 
 func _solve_legs() -> void:

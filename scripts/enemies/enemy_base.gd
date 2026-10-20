@@ -650,6 +650,11 @@ func flash_amount() -> float:
 	return _flash
 
 
+## 지금 상태의 남은 시간 (읽기만 — 그림이 폴짝 웅크림 같은 때를 맞출 때. 속 값 _timer 를 직접 읽지 않게)
+func state_timer() -> float:
+	return _timer
+
+
 func state_name() -> String:
 	match state:
 		State.IDLE: return "대기"

@@ -44,8 +44,12 @@ const LANTERN_FRICTION := 5.0
 const LANTERN_SWING_MAX := 2.3
 ## 창이 돌 수 있는 가장 빠른 빠르기 (라디안/초): 큰 휘두르기도 한 프레임에 창이 '순간이동'하지 않게 (60fps 에 한 프레임 0.57rad)
 const SPEAR_MAX_SPEED := 34.0
+## 내려찍기: 내려오는 끝자락(예비 86% 부터)에 창을 이 세상 각도(머리 위, 조금 뒤)로 먼저 넘겨 둔다
+const SLAM_PRE_SPEAR := -200.0
 ## 몸 틀기 빠르기 (1/s)
 const TURN_SPEED := 11.0
+## 돌아설 때 줄이는 폭의 한계 (온전한 폭의 몫 — 무쇠 펌프와 같은 '절반까지 줄이고 쿵 뒤집기')
+const TURN_MIN_W := 0.45
 ## 궤적: 이 속도(px/s)보다 빨리 움직일 때만 띠가 보이고, 이만큼 넘으면 가장 진하다
 const TRAIL_MIN_SPEED := 900.0
 const TRAIL_FULL_SPEED := 3200.0
@@ -128,6 +132,11 @@ var _light_pos := Vector2.ZERO
 var _trail: Node2D
 var _trail_pts: Array = []
 var _prev_tip := Vector2.ZERO
+var _fall_t := 0.0          # 쓰러짐: 땅에 닿은 뒤 지난 시간 (공중에서 쓰러지면 착지부터 잰다)
+var _fall_air := false      # 쓰러짐: 공중에서 허우적이며 떨어지는 중이었다
+var _slam_spark := false    # 내려찍기: 창끝이 땅에 닿으면 불꽃 (판정이 켜진 뒤 한 번)
+var _slam_air := {}         # 내려찍기 타격이 출발하는 자세 (공중 자세 + 머리 위로 넘긴 창 — 한 번 만들어 돌려 쓴다)
+var _slam_air_src := {}
 var _prev_lantern := Vector2.ZERO
 var _tip_speed := 0.0
 var _lantern_speed := 0.0
@@ -265,6 +274,9 @@ func _process(delta: float) -> void:
 	_state_t += delta
 	var st := boss.state
 	_events(st)
+	# 쓰러짐의 시간은 땅에 닿은 뒤부터 잰다 (공중(내려찍기 도약 꼭대기)에서 쓰러지면 허우적이며 떨어지고, 착지부터 무릎 순서)
+	if st == LanternKnight.State.FALLEN and boss.is_on_floor():
+		_fall_t += delta
 	# 몸 틀기: 1 → 0 → −1 (뒤집는 순간 딛은 발·등불을 세상에 남긴다)
 	_face = Motion.damp(_face, float(boss.facing), TURN_SPEED, delta)
 	var fx := _face
@@ -277,7 +289,9 @@ func _process(delta: float) -> void:
 		_lan_th = -_lan_th
 		_lan_w = -_lan_w
 		_lan_prev = Vector2.INF
-	scale = Vector2(fx, 1.0)
+	# 폭은 절반 가까이(TURN_MIN_W)까지만 줄이고 부호가 바뀌는 프레임에 '쿵' 뒤집는다 (0 까지 줄이면 한두 프레임 종잇장 막대로 보였다 —
+	# 2026-10-20 검수). 그 사이 정면 투구로 바꿔 끼운다.
+	scale = Vector2(s * lerpf(TURN_MIN_W, 1.0, absf(fx)), 1.0)
 	# 몸을 트는 한가운데(옆모습이 납작해질 때)엔 투구를 앞모습 그림으로 바꿔 끼운다 (시트의 정면 투구) — 판때기가 뒤집히는 대신 돌아서는 것처럼
 	var front := absf(fx) < 0.45
 	if front != _head_front:
@@ -305,7 +319,7 @@ func _process(delta: float) -> void:
 	_lock = Motion.damp(_lock, 1.0 if kneeling else 0.0, 6.0, delta)
 	var settle_want := 0.0
 	if st == LanternKnight.State.FALLEN:
-		settle_want = clampf((_state_t - FALL_LEAN) / (FALL_DOWN - FALL_LEAN), 0.0, 1.0)
+		settle_want = clampf((_fall_t - FALL_LEAN) / (FALL_DOWN - FALL_LEAN), 0.0, 1.0)
 	_settle = Motion.damp(_settle, settle_want, 5.0, delta)
 	motion.ground_lock = _lock
 	motion.ground_settle = _settle
@@ -314,6 +328,12 @@ func _process(delta: float) -> void:
 	_sync_gait(st, absf(float(ctx["speed"])))
 	motion.update(delta, ctx)
 	_post_solve(delta)
+	if _slam_spark:
+		if st != LanternKnight.State.SLAM or boss.attack_phase != "active":
+			_slam_spark = false
+		elif _tip_global().y >= boss.global_position.y - 14.0:
+			_slam_spark = false
+			_spark_at(_tip_global())
 	_after(delta, st)
 
 
@@ -337,6 +357,8 @@ func _events(st: LanternKnight.State) -> void:
 		_on_state(st)
 		_prev_state = st
 		_state_t = 0.0
+		_fall_t = 0.0
+		_fall_air = false
 	if ph != _prev_phase:
 		_on_phase(st, ph)
 		_prev_phase = ph
@@ -419,7 +441,8 @@ func _on_phase(st: LanternKnight.State, ph: String) -> void:
 			motion.kick("crouch", 2.0)
 			motion.kick("thud", 40.0)
 			_puff(22, f * 120.0)
-			_spark_at(_tip_global())
+			# 불꽃은 창끝이 땅에 닿는 순간 그 자리에서 (예전엔 판정이 켜지는 프레임에 머리 뒤 공중의 창끝에서 튀었다)
+			_slam_spark = true
 		LanternKnight.State.THRUST:
 			_puff(6, -f * 40.0)
 		LanternKnight.State.FLAME:
@@ -490,6 +513,10 @@ func _pose_now(st: LanternKnight.State, delta: float, info: Dictionary) -> Dicti
 		LanternKnight.State.THROW:
 			return motion.three_beat(_from, motion.pose("throw_w"), motion.pose("throw_s"), stance, beat, p, 0.16)
 		LanternKnight.State.WAVE:
+			if ph == "active":
+				# 검기는 타격 25% 에 나간다 (lantern_knight.gd) → 휘두르기를 타격 앞 30% 에 몰아 창이 그 전에 머리 위를 넘어 앞을 지나게
+				# 하고, 나머지는 뻗은 채 버틴다 (예전엔 창이 타격 70% 에야 앞으로 내려와 검기가 창보다 먼저 나갔다 — 2026-10-20 검수)
+				return motion.three_beat(_from, motion.pose("wave_w"), motion.pose("wave_s"), stance, "strike", minf(p / 0.3, 1.0), 0.12)
 			return motion.three_beat(_from, motion.pose("wave_w"), motion.pose("wave_s"), stance, beat, p, 0.12)
 		LanternKnight.State.COMBO3:
 			if boss.anim_hint == "stagger":
@@ -595,10 +622,25 @@ func _slam_pose(ph: String, p: float, stance: Dictionary, info: Dictionary) -> D
 			var up := motion.mix(crouch, air, Motion.anticipation((p - 0.3) / 0.7))
 			var tr := clampf((p - 0.7) / 0.3, 0.0, 1.0)
 			up["spear"] = float(up["spear"]) + sin(_t * 40.0) * 2.0 * tr
+			# 내려오는 끝자락에 창을 머리 위로 먼저 넘겨 둔다 → 땅에 닿는 순간(타격 시작)부터 짧게 내리꽂는다
+			var pre := clampf((p - 0.86) / 0.14, 0.0, 1.0)
+			if pre > 0.0:
+				up["spear"] = lerpf(float(up["spear"]), SLAM_PRE_SPEAR, Motion.ease_in(pre, 2.0))
 			return up
 		"active":
-			return motion.three_beat(_from, air, motion.pose("slam_s"), stance, "strike", p, 0.1)
-	return motion.three_beat(_from, air, motion.pose("slam_s"), motion.mix(motion.pose("slam_r"), stance, p), "recover", p)
+			# 판정(양쪽 ±300 충격파)은 땅에 닿는 순간 켜져 0.25초 간다 → 창을 타격 앞 20% 안에 앞쪽 판정 안 땅에 내리꽂는다
+			# (예전엔 창이 타격 80% 에야 판정 밖 470px 땅에 닿았다 — 2026-10-20 검수). 나머지는 꽂은 채 버틴다.
+			return motion.three_beat(_from, _slam_air_pre(air), motion.pose("slam_s"), stance, "strike", minf(p / 0.2, 1.0), 0.1)
+	return motion.three_beat(_from, _slam_air_pre(air), motion.pose("slam_s"), motion.mix(motion.pose("slam_r"), stance, p), "recover", p)
+
+
+## 예비 끝 자세(머리 위로 창을 넘긴 공중 자세) — 타격은 여기서 출발한다
+func _slam_air_pre(air: Dictionary) -> Dictionary:
+	if _slam_air.is_empty() or _slam_air_src != air:
+		_slam_air_src = air
+		_slam_air = air.duplicate()
+		_slam_air["spear"] = SLAM_PRE_SPEAR
+	return _slam_air
 
 
 ## 등불 회전: 창을 머리 위로 들고 손을 자루 가운데로 미끄러뜨려 빙글 돌린다 (예비 1바퀴 → 타격 2바퀴 → 멈춤).
@@ -623,7 +665,24 @@ func _spin_pose(ph: String, p: float, stance: Dictionary, info: Dictionary) -> D
 ## 쓰러짐: 무릎이 꺾여 한 무릎을 꿇고 창을 땅에 짚어 기댄다 → 떨며 고개가 처진다 → 창을 놓치고 앞으로 엎어져 눕는다.
 ## 다 누운 뒤에는 정화할 때까지 그대로 (숨도 멎는다). 몸은 땅 닿기(ground_lock)·내려놓기(ground_settle)로 땅 위에.
 func _fallen_pose(delta: float, info: Dictionary) -> Dictionary:
-	var t := _state_t
+	if not boss.is_on_floor() and _fall_t <= 0.0:
+		# 아직 공중: 무릎 꿇은 채 떨어지지 않고 팔다리를 허우적이며 떨어진다 (착지하면 그때부터 무릎 → 기댐 → 엎어짐)
+		# (예전엔 무릎 꿇고 창에 기댄 자세 그대로 158px 위에서 떨어졌다 — 2026-10-20 검수)
+		_fall_air = true
+		info["feet"] = RigMotion.Feet.AIR
+		info["drive"] = RigMotion.Drive.QUICK
+		info["breath"] = 0.0
+		var ap := motion.pose("stagger").duplicate()
+		ap["torso"] = float(ap["torso"]) + sin(_t * 17.0) * 6.0
+		ap["head"] = float(ap["head"]) + sin(_t * 13.0 + 1.0) * 8.0
+		return ap
+	if _fall_air:
+		_fall_air = false
+		_from = motion.capture()   # 착지한 순간의 자세에서 무릎 순서를 시작한다
+		motion.kick("crouch", 1.6)
+		motion.kick("thud", 30.0)
+		_puff(16, 0.0)
+	var t := _fall_t
 	info["breath"] = 0.0 if t > FALL_LEAN else 1.4
 	_glow = Motion.damp(_glow, 0.12 if t > FALL_LEAN else 0.5, 2.5, delta)
 	if t < FALL_KNEE:

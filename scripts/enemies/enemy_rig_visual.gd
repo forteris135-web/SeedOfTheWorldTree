@@ -40,6 +40,9 @@ var arm_front_limit := INF
 const ARM_FRONT := 1.1
 ## 몸 기울기 배수 (거대화 몹은 앞머리가 땅에 박히지 않게 줄인다)
 var tilt_scale := 1.0
+## 돌아설 때 줄이는 폭의 한계 (0 = 폭이 0 을 지나며 몸을 튼다 — 사람 모양). 몸이 긴 기계는 0.5: 절반까지 줄이고 '쿵' 뒤집는다
+## (기계·작은 펌프가 4~5프레임 동안 세로 실선처럼 보였다 — 2026-10-20 검수). EnemyMechVisual 이 정한다.
+var turn_min_width := 0.0
 
 ## 공중이면 '공중 자세'로 바꾸는 상태들 (공격·무너짐·쓰러짐은 공중에서도 제 자세)
 const LOCO_STATES := [EnemyBase.State.IDLE, EnemyBase.State.PATROL, EnemyBase.State.CHASE, EnemyBase.State.BACKSTEP, EnemyBase.State.ALERT, EnemyBase.State.LUNGE, EnemyBase.State.HIT]
@@ -94,6 +97,9 @@ var _underlay_on := false
 var _aim_i := -1      # 대롱 뼈 번호
 var _overlay_sig := Vector3(-2, -2, -2)   # 머리 위 표시를 마지막으로 그린 값 (바뀔 때만 다시 그린다)
 var _aim_arm := -1    # 겨눌 때 돌리는 위팔 뼈 번호
+var _notifier: VisibleOnScreenNotifier2D   # 화면 밖 가만히 있는 몹은 뼈대를 쉬게 한다 (_cull_quiet)
+var _culled := false
+var _notifier_scale := -1.0
 
 
 func _ready() -> void:
@@ -107,7 +113,7 @@ func _ready() -> void:
 	add_child(rig)
 	if not rig.build(rig_id):
 		return
-	motion = RigMotion.new(rig)
+	motion = _make_motion()
 	rig.setup_ghosts(rig.data.get("ghost", ["torso", "arm_f_up", "arm_f_lo", "weapon"]), GHOST_COUNT)
 	_label = Label.new()
 	_label.add_theme_font_size_override("font_size", 22)
@@ -174,7 +180,16 @@ func _ready() -> void:
 		if _aim_i < 0 or _aim_arm < 0 or not motion.ch.has("arm_f_up"):
 			push_warning("대롱 겨눔: 뼈대 %s 에 %s 또는 arm_f_up 이 없어 겨누지 않는다" % [rig_id, aim_bone])
 			_aim_i = -1
+	if DisplayServer.get_name() != "headless":
+		# 뼈대를 덮는 넉넉한 사각형 (키 기준: 무기·천이 앞뒤로 키만큼, 위로 키의 1.5배 — 크기는 _cull_quiet 가 맞춘다)
+		_notifier = VisibleOnScreenNotifier2D.new()
+		add_child(_notifier)
 	_ready_ok = true
+
+
+## 움직임 층을 만든다 (몹마다 갈고리 달린 HookedRigMotion 으로 바꿔 쓰려면 이것을 덮어쓴다 — 두 번 만들지 않게)
+func _make_motion() -> RigMotion:
+	return RigMotion.new(rig)
 
 
 ## 상태가 바뀌었다고 표시만 해 둔다. 진입 연출은 다음 _process 에서 (하위 스크립트가 anim_hint 를 그 뒤에 세우므로).
@@ -272,6 +287,8 @@ func _process(delta: float) -> void:
 	if not _ready_ok or _enemy == null:
 		return
 	_t += delta
+	if _cull_quiet():
+		return
 	if not _floor_known:
 		_floor_y = _find_floor_y()
 		_floor_known = true
@@ -280,7 +297,8 @@ func _process(delta: float) -> void:
 	var gscale := rig.game_scale * art_scale
 	var vx := _enemy.velocity.x
 	var on_floor := _enemy.is_on_floor()
-	var airborne := not on_floor and absf(_enemy.velocity.y) > 60.0
+	# 한 번 공중이 되면 땅에 닿을 때까지 공중 (폴짝 뛴 꼭대기에서 세로 속도가 잠깐 작아질 때 다리가 땅 걸음을 시작하지 않게)
+	var airborne := not on_floor and (absf(_enemy.velocity.y) > 60.0 or _was_airborne)
 
 	# 방향 전환: 0.1초에 한 번만 받아들이고, 보이는 폭이 +1 → 0 → −1 을 지나며 몸을 튼다
 	_face_hold += delta
@@ -491,7 +509,8 @@ func _process(delta: float) -> void:
 	var sq := clampf(motion.spring_value("squash"), -0.25, 0.3) * 0.1
 	var shake := sin(_t * 45.0) * 1.2 * _tremor
 	rig.position = Vector2(shake, _floor_y)
-	rig.scale = Vector2(_mir.v * art_scale * (1.0 + sq), art_scale * (1.0 - sq))
+	var mir_w := _last_mir_sign * lerpf(turn_min_width, 1.0, absf(_mir.v))
+	rig.scale = Vector2(mir_w * art_scale * (1.0 + sq), art_scale * (1.0 - sq))
 	# 디딤 먼지
 	if absf(vx) > 80.0 and on_floor:
 		for leg in motion.legs:
@@ -560,6 +579,31 @@ func _process(delta: float) -> void:
 	if st == EnemyBase.State.BROKEN or _underlay_on:
 		_underlay.queue_redraw()
 	_underlay_on = st == EnemyBase.State.BROKEN
+
+
+## 화면 밖에서 가만히 서 있거나 거니는 몹은 뼈대를 움직이지 않는다 (모바일 비용 — 방 하나에 몹 그림만 매 프레임 약 1ms 를 썼다,
+## 2026-10-20 검수). 싸움·쓰러짐 같은 상태는 화면 밖에서도 그대로 움직인다 (돌아왔을 때 자세가 튀지 않게).
+## 보는 방향만은 맞춰 둔다 (경비병 방패 판정이 is_facing_settled 를 본다). 화면 없는 시험(headless)에서는 끈다.
+func _cull_quiet() -> bool:
+	if _notifier == null:
+		return false
+	if _notifier_scale != art_scale:
+		# 크기가 바뀌면(거대화는 _ready 뒤에 키운다) 사각형도 다시
+		_notifier_scale = art_scale
+		var h := float(rig.data.get("height", 1000.0)) * rig.game_scale * art_scale
+		_notifier.rect = Rect2(-h * 1.3, -h * 1.6, h * 2.6, h * 2.3)
+	var quiet := _enemy.state == EnemyBase.State.IDLE or _enemy.state == EnemyBase.State.PATROL
+	if quiet and not _notifier.is_on_screen():
+		_culled = true
+		_face_target = _enemy.facing
+		_mir.v = 1.0 if _enemy.facing > 0 else -1.0
+		_last_mir_sign = signf(_mir.v)
+		_last_x = _enemy.global_position.x
+		return true
+	if _culled:
+		_culled = false
+		motion.snap_feet()
+	return false
 
 
 ## 대롱(gun): 소녀를 겨눈다 (EnemySpriteVisual 의 겨눔과 같은 상태·한계). 상태 자세 대신 위팔 목표를 고쳐

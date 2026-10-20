@@ -19,11 +19,14 @@ const RIG_ID := "gray_leaf_bird"
 const BONE_SCALE := {"head": 0.82, "wing_b_in": 1.25, "wing_f_in": 1.25, "wing_b_fold": 1.15, "wing_f_fold": 1.15, "tail_a": 1.05, "tail_c": 1.1}
 ## 잔상 간격(초)
 const GHOST_INTERVAL := 0.03
-## 누운 몸이 바닥에 묻히는 깊이 (게임 px)
-const LIE_SINK := 12.0
+## 누운 몸이 바닥에 묻히는 깊이 (게임 px) — 삐죽한 잎 끝이 풀에 묻혀 무게가 실려 보일 만큼만 (12 는 몸통·머리가 바닥선 아래
+## 8~12px 로 비쳤다 — 2026-10-20 검수)
+const LIE_SINK := 5.0
 ## 날 때 몸을 발 자리보다 이만큼(게임 px) 내려 그린다 — 몸 가운데가 몸 충돌·맞는 영역(보스 원점 위 150px)에 오게.
 ## 바닥 가까이(이 값의 두 배 안)에서는 부드럽게 0 으로 (내려앉는 순간 발톱이 바닥에 닿는다).
 const AIR_DROP := 95.0
+## 돌아설 때 줄이는 폭의 한계 (온전한 폭의 몫)
+const TURN_MIN_W := 0.45
 ## 펼친 날개 ↔ 접은 날개 그림이 바뀌는 빠르기 (초당 몫 — 6 이면 0.17초에 다 바뀐다)
 const FOLD_SPEED := 6.0
 
@@ -437,7 +440,9 @@ func _process(delta: float) -> void:
 	var sq := clampf(motion.spring_value("squash"), -0.25, 0.3) * 0.08
 	# 누운 몸은 바닥에 조금 묻힌다 (잎 끝이 바닥 풀에 묻혀 무게가 실려 보이게 — 껍질 점은 삐죽한 잎 끝까지라 그대로면 떠 보인다)
 	rig.position = Vector2(0.0, _floor_off + LIE_SINK * _lie)
-	rig.scale = Vector2(_face.v * art_scale * (1.0 + sq), art_scale * (1.0 - sq))
+	# 돌아설 때 폭은 절반 가까이(TURN_MIN_W)까지만 줄이고 부호가 바뀌는 프레임에 폴짝 뒤집는다 (옆모습 몸통이 0.1초 동안
+	# 납작한 판으로 보이지 않게 — 2026-10-20 검수)
+	rig.scale = Vector2(_last_face_sign * lerpf(TURN_MIN_W, 1.0, absf(_face.v)) * art_scale * (1.0 + sq), art_scale * (1.0 - sq))
 
 	# ---- 잔상·잎 ----
 	if ghost:
@@ -609,7 +614,9 @@ func _pose_for(st: int, ph: String, delta: float) -> Dictionary:
 			p["_ghost"] = ph == "active"
 			p["_breath"] = 0.0
 		S.PECK:
-			p = _three_beat("peck_windup", "peck", "peck_ready", ph)
+			# 찍기 정점을 타격 앞 60% 에 두고 그 뒤는 찍은 채 버틴다 — 부리가 판정(발밑 앞 80~280, 위 40~150) 안에 오래 머물게
+			# (예전엔 타격 끝에야 부리가 소녀 머리 위 167px 까지 내려와 판정에 닿지 않았다 — 2026-10-20 검수)
+			p = _three_beat("peck_windup", "peck", "peck_ready", ph, 0.6)
 			p["_ghost"] = ph == "active"
 			p["_breath"] = 0.0
 			if ph == "active":
@@ -689,7 +696,8 @@ func _fallen_pose(st: int, delta: float) -> Dictionary:
 
 
 ## 세 박자: 예비(지금 자세 → 예비 자세, 끝에서 멈칫) → 타격(채찍처럼, 지나침) → 되돌림(출렁이며 준비 자세).
-func _three_beat(windup: String, strike: String, ready: String, ph: String) -> Dictionary:
+## strike_span: 타격 구간의 몇 몫 안에 휘두르기를 끝내고 뻗은 채 버틸지 (1 = 구간 끝까지)
+func _three_beat(windup: String, strike: String, ready: String, ph: String, strike_span := 1.0) -> Dictionary:
 	var q := _boss.phase_progress()
 	var p: Dictionary
 	match ph:
@@ -697,7 +705,7 @@ func _three_beat(windup: String, strike: String, ready: String, ph: String) -> D
 			p = motion.three_beat(_from, motion.pose(windup), motion.pose(strike), motion.pose(ready), "windup", q)
 			p["_drive"] = RigMotion.Drive.SOFT
 		"active":
-			p = motion.three_beat(_from, motion.pose(windup), motion.pose(strike), motion.pose(ready), "strike", q, 0.2)
+			p = motion.three_beat(_from, motion.pose(windup), motion.pose(strike), motion.pose(ready), "strike", minf(q / strike_span, 1.0), 0.2)
 			p["_drive"] = RigMotion.Drive.FAST
 		"recovery":
 			p = motion.three_beat(_phase_from, {}, {}, motion.pose(ready), "recover", q)
