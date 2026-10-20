@@ -464,6 +464,18 @@ func _draw_trail() -> void:
 		prev = p
 
 
+# ---------- 이펙트 자리 ----------
+
+## EnemyRigVisual.fx_point 에 낚싯줄 자리를 더한다: whip_tip(줄 끝) / hand(줄을 쥔 주먹)
+func fx_point(kind: String) -> Vector2:
+	match kind:
+		"whip_tip":
+			return _pts[0] if _rope_ok and _pts.size() > 0 else Vector2.INF
+		"hand":
+			return _hand_world() if _grip_bone >= 0 else Vector2.INF
+	return super.fx_point(kind)
+
+
 # ---------- 옛 그림과 같은 이름 (시험 probe_lake 가 읽는다) ----------
 
 ## 줄이 나오는 자리 (이 노드 기준) = 주먹

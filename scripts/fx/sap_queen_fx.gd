@@ -7,6 +7,7 @@ extends "res://scripts/fx/skill_fx.gd"
 ##  - 하늘에 떠 있는 동안 가끔 날개에서 수액 방울이 떨어진다
 
 const BODY := Vector2(0, -120)
+## 2026-10-20 통합: 나비 떼를 풀어 놓는 고리는 뼈대 그림의 두 손(vis_point "hands"), 날개가루는 두 날개 가운데를 따른다.
 
 var _prev_spawned := 0
 
@@ -25,11 +26,11 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		return
 	match state_name():
 		"DUST":
-			Fx.spawn("wing_dust_burst", boss.global_position + BODY)
+			Fx.spawn("wing_dust_burst", _wings_at())
 		"WAVE":
 			Fx.spawn("sap_splash", Vector2(boss.global_position.x, _water_top()), {"scale": 1.25})
 		"BUTTERFLIES":
-			Fx.spawn("butterfly_burst", ahead(90.0, -140.0))
+			Fx.spawn("butterfly_burst", vis_point("hands", ahead(90.0, -140.0)))
 
 
 func _tick(delta: float) -> void:
@@ -40,7 +41,7 @@ func _tick(delta: float) -> void:
 			# 2페이즈: 반 박 뒤 한 번 더 흩뿌린다 (_spawned 1 → 2)
 			var sp := int(val("_spawned", 0))
 			if sp == 2 and _prev_spawned == 1:
-				Fx.spawn("wing_dust_burst", body, {"scale": 0.8})
+				Fx.spawn("wing_dust_burst", _wings_at(), {"scale": 0.8})
 			_prev_spawned = sp
 		"WAVE":
 			if String(val("attack_phase", "")) == "startup" and every("drip", 0.1, delta):
@@ -65,3 +66,13 @@ func _water_top() -> float:
 		if pool and boss.global_position.x >= pool.global_position.x and boss.global_position.x <= pool.global_position.x + pool.size.x:
 			return pool.to_global(Vector2(0.0, pool.surface_top())).y
 	return y
+
+
+## 날개가루가 터지는 자리: 두 위 날개 가운데의 중간 (뼈대를 못 읽으면 몸 가운데)
+func _wings_at() -> Vector2:
+	var body := boss.global_position + BODY
+	var a := vis_point("wing_f", Vector2.INF)
+	var b := vis_point("wing_b", Vector2.INF)
+	if a.is_finite() and b.is_finite():
+		return (a + b) * 0.5
+	return body

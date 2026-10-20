@@ -116,6 +116,10 @@ var _fall_by: Player
 var last_hit_dir := 1
 ## 무너짐·쓰러짐 이펙트 크기 배수 (거대화 중간 보스는 몸 크기만큼 — EliteTraits.apply 가 정한다)
 var fx_scale := 1.0
+## fx_point 가 믿는 거리 (몹 원점에서 px, 거대화는 fx_scale 배) — 이보다 멀면 그림 자리 대신 예전 고정 자리
+const FX_POINT_RANGE := 520.0
+## shot_origin 이 예전 고정 자리에서 옮길 수 있는 가장 먼 거리 (px)
+const SHOT_SHIFT_MAX := 60.0
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -630,6 +634,24 @@ func _spawn_sprout(at: Vector2) -> void:
 		var s := sprout_scene.instantiate()
 		s.global_position = at
 		get_parent().add_child(s)
+
+
+## 이펙트를 띄울 자리: 그림(부위 뼈대)이 알려 주는 무기 끝·대롱 끝·방패 면 등 (EnemyRigVisual.fx_point 의 이름).
+## 그림이 모르거나(예전 그림) 뼈대가 이상하게 먼 자리를 주면 fallback (예전 고정 자리) — 이펙트 때문에 멈추거나 엉뚱한 데 뜨지 않게.
+func fx_point(kind: String, fallback: Vector2) -> Vector2:
+	var vis := get_node_or_null("Visual")
+	if vis and vis.has_method("fx_point"):
+		var p: Vector2 = vis.fx_point(kind)
+		if p.is_finite() and p.distance_to(global_position) < FX_POINT_RANGE * maxf(fx_scale, 1.0):
+			return p
+	return fallback
+
+
+## 대롱 몹이 쏘는 자리: 그림의 대롱 끝(muzzle)으로 옮기되 예전 고정 자리에서 SHOT_SHIFT_MAX(× fx_scale) 넘게는 옮기지 않는다
+## (뼈대 그림의 대롱 끝에서 씨앗·수액이 나가게 — 반동으로 대롱이 크게 흔들린 순간에도 판정 출발점이 멀리 튀지 않게).
+func shot_origin(fallback: Vector2) -> Vector2:
+	var m := fx_point("muzzle", fallback)
+	return fallback + (m - fallback).limit_length(SHOT_SHIFT_MAX * maxf(fx_scale, 1.0))
 
 
 ## 그림(Visual)에 메서드가 있으면 부른다 (충격·반동 같은 1회 연출).

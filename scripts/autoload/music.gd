@@ -344,6 +344,15 @@ func falter(depth := 0.16, time := 1.4) -> void:
 	_pitch_tween.tween_property(p, "pitch_scale", 1.0, time * 0.65).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 
+## 지금 곡이 흐르는 빠르기 (1 = 그대로, 휘청이는 동안 1 − depth 까지 처진다). 곡이 없으면 1.
+## 곡에 맞춰 움직이는 그림(무쇠 펌프의 '쿵')이 곡과 같은 빠르기로 늘어지게 읽는다.
+func tempo_scale() -> float:
+	if _current == "":
+		return 1.0
+	var p := _players[_active]
+	return p.pitch_scale if p.playing else 1.0
+
+
 ## 휘청이는 중인가 (시험용)
 func is_faltering() -> bool:
 	return _pitch_tween != null and _pitch_tween.is_running()

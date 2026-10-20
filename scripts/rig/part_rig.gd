@@ -370,6 +370,56 @@ func bone_point(bone_name: String, local := Vector2.ZERO) -> Vector2:
 	return to_rig_local(xf[i] * local)
 
 
+## ---------- 세상 좌표 자리 (이펙트·시험이 읽는다 — 2026-10-20 이펙트 ↔ 뼈대 맞춤) ----------
+## 모두 마지막 apply() 결과(xf)를 쓴다. 뼈·자리가 없거나 아직 만들지 않았으면 Vector2.INF (부르는 쪽이 대신 자리를 쓴다).
+
+## 뼈 틀의 점 → 세상 좌표
+func bone_global(bone_name: String, local := Vector2.ZERO) -> Vector2:
+	var i := bone_index(bone_name)
+	if i < 0 or i >= xf.size() or not is_inside_tree():
+		return Vector2.INF
+	return to_global(to_rig_local(xf[i] * local))
+
+
+## 뼈 끝(관절에서 축을 따라 len × frac) → 세상 좌표. 칼끝·창끝·대롱 끝·드릴 끝처럼 축이 있는 부위.
+func bone_tip_global(bone_name: String, frac := 1.0) -> Vector2:
+	var i := bone_index(bone_name)
+	if i < 0 or i >= xf.size() or not is_inside_tree():
+		return Vector2.INF
+	return to_global(to_rig_local(xf[i] * Vector2(0.0, bone_len[i] * frac)))
+
+
+## 부위 그림(껍질 점)의 가운데 → 세상 좌표. 방패 면·몸통 가운데처럼 축이 없는 부위.
+func bone_center_global(bone_name: String) -> Vector2:
+	var i := bone_index(bone_name)
+	if i < 0 or i >= xf.size() or not is_inside_tree():
+		return Vector2.INF
+	var h: PackedVector2Array = hulls[i] if i < hulls.size() else PackedVector2Array()
+	if h.is_empty():
+		return to_global(to_rig_local(xf[i].origin))
+	var r := Rect2(h[0], Vector2.ZERO)
+	for q in h:
+		r = r.expand(q)
+	return to_global(to_rig_local(xf[i] * r.get_center()))
+
+
+## 설계도 sockets 의 자리 → 세상 좌표 (부리 끝·대포 입·드릴 끝·핵 등)
+func socket_global(sock: String) -> Vector2:
+	var sd: Dictionary = data.get("sockets", {}).get(sock, {})
+	if sd.is_empty():
+		return Vector2.INF
+	return bone_global(str(sd.get("bone", "")), _v(sd.get("pos", [0.0, 0.0])))
+
+
+## 뼈의 세상 방향 (뼈 축 = 뼈 틀의 아래쪽 +y 가 세상에서 가리키는 각도, 라디안). 좌우 뒤집기(scale.x)를 반영한다.
+func bone_axis_angle(bone_name: String) -> float:
+	var a := bone_global(bone_name)
+	var b := bone_global(bone_name, Vector2(0.0, 100.0))
+	if not a.is_finite() or not b.is_finite() or a.distance_squared_to(b) < 0.0001:
+		return 0.0
+	return (b - a).angle()
+
+
 ## 노드를 뼈에 붙인다: apply() 마다 position 만 따라간다 (회전은 따라가지 않는다 — 빛·입자용).
 func attach(bone_name: String, node: Node2D, local := Vector2.ZERO) -> void:
 	var i := bone_index(bone_name)

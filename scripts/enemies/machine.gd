@@ -46,7 +46,8 @@ func _physics_process(delta: float) -> void:
 		_fx_t -= delta
 		if _fx_t <= 0.0:
 			_fx_t = 0.05
-			Fx.spawn("drill_spark", global_position + Vector2(facing * 150.0, -hurt_height * 0.35) + Vector2(randf_range(-10.0, 10.0), randf_range(-20.0, 20.0)))   # 이펙트: 드릴 불똥
+			var tip := fx_point("drill_tip", global_position + Vector2(facing * 150.0, -hurt_height * 0.35))   # 뼈대 드릴 끝
+			Fx.spawn("drill_spark", tip + Vector2(randf_range(-10.0, 10.0), randf_range(-20.0, 20.0)))   # 이펙트: 드릴 불똥
 		if not is_on_floor():
 			velocity.y += gravity * delta
 		move_and_slide()
@@ -61,7 +62,7 @@ func _physics_process(delta: float) -> void:
 			Juice.shake(4.0)
 			# 들이받기 끝: '꽝' 충격 반동 (벽에 부딛혔으면 더 크게)
 			_visual_call("impact", [facing, 1.4 if hit_wall else 0.9])
-			Fx.spawn("slam_impact", global_position + Vector2(facing * 150.0, -hurt_height * 0.4), {"scale": 1.3 if hit_wall else 0.9})   # 이펙트: 들이받음
+			Fx.spawn("slam_impact", fx_point("drill_tip", global_position + Vector2(facing * 150.0, -hurt_height * 0.4)), {"scale": 1.3 if hit_wall else 0.9})   # 이펙트: 들이받음 (드릴 끝)
 		return
 	if _ramming and state not in [State.WINDUP, State.STRIKE]:
 		_ramming = false

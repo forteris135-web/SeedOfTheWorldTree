@@ -85,8 +85,9 @@ class MuzzleDot extends Node2D:
 	var flash := 0.0
 	var t := 0.0
 	const RED := Color(2.2, 0.45, 0.35)
+	const CODE_FLASH := false
 	func _draw() -> void:
-		if amount <= 0.01 and flash <= 0.01:
+		if amount <= 0.01 and (flash <= 0.01 or not CODE_FLASH):
 			return
 		var a := clampf(amount, 0.0, 1.0)
 		var pulse := 0.5 + 0.5 * sin(t * 22.0)
@@ -98,8 +99,9 @@ class MuzzleDot extends Node2D:
 		draw_circle(Vector2.ZERO, dot_r * 1.9, Color(RED, a * 0.22))
 		draw_circle(Vector2.ZERO, dot_r, Color(RED, a * 0.95))
 		draw_circle(Vector2.ZERO, dot_r * 0.45, Color(2.6, 1.6, 1.4, a))
-		# 발사 번쩍임: 터지는 원 + 짧은 빛살 6개
-		if flash > 0.01:
+		# 발사 번쩍임: 터지는 원 + 짧은 빛살 6개 — 2026-10-20 통합: 기획자 이펙트 그림의 금빛 번쩍임(scripts/fx/bird_fx.gd 의
+		# feather_flash, 같은 자리)이 맡아 코드 번쩍임은 끈다 (CODE_FLASH). 붉은 점·조여드는 고리(예고)는 그대로.
+		if CODE_FLASH and flash > 0.01:
 			var f := clampf(flash, 0.0, 1.0)
 			var burst := lerpf(44.0, 14.0, f)
 			draw_circle(Vector2.ZERO, burst, Color(2.4, 1.2, 0.9, f * 0.5))
@@ -713,6 +715,30 @@ func _three_beat(windup: String, strike: String, ready: String, ph: String, stri
 		_:
 			p = motion.pose(ready).duplicate()
 	return p
+
+
+## 이름으로 고르는 이펙트 자리 (scripts/fx/bird_fx.gd 가 읽는다 — 이펙트가 뼈대의 부리·날개를 따라가게):
+## beak(부리 끝) / wing_tip(가까운 날개 끝) / wing_tip_back(먼 날개 끝) / chest(몸통 가운데). 모르는 이름이면 Vector2.INF.
+func fx_point(kind: String) -> Vector2:
+	if rig == null:
+		return Vector2.INF
+	match kind:
+		"beak", "wing_tip":
+			return rig.socket_global(kind)
+		"wing_tip_back":
+			# 먼 날개 끝: 가까운 날개 끝 자리(설계도 wing_tip)를 먼 날개 뼈에 그대로 옮긴다 (두 날개는 같은 그림을 쓴다)
+			var sd: Dictionary = rig.data.get("sockets", {}).get("wing_tip", {})
+			if sd.is_empty() or not rig.has_bone("wing_b_out"):
+				return Vector2.INF
+			return rig.bone_global("wing_b_out", PartRig._v(sd["pos"]))
+		"chest":
+			return rig.bone_center_global("torso")
+	return Vector2.INF
+
+
+## 뼈 틀의 점 → 세상 자리 (뼈가 없으면 Vector2.INF)
+func bone_global(bone_name: String, local := Vector2.ZERO) -> Vector2:
+	return rig.bone_global(bone_name, local) if rig else Vector2.INF
 
 
 ## 뼈대 설계도 sockets 의 자리 (세계 좌표): "beak"(부리 끝) / "wing_tip"(가까운 날개 끝). 시험·연출이 읽는다.

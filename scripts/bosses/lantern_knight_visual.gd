@@ -54,6 +54,8 @@ const TURN_MIN_W := 0.45
 const TRAIL_MIN_SPEED := 900.0
 const TRAIL_FULL_SPEED := 3200.0
 const TRAIL_LIFE := 0.16
+## 창끝 띠를 그리는가 (false: 창끝은 이펙트 그림이 맡고 등불 띠만 — 위 _update_trail 설명)
+const TRAIL_TIP := false
 ## 쓰러짐 순서 (FALLEN 이 된 뒤 초): 무릎 꿇기 → 창에 기대어 떨기 → 엎어짐 시작 → 다 누움
 const FALL_KNEE := 0.45
 const FALL_LEAN := 1.5
@@ -1005,6 +1007,46 @@ func _spark_at(pos: Vector2) -> void:
 	_embers.emitting = true
 
 
+## ---------- 이펙트 자리 (scripts/fx/knight_fx.gd 가 읽는다 — 이펙트가 뼈대의 창·등불을 따라가게) ----------
+
+## 창끝의 세상 자리
+func weapon_tip_global() -> Vector2:
+	return _tip_global() if rig else Vector2.INF
+
+
+## 뼈 틀의 점 → 세상 자리 (뼈가 없으면 Vector2.INF)
+func bone_global(bone_name: String, local := Vector2.ZERO) -> Vector2:
+	return rig.bone_global(bone_name, local) if rig else Vector2.INF
+
+
+## 이름으로 고르는 이펙트 자리: spear_tip(창끝) / spear_grip(앞손 = 창 손잡이) / spear_mid(창 가운데) / lantern(창에 매단 등불)
+## / head(투구 등불) / chest(가슴). 모르는 이름이면 Vector2.INF.
+func fx_point(kind: String) -> Vector2:
+	if rig == null or _i_weapon < 0:
+		return Vector2.INF
+	match kind:
+		"spear_tip":
+			return _tip_global()
+		"spear_grip":
+			return rig.to_global(rig.to_rig_local(rig.xf[_i_weapon].origin))
+		"spear_mid":
+			return rig.to_global(rig.to_rig_local(rig.xf[_i_weapon] * Vector2(0, SPEAR_TIP * 0.5)))
+		"lantern":
+			return _lantern_global()
+		"head":
+			return _head_glow.global_position if _head_glow else rig.bone_global("head")
+		"chest":
+			return rig.bone_center_global("torso")
+	return Vector2.INF
+
+
+## 창 방향 (손잡이 → 창끝, 세상 각도 라디안)
+func spear_angle() -> float:
+	if rig == null or _i_weapon < 0:
+		return 0.0
+	return (fx_point("spear_tip") - fx_point("spear_grip")).angle()
+
+
 ## 창끝 / 등불의 세상 자리 (시험·불씨·궤적이 쓴다)
 func _tip_global() -> Vector2:
 	return rig.to_global(rig.to_rig_local(rig.xf[_i_weapon] * Vector2(0, SPEAR_TIP)))
@@ -1026,12 +1068,13 @@ func _update_trail(delta: float) -> void:
 		_lantern_speed = (lantern - _prev_lantern).length() / delta
 	_prev_tip = tip
 	_prev_lantern = lantern
-	# 휘두르는 순간(타격)과 되돌림 첫머리에만 점을 남긴다 — 예비동작에서 창을 머리 위로 넘길 때나 몸 틀기에 띠가 생기지 않게.
-	# 몸이 다 돌았을 때(|scale.x| > 0.9)만.
+	# 띠는 등불 회전(SPIN)에서만 남긴다 (2026-10-20 통합: 찌르기·3연격·등불 휘두르기·검기·내려찍기·돌진은 기획자 이펙트 그림
+	# (scripts/fx/knight_fx.gd — 불빛 줄기·불꽃 초승달·붉은 초승달·불꽃 터짐)이 맡는다. 코드 띠까지 겹치면 크림색 호가 불꽃 그림 위에
+	# 따로 떠서 두 겹으로 보였고, 가드 불가 공격의 붉은빛도 흐려졌다). 등불 회전은 바닥 불꽃 고리만 있어 등불이 도는 길을
+	# 주황 등불 띠(창끝 띠는 그리지 않는다)로 보여 준다. 몸이 다 돌았을 때(|scale.x| > 0.9)만.
 	var ph := boss.attack_phase
-	var on := ph == "active" or (ph == "recovery" and boss.phase_progress() < 0.3)
-	if boss.state == LanternKnight.State.CHARGE or boss.state == LanternKnight.State.SPIN:
-		on = on or (ph == "startup" and boss.state == LanternKnight.State.SPIN and boss.phase_progress() > 0.5)
+	var on := boss.state == LanternKnight.State.SPIN and (ph == "active" or (ph == "startup" and boss.phase_progress() > 0.5) \
+		or (ph == "recovery" and boss.phase_progress() < 0.3))
 	if on and absf(_face) > 0.9:
 		var to_tip := tip - pivot
 		var to_lan := lantern - pivot
@@ -1070,7 +1113,7 @@ func _draw_trail() -> void:
 			var lt := lerpf(float(a[2]), float(b[2]), u)
 			var al := lerp_angle(float(a[3]), float(b[3]), u)
 			var ll := lerpf(float(a[4]), float(b[4]), u)
-			if k > 0.0:
+			if k > 0.0 and TRAIL_TIP:
 				var c0 := p_prev + Vector2.from_angle(at_prev) * lt_prev
 				var c1 := p + Vector2.from_angle(at) * lt
 				var c2 := p + Vector2.from_angle(at) * lt * 0.82

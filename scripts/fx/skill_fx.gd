@@ -114,3 +114,20 @@ func red() -> bool:
 ## 바라보는 쪽 기준의 자리 (dx 는 앞쪽 +)
 func ahead(dx: float, dy: float) -> Vector2:
 	return boss.global_position + Vector2(dx * facing(), dy)
+
+
+## 보스 그림(부위 뼈대, 보스의 자식 Sprite)이 알려 주는 자리 — 창끝·부리·지팡이 머리·손·관 입 등 (각 그림의 fx_point 이름).
+## 2026-10-20 통합: 예전엔 보스 원점·판정 상자에서 고정 거리로 띄웠다 → 뼈대가 실제로 움직이는 자리를 따라간다.
+## 그림이 모르거나(이름 없음·뼈대 못 읽음) 보스에서 VIS_RANGE 넘게 먼 자리를 주면 fallback (예전 고정 자리) — 이펙트 때문에 멈추지 않게.
+const VIS_RANGE := 1100.0
+var _vis: Node = null
+
+
+func vis_point(kind: String, fallback: Vector2) -> Vector2:
+	if _vis == null or not is_instance_valid(_vis):
+		_vis = boss.get_node_or_null("Sprite")
+	if _vis and _vis.has_method("fx_point"):
+		var p: Vector2 = _vis.call("fx_point", kind)
+		if p.is_finite() and p.distance_to(boss.global_position) < VIS_RANGE:
+			return p
+	return fallback

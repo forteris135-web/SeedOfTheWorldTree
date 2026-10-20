@@ -6,6 +6,8 @@ extends "res://scripts/fx/skill_fx.gd"
 ##  - 깃털 화살: 쏠 때마다 부리 앞 금빛 번쩍임 (깃털 그림은 Projectile 의 look "bird_feather")
 ##  - 내려앉기·날아오르기: 발밑 잎 무더기 / 날개 휘두르기: 잿빛 바람 초승달 / 부리 찍기: 부리 끝 별빛
 ##  - 잎 삼키기: 잎 더미에서 부리로 빨려 드는 잎, 끊기면 잎이 흩어진다
+## 2026-10-20 통합: 부리에서 나는 이펙트(쪼기 별빛·삼키기 잎이 빨려 드는 곳)는 뼈대 그림의 부리 끝(vis_point "beak")을 따른다.
+## 깃털 번쩍임은 깃털이 실제로 생기는 자리(보스 muzzle_point — 판정 출발점)에 그대로 둔다.
 
 ## 바람 줄기 간격 (초) — 아이폰 부담을 생각해 줄기는 성기게, 잎은 조금 촘촘히
 const STREAK_GAP := 0.16
@@ -17,6 +19,10 @@ const STREAK_SPEED := 1700.0
 var _prev_flash := 0.0
 var _prev_stagger := 0.0
 var _prev_crouch := false
+## 부리 찍기 별빛을 기다리는 중 (타격 시작엔 부리가 아직 머리 위라, 부리가 판정 안으로 내려오는 때에 띄운다)
+var _peck_pending := false
+## 부리가 판정 상자에 들어오는 타격 진행도 (뼈대 검수 2026-10-20: 타격의 50% 무렵)
+const PECK_AT := 0.5
 ## 기술이 끊기면(무너짐 등) 거둘 따라다니는 이펙트: [[FxSprite, gen], ...]
 var _held: Array = []
 
@@ -51,11 +57,17 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		"SWEEP":
 			Fx.spawn("wing_sweep", ahead(150.0, -110.0), {"facing": facing(), "rot": 30.0})
 		"PECK":
-			Fx.spawn("peck_burst", ahead(230.0, -60.0), {"facing": facing()})
+			_peck_pending = true   # 부리가 내리찍히는 순간(타격 진행 PECK_AT)에 부리 끝에서 터진다 — _tick
 
 
 func _tick(delta: float) -> void:
 	var st := state_name()
+	if _peck_pending:
+		if st != "PECK" or String(val("attack_phase", "")) != "active":
+			_peck_pending = false
+		elif not boss.has_method("phase_progress") or float(boss.call("phase_progress")) >= PECK_AT:
+			_peck_pending = false
+			Fx.spawn("peck_burst", vis_point("beak", ahead(230.0, -60.0)), {"facing": facing()})
 	if st == "WIND":
 		if red():
 			if every("ember", 0.1, delta):
@@ -72,12 +84,13 @@ func _tick(delta: float) -> void:
 		var pile = val("_target_pile")
 		if pile != null and is_instance_valid(pile):
 			var from: Vector2 = pile.global_position + Vector2(randf_range(-80.0, 80.0), randf_range(-40.0, -8.0))
-			var beak := ahead(170.0, -70.0)
+			var beak := vis_point("beak", ahead(170.0, -70.0))
 			Fx.spawn("leaf_suck", from, {"vel": (beak - from) / 0.45})
 	# 잎 삼키기를 끊었다 (움찔이 1 로 튄다): 부리 앞 잎이 흩어진다
 	var sg := float(val("stagger", 0.0))
 	if sg > _prev_stagger + 0.5:
-		Fx.spawn("pile_burst", ahead(160.0, 0.0), {"scale": 0.8})
+		var bk := vis_point("beak", ahead(160.0, 0.0))
+		Fx.spawn("pile_burst", Vector2(bk.x, boss.global_position.y), {"scale": 0.8})
 	_prev_stagger = sg
 	# 날아오르기: 웅크렸다 박차는 순간 발밑에 잎이 터진다
 	var cr := bool(val("crouching", false))

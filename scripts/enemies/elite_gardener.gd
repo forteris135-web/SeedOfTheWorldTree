@@ -68,7 +68,7 @@ func _shoot() -> void:
 	p.color = Color(0.8, 0.6, 0.28)
 	p.look = "elite_seed"   # 이펙트 리뉴얼 F2
 	get_parent().add_child(p)
-	var origin := global_position + Vector2(facing * 70.0 * EliteTraits.SIZE_MULT, -hurt_height * 0.55)
+	var origin := shot_origin(global_position + Vector2(facing * 70.0 * EliteTraits.SIZE_MULT, -hurt_height * 0.55))   # 뼈대 대롱 끝
 	p.global_position = origin
 	var dir := (player.global_position + Vector2(0, -40) - origin).normalized()
 	p.launch(dir, self, false)

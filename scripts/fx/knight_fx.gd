@@ -7,6 +7,9 @@ extends "res://scripts/fx/skill_fx.gd"
 ##  - 내려찍기(가드 불가): 예고 동안 몸에서 붉은 불티, 착지에 불꽃 터짐 + 붉은 고리 + 먼지
 ##  - 돌진: 뒤로 끌리는 불빛 줄기·먼지, 창이 박히면 불똥 / 등불 회전: 고리 한 겹마다 퍼지는 불꽃 고리
 ##  - 등불 던지기: 손의 불씨 (등불·불기둥 그림은 Projectile look "knight_lantern"/"knight_pillar", 붉은 예고 고리는 기사 논리가 띄운다)
+## 2026-10-20 통합: 창끝·등불·가슴에서 나는 이펙트는 뼈대 그림의 자리(vis_point — lantern_knight_visual.fx_point)를 따른다.
+## 찌르기 줄기는 판정 앞 470px 를 덮도록 뒤끝 x 는 그대로 두고 높이만 창끝을 따른다. 휘두르기 초승달은 판정 상자 기준 그대로.
+## 코드로 그린 창끝 띠(그림 쪽)는 껐다 — 기사의 공격은 이 그림 이펙트 한 겹으로 보인다 (등불 회전의 주황 등불 띠만 남김).
 
 var _prev_rings := 0
 var _prev_wave_sent := false
@@ -15,9 +18,9 @@ var _prev_wave_sent := false
 func _on_state(_old: int, _new: int) -> void:
 	match state_name():
 		"STUCK":
-			Fx.spawn("spear_stuck", ahead(380.0, -155.0), {"facing": facing()})
+			Fx.spawn("spear_stuck", vis_point("spear_tip", ahead(380.0, -155.0)), {"facing": facing()})
 		"STAGGER":
-			Fx.spawn("fire_ring", body_point(0.45, 330.0), {"scale": 0.8})
+			Fx.spawn("fire_ring", vis_point("chest", body_point(0.45, 330.0)), {"scale": 0.8})
 		"SPIN":
 			_prev_rings = 0
 
@@ -28,11 +31,11 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 	var f := facing()
 	match state_name():
 		"THRUST":
-			Fx.spawn("spear_thrust", ahead(-10.0, -155.0), {"facing": f})
+			Fx.spawn("spear_thrust", _thrust_at(), {"facing": f})
 		"COMBO3":
 			match int(val("combo_step", 0)):
 				0:
-					Fx.spawn("spear_thrust", ahead(-10.0, -155.0), {"facing": f})
+					Fx.spawn("spear_thrust", _thrust_at(), {"facing": f})
 				1:
 					Fx.spawn("spear_swing", ahead(150.0, -170.0), {"facing": f, "rot": 20.0})
 				2:
@@ -42,8 +45,9 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		"SLAM":
 			Fx.spawn("knight_slam", boss.global_position)
 		"THROW":
+			var lan := vis_point("lantern", ahead(80.0, -170.0))
 			for i in 5:
-				Fx.spawn("ember", ahead(80.0, -170.0) + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
+				Fx.spawn("ember", lan + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
 
 
 func _tick(delta: float) -> void:
@@ -70,8 +74,17 @@ func _tick(delta: float) -> void:
 		"WAVE":
 			var sent := bool(val("_wave_sent", false))
 			if sent and not _prev_wave_sent and String(val("attack_phase", "")) == "active":
+				# 검기가 생기는 자리(땅 가까이 앞 150) — 창끝은 이때 머리 위 높이라 따라가지 않는다 (검기와 번쩍임이 떨어져 보였다)
 				Fx.spawn("wave_flash", ahead(150.0, -120.0), {"facing": facing()})
 				Fx.spawn("spear_swing", ahead(140.0, -150.0), {"facing": facing(), "rot": 10.0, "scale": 1.1})
 			_prev_wave_sent = sent
 	if st != "WAVE":
 		_prev_wave_sent = false
+
+
+## 찌르기 불빛 줄기의 뒤끝 자리: x 는 판정 앞 470px 를 덮는 예전 자리, 높이는 뼈대 창끝 (판정 높이 100~210 안으로)
+func _thrust_at() -> Vector2:
+	var base := ahead(-10.0, -155.0)
+	var tip := vis_point("spear_tip", base)
+	var gy := boss.global_position.y
+	return Vector2(base.x, clampf(tip.y, gy - 210.0, gy - 100.0))

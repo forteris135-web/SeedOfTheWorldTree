@@ -70,7 +70,7 @@ func _shoot() -> void:
 	p.fall_gravity = 420.0
 	p.lifetime = 2.6
 	get_parent().add_child(p)
-	var origin := global_position + Vector2(facing * 60.0, -hurt_height * 0.5)
+	var origin := shot_origin(global_position + Vector2(facing * 60.0, -hurt_height * 0.5))   # 뼈대 대롱 끝 (2026-10-20)
 	p.global_position = origin
 	# 소녀가 움직이는 쪽을 조금 앞질러 겨눈다 (리듬을 알면 구르기로 피하고, 가드로 되받는다)
 	var aim := player.global_position + Vector2(player.velocity.x * 0.25, -50.0 - absf(player.global_position.x - origin.x) * 0.18)

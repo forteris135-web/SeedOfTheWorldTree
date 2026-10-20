@@ -23,6 +23,8 @@ const RED_C := Color(1.0, 0.1, 0.08)
 const RED_BODY := Color(1.6, 0.45, 0.4)   # 가드 불가 예고 때 몸이 물드는 색 (너무 밝으면 글로우로 번진다)
 const TRAIL_LIFE := 0.28   # 지팡이 호 궤적이 남는 시간
 const TRAIL_C := Color(0.7, 0.45, 1.0)
+## 코드 궤적을 그리는가 (false: 이펙트 그림만 — 아래 _process 의 설명)
+const TRAIL_ON := false
 ## 손이 자루를 따라 미끄러지는 길이 (시트 px, slide 채널 1 일 때): 휘두를 때 자루 아래쪽을 쥔다
 const SLIDE_PX := 330.0
 ## 지팡이 위 자리 (시트 px → 지팡이 뼈 틀). 설계도 sockets 에 있다: staff_head(달 원반), lantern(등불), staff_mid(자루 가운데)
@@ -163,6 +165,31 @@ func _on_state_changed(st: RootKeeper.State) -> void:
 ## 지팡이 머리(달 원반)의 월드 좌표 — 구슬·씨앗 예고 고리가 여기 뜬다 (보스의 orb_origin 이 읽는다)
 func head_world() -> Vector2:
 	return socket_world("staff_head")
+
+
+## 지팡이 머리(달 원반)의 세상 자리 — 이펙트가 지팡이를 따라가게 (head_world 와 같다)
+func weapon_tip_global() -> Vector2:
+	return socket_world("staff_head") if rig else Vector2.INF
+
+
+## 뼈 틀의 점 → 세상 자리 (뼈가 없으면 Vector2.INF)
+func bone_global(bone_name: String, local := Vector2.ZERO) -> Vector2:
+	return rig.bone_global(bone_name, local) if rig else Vector2.INF
+
+
+## 이름으로 고르는 이펙트 자리 (scripts/fx/root_keeper_fx.gd 가 읽는다): staff_head(달 원반) / staff_mid(자루 가운데)
+## / lantern(지팡이 등불) / hand(지팡이를 쥔 손) / chest(가슴). 모르는 이름이면 Vector2.INF.
+func fx_point(kind: String) -> Vector2:
+	if rig == null:
+		return Vector2.INF
+	match kind:
+		"staff_head", "staff_mid", "lantern":
+			return socket_world(kind) if _sock.has(kind) else Vector2.INF
+		"hand":
+			return rig.bone_center_global("hand_f")
+		"chest":
+			return rig.bone_center_global("torso")
+	return Vector2.INF
 
 
 ## 설계도 sockets 의 자리를 월드 좌표로 (없으면 보스 머리 위)
@@ -421,7 +448,10 @@ func _process(delta: float) -> void:
 	else:
 		_ghost_timer = 0.0
 	rig.fade_ghosts(delta)
-	_update_trail(trail)
+	# 지팡이 호 궤적(코드로 그린 보랏빛 띠)은 끈다 (2026-10-20 통합): 휘두르기·되돌려 베기는 기획자 이펙트 그림 '보랏빛 초승달'
+	# (scripts/fx/root_keeper_fx.gd — 지팡이 머리가 지나가는 호에 맞춰 뜬다)이 맡는다. 둘 다 그리면 각진 보랏빛 띠가
+	# 초승달 그림 위에 따로 떠서 두 겹으로 보였다. 내려찍기(가드 불가)는 붉은 이펙트만 (보랏빛 띠가 붉은 예고를 흐렸다).
+	_update_trail(trail and TRAIL_ON)
 	_update_light(delta)
 
 	# ---- 색 ----

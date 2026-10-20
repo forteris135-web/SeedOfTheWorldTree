@@ -836,3 +836,33 @@ func _draw_marks() -> void:
 		for i in range(1, _trail.size()):
 			var a := float(i) / _trail.size()
 			_marks.draw_line(_trail[i - 1], _trail[i], Color(0.75, 0.95, 1.0, 0.35 * a), 30.0 * a, true)
+
+
+# ---------- 이펙트 자리 (scripts/fx/sap_queen_fx.gd 가 읽는다 — 이펙트가 뼈대의 손·날개를 따라가게) ----------
+
+## 이름으로 고르는 이펙트 자리: hand_f / hand_b(두 손 — 손바닥 빛 자리) / hands(두 손 가운데) / wing_f / wing_b(위 날개 가운데)
+## / chest(가슴). 모르는 이름이면 Vector2.INF.
+func fx_point(kind: String) -> Vector2:
+	if rig == null:
+		return Vector2.INF
+	match kind:
+		"hand_f", "hand_b":
+			return rig.bone_tip_global(kind, 0.55)
+		"hands":
+			var a := rig.bone_tip_global("hand_f", 0.55)
+			var b := rig.bone_tip_global("hand_b", 0.55)
+			if not a.is_finite() or not b.is_finite():
+				return Vector2.INF
+			return (a + b) * 0.5
+		"wing_f":
+			return rig.bone_center_global("wing_uf")
+		"wing_b":
+			return rig.bone_center_global("wing_ub")
+		"chest":
+			return rig.bone_center_global("bust") if rig.has_bone("bust") else rig.bone_center_global("torso")
+	return Vector2.INF
+
+
+## 뼈 틀의 점 → 세상 자리 (뼈가 없으면 Vector2.INF)
+func bone_global(bone_name: String, local := Vector2.ZERO) -> Vector2:
+	return rig.bone_global(bone_name, local) if rig else Vector2.INF

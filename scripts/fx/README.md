@@ -101,6 +101,23 @@ Fx 밖의 노드(레이저, 초승달 검기 등)도 `Fx.make_material("light", 
 - 공용: 무너짐(BROKEN) → `boss_break`, 쓰러짐(FALLEN) → `boss_fall`.
 - 따라다니는 긴 이펙트(새의 바람 소용돌이·잎 회오리)는 상태가 바뀌면 `Fx.end_soon` 으로 부드럽게 거둔다.
 
+### 이펙트 ↔ 부위 뼈대 (2026-10-20 통합)
+
+보스·몹 그림이 부위 뼈대(RIGS.md)로 바뀌어 창·지팡이·부리·관이 실제로 움직이므로, **몸의 한 부분에서 나는 이펙트는 그 부분을 따라간다.**
+- 보스: 관찰자가 `vis_point("이름", 예전 고정 자리)` 로 묻는다 → 보스의 `Sprite`(그림) 의 `fx_point(이름)`. 그림이 모르거나(Vector2.INF)
+  보스에서 너무 멀면(`VIS_RANGE`) 예전 고정 자리 — 뼈대를 못 읽어도 이펙트 때문에 멈추지 않는다.
+  이름: 기사 `spear_tip`·`spear_grip`·`spear_mid`·`lantern`·`head`·`chest` / 새 `beak`·`wing_tip`·`wing_tip_back`·`chest`
+  / 뿌리지기 `staff_head`·`staff_mid`·`lantern`·`hand`·`chest` / 여왕 `hand_f`·`hand_b`·`hands`·`wing_f`·`wing_b`·`chest`
+  / 무쇠 펌프 `mouth`(=`piston`)·`muzzle`·`core`·`vent`·`outlet`. 각 그림에 `weapon_tip_global()`·`bone_global(뼈, 자리)`(·`muzzle_global()`)도 있다.
+- 몹: 몹 논리가 `fx_point("이름", 예전 고정 자리)`(EnemyBase) 로 묻는다 → `EnemyRigVisual.fx_point`: `weapon_tip`·`muzzle`·`weapon`(방패 면)·`hand`·`chest`·`head`,
+  그 밖엔 설계도 sockets 이름(`drill_tip`·`core`·`valve` …), 어부는 `whip_tip`·`hand`. 대롱 몹(정원사·거대 정원사·작은 펌프)은 `shot_origin()` 으로
+  씨앗·수액이 **대롱 끝에서** 나간다 (예전 고정 자리에서 최대 60px — 판정 출발점이 크게 튀지 않게).
+- 판정 상자를 덮는 이펙트(찌르기 줄기·휘두르기 초승달·내려찍기 터짐·물결)는 판정 기준 자리를 그대로 두고, 높이만 뼈대를 따른다(기사 찌르기).
+- **한 공격엔 한 겹:** 그림 쪽의 코드 띠(기사 창끝 띠·뿌리지기 지팡이 보랏빛 띠·펌프 빨아들이기 띠·새 깃털 코드 번쩍임)는 껐다 —
+  이 그림 이펙트와 겹쳐 두 겹으로 보였다. 남긴 코드 연출: 기사 등불 회전의 주황 등불 띠(바닥 고리만으론 등불이 도는 길이 안 보인다),
+  어부 낚싯줄 끝 자국(줄을 따라가는 가는 선), 여왕 내리꽂기 꼬리·박자 고리, 새 깃털 예고(붉은 점·고리), 뼈대 잔상, 작은 불씨·먼지 알갱이.
+- 가드 불가 공격은 계속 진한 붉은빛 (그림의 붉은 깜빡임 + 붉은 불티·`danger` 팔레트) — 크림·보랏빛 코드 띠가 사라져 더 또렷하다.
+
 ### 새로 생긴 것
 
 - 팔레트: `fire` `ember` `sap` `spore` `moon` `danger` `steam`

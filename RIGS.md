@@ -26,7 +26,7 @@
 | `scripts/rig/part_rig.gd` | `PartRig` — 뼈대 노드: 부위 그림을 관절로 잇고 그린다 (변형 그림, 번쩍임·흩어짐 셰이더, 잔상, 덧고침 도우미) |
 | `scripts/rig/rig_motion.gd` | `RigMotion` — 움직임: 스프링 보간, 세 박자 휘두르기, 걸음·발 디딤, 다리 IK, 무릎 꿇기, 무기 땅 막기, 천 흔들림, 땅 닿기·내려놓기 |
 | `scripts/rig/rig_poses.gd` | `RigPoses` — 사람 모양(humanoid) 자세 모음 + 원형 파일 읽기. **`SETS` 는 고치지 않는다** (새 원형은 파일로) |
-| `scripts/enemies/enemy_rig_visual.gd` | `EnemyRigVisual` — 일반 몹의 Visual (EnemySpriteVisual 과 공개 함수가 같다) |
+| `scripts/enemies/enemy_rig_visual.gd` | `EnemyRigVisual` — 일반 몹의 Visual (예전 한 장 그림 EnemySpriteVisual 과 공개 함수가 같다 — 예전 것은 2026-10-20 지움) |
 | `scripts/enemies/hooked_rig_motion.gd` | `HookedRigMotion` — RigMotion + '움직이기 직전 갈고리' (몹 그림이 목표 자세를 한 번 더 고친다) |
 | `scripts/enemies/enemy_mech_visual.gd` | `EnemyMechVisual` — 기계 몹 공용 (드릴 돌기·빛·김·불꽃·늘 겨누는 대롱·배를 땅에 대는 쓰러짐) |
 | `shaders/rig_flash.gdshader` | 부위 공용 재질: 피격 번쩍임, 흩어져 사라짐 (부위 지역 좌표의 부드러운 얼룩) |
@@ -379,6 +379,12 @@ func _process(delta: float) -> void:
 | `copy_pose_from(src)` | 같은 뼈대의 다른 PartRig 자세를 그대로 (뼈 수가 다르면 false) |
 | `skeleton_node()` | 부위 그림이 놓인 노드 (덧그림을 부위 사이에 끼울 때) |
 | `bone_point`, `to_rig_local`, `attach`, `set_variant`, `sprite_of`, `set_facing`, `set_flash`, `set_dissolve`, `lowest_y`, `highest_y`, `bounds`, 잔상 함수 | 그 밖의 원래 공개 함수 |
+| `bone_global(뼈, 자리)` / `bone_tip_global(뼈, 몫 := 1)` / `bone_center_global(뼈)` / `socket_global(이름)` / `bone_axis_angle(뼈)` | **세상 좌표** (2026-10-20): 뼈 틀의 점 / 뼈 끝(축 len × 몫 — 칼끝·창끝·대롱 끝) / 부위 그림 가운데(방패 면) / 설계도 sockets / 뼈 축의 세상 각도. 없으면 `Vector2.INF` |
+
+**그림의 이펙트 자리 `fx_point(이름)`** (2026-10-20 — 이펙트가 뼈대를 따라가게, `scripts/fx/README.md` '이펙트 ↔ 부위 뼈대')
+- 모든 보스 그림과 `EnemyRigVisual`(+`EnemyMechVisual`·수액 어부)에 있다. 모르는 이름이면 `Vector2.INF` → 부르는 쪽(관찰자 `vis_point`, 몹 `EnemyBase.fx_point`)이 예전 고정 자리를 쓴다.
+- 새 몹·보스 그림을 만들면 무기 끝·입·손 같은 자리를 `fx_point` 에 더해 둔다 (이름은 README 표). 몹은 기본(`weapon_tip`·`muzzle`·`weapon`·`hand`·`chest`·`head` + sockets 이름)이 이미 있다.
+- 그림 쪽에 코드로 그린 띠·호를 새로 넣기 전에, 같은 공격에 이펙트 그림(`scripts/fx/<보스>_fx.gd`)이 있는지 본다 — 한 공격엔 한 겹.
 
 ---
 

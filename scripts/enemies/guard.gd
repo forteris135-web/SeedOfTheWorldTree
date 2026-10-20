@@ -62,7 +62,9 @@ func _strike() -> void:
 		return
 	anim_hint = ""
 	super._strike()
-	Fx.spawn("shield_bash", global_position + Vector2(facing * 100.0, -hurt_height * 0.5), {"facing": facing})   # 이펙트: 방패 치기
+	# 이펙트: 방패 치기 — 뼈대 방패 면 조금 앞 (그림이 모르면 예전 고정 자리)
+	var bash_at := fx_point("weapon", global_position + Vector2(facing * 80.0, -hurt_height * 0.5)) + Vector2(facing * 20.0, 0.0)
+	Fx.spawn("shield_bash", bash_at, {"facing": facing})
 
 
 func _physics_process(delta: float) -> void:
@@ -79,7 +81,9 @@ func _physics_process(delta: float) -> void:
 		_fx_t -= delta
 		if _fx_t <= 0.0:
 			_fx_t = 0.06
-			Fx.spawn("charge_dust", global_position + Vector2(-facing * 30.0, -hurt_height * 0.45), {"facing": facing})   # 이펙트: 붉은 돌진 줄기
+			# 이펙트: 붉은 돌진 줄기 — 낮게 웅크린 몸통 높이 뒤로 끌린다
+			var chest := fx_point("chest", global_position + Vector2(0.0, -hurt_height * 0.45))
+			Fx.spawn("charge_dust", Vector2(global_position.x - facing * 30.0, chest.y), {"facing": facing})
 		if not is_on_floor():
 			velocity.y += gravity * delta
 		move_and_slide()
@@ -94,7 +98,8 @@ func _physics_process(delta: float) -> void:
 			_timer = stuck_time
 			Juice.shake(5.0)
 			_visual_call("impact", [facing, 1.3 if blocked else 0.8])
-			Fx.spawn("slam_impact", global_position + Vector2(facing * 110.0, -hurt_height * 0.45), {"scale": 1.2 if blocked else 0.8})   # 이펙트: 방패가 박힘
+			var stuck_at := fx_point("weapon", global_position + Vector2(facing * 90.0, -hurt_height * 0.45)) + Vector2(facing * 20.0, 0.0)
+			Fx.spawn("slam_impact", stuck_at, {"scale": 1.2 if blocked else 0.8})   # 이펙트: 방패가 박힘 (뼈대 방패 면)
 		return
 	if state == State.RECOVER and _mode == "stuck":
 		_tick_common(delta)

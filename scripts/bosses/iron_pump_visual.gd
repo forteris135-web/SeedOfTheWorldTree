@@ -3,12 +3,13 @@ extends Node2D
 ## (PartRig — art/rigs/iron_pump, 설계도 data/rigs/iron_pump.json, 자세 data/rigs/_archetypes/iron_pump.json)를
 ## 움직임 층(RigMotion)으로 움직인다. 예전에는 임시 그림 한 장을 통째로 기울이고 눌러서 '판때기'처럼 보였다 — 이제 관절로 선다:
 ##  - 몸통(핵 창·탱크) 아래 **무릎이 뒤로 꺾이는 기계 다리 둘**: 디딘 발은 땅에 고정, 두 마디 IK. 걸음마다 쿵 — 몸이 내려앉고
-##    앞뒤로 흔들리며 발밑에 먼지. 서 있어도 매 박(보스곡 128bpm)마다 '쿵' 하고 들썩이고, 등 위 관 팔이 펌프처럼 끄덕인다.
+##    앞뒤로 흔들리며 발밑에 먼지. 서 있어도 매 박(보스곡 124.5bpm, 곡이 들리면 곡의 박 자리에)마다 '쿵' 하고 들썩이고, 등 위 관 팔이 펌프처럼 끄덕인다.
 ##  - 흡입 팔(위팔 → 아래팔, 끝에 쇠창살 입): **피스톤 내려찍기** = 팔을 하늘로 치켜들고 멈칫(붉게 떨림) → 앞 땅에 내리꽂고
 ##    몸이 앞으로 쏠림(먼지·불꽃) → 출렁이며 제자리. **빨아들이기** = 입을 소녀에게 겨누고 떨며 들이마심(수액빛 띠) → 끝에 덥석 문다.
 ##  - 수액 대포(몸 앞 아래): **수액 분사** = 흡입 팔을 땅에 짚어 버팀(받침대) → 대포가 소녀를 겨누고 한 발마다 크게 튀어 오르는 반동,
 ##    몸이 뒤로 밀리고 관 팔이 출렁임.
-##  - 2페이즈: 규칙이 무너진다 — 박이 엇나가고(짧았다 길었다·두 번 쿵), 동작이 멈칫멈칫 끊겼다가 확 따라잡고, 경련하듯 튄다.
+##  - 2페이즈: 규칙이 무너진다 — 들어서는 순간 곡이 휘청이면(Music.falter: 재생 속도가 처졌다 돌아옴) '쿵'도 같은 빠르기로 늘어지고,
+##    그 뒤 박이 엇나가고(짧았다 길었다·두 번 쿵), 동작이 멈칫멈칫 끊겼다가 확 따라잡고, 경련하듯 튄다.
 ##    이음새마다 수액이 샌다.
 ##  - 장갑 깨짐(BROKEN): 무릎이 꺾여 주저앉고 팔·대포·관이 늘어지며, 핵 창이 터질 듯 밝게 맥동(빛살)하고 김이 샌다.
 ##  - 쓰러짐: 경련 → 다리가 꺾이며 발이 밖으로 미끄러지고 → 몸이 땅에 '쿵' 떨어져 살짝 튀었다가 → 엎드려 눕는다.
@@ -20,7 +21,12 @@ extends Node2D
 ## 세기 조절: 아래 상수들과 자세 파일.
 
 const RIG_ID := "iron_pump"
-const BEAT := 60.0 / 128.0
+## 한 박 = 보스 논리와 같은 값 (기획자 정식 곡을 잰 124.5bpm — IronPump.BEAT). 예전엔 기획서의 128bpm 이라 '쿵'이 곡과 어긋났다.
+const BEAT := IronPump.BEAT
+## 박 자리를 곡의 재생 위치에 맞춘다: 곡의 첫 박 (초, tools/measure_tempo.gd 로 잰 값 — IronPump.BEAT 설명 참고)
+const MUSIC_FIRST_BEAT := 0.36
+## 빨아들이기 코드 띠를 그리는가 (false — _draw_suck_stream 설명)
+const SUCK_STREAM := false
 ## 몸 틀기 빠르기 (1/s)와 도는 도중 가장 좁아지는 폭 (1 = 그대로)
 const TURN_SPEED := 7.0
 const TURN_MIN_WIDTH := 0.5
@@ -88,6 +94,7 @@ var _beat_t := 0.0
 var _beat_len := BEAT
 var _beat_n := 0
 var _beat_amp := 1.0
+var _music_beat_n := -1    # 곡에 맞춘 '쿵'의 마지막 박 번호 (-1 = 곡을 따르지 않는 중)
 var _pump_ph := 0.0        # 관 팔 끄덕임 위상 (박마다 반 바퀴)
 var _death_beats := 0      # 쓰러진 뒤 남은 마지막 박동 수
 ## 2페이즈 멈칫거림: 남은 멈춤 시간, 다음 멈춤까지, 멈춘 자세, 따라잡기(빠른 스프링) 남은 시간
@@ -782,15 +789,25 @@ func _stutter(pose: Dictionary, delta: float, info: Dictionary) -> Dictionary:
 	return pose
 
 
-## 박: 1페이즈는 정확히 128bpm 마다 '쿵'. 2페이즈는 길이가 들쭉날쭉(반 박·한 박 반)하고 가끔 두 번 연달아.
-## 쓰러진 뒤에는 약해지는 마지막 박동 몇 번 뒤 멈춘다.
+## 박: 1페이즈는 보스곡의 박(IronPump.BEAT = 124.5bpm)마다 '쿵' — 곡이 들리면 곡의 재생 위치로 박 자리를 맞춘다.
+## 2페이즈는 길이가 들쭉날쭉(반 박·한 박 반)하고 가끔 두 번 연달아. 곡이 휘청이는 동안(Music.falter)은 박 시계도 곡의 빠르기
+## (Music.tempo_scale)로 흘러 '쿵'이 곡과 함께 늘어진다. 쓰러진 뒤에는 약해지는 마지막 박동 몇 번 뒤 멈춘다.
 func _beat(delta: float, st: IronPump.State, amount: float) -> void:
-	_beat_t += delta
-	_pump_ph += delta * PI / _beat_len
+	var tempo := Music.tempo_scale()
+	_beat_t += delta * tempo
+	_pump_ph += delta * tempo * PI / _beat_len
 	_beat_amp = Motion.damp(_beat_amp, 0.0 if st == IronPump.State.FALLEN or st == IronPump.State.PURIFIED else 1.0, 1.5, delta)
 	_steam_t -= delta
 	_steam.emitting = _steam_t > 0.0
-	if _beat_t < _beat_len:
+	# 1페이즈 싸움 중 곡이 들리면: 곡의 박이 바뀐 순간이 '쿵' (재생 위치를 따르므로 휘청임·히트스톱과도 어긋나지 않는다)
+	var music_n := _music_beat()
+	if music_n >= 0 and boss.phase == 1 and st != IronPump.State.FALLEN and st != IronPump.State.PURIFIED:
+		if music_n == _music_beat_n:
+			return
+		_music_beat_n = music_n
+		_beat_t = 0.0
+	elif _beat_t < _beat_len:
+		_music_beat_n = -1
 		return
 	_beat_t = 0.0
 	_beat_n += 1
@@ -812,6 +829,18 @@ func _beat(delta: float, st: IronPump.State, amount: float) -> void:
 	_core_kick = maxf(_core_kick, 0.35 * amount)
 	if _beat_n % 2 == 0 or boss.phase == 2:
 		_steam_t = 0.12
+
+
+## 곡의 몇 번째 박인가 (곡의 첫 박 MUSIC_FIRST_BEAT 부터 BEAT 마다 하나). 보스곡이 들리지 않으면(대기·러시 전환·화면 없는 시험) -1.
+func _music_beat() -> int:
+	if boss == null or boss.state in [IronPump.State.WAIT, IronPump.State.INTRO]:
+		return -1
+	var room := boss.get_parent()
+	var track: String = str(room.get("boss_track")) if room and room.get("boss_track") != null else ""
+	var pos := Music.playback_time(track)
+	if pos < MUSIC_FIRST_BEAT:
+		return -1
+	return int(floorf((pos - MUSIC_FIRST_BEAT) / BEAT))
 
 
 ## 대포 겨눔 각도 (도). 소녀가 앞에 있으면 수액 방울이 날아갈 쪽(소녀 위로 조금, 거리만큼 더 높게)을 겨눈다. w = 겨눔 몫.
@@ -987,7 +1016,11 @@ func _draw_rays() -> void:
 
 
 ## 빨아들이기: 소녀와 흡입 팔의 입 사이에 빨려 드는 수액빛 띠 (흐르는 줄 여러 가닥 + 빛 알갱이). 세상 좌표.
+## 2026-10-20 통합: 꺼 둔다 (SUCK_STREAM) — 빨려 드는 물줄기는 기획자 이펙트 그림(scripts/fx/iron_pump_fx.gd 의 suck_strip,
+## 흡입 팔 입 자리를 따라감)이 맡고, 여기서는 사이를 흐르는 작은 빛 알갱이(_inhale)만 남긴다. 셋 다 그리면 띠가 두 겹으로 보였다.
 func _draw_suck_stream() -> void:
+	if not SUCK_STREAM:
+		return
 	if boss == null or not boss.visible or boss.state != IronPump.State.SUCK or boss.attack_phase != "active" or boss._bit:
 		return
 	if boss.player == null or not is_instance_valid(boss.player):
@@ -1013,6 +1046,39 @@ func _draw_suck_stream() -> void:
 		var k := fposmod(_t * 1.25 + i / 7.0, 1.0)
 		var q := from + span * k + side * sin(_t * 5.0 + i) * 64.0 * (1.0 - k)
 		_stream.draw_circle(q, 8.0 + 5.0 * k, Color(1.0, 1.0, 1.0, 0.5 * a))
+
+
+# ---------- 이펙트 자리 (scripts/fx/iron_pump_fx.gd 가 읽는다 — 이펙트가 뼈대의 관 입·대포·핵을 따라가게) ----------
+
+## 이름으로 고르는 이펙트 자리: mouth(흡입 팔 끝의 쇠창살 입 = 피스톤 머리) / piston(= mouth) / muzzle(수액 대포 입)
+## / core(핵 창) / vent(등 위 탱크 꼭대기 — 김 구멍) / outlet(뒤 관 끝). 모르는 이름이면 Vector2.INF.
+func fx_point(kind: String) -> Vector2:
+	if rig == null:
+		return Vector2.INF
+	var sname := kind
+	match kind:
+		"piston":
+			sname = "mouth"
+		"vent":
+			sname = "tank_top"
+	if not _sock.has(sname):
+		return Vector2.INF
+	return _sock_global(sname)
+
+
+## 대포 입의 세상 자리 (수액 방울이 나가는 자리)
+func muzzle_global() -> Vector2:
+	return fx_point("muzzle")
+
+
+## 흡입 팔 끝(피스톤 머리)의 세상 자리
+func weapon_tip_global() -> Vector2:
+	return fx_point("mouth")
+
+
+## 뼈 틀의 점 → 세상 자리 (뼈가 없으면 Vector2.INF)
+func bone_global(bone_name: String, local := Vector2.ZERO) -> Vector2:
+	return rig.bone_global(bone_name, local) if rig else Vector2.INF
 
 
 # ---------- 시험·도구용 ----------

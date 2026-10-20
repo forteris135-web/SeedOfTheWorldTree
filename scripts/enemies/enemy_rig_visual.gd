@@ -1,6 +1,6 @@
 extends Node2D
 class_name EnemyRigVisual
-## 일반 몹의 '부위 뼈대' 그림 (EnemySpriteVisual 을 갈아 끼우는 자리). 씬의 Visual 노드에 이 스크립트를 붙이고 rig_id 만 정한다.
+## 일반 몹의 '부위 뼈대' 그림 (예전 한 장 그림 EnemySpriteVisual 을 갈아 끼운 것 — 예전 것은 2026-10-20 지움). 씬의 Visual 노드에 이 스크립트를 붙이고 rig_id 만 정한다.
 ## 부위 그림은 art/rigs/<rig_id>/ (tools/rig_cut.gd 가 data/rigs/<rig_id>.json 에서 자른다). 쓰는 법: RIGS.md.
 ##
 ## EnemyBase 의 상태(state·windup_progress·phase_progress·attack_phase·anim_hint·velocity·facing)를 읽어 자세를 고르고,
@@ -217,6 +217,48 @@ func is_facing_settled() -> bool:
 func npc_look() -> Dictionary:
 	var fy := _floor_y if _floor_known else (_find_floor_y() if _enemy else 0.0)
 	return {"rig": npc_rig, "rig_scale": art_scale, "texture": texture, "art_faces_right": npc_faces_right, "art_scale": npc_art_scale, "floor_y": fy}
+
+
+# ---------- 이펙트 자리 (몹 논리의 Fx 한 줄이 EnemyBase.fx_point 로 읽는다 — 이펙트가 뼈대의 무기를 따라가게) ----------
+
+## 이름으로 고르는 세상 자리: weapon_tip(무기 끝 — 칼끝·창끝) / muzzle(대롱 끝 — 설계도 sockets.muzzle 이 있으면 그 자리,
+## 없으면 겨누는 뼈 aim_bone 의 끝) / weapon(무기 그림 가운데 — 방패 면) / hand(무기를 쥔 손) / chest(몸통 가운데) / head(머리 가운데).
+## 그 밖의 이름은 설계도 sockets 이름으로 찾는다 (drill_tip·core·valve·eye …). 모르거나 아직 뼈대가 없으면 Vector2.INF.
+func fx_point(kind: String) -> Vector2:
+	if rig == null or not _ready_ok:
+		return Vector2.INF
+	match kind:
+		"weapon_tip":
+			return rig.bone_tip_global("weapon")
+		"muzzle":
+			var m := rig.socket_global("muzzle")
+			if m.is_finite():
+				return m
+			return rig.bone_tip_global(aim_bone if rig.has_bone(aim_bone) else "weapon")
+		"weapon":
+			return rig.bone_center_global("weapon")
+		"hand":
+			return rig.bone_tip_global("arm_f_lo")
+		"chest":
+			return rig.bone_center_global("torso") if rig.has_bone("torso") else rig.bone_center_global("body")
+		"head":
+			return rig.bone_center_global("head")
+	return rig.socket_global(kind)
+
+
+## 무기 끝의 세상 자리 (칼끝·창끝)
+func weapon_tip_global() -> Vector2:
+	return fx_point("weapon_tip")
+
+
+## 대롱 끝의 세상 자리 (씨앗·수액이 나가는 자리)
+func muzzle_global() -> Vector2:
+	return fx_point("muzzle")
+
+
+## 뼈 틀의 점 → 세상 자리 (뼈가 없으면 Vector2.INF)
+func bone_global(bone_name: String, local := Vector2.ZERO) -> Vector2:
+	return rig.bone_global(bone_name, local) if rig else Vector2.INF
 
 
 # ---------- 1회 연출 (EnemyBase 가 부른다) ----------
