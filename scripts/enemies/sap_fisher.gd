@@ -4,7 +4,7 @@ class_name SapFisher
 ## 중거리(사거리 WHIP_RANGE): 가까이 오면 뒤로 물러나고(BACKSTEP·폴짝), 멀면 다가온다.
 ## 가르치는 것: 거리 조절과 **3박 리듬의 예고** — 예고 2박 동안 줄을 두 번 흔들고(하나·둘) 세 번째 박에 휘두른다(셋).
 ## 박자는 수액의 여왕과 같은 138bpm (한 박 0.435초 → 예고 0.87초). 가드 가능, 저스트 가드로 되받으면 크게 휘청.
-## 그림은 EnemySpriteVisual + 낚싯줄을 코드로 그리는 SapFisherVisual (sap_fisher_visual.gd).
+## 그림은 부위 뼈대(EnemyRigVisual) + 줄 물리로 움직이는 낚싯줄 (sap_fisher_visual.gd).
 
 const BEAT := 60.0 / 138.0
 ## 채찍 사거리(px)와 판정 높이

@@ -267,6 +267,12 @@
 - 투명 배경: 캐릭터·적·오브젝트·보스(현재)는 모두 투명. 배경·회상·보스(과거)·타이틀·셀레니아 시트는 원래 불투명이 맞음. **배경 지우기 필요 없음.**
 - 다시 받을 것: 일반 마을경비병 (얼굴을 더 침식된 모습으로).
 - 참고: 보스(과거) 3장은 회상용 장면 그림이라 `memories/`의 그림과 함께 쓴다.
+- **2026-10-20 정리 (부위 뼈대로 바뀜):** 몹·보스가 기획자의 **부위 시트**를 자른 뼈대(`art/rigs/<id>/`, 만드는 법 `RIGS.md`)로 움직이게 되어,
+  게임에서 더는 쓰지 않는 한 장 그림을 앱에서 지웠다 (약 42MB): `bosses/boss_bird_now·past`, `boss_knight_now·past`, `boss_rootkeeper_now·past`,
+  `enemies/enemy_woodcutter`, `enemy_gardener`, `enemy_guard`, `enemy_machine`, `enemy_herbalist`, (확장판) `enemy_sap_fisher`, `enemy_small_pump`,
+  그리고 예전 몸통/팔 조각(`enemies/parts/`, `bosses/parts/`). **원본은 `art/_원본/` 에 그대로 있다.**
+  구원형(`*_savable.png`)·오웬 그림은 구원된 사람 뼈대를 못 읽을 때 대신 뜨는 그림이라 남겨 두었다.
+  위 3·4장의 요청문은 새 몹·보스를 그릴 때의 외형 기준으로 그대로 둔다 (이제는 부위를 나눈 시트로 받는다 — RIGS.md 1장).
 
 ## 10. UI 그림 (2026-10-18 추가)
 

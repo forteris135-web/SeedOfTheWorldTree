@@ -6,7 +6,7 @@ extends SceneTree
 ## 만드는 것:
 ##   (art/bosses/boss_iron_pump_now.png 는 만들지 않는다 — 무쇠 펌프는 부위 뼈대(data/rigs/iron_pump.json)로 움직이고,
 ##    이 파일은 tools/pump_render.tscn 이 뼈대의 대기 자세로 그린 조립 그림이다 (2026-10-20))
-##   art/enemies/enemy_small_pump.png (1536×1024 투명, 왼쪽을 보는 작은 펌프 — 지금은 쓰지 않는다: 작은 펌프도 부위 뼈대 small_pump)
+##   (art/enemies/enemy_small_pump.png 는 2026-10-20 지움 — 작은 펌프는 부위 뼈대 small_pump 로 움직이고 이 그림을 쓰는 곳이 없다)
 ##   art/objects/object_cracked_wall.png (512×1024 투명, 세로로 금 간 나무 벽 조각 — 벽의 크기에 맞춰 늘려 그린다)
 ##   art/objects/object_dew_cup.png / object_scripture_page.png (512×512 투명 아이콘)
 ##   (art/backgrounds/bg_flooded_mine.png / bg_flooded_mine_boss.png 는 기획자 그림(배경 6-1·6-2)으로 바뀌어 더 만들지 않는다)
@@ -25,12 +25,12 @@ func _init() -> void:
 	# 무쇠 펌프(지금)는 부위 뼈대로 바뀌어 임시 그림을 만들지 않는다 — boss_iron_pump_now.png 는 tools/pump_render.tscn 의 조립 그림 (2026-10-20)
 	# boss_iron_pump_past.png · memory_pump_1~3.png 는 기획자의 진짜 그림이 들어왔고, ending_third_way.png 는 ENDINGS.md 의 진엔딩 그림 5장
 	# (ending_true_1~5.png)으로 바뀌어 없어졌다 (2026-10-20) — 만들지 않는다 (--force 로도 덮어쓰지 않게)
-	_make("res://art/enemies/enemy_small_pump.png", 1536, 1024, true, _small_pump)
+	# enemy_small_pump.png 는 만들지 않는다 (2026-10-20 지움 — 부위 뼈대 small_pump, 쓰는 곳 없음)
 	_make("res://art/objects/object_cracked_wall.png", 512, 1024, true, _cracked_wall)
 	_make("res://art/objects/object_dew_cup.png", 512, 512, true, _dew_cup)
 	_make("res://art/objects/object_scripture_page.png", 512, 512, true, _scripture_page)
 	# 잠긴 채굴장 배경 두 장은 기획자 그림(익스펜션 배경 6-1·6-2)으로 바뀌었다 — --force 로도 덮어쓰지 않게 만들지 않는다
-	print("임시 그림 %d장 생성 (4장 중, 나머지는 이미 있어 건너뜀) (%.1f초)" % [_made, (Time.get_ticks_msec() - t0) / 1000.0])
+	print("임시 그림 %d장 생성 (3장 중, 나머지는 이미 있어 건너뜀) (%.1f초)" % [_made, (Time.get_ticks_msec() - t0) / 1000.0])
 	quit()
 
 

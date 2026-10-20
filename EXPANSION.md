@@ -309,6 +309,7 @@ industrial tragic boss battle, relentless mechanical ostinato, pounding low perc
 ### 일반 적
 
 **5. 수액 어부** — 저장: `art/enemies/enemy_sap_fisher.png`
+> 2026-10-20: 수액 어부는 기획자의 **부위 시트**로 만든 뼈대(`data/rigs/sap_fisher.json` → `art/rigs/sap_fisher/`)로 움직인다. 한 장 그림은 쓰는 곳이 없어 지웠다 (RIGS.md).
 ```
 나무에 침식되어 몸과 나무가 융합된 사람. 나무껍질로 굳어 가는 피부, 몸을 뚫고 자란 가지와 잎, 혈관처럼 빛나는 수액 줄기. 전신 옆모습, 투명 배경. 원래는 호수에서 수액을 긷던 어부. 수액에 젖은 긴 낚싯줄을 채찍처럼 쥐고 있다. 첨부한 기준 그림과 같은 화풍으로. 다크 판타지 동화풍, 몽환적이고 쓸쓸한 분위기, 부드러운 수채화 느낌. 징그럽지 않고 기묘하게 아름답게. 글자나 서명은 넣지 말 것.
 ```
@@ -320,6 +321,7 @@ industrial tragic boss battle, relentless mechanical ostinato, pounding low perc
 ```
 
 **7. 작은 펌프** — 저장: `art/enemies/enemy_small_pump.png`
+> 2026-10-20: 작은 펌프도 부위 뼈대(`data/rigs/small_pump.json`)로 움직인다. 한 장 그림은 쓰는 곳이 없어 지웠다 (RIGS.md).
 ```
 사람이 아닌, 펌프실의 작은 보조 펌프 기계. 나무뿌리에 감겨 짐승처럼 움직이고, 관에서 수액을 분사한다. 녹슨 붉은 금속. 전신 옆모습, 투명 배경. 첨부한 기준 그림과 같은 화풍으로. 다크 판타지 동화풍, 몽환적이고 쓸쓸한 분위기, 부드러운 수채화 느낌. 징그럽지 않고 기묘하게 아름답게. 글자나 서명은 넣지 말 것.
 ```

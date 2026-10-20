@@ -3,8 +3,9 @@ extends SceneTree
 ## EXPANSION.md 11장의 파일 이름 **그대로** 만든다 → 진짜 그림을 같은 이름으로 덮어쓰기만 하면 끝.
 ## 사용: /path/to/Godot --headless --path . --script tools/make_placeholders_lake.gd
 ## 만드는 것 (모두 1536×1024, 진짜 그림과 같은 크기라 배율·자리가 그대로 맞는다):
-##   art/bosses/boss_sap_queen_now.png (투명, 나비 실루엣 + 갈라진 날개)
-##   art/enemies/enemy_sap_fisher.png (투명, 오른쪽을 보는 사람 실루엣 + 낚싯대, 줄은 코드가 그림) / enemy_sap_fisher_savable.png (가슴 온기)
+##   art/enemies/enemy_sap_fisher_savable.png (가슴 온기 — 구원형 어부 뼈대를 못 읽을 때만 쓰는 대신 그림)
+##   (boss_sap_queen_now.png 는 부위 뼈대의 조립 그림 — tools/queen_film.tscn -- --render 가 만든다)
+##   (enemy_sap_fisher.png 는 2026-10-20 지움: 수액 어부는 부위 뼈대 sap_fisher 로 움직이고 이 그림을 쓰는 곳이 없다)
 ##   (배경 bg_hidden_descent / bg_sap_lake_1 / bg_sap_lake_boss 는 기획자 그림으로 바뀌어 더는 만들지 않는다)
 ##   (boss_sap_queen_past.png · art/memories/memory_queen_1~3.png 는 진짜 그림이 들어와 더 만들지 않는다)
 ## 그림은 절반 크기(768×512)로 계산한 뒤 두 배로 키운다 (수채화처럼 부드럽고, 계산이 4배 빠르다).
@@ -21,11 +22,11 @@ func _init() -> void:
 	var t0 := Time.get_ticks_msec()
 	# 여왕(지금)은 부위 뼈대로 바뀌어 임시 그림을 만들지 않는다 — boss_sap_queen_now.png 는 tools/queen_film.tscn -- --render 의 조립 그림 (2026-10-20)
 	# boss_sap_queen_past.png · memory_queen_1~3.png 는 기획자의 진짜 그림이 들어왔다 (2026-10-20) — 만들지 않는다 (덮어쓰기 방지)
-	_make("res://art/enemies/enemy_sap_fisher.png", true, func(u: float, v: float) -> Color: return _fisher(u, v, false))
+	# enemy_sap_fisher.png 는 만들지 않는다 (2026-10-20 지움 — 부위 뼈대 sap_fisher, 쓰는 곳 없음)
 	_make("res://art/enemies/enemy_sap_fisher_savable.png", true, func(u: float, v: float) -> Color: return _fisher(u, v, true))
 	# 배경 세 장은 기획자 그림으로 바뀌었다 (익스펜션/그림/배경 4-1 → bg_sap_lake_1, 4-2 → bg_sap_lake_boss, 5 → bg_hidden_descent).
 	# 진짜 그림을 덮어쓰지 않게 다시 만들지 않는다 (_bg_* · _memory_* · _queen_past 함수는 참고용으로 남겨 둔다).
-	print("임시 그림 2장 생성 완료 (%.1f초)" % ((Time.get_ticks_msec() - t0) / 1000.0))
+	print("임시 그림 1장 생성 완료 (%.1f초)" % ((Time.get_ticks_msec() - t0) / 1000.0))
 	quit()
 
 

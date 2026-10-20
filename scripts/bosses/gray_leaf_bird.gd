@@ -130,7 +130,7 @@ var muzzle_flash := 0.0
 @onready var body_shape: CollisionShape2D = $CollisionShape2D
 
 const PROJECTILE := preload("res://scenes/combat/projectile.tscn")
-## 부리 끝 바로 앞 (오른쪽을 볼 때; 그림 boss_bird_now.png 의 부리 ≈ 몸 가운데에서 (+210, −70), 깃털 자세로 살짝 젖힘)
+## 부리 끝 바로 앞 (오른쪽을 볼 때; 예전 한 장 그림의 부리 ≈ 몸 가운데에서 (+210, −70), 깃털 자세로 살짝 젖힘 — 깃털이 생기는 판정 출발점이라 그대로 둔다)
 const MUZZLE_OFFSET := Vector2(230.0, -235.0)
 ## 그림 가운데 (Sprite position)
 const BODY_OFFSET := Vector2(0.0, -150.0)

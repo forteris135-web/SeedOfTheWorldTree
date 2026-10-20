@@ -12,7 +12,7 @@ ChatGPT에서 받은 그림은 이름 상관없이 **이 폴더에 모아 두면
 |---|---|---|
 | 수액의 여왕 (지금) | `art/bosses/boss_sap_queen_now.png` | **이제 부위 뼈대로 움직인다** (2026-10-20: 기획자 부위 시트 `익스펜션/그림/보스/1B276E19-….PNG` → `data/rigs/sap_queen.json` → `art/rigs/sap_queen/`). 이 파일은 뼈대를 못 읽을 때만 대신 뜨는 조립 그림이다 — `tools/queen_film.tscn -- --render` 가 만든다(덮어쓰지 않는다). 그림을 바꾸려면 부위 시트를 새로 주고 RIGS.md 대로 다시 자른다 |
 | 수액의 여왕 (과거, 회상용) | `art/bosses/boss_sap_queen_past.png` | 가로 3:2 — **진짜 그림 들어옴** (2026-10-20, `익스펜션/그림/보스/621C2CCE….PNG`) |
-| 수액 어부 | `art/enemies/enemy_sap_fisher.png` | **이제 부위 뼈대로 움직인다** (2026-10-20: 기획자 부위 시트 → `data/rigs/sap_fisher.json` → `art/rigs/sap_fisher/`, 낚싯줄은 덩굴 조각을 이은 줄 물리). 이 파일은 게임이 쓰지 않는다. 그림을 바꾸려면 부위 시트를 새로 주고 RIGS.md 대로 다시 자른다 |
+| 수액 어부 | (`art/enemies/enemy_sap_fisher.png` — 2026-10-20 지움) | **이제 부위 뼈대로 움직인다** (2026-10-20: 기획자 부위 시트 → `data/rigs/sap_fisher.json` → `art/rigs/sap_fisher/`, 낚싯줄은 덩굴 조각을 이은 줄 물리). 한 장 그림은 게임이 쓰지 않아 지웠다. 그림을 바꾸려면 부위 시트를 새로 주고 RIGS.md 대로 다시 자른다 |
 | 수액 어부 (구원 가능) | `art/enemies/enemy_sap_fisher_savable.png` | 위와 같음 (`data/rigs/sap_fisher_savable.json`). 이 파일은 뼈대를 못 읽을 때만 대신 뜨는 그림이다. 구원한 뒤 사당의 '집'도 같은 뼈대로 선다 (`relocations_expansion.json` 의 `fisher_lake` → `"rig"`) |
 | 숨은 내리막 배경 | `art/backgrounds/bg_hidden_descent.png` | 가로 3:2 |
 | 수액의 호수 1 배경 | `art/backgrounds/bg_sap_lake_1.png` | 가로 3:2 (호수 방 두 곳이 함께 씀) |
@@ -24,6 +24,6 @@ ChatGPT에서 받은 그림은 이름 상관없이 **이 폴더에 모아 두면
   - **진짜 그림 들어옴 (2026-10-20):** 펌프 회상 ①②③ `memory_pump_1~3.png` ← `익스펜션/그림/회상/A·B·C.PNG`, 무쇠 펌프 (과거) `boss_iron_pump_past.png` ← `익스펜션/그림/보스/E07E3F96….PNG`.
   - 단 **무쇠 펌프(지금)와 작은 펌프는 부위 뼈대로 움직인다** (2026-10-20: `data/rigs/iron_pump.json`, `small_pump.json`).
     `art/bosses/boss_iron_pump_now.png` 는 `tools/pump_render.tscn` 이 뼈대의 대기 자세로 그린 조립 그림(참고용, 덮어쓰지 않는다)이고,
-    `art/enemies/enemy_small_pump.png` 는 게임이 쓰지 않는다. 그림을 바꾸려면 부위 시트를 새로 주고 RIGS.md 대로 다시 자른다.
+    `art/enemies/enemy_small_pump.png` 는 게임이 쓰지 않아 지웠다(2026-10-20). 그림을 바꾸려면 부위 시트를 새로 주고 RIGS.md 대로 다시 자른다.
 - **엔딩 그림 (ENDINGS.md 4장, 2026-10-20 모두 들어옴, 1672×941):** `art/memories/ending_sacrifice_1~3.png`, `ending_return_1~3.png`, `ending_true_1~5.png`(옛 `ending_third_way.png` 한 장을 대신함 — 지움), 타이틀 변형 `art/characters/title_after_sacrifice.png`·`title_after_return.png`·`title_after_true.png`. 원본은 `익스펜션/그림/엔딩/<엔딩 이름>/1~5.png·타이틀.png`.
 - 진짜 그림을 넣은 뒤 Godot 편집기를 한 번 열면(또는 `Godot --headless --path . --import`) 새로 읽어 들인다.

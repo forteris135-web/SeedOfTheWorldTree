@@ -52,7 +52,7 @@ git pull origin main
 
 ## 7. 폴더·파일 길잡이
 - `scripts/player/` 소녀(`player.gd` 상태 기계, `selenia_rig.gd` 뼈대 애니메이션, `game_camera.gd`)
-- `scripts/enemies/` 적(`enemy_base.gd` 공통 상태 기계, `enemy_sprite_visual.gd` 그림·모션, 종류별 스크립트), `scripts/bosses/` 보스 셋 + `boss_room.gd`
+- `scripts/enemies/` 적(`enemy_base.gd` 공통 상태 기계, `enemy_rig_visual.gd`·`enemy_mech_visual.gd` 부위 뼈대 그림·모션 — RIGS.md, 종류별 스크립트), `scripts/bosses/` 보스 셋 + `boss_room.gd`
 - `scripts/world/` 방(`room.gd` — 방 바탕 + 모든 `--…test`), 발판·경사·가시·포탈·달빛풀·비밀 벽/천장·아이템
 - `scripts/ui/` HUD·보스 HUD·터치·지도·메뉴·키 바꾸기·이동 메뉴·타이틀·회상·엔딩
 - `scripts/autoload/` Progress(진행·능력·성장·고른 영혼), SaveGame, Settings, Keymap, InputDevice, Sfx, Music, Juice, Purity, Dialogue, Game
