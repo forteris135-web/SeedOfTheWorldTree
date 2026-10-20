@@ -1,0 +1,71 @@
+{
+  "region": "canopy",
+  "name": "수관",
+  "note": "수관 지형 그림 조각. 자르기: tools/terrain_cut.gd canopy → art/terrain/canopy/. 설명은 TERRAIN.md.",
+  "scale": 1.0,
+  "tint": [0.88, 0.86, 0.82],
+  "fill": {"top": 1.0, "deep": 0.72, "deep_px": 380, "rim": 0.8, "rim_px": 30, "wall": 0.86},
+  "lift": 2,
+  "depth": {
+    "ash": {"haze": 0.28, "haze_color": "#d9dcdf", "contrast": 0.66, "sat": 0.8, "fore_value": 0.86, "fore_contrast": 1.04, "shadow": 0.6},
+    "alive": {"haze": 0.1, "haze_color": "#f0e4c8", "contrast": 0.87, "sat": 0.94, "fore_value": 0.95, "fore_contrast": 1.03, "shadow": 0.45},
+    "shadow_lod": 4.5, "shadow_offset": [0, 9]
+  },
+  "roles": {"ground": ["ground_a", "ground_a", "ground_a", "ledge_a"]},
+  "params": {
+    "ground": {"band": 110, "fade": 50, "cap": 150, "overlap": 110, "caps": ["ground_a"]},
+    "slab": {"max_w": 360},
+    "branch": {"thin_poly": 110},
+    "thorn": {"tint": [0.92, 0.72, 0.64], "reach_min": 0.9, "reach_max": 1.35, "sink": 22}
+  },
+  "ash": {
+    "neutral": [[0.0, "#1d2026"], [0.25, "#4a4e56"], [0.55, "#8a8f97"], [0.8, "#c0c3c8"], [1.0, "#eaebed"]],
+    "hues": {
+      "yellow": [[0.0, "#201f22"], [0.3, "#555357"], [0.6, "#999594"], [0.85, "#cbc7c2"], [1.0, "#eeebe6"]],
+      "green": [[0.0, "#1a1f22"], [0.3, "#4a5356"], [0.6, "#8b9597"], [0.85, "#bcc3c3"], [1.0, "#e5e9e8"]]
+    }
+  },
+  "cut": {
+    "sheet": "res://익스펜션/그림/지형/3905F02A-6961-4152-9C08-A5779251BE1C.PNG",
+    "alpha": 0.8,
+    "gap": 1,
+    "pieces": [
+      {"name": "branch_a", "role": "branch", "src": [14, 11, 834, 222], "walk": [32, 690]},
+      {"name": "branch_b", "role": "branch", "src": [852, 16, 583, 207], "walk": [16, 450]},
+      {"name": "branch_c", "role": "branch", "src": [17, 191, 511, 187], "walk": [260, 496]},
+      {"name": "branch_d", "role": "fork", "src": [15, 338, 753, 214]},
+      {"name": "branch_e", "role": "branch", "src": [742, 357, 435, 184]},
+      {"name": "slab_a", "role": "slab", "src": [989, 210, 276, 201]},
+      {"name": "slab_b", "role": "slab", "src": [1255, 238, 183, 161]},
+      {"name": "slab_c", "role": "slab", "src": [1139, 423, 136, 90]},
+      {"name": "slab_d", "role": "slab", "src": [1214, 639, 220, 119]},
+      {"name": "ground_a", "role": "ground", "src": [12, 536, 820, 290], "walk": [110, 720]},
+      {"name": "ledge_a", "role": "ground", "src": [794, 506, 433, 308], "keep": "largest", "walk": [140, 424]},
+      {"name": "slope_a", "role": "slope", "src": [1012, 767, 424, 307], "keep": "largest"},
+      {"name": "hang_a", "role": "hang", "src": [16, 782, 211, 283]},
+      {"name": "hang_b", "role": "hang", "src": [176, 809, 348, 258]},
+      {"name": "hang_c", "role": "hang", "src": [501, 810, 191, 263]},
+      {"name": "hang_d", "role": "hang", "src": [626, 789, 240, 220]},
+      {"name": "hang_e", "role": "hang", "src": [884, 812, 271, 129]},
+      {"name": "hang_f", "role": "hang", "src": [949, 922, 72, 116]},
+      {"name": "hang_g", "role": "hang", "src": [1300, 420, 134, 123]},
+      {"name": "twig_a", "role": "hang", "src": [1247, 513, 182, 121]},
+      {"name": "bush_a", "role": "bush", "src": [807, 919, 131, 143]},
+      {"name": "arch_a", "role": "arch", "src": [523, 180, 470, 185]},
+      {"name": "thorn_a", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [187, 242, 127, 171], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_b", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [242, 352, 219, 283], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_c", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [370, 244, 216, 224], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_d", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [584, 358, 110, 183], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_e", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [650, 273, 167, 238], "scale": 0.8, "keep": "largest"},
+      {"name": "shard_a", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1029, 197, 77, 126], "scale": 0.45, "keep": "largest"},
+      {"name": "shard_b", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1075, 363, 84, 133], "scale": 0.45, "keep": "largest"},
+      {"name": "shard_c", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1156, 599, 57, 131], "scale": 0.45, "keep": "largest"},
+      {"name": "bark_src", "role": "source", "atlas": false, "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [13, 7, 1229, 1238], "scale": 0.6, "keep": "largest"},
+      {"name": "thorn_f", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [468, 482, 98, 148], "scale": 0.8, "keep": "largest"}
+    ],
+    "extras": [
+      {"name": "cracked", "kind": "cracked", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [13, 7, 1229, 1238], "keep": "largest", "out_scale": 0.32, "bright": 1.45}
+    ],
+    "fill": {"from": ["bark_src"], "vertical": true, "bright": 1.45, "size": 512, "patch": 80, "cover": 9, "min_ratio": 0.9, "hue": [5, 62], "sat": [0.04, 0.8], "val": [0.06, 0.86]}
+  }
+}

@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://c1seedfloodmine01"]
+[gd_scene load_steps=22 format=3 uid="uid://c1seedfloodmine01"]
 
 [ext_resource type="Script" path="res://scripts/world/room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -16,6 +16,9 @@
 [ext_resource type="PackedScene" uid="uid://c1seedsappool" path="res://scenes/world/sap_pool.tscn" id="54_sap_pool"]
 [ext_resource type="PackedScene" uid="uid://c1seedsmallpump" path="res://scenes/enemies/small_pump.tscn" id="55_small_pump"]
 [ext_resource type="Texture2D" path="res://art/backgrounds/bg_flooded_mine.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/terrain_prop.gd" id="61_prop"]
+[ext_resource type="Script" path="res://scripts/world/waterwheel.gd" id="62_wheel"]
+[ext_resource type="Script" path="res://scripts/world/machine_lamp.gd" id="63_lamp"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -111,6 +114,53 @@ initial_velocity_max = 26.0
 scale_amount_min = 0.25
 scale_amount_max = 0.7
 color = Color(0.4, 0.85, 0.9, 0.5)
+
+[node name="Props" type="Node2D" parent="."]
+
+[node name="PanelA" type="Node2D" parent="Props"]
+position = Vector2(760, 1100)
+script = ExtResource("61_prop")
+piece = "panel_a"
+shade = Color(0.8, 0.78, 0.78, 1)
+
+[node name="LampA" type="Node2D" parent="Props"]
+position = Vector2(700, 940)
+script = ExtResource("63_lamp")
+lamp = "lamp_y"
+
+[node name="Wheel1" type="Node2D" parent="Props"]
+position = Vector2(1530, 1000)
+script = ExtResource("62_wheel")
+art_scale = 0.7
+
+[node name="Elbow" type="Node2D" parent="Props"]
+position = Vector2(2150, 1100)
+script = ExtResource("61_prop")
+piece = "pipe_elbow"
+shade = Color(0.8, 0.78, 0.78, 1)
+
+[node name="Wheel2" type="Node2D" parent="Props"]
+position = Vector2(2905, 1012)
+script = ExtResource("62_wheel")
+art_scale = 0.55
+speed = 0.4
+with_tower = false
+
+[node name="Gate" type="Node2D" parent="Props"]
+position = Vector2(3810, 1100)
+script = ExtResource("61_prop")
+piece = "gate_a"
+shade = Color(0.8, 0.78, 0.78, 1)
+
+[node name="LampGateL" type="Node2D" parent="Props"]
+position = Vector2(3700, 800)
+script = ExtResource("63_lamp")
+lamp = "lamp_y"
+
+[node name="LampGateR" type="Node2D" parent="Props"]
+position = Vector2(3920, 800)
+script = ExtResource("63_lamp")
+lamp = "lamp_y"
 
 [node name="Terrain" type="Node2D" parent="."]
 

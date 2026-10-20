@@ -4,7 +4,8 @@ extends Node
 ##  - 걷거나 달리는 동안: 발 자리 수면에 잔물결 (STEP_GAP 마다)
 ##  - 뛰어오를 때·웅덩이를 박차고 나갈 때: 왕관 물보라
 ##  - 가끔 위에서 수액 방울이 떨어져 수면에 물결을 남긴다 (웅덩이가 화면에 보일 때만)
-## 웅덩이(SapPool)의 수면 높이는 정화되면 FILL_RISE 만큼 차오르므로 그 값을 따른다.
+## 물보라·잔물결은 웅덩이가 그리는 수면(SapPool.surface_top — 맞는 영역 윗변, 정화되면 FILL_RISE 만큼 차오름)에 난다.
+## 물 그림(수면 테두리·물결 띠·빛 띠·수면선)은 웅덩이가 그리므로 여기서는 순간의 물보라·잔물결만 (겹쳐 그리지 않는다).
 
 const STEP_GAP := 0.2
 const RUN_SPEED := 80.0
@@ -28,6 +29,9 @@ func _ready() -> void:
 
 
 func surface_y() -> float:
+	if pool.has_method("surface_top"):
+		# 그림 수면 (지형 리뉴얼: 웅덩이 윗변이 아니라 맞는 영역 윗변 = 높이의 SURFACE_FRAC, 차오름 포함)
+		return pool.to_global(Vector2(0.0, float(pool.call("surface_top")))).y + 4.0
 	var rise := 0.0
 	if "_alive" in pool:
 		rise = float(pool.get("_alive")) * float(pool.get("FILL_RISE"))

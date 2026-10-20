@@ -1,8 +1,12 @@
 extends StaticBody2D
 class_name Platform
-## 지형 조각: 굽은 가지 모양의 어두운 실루엣 + 나무껍질 결 + 윗면 이끼·잎 + 늘어진 덩굴.
-## (기획서 9장: 지형은 어두운 실루엣에 배경의 주된 색을 살짝 입히고, 윗면에 가는 빛 테두리)
-## 원점은 왼쪽 위. 정화 전에는 공용 잿빛 재질로 바래 보인다.
+## 지형 조각 (발판·바닥·벽·천장). 원점은 왼쪽 위, 충돌은 size 사각형 (one_way 면 아래에서 통과).
+## 겉모습은 두 가지:
+##  - 그림 조각 지형 (지역에 그림 옷이 있으면 — 지금은 41방 모두): TerrainArt 가 기획자 그림 조각을 이어 붙여 한 번 만든다.
+##    설명서는 TERRAIN.md. 이때 아래 '코드로 그리기'(몸통·겹·색 setter)는 쓰지 않는다.
+##  - 코드로 그리기 (그림이 아직 없는 지역): 굽은 가지 모양의 어두운 실루엣 + 나무껍질 결 + 윗면 이끼·잎 + 늘어진 덩굴.
+##    (기획서 9장: 지형은 어두운 실루엣에 배경의 주된 색을 살짝 입히고, 윗면에 가는 빛 테두리)
+## 정화 전에는 공용 잿빛 재질(팔레트 바꾸기)로 지역의 잿빛 색이 된다.
 ## - 디테일(2026-10-19 기획자 요청): 실루엣 가장자리에 읽히는 디테일(이끼 무더기·잘린 잔가지·늘어진 이끼 수염·
 ##   뿌리 가닥·잎 달린 덩굴·가지 끝 잎 묶음·덩어리 모서리 이끼), 안쪽은 윗면 빛 띠 + 껍질 결·홈·옹이,
 ##   지역별 장식(TerrainStyle 표). 지역은 조상 Room 의 region (style_region 으로 강제 가능).
@@ -24,6 +28,8 @@ class_name Platform
 		if v == color:
 			return
 		color = v
+		if _art:
+			return   # 그림 조각 지형은 몸통 색을 쓰지 않는다
 		# 몸통 + 장식(잔가지가 몸통 색을 쓴다). 색은 방에 들어올 때 한 번만 바뀐다.
 		queue_redraw()
 		if _decor_layer:
@@ -33,6 +39,8 @@ class_name Platform
 		if v == edge_color:
 			return
 		edge_color = v
+		if _art:
+			return   # 그림 조각 지형은 테두리 빛을 그림이 대신한다 (정화 연출 중 다시 그리지 않음)
 		# 정화 연출 중에는 매 프레임 바뀐다 → 가벼운 윗면 빛 겹만 다시 그린다
 		if _edge_layer:
 			_edge_layer.queue_redraw()
@@ -113,6 +121,10 @@ var _top_cover := PackedByteArray()
 var _bottom_cover := PackedByteArray()
 var _cover_ready := false
 var _glow_done := false
+## 그림 조각 지형 (지역에 그림 옷이 있으면 — TerrainSkin). 있으면 옛 코드 그리기(몸통·겹)는 쓰지 않는다.
+var _art: TerrainArt
+var _skin: TerrainSkin
+var _ready_done := false
 
 
 func _ready() -> void:
@@ -125,9 +137,13 @@ func _ready() -> void:
 		shape.one_way_collision = true
 		shape.one_way_collision_margin = 24.0
 	add_child(shape)
-	material = preload("res://shaders/ash_purify.tres")
+	material = preload("res://shaders/ash_purify_fore.tres")   # 앞 지형 재질 (앞뒤 가르기 — TERRAIN.md 5장)
 	_apply_style()
-	if _wants_layers():
+	_skin = TerrainSkin.for_node(self, style_region)
+	if _skin != null and _wants_layers():
+		# 그림 조각 지형: 겉모습은 TerrainArt 가 한 번 만들어 둔다 (충돌은 위의 사각형 그대로)
+		_build_art()
+	elif _wants_layers():
 		_edge_layer = TerrainStyle.Layer.new(self, TerrainStyle.LAYER_EDGE)
 		_edge_layer.name = "EdgeLayer"
 		add_child(_edge_layer)
@@ -148,6 +164,24 @@ func _ready() -> void:
 			settings.changed.connect(_apply_debug_label)
 		_apply_debug_label()
 	_sync_suspicious()
+	_ready_done = true
+
+
+## 그림 조각 겉모습을 (다시) 만든다.
+func _build_art() -> void:
+	if _art:
+		remove_child(_art)
+		_art.queue_free()
+	_art = TerrainArt.new(_skin, self)
+	_art.name = "Art"
+	add_child(_art)
+	move_child(_art, 1 if get_child_count() > 1 else 0)
+	_art.build_platform(self, size, _is_thin(), one_way, decorate, suspicious)
+
+
+## 그림 조각 지형인가 (시험용)
+func is_art() -> bool:
+	return _art != null
 
 
 ## 겹을 쓸지. 자기 _draw 로 다 그리는 하위 클래스(비밀 벽·천장)는 쓰지 않는다.
@@ -168,6 +202,10 @@ func _apply_style() -> void:
 
 ## 몸통과 두 겹을 모두 다시 그린다 (모양·장식 세기가 바뀌었을 때).
 func _redraw_all() -> void:
+	if _art:
+		if _ready_done:
+			_build_art()   # 나중에 모양·수상함이 바뀌면 겉모습을 다시 만든다 (방에 들어올 때는 한 번만)
+		return
 	queue_redraw()
 	if _edge_layer:
 		_edge_layer.queue_redraw()
@@ -209,14 +247,39 @@ func _suspicious_edge() -> PackedVector2Array:
 	var w := size.x
 	var h := size.y
 	match suspicious_face:
-		1:   # 아래 (천장의 아랫면)
-			return PackedVector2Array([Vector2(w, h), Vector2(0, h)])
+		1:   # 아래 (천장의 아랫면) — 바로 밑에 붙은 부서지는 지형(비밀 천장 옹이)이 있으면 그 폭(+여유)만
+			var span := _breakable_span_below()
+			return PackedVector2Array([Vector2(span.y, h), Vector2(span.x, h)])
 		2:   # 왼쪽
 			return PackedVector2Array([Vector2(0, h), Vector2(0, 0)])
 		3:   # 오른쪽
 			return PackedVector2Array([Vector2(w, 0), Vector2(w, h)])
 		_:   # 위
 			return PackedVector2Array([Vector2(0, 0), Vector2(w, 0)])
+
+
+## 아랫면 단서의 가로 구간 [x0, x1]: 바로 밑에 붙은 형제 부서지는 지형(secret_id — 비밀 천장 옹이)의 폭 + SPAN_PAD.
+## 그림 가지는 충돌 아래로 늘어져, 발판 전체 길이의 빛 줄이면 늘어진 뿌리 한가운데를 가로질러 옹이를 가리키지 못한다. 없으면 전체 폭.
+const SPAN_PAD := 24.0
+func _breakable_span_below() -> Vector2:
+	var lo := INF
+	var hi := -INF
+	var parent := get_parent()
+	if parent != null and is_inside_tree():
+		for s in parent.get_children():
+			if s == self or not (s is Platform) or not ("secret_id" in s):
+				continue
+			var off: Vector2 = (s as Node2D).global_position - global_position
+			if absf(off.y - size.y) > 6.0:
+				continue
+			var x0 := maxf(off.x, 0.0)
+			var x1 := minf(off.x + (s as Platform).size.x, size.x)
+			if x1 > x0:
+				lo = minf(lo, x0)
+				hi = maxf(hi, x1)
+	if lo == INF:
+		return Vector2(0.0, size.x)
+	return Vector2(maxf(lo - SPAN_PAD, 0.0), minf(hi + SPAN_PAD, size.x))
 
 
 ## 수상한 단서: 고른 면의 온기 빛(더하기 혼합) + 그 면 바깥으로 천천히 흐르는 빛 가루 몇 개.
@@ -384,6 +447,8 @@ func _covered(p: Vector2) -> bool:
 # ---------------------------------------------------------------- 그리기
 ## 몸통 (이 노드): 실루엣 + 껍질 결·홈·옹이 + 지역 몸통 장식(채굴장 금속판·띠쇠·녹물, 수액 윤기).
 func _draw() -> void:
+	if _art:
+		return
 	var t0 := Time.get_ticks_usec()
 	TerrainStyle.trace_node = self
 	_ensure_geo()

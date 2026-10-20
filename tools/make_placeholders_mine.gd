@@ -8,7 +8,7 @@ extends SceneTree
 ##   art/enemies/enemy_small_pump.png (1536×1024 투명, 왼쪽을 보는 작은 펌프 — art_faces_right=false)
 ##   art/objects/object_cracked_wall.png (512×1024 투명, 세로로 금 간 나무 벽 조각 — 벽의 크기에 맞춰 늘려 그린다)
 ##   art/objects/object_dew_cup.png / object_scripture_page.png (512×512 투명 아이콘)
-##   art/backgrounds/bg_flooded_mine.png / bg_flooded_mine_boss.png (1536×1024, 붉은 녹과 수액빛)
+##   (art/backgrounds/bg_flooded_mine.png / bg_flooded_mine_boss.png 는 기획자 그림(배경 6-1·6-2)으로 바뀌어 더 만들지 않는다)
 ##   (art/memories/memory_pump_1~3.png · boss_iron_pump_past.png 는 진짜 그림이 들어와 더 만들지 않는다)
 ##   (art/memories/ending_third_way.png 는 더 만들지 않는다 — ENDINGS.md 의 진엔딩 그림 ending_true_1~5.png 로 바뀜)
 ## 그림은 절반 크기로 계산한 뒤 두 배로 키운다 (부드럽고 4배 빠르다).
@@ -28,9 +28,8 @@ func _init() -> void:
 	_make("res://art/objects/object_cracked_wall.png", 512, 1024, true, _cracked_wall)
 	_make("res://art/objects/object_dew_cup.png", 512, 512, true, _dew_cup)
 	_make("res://art/objects/object_scripture_page.png", 512, 512, true, _scripture_page)
-	_make("res://art/backgrounds/bg_flooded_mine.png", 1536, 1024, false, _bg_flooded)
-	_make("res://art/backgrounds/bg_flooded_mine_boss.png", 1536, 1024, false, _bg_flooded_boss)
-	print("임시 그림 %d장 생성 (7장 중, 나머지는 이미 있어 건너뜀) (%.1f초)" % [_made, (Time.get_ticks_msec() - t0) / 1000.0])
+	# 잠긴 채굴장 배경 두 장은 기획자 그림(익스펜션 배경 6-1·6-2)으로 바뀌었다 — --force 로도 덮어쓰지 않게 만들지 않는다
+	print("임시 그림 %d장 생성 (5장 중, 나머지는 이미 있어 건너뜀) (%.1f초)" % [_made, (Time.get_ticks_msec() - t0) / 1000.0])
 	quit()
 
 

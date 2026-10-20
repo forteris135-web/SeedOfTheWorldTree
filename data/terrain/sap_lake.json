@@ -1,0 +1,81 @@
+{
+  "region": "sap_lake",
+  "name": "수액의 호수",
+  "note": "수액의 호수 지형 그림 조각 (호숫가의 뿌리·수면 자국 벽·호수 한가운데). 금빛 뿌리 발판(위에 고인 수액·작은 폭포) + 물 지형(수액 웅덩이 겉모습, water 역할). 숨은 내리막은 room_skins 로 sap_descent 그림 옷을 입는다. 자르기: tools/terrain_cut.gd sap_lake → art/terrain/sap_lake/. 설명은 TERRAIN.md.",
+  "room_skins": {"hidden_descent": "sap_descent"},
+  "scale": 1.0,
+  "tint": [0.8, 0.77, 0.72],
+  "fill": {"top": 1.0, "deep": 0.62, "deep_px": 340, "rim": 0.7, "rim_px": 34, "wall": 0.72, "top_inset": 14},
+  "lift": 2,
+  "depth": {
+    "ash": {"haze": 0.3, "haze_color": "#d6dcdc", "contrast": 0.62, "sat": 0.8, "fore_value": 0.88, "fore_contrast": 1.1, "shadow": 0.6},
+    "alive": {"haze": 0.14, "haze_color": "#e8e4d8", "contrast": 0.82, "sat": 0.92, "fore_value": 0.96, "fore_contrast": 1.06, "shadow": 0.45},
+    "shadow_lod": 4.5, "shadow_offset": [0, 9]
+  },
+  "roles": {
+    "branch": ["plat_a", "plat_b", "plat_c", "plat_d", "plat_long"],
+    "ground": ["pool_a", "pool_a", "plat_d", "plat_a"],
+    "hang": ["hang_a", "hang_b", "hang_c", "hang_d", "hang_e", "hang_f", "hang_a", "hang_b"],
+    "water": ["water_body", "water_long", "water_long"],
+    "wave": ["wave_a", "wave_b"]
+  },
+  "params": {
+    "ground": {"band": 74, "fade": 46, "cap": 130, "overlap": 100, "caps": ["pool_a", "plat_a"]},
+    "slab": {"max_w": 210},
+    "branch": {"thin_poly": 110, "chain": ["plat_long", "plat_d"], "skip": {"plat_d": [[262, 318]]}},
+    "thorn": {"tint": [0.9, 0.78, 0.66], "reach_min": 0.9, "reach_max": 1.35, "sink": 22},
+    "water": {"deep": "#7aa9bf", "deep_ash": "#8a9894", "alpha": [0.14, 0.48], "alpha_ash": [0.2, 0.55], "murk": {"color": "#2a4b5c", "color_ash": "#3b4341", "top": 0.55, "full": 26}, "tint": [0.86, 0.97, 1.0], "tint_ash": [0.9, 0.92, 0.9], "art_alpha": 0.4, "art_alpha_ash": 0.3, "band": 0.62, "wave_alpha": 0.5, "wave_h": 24, "line": [0.75, 0.95, 1.0]},
+    "wall": {"width": 128, "art_faces": 1, "flip_random": true, "out": 12, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.04, "v_hi": 0.96, "top_inset": 36}
+  },
+  "ash": {
+    "neutral": [[0.0, "#1b1f1e"], [0.25, "#464d4a"], [0.55, "#848b87"], [0.8, "#bbc0bc"], [1.0, "#e6e9e6"]],
+    "hues": {
+      "red": [[0.0, "#211e1c"], [0.3, "#58534c"], [0.6, "#97918a"], [0.85, "#c8c2b9"], [1.0, "#ece8e1"]],
+      "yellow": [[0.0, "#201f1b"], [0.3, "#56544a"], [0.6, "#96938a"], [0.85, "#c6c3b8"], [1.0, "#ebe9e0"]],
+      "cyan": [[0.0, "#17211b"], [0.3, "#47584a"], [0.6, "#82967f"], [0.85, "#b6c5ae"], [1.0, "#e2eadb"]],
+      "blue": [[0.0, "#19201c"], [0.3, "#4a564b"], [0.6, "#859283"], [0.85, "#b8c3b2"], [1.0, "#e3e9de"]]
+    }
+  },
+  "cut": {
+    "sheet": "res://익스펜션/그림/지형/78493128-1C95-4039-B158-2F6E9373D332.PNG",
+    "alpha": 0.8,
+    "gap": 1,
+    "pieces": [
+      {"name": "plat_a", "role": "branch", "src": [27, 32, 422, 136], "keep": "largest"},
+      {"name": "plat_b", "role": "branch", "src": [481, 31, 361, 138], "keep": "largest"},
+      {"name": "plat_c", "role": "branch", "src": [661, 153, 449, 233], "keep": "largest"},
+      {"name": "plat_d", "role": "branch", "src": [30, 316, 450, 193], "keep": "largest"},
+      {"name": "plat_long", "role": "branch", "src": [32, 169, 689, 208], "keep": "largest"},
+      {"name": "pool_a", "role": "ground", "src": [35, 530, 463, 173], "keep": "largest"},
+      {"name": "slab_a", "role": "slab", "src": [866, 48, 168, 123], "keep": "largest"},
+      {"name": "slab_b", "role": "slab", "src": [1135, 256, 161, 136], "keep": "largest"},
+            {"name": "bush_a", "role": "bush", "src": [258, 761, 165, 84], "keep": "largest", "clip": [258, 761, 165, 50]},
+      {"name": "bush_b", "role": "bush", "src": [121, 631, 204, 150], "keep": "largest", "clip": [121, 631, 204, 96]},
+      {"name": "bush_c", "role": "bush", "src": [932, 512, 182, 138], "keep": "largest", "clip": [932, 512, 182, 84]},
+      {"name": "hang_a", "role": "hang", "src": [44, 649, 53, 212], "keep": "largest"},
+      {"name": "hang_b", "role": "hang", "src": [410, 639, 44, 129], "keep": "largest"},
+      {"name": "hang_c", "role": "hang", "src": [610, 740, 31, 97], "keep": "largest"},
+      {"name": "hang_d", "role": "hang", "src": [666, 742, 26, 121], "keep": "largest"},
+      {"name": "hang_e", "role": "hang", "src": [1268, 616, 149, 152], "keep": "largest"},
+      {"name": "hang_f", "role": "hang", "src": [1060, 58, 162, 195], "keep": "largest"},
+      {"name": "wall_a", "role": "wall", "src": [1046, 258, 373, 347], "keep": "largest", "clip": [1288, 262, 132, 300]},
+      {"name": "trunk_src", "role": "source", "atlas": false, "src": [1046, 258, 373, 347], "keep": "largest", "clip": [1288, 262, 132, 300]},
+      {"name": "mound_src", "role": "source", "atlas": false, "src": [29, 704, 1391, 347], "keep": "largest", "clip": [30, 800, 330, 200]},
+      {"name": "mound2_src", "role": "source", "atlas": false, "src": [29, 704, 1391, 347], "keep": "largest", "clip": [1130, 760, 260, 200]},
+      {"name": "water_body", "role": "water", "sheet": "res://익스펜션/그림/지형/물 지형.png", "src": [31, 483, 813, 98], "keep": "largest"},
+      {"name": "water_long", "role": "water", "sheet": "res://익스펜션/그림/지형/물 지형.png", "src": [21, 47, 1944, 151], "keep": "largest", "clip": [500, 47, 1400, 151]},
+      {"name": "wave_a", "role": "wave", "sheet": "res://익스펜션/그림/지형/물 지형.png", "src": [47, 605, 935, 42], "keep": "largest"},
+      {"name": "wave_b", "role": "wave", "sheet": "res://익스펜션/그림/지형/물 지형.png", "src": [50, 682, 967, 64], "keep": "largest"},
+      {"name": "thorn_a", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [187, 242, 127, 171], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_b", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [242, 352, 219, 283], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_c", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [370, 244, 216, 224], "scale": 0.8, "keep": "largest"},
+      {"name": "shard_a", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1029, 197, 77, 126], "scale": 0.45, "keep": "largest"},
+      {"name": "shard_b", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1075, 363, 84, 133], "scale": 0.45, "keep": "largest"},
+      {"name": "shard_c", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1156, 599, 57, 131], "scale": 0.45, "keep": "largest"}
+    ],
+    "extras": [
+      {"name": "cracked", "kind": "cracked", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [13, 7, 1229, 1238], "keep": "largest", "out_scale": 0.32, "bright": 1.6}
+    ],
+    "fill": {"from": ["mound_src", "mound2_src", "trunk_src"], "vertical": true, "bright": 1.0, "size": 512, "patch": 64, "cover": 8, "min_ratio": 0.86, "hue": [0, 50], "sat": [0.02, 0.85], "val": [0.12, 0.95]}
+  }
+}

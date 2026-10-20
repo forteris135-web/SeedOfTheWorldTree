@@ -1,0 +1,11 @@
+{
+  "note": "지역에 속하지 않는 단독 그림 (기록물 양피지 등). 자르기: tools/terrain_cut.gd _objects. 지형 그림 옷이 아니다 (enabled=false).",
+  "enabled": false,
+  "cut": {
+    "alpha": 0.8,
+    "gap": 1,
+    "exports": [
+      {"name": "record_parchment", "sheet": "res://익스펜션/그림/오브젝트/A6977DA2-78B0-4654-8F7C-7873FB6CA9D5.PNG", "src": [20, 14, 1223, 1225], "keep": "largest", "out": "res://art/objects/record_parchment.png", "max": 360}
+    ]
+  }
+}

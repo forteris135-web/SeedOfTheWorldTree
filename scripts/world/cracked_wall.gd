@@ -36,6 +36,8 @@ var _hurtbox: Hurtbox
 ## 틈으로 새는 빛 (잿빛 재질을 받지 않는 더하기 혼합 층 — 정화 전 잿빛 지역에서도 빛은 색을 띤다)
 var _glow: Node2D
 var _leak: CPUParticles2D
+## 그림 조각 금 간 나무 (지역 그림 옷에 cracked 조각이 있으면 임시 그림 대신 쓴다)
+var _crack: CrackedArt
 
 
 func _ready() -> void:
@@ -112,6 +114,14 @@ func _ready() -> void:
 	_leak.material = add
 	add_child(_leak)
 	_update_glow_color()
+	if CrackedArt.can_build(_skin):
+		_sprite.visible = false
+		_base.visible = false
+		_crack = CrackedArt.new()
+		add_child(_crack)
+		move_child(_crack, 1)
+		_crack.setup(_skin, self, PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size, Vector2(0, size.y)]))
+		_leak.emission_rect_extents = Vector2(6.0, size.y * 0.42)
 	if secret_id != "" and Progress.is_collected(secret_id):
 		_set_broken_quietly()
 
@@ -131,6 +141,18 @@ func _process(delta: float) -> void:
 	_shake = maxf(_shake - delta * 4.0, 0.0)
 	_deny = maxf(_deny - delta * 2.2, 0.0)
 	_redraw_t += delta
+	if _crack:
+		# 그림 조각: 능력이 없으면 붉게, 있으면 금빛으로 숨 쉬는 틈 빛. 맞아서 튕기면 붉게 번쩍.
+		_crack.position = Vector2(sin(_t * 90.0) * 3.0 * _shake, cos(_t * 70.0) * 1.5 * _shake)
+		var pulse2 := 0.5 + 0.5 * sin(_t * 1.6 + float(_rng_seed % 7))
+		var g2 := LOCKED_GLOW if not can_break() else OPEN_GLOW
+		_crack.set_state(pulse2, _damage, g2.lerp(Color(1.3, 0.25, 0.12), _deny), _deny * 0.8 + _shake * 0.2)
+		_glow.position = _crack.position
+		_glow.queue_redraw()
+		if _redraw_t >= 0.1:
+			_redraw_t = 0.0
+			_update_glow_color()
+		return
 	if _sprite:
 		_sprite.position = Vector2(sin(_t * 90.0) * 3.0 * _shake, cos(_t * 70.0) * 1.5 * _shake)
 		# 능력이 없으면 붉게, 있으면 따뜻하게 숨 쉬는 틈의 빛. 맞아서 튕기면 붉게 번쩍.
@@ -195,6 +217,8 @@ func _break() -> void:
 	_dust.emitting = false
 	_leak.emitting = false
 	_glow.visible = false
+	if _crack:
+		_crack.burst(get_parent())
 	if _sprite:
 		var tw := create_tween()
 		tw.tween_property(_sprite, "modulate:a", 0.0, 0.25)
@@ -270,7 +294,7 @@ func _spawn_debris() -> void:
 
 ## 부모(잿빛 재질): 금의 어두운 가장자리만 (빛은 _draw_glow 가 더하기 혼합으로 그 위에).
 func _draw() -> void:
-	if _broken:
+	if _broken or _crack:
 		return
 	if _shake > 0.0:
 		draw_set_transform(Vector2(sin(_t * 90.0) * 3.0 * _shake, cos(_t * 70.0) * 1.5 * _shake))
@@ -293,6 +317,11 @@ func _crack_points() -> PackedVector2Array:
 ## 맞을수록 넓어지고 곁가지 금이 늘며, 능력 없이 때리면 붉게 크게 번쩍인다("아직 열 수 없다").
 func _draw_glow() -> void:
 	if _broken:
+		return
+	if _crack:
+		# 그림 조각이면 틈 빛은 그림(cracked_glow)이 낸다 — 여기서는 '아직 열 수 없다' 붉은 번쩍임만
+		if _deny > 0.0:
+			_glow.draw_rect(Rect2(Vector2(-4, -4), size + Vector2(8, 8)), Color(1.0, 0.18, 0.08, 0.12 * _deny))
 		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = _rng_seed

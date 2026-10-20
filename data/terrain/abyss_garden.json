@@ -1,0 +1,56 @@
+{
+  "region": "abyss_garden",
+  "name": "심연 · 달빛 정원",
+  "note": "달빛 정원·정원의 끝(보스 방) 지형 그림 조각 (푸른 버섯·등불·등나무 정원 시트). data/terrain/abyss.json 의 room_skins 가 이 방들에 이 그림 옷을 고른다. 자르기: tools/terrain_cut.gd abyss_garden → art/terrain/abyss_garden/. 잿빛 팔레트는 심연(abyss.json) 것을 쓴다 (여기에는 없음).",
+  "scale": 1.0,
+  "tint": [0.9, 0.9, 0.94],
+  "fill": {"top": 1.0, "deep": 0.62, "deep_px": 320, "rim": 0.78, "rim_px": 30, "wall": 0.84},
+  "lift": 2,
+  "depth": {
+    "ash": {"haze": 0.3, "haze_color": "#6f7a90", "contrast": 0.72, "sat": 0.85, "fore_value": 0.95, "fore_contrast": 1.1, "shadow": 0.6},
+    "alive": {"haze": 0.2, "haze_color": "#6c82a8", "contrast": 0.82, "sat": 0.92, "fore_value": 1.0, "fore_contrast": 1.06, "shadow": 0.55},
+    "shadow_lod": 4.5, "shadow_offset": [0, 9]
+  },
+  "roles": {"branch": ["ground_a"], "ground": ["ground_a", "ground_a", "ground_b"]},
+  "params": {
+    "probe": {"deco": 18, "note": "윗면에 선 버섯·등불·수정은 시험의 윗선 재기에서 뺀다 (윗선보다 이만큼 넘게 솟은 곳, px)"},
+    "ground": {"band": 110, "fade": 50, "cap": 150, "overlap": 110, "caps": ["ground_a"]},
+    "slab": {"max_w": 360},
+    "branch": {"thin_poly": 110},
+    "glow": {"color": [0.62, 0.74, 1.0]},
+    "thorn": {"tint": [0.86, 0.8, 0.9], "reach_min": 0.9, "reach_max": 1.35, "sink": 22}
+  },
+  "cut": {
+    "sheet": "res://익스펜션/그림/지형/4B817802-7B16-4722-85ED-A6511B58CC58.PNG",
+    "alpha": 0.8,
+    "gap": 1,
+    "glow": {"lum": 0.8, "cell": 40, "min_px": 40, "max": 6},
+    "pieces": [
+      {"name": "ground_a", "role": "ground", "src": [13, 10, 943, 213], "keep": "largest", "ignore": [[45, 5, 165, 82], [245, 25, 100, 58], [360, 45, 55, 38], [500, 20, 50, 52], [660, 40, 40, 42], [710, 30, 65, 50], [810, 8, 125, 77]]},
+      {"name": "ground_b", "role": "ground", "src": [13, 907, 685, 166], "keep": "largest", "ignore": [[10, 900, 240, 95], [325, 905, 265, 95]]},
+      {"name": "slab_a", "role": "slab", "src": [234, 190, 332, 138], "keep": "largest"},
+      {"name": "slab_b", "role": "slab", "src": [583, 179, 263, 208], "keep": "largest", "ignore": [[660, 175, 100, 70], [755, 175, 40, 62], [810, 230, 45, 28]]},
+      {"name": "slab_c", "role": "slab", "src": [17, 182, 237, 210], "keep": "largest", "ignore": [[45, 185, 45, 75], [150, 210, 70, 58]]},
+      {"name": "slab_d", "role": "slab", "src": [1100, 195, 218, 146], "keep": "largest"},
+      {"name": "slab_e", "role": "slab", "src": [1215, 433, 217, 231], "keep": "largest", "ignore": [[1265, 425, 65, 42]]},
+      {"name": "hang_a", "role": "hang", "src": [968, 11, 289, 167], "keep": "largest"},
+      {"name": "hang_b", "role": "hang", "src": [820, 540, 124, 135], "keep": "largest"},
+      {"name": "lamp_a", "role": "hang", "src": [965, 538, 37, 132], "keep": "largest"},
+      {"name": "lamp_b", "role": "hang", "src": [1072, 512, 62, 135]},
+      {"name": "thorn_a", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [187, 242, 127, 171], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_b", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [242, 352, 219, 283], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_c", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [370, 244, 216, 224], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_d", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [584, 358, 110, 183], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_e", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [650, 273, 167, 238], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_f", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [468, 482, 98, 148], "scale": 0.8, "keep": "largest"},
+      {"name": "shard_a", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1029, 197, 77, 126], "scale": 0.45, "keep": "largest"},
+      {"name": "shard_b", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1075, 363, 84, 133], "scale": 0.45, "keep": "largest"},
+      {"name": "shard_c", "role": "shard", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [1156, 599, 57, 131], "scale": 0.45, "keep": "largest"},
+      {"name": "root_src", "role": "source", "atlas": false, "src": [60, 540, 520, 380], "clip": [60, 540, 520, 380], "scale": 0.75, "keep": "largest"}
+    ],
+    "extras": [
+      {"name": "cracked", "kind": "cracked", "sheet": "res://익스펜션/그림/오브젝트/6D8267F4-D4E0-4E1F-A0D6-352529FD4CE1.PNG", "src": [13, 7, 1229, 1238], "keep": "largest", "out_scale": 0.32, "bright": 1.2}
+    ],
+    "fill": {"from": ["root_src"], "vertical": false, "bright": 1.25, "size": 512, "patch": 48, "cover": 9, "min_ratio": 0.75, "hue": [190, 330], "sat": [0.0, 0.4], "val": [0.06, 0.58]}
+  }
+}

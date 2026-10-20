@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3 uid="uid://c1seedmineboss"]
+[gd_scene load_steps=29 format=3 uid="uid://c1seedmineboss"]
 
 [ext_resource type="Script" path="res://scripts/bosses/boss_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -17,6 +17,7 @@
 [ext_resource type="Script" path="res://scripts/world/fog_gate.gd" id="19_gate"]
 [ext_resource type="PackedScene" uid="uid://c1seedbosshud" path="res://scenes/ui/boss_hud.tscn" id="20_boss_hud"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="Script" path="res://scripts/world/terrain_prop.gd" id="61_prop"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
 size = Vector2(80, 400)
@@ -131,6 +132,20 @@ offset_left = 760.0
 offset_top = 500.0
 offset_right = 3440.0
 offset_bottom = 1500.0
+
+[node name="Props" type="Node2D" parent="."]
+
+[node name="Crane" type="Node2D" parent="Props"]
+position = Vector2(860, 1500)
+script = ExtResource("61_prop")
+piece = "crane_a"
+shade = Color(0.8, 0.78, 0.78, 1)
+
+[node name="FrameB" type="Node2D" parent="Props"]
+position = Vector2(3480, 1500)
+script = ExtResource("61_prop")
+piece = "frame_b"
+shade = Color(0.8, 0.78, 0.78, 1)
 
 [node name="Terrain" type="Node2D" parent="."]
 

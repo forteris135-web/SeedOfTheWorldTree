@@ -92,7 +92,7 @@ Fx 밖의 노드(레이저, 초승달 검기 등)도 `Fx.make_material("light", 
 | 공격 노드 그림 (뿌리 가시·뿌리 손·달빛 구슬·씨앗·충격파·뿌리 벽·검기·수액 물결·수액 기둥·포자 구름·잎 더미) | 각 노드 스크립트 (`scripts/combat/`, `scripts/bosses/root_*.gd`, `sword_wave.gd`, `scripts/world/leaf_pile.gd`) | 자식 Sprite2D + `Fx.shared_material(팔레트, 더하기, 남김)`. 그림이 없으면 예전 코드 그림으로 돌아간다 |
 
 몹(정원사·경비병·기계·수액 어부)은 각 몹 스크립트의 공격 순간에 `Fx.spawn` 한 줄. 작은 펌프·무쇠 펌프의 물줄기는 `SapBlob.launch`.
-물 이펙트는 `scripts/fx/water_fx.gd` (수액 웅덩이 `sap_pool.gd` 의 `_ready` 한 줄).
+물 이펙트는 `scripts/fx/water_fx.gd` (수액 웅덩이 `sap_pool.gd` 의 `_ready` 한 줄). 물보라·잔물결은 웅덩이가 그리는 수면(`SapPool.surface_top()` — 지형 리뉴얼 뒤 맞는 영역 윗변, 판정 수면 `surface_y()` 보다 조금 아래)에 난다. 물 모습 자체(물빛·결·물결 띠)는 웅덩이가 그린다 (`TERRAIN.md` 6장).
 
 ### 관찰자(skill_fx) 규칙
 

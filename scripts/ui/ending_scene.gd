@@ -800,7 +800,8 @@ func _start_ash(f: Dictionary) -> void:
 	var L: Dictionary = _layers_art[_front]
 	var mat := ShaderMaterial.new()
 	mat.shader = _ash_shader
-	mat.set_shader_parameter("ash_tint", Purity.ASH_TINTS.get(str(f.get("tint", "canopy")), Vector3(0.66, 0.70, 0.78)))
+	# 잿빛 = 그 지역의 잿빛 팔레트 표 (셰이더가 팔레트 바꾸기로 바뀜 — 옛 ash_tint 값은 없다)
+	mat.set_shader_parameter("ash_lut", Purity.ash_lut(str(f.get("tint", "canopy"))))
 	mat.set_shader_parameter("purity", 0.0)
 	mat.set_shader_parameter("radius", 0.0)
 	mat.set_shader_parameter("center", _vec2(f.get("origin", [0.5, 1.1])))

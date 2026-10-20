@@ -1,0 +1,53 @@
+{
+  "region": "sap_descent",
+  "name": "수액의 호수 · 숨은 내리막",
+  "note": "숨은 내리막(hidden_descent) 한 방만 입는 그림 옷 — sap_lake.json 의 room_skins 로 고른다 (지역은 sap_lake 그대로: 정화·음악·잿빛 표는 sap_lake.json). 어두운 뿌리·폭포·안개 시트. 자르기: tools/terrain_cut.gd sap_descent → art/terrain/sap_descent/.",
+  "scale": 1.0,
+  "tint": [0.86, 0.85, 0.88],
+  "fill": {"top": 0.95, "deep": 0.55, "deep_px": 320, "rim": 0.7, "rim_px": 30, "wall": 0.7, "top_inset": 16},
+  "lift": 2,
+  "depth": {
+    "ash": {"haze": 0.22, "haze_color": "#6e7478", "contrast": 0.72, "sat": 0.85, "fore_value": 0.92, "fore_contrast": 1.1, "shadow": 0.55},
+    "alive": {"haze": 0.12, "haze_color": "#6f7a86", "contrast": 0.85, "sat": 0.92, "fore_value": 0.98, "fore_contrast": 1.06, "shadow": 0.45},
+    "shadow_lod": 4.5, "shadow_offset": [0, 9]
+  },
+  "roles": {
+    "branch": ["root_plat_a"],
+    "ground": ["root_mass_a", "root_mass_a", "root_mass_b"],
+    "hang": ["vine_a", "vine_b", "vine_c", "vine_d", "vine_e", "fall_a", "vine_a", "vine_b"]
+  },
+  "params": {
+    "ground": {"band": 96, "fade": 50, "cap": 140, "overlap": 100, "caps": ["root_mass_b"], "flip_right_cap": true},
+    "slab": {"max_w": 200},
+    "branch": {"thin_poly": 110},
+    "thorn": {"tint": [0.86, 0.8, 0.76], "reach_min": 0.9, "reach_max": 1.35, "sink": 22},
+    "wall": {"width": 140, "art_faces": 1, "flip_random": true, "out": 14, "min_h": 180, "inner_fade": 0.4, "v_lo": 0.42, "v_hi": 0.8, "top_inset": 40}
+  },
+  "cut": {
+    "sheet": "res://익스펜션/그림/지형/C082DF1A-939D-47FE-9DD7-9DA84BE5FB9C.PNG",
+    "alpha": 0.8,
+    "gap": 1,
+    "pieces": [
+      {"name": "root_plat_a", "role": "branch", "src": [19, 12, 541, 231], "keep": "largest"},
+      {"name": "root_plat_b", "role": "branch", "src": [566, 145, 299, 195], "keep": "largest"},
+      {"name": "root_plat_c", "role": "branch", "src": [601, 9, 222, 132], "keep": "largest"},
+      {"name": "root_mass_a", "role": "ground", "src": [17, 843, 792, 227], "keep": "largest", "clip": [17, 843, 575, 227]},
+      {"name": "root_mass_b", "role": "ground", "src": [561, 692, 462, 199], "keep": "largest"},
+      {"name": "vine_a", "role": "hang", "src": [1190, 17, 35, 214], "keep": "largest"},
+      {"name": "vine_b", "role": "hang", "src": [1250, 17, 36, 307], "keep": "largest"},
+      {"name": "vine_c", "role": "hang", "src": [1295, 13, 127, 198], "keep": "largest"},
+      {"name": "vine_d", "role": "hang", "src": [1377, 274, 48, 249], "keep": "largest"},
+      {"name": "vine_e", "role": "hang", "src": [1251, 374, 49, 357], "keep": "largest"},
+      {"name": "fall_a", "role": "hang", "src": [1118, 261, 69, 332], "keep": "largest"},
+      {"name": "pillar_a", "role": "wall", "src": [1309, 603, 123, 453], "keep": "largest"},
+      {"name": "body_src", "role": "source", "atlas": false, "src": [17, 843, 792, 227], "keep": "largest", "clip": [60, 905, 440, 160]},
+      {"name": "pillar_src", "role": "source", "atlas": false, "src": [1309, 603, 123, 453], "keep": "largest", "clip": [1312, 640, 115, 390]},
+      {"name": "thorn_a", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [187, 242, 127, 171], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_b", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [242, 352, 219, 283], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_c", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [370, 244, 216, 224], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_d", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [584, 358, 110, 183], "scale": 0.8, "keep": "largest"},
+      {"name": "thorn_e", "role": "thorn", "sheet": "res://익스펜션/그림/이펙트/보스 이펙트 1.PNG", "src": [650, 273, 167, 238], "scale": 0.8, "keep": "largest"}
+    ],
+    "fill": {"from": ["body_src", "pillar_src"], "vertical": true, "bright": 1.15, "size": 512, "patch": 64, "cover": 9, "min_ratio": 0.88, "hue": [0, 360], "sat": [0.0, 0.6], "val": [0.08, 0.76]}
+  }
+}

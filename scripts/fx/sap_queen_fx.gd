@@ -27,7 +27,7 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		"DUST":
 			Fx.spawn("wing_dust_burst", boss.global_position + BODY)
 		"WAVE":
-			Fx.spawn("sap_splash", Vector2(boss.global_position.x, float(val("surface_y", boss.global_position.y))), {"scale": 1.25})
+			Fx.spawn("sap_splash", Vector2(boss.global_position.x, _water_top()), {"scale": 1.25})
 		"BUTTERFLIES":
 			Fx.spawn("butterfly_burst", ahead(90.0, -140.0))
 
@@ -54,3 +54,14 @@ func _tick(delta: float) -> void:
 				Fx.spawn("sap_drip", body + Vector2(randf_range(-90.0, 90.0), randf_range(-20.0, 40.0)))
 	if st != "DUST":
 		_prev_spawned = 0
+
+
+## 물보라 자리 = 웅덩이가 그리는 수면 (지형 리뉴얼: 그림 수면은 판정 수면 surface_y 보다 높이의 SURFACE_FRAC 만큼 아래, 정화되면 차오름).
+## 보스의 surface_y(물결 판정 기준)는 그대로 두고 그림만 맞춘다. 웅덩이가 없으면 surface_y.
+func _water_top() -> float:
+	var y := float(val("surface_y", boss.global_position.y))
+	for n in boss.get_tree().get_nodes_in_group("sap_pool"):
+		var pool := n as SapPool
+		if pool and boss.global_position.x >= pool.global_position.x and boss.global_position.x <= pool.global_position.x + pool.size.x:
+			return pool.to_global(Vector2(0.0, pool.surface_top())).y
+	return y

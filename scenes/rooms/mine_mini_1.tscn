@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://c1seedminemini1"]
+[gd_scene load_steps=19 format=3 uid="uid://c1seedminemini1"]
 
 [ext_resource type="Script" path="res://scripts/world/miniboss_room.gd" id="1_miniroom"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -15,6 +15,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 [ext_resource type="PackedScene" uid="uid://c1seedelitemachine" path="res://scenes/enemies/elite_machine.tscn" id="63_elite_machine"]
 [ext_resource type="Texture2D" path="res://art/backgrounds/bg_mine_1.png" id="11_bg"]
+[ext_resource type="Script" path="res://scripts/world/terrain_prop.gd" id="61_prop"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -114,6 +115,21 @@ initial_velocity_max = 26.0
 scale_amount_min = 0.25
 scale_amount_max = 0.7
 color = Color(1, 0.85, 0.45, 0.55)
+
+[node name="Props" type="Node2D" parent="."]
+
+[node name="FrameB" type="Node2D" parent="Props"]
+position = Vector2(1250, 1300)
+script = ExtResource("61_prop")
+piece = "frame_b"
+shade = Color(0.8, 0.78, 0.78, 1)
+
+[node name="Gallows" type="Node2D" parent="Props"]
+position = Vector2(2050, 1300)
+script = ExtResource("61_prop")
+piece = "gallows_a"
+shade = Color(0.8, 0.78, 0.78, 1)
+flip_h = true
 
 [node name="Terrain" type="Node2D" parent="."]
 
