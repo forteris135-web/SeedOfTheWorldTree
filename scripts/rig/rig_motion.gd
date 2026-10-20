@@ -924,15 +924,12 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 			else:
 				any_swing = true
 	if any_swing:
-		# 다른 발이 걸음 중이어도, 디딘 발이 다리가 닿지 않을 만큼 멀리 남았으면 걸음 중인 발을 그 자리에 딛고 그 발부터 옮긴다
+		# 다른 발이 걸음 중이어도, 디딘 발이 다리가 닿지 않을 만큼 멀리 남았으면 그 발도 바로 걸음을 시작한다 (잠깐 두 발이 함께 옮긴다)
 		# (약초꾼이 뿌리며 앞으로 밀리는 동안 앞발 걸음이 길게 이어져 뒷발이 '디딘 채' 12px 떴다 — 2026-10-20 검수)
-		if _overreached_leg() == null:
-			return
-		for leg in legs:
-			if leg.swing:
-				leg.swing = false
-				leg.h = 0.0
-				leg.planted_now = true
+		var far_s := _overreached_leg()
+		if far_s:
+			_start_step(far_s, maxf(absf(far_s.x - float(fin.get(far_s.k_foot, 0.0)) * L), L * 0.3))
+		return
 	var thr := float(fin.get("step_thr", 0.2)) * L
 	var worst: Leg = null
 	var worst_err := thr
@@ -949,12 +946,17 @@ func _update_feet(delta: float, speed: float, dx: float, grounded: bool) -> void
 			worst = far
 			worst_err = maxf(absf(far.x - float(fin.get(far.k_foot, 0.0)) * L), L * 0.3)
 	if worst:
-		worst.swing = true
-		worst.timed = true
-		worst.t = 0.0
-		worst.from_x = worst.x
-		worst.dur = clampf(float(fin.get("step_dur", 0.2)), 0.06, 0.5)
-		worst.lift = float(fin.get("step_lift", 0.08)) * L * clampf(worst_err / maxf(L * 0.3, 1.0), 0.5, 1.2)
+		_start_step(worst, worst_err)
+
+
+## 자세의 발 자리로 한 걸음 (시간으로 가는 걸음). err = 어긋남 (걸음 높이를 정한다)
+func _start_step(leg: Leg, err: float) -> void:
+	leg.swing = true
+	leg.timed = true
+	leg.t = 0.0
+	leg.from_x = leg.x
+	leg.dur = clampf(float(fin.get("step_dur", 0.2)), 0.06, 0.5)
+	leg.lift = float(fin.get("step_lift", 0.08)) * L * clampf(err / maxf(L * 0.3, 1.0), 0.5, 1.2)
 
 
 ## 디딘 발 중 엉덩이를 한계(DROP_MAX)까지 낮춰도 다리가 닿지 않을 발 (가장 모자란 것). 무릎 꿇은 다리·한 뼈 다리는 뺀다.
