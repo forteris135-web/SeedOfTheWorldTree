@@ -102,7 +102,7 @@ signal hit_impact(result: String, target: Node)
 
 @export_group("체력과 회복")
 @export var max_hp := 100.0
-## 이슬 방울 개수 (달빛풀에서 다시 채워진다).
+## 이슬 방울 개수 (달빛풀에서 다시 채워진다). 실제 값은 _apply_abilities 가 Progress.dew_max() 로 정한다 (최대 Progress.MAX_DEWS = 8).
 @export var max_dews := 3
 @export var heal_amount := 45.0
 ## 회복 동작에 걸리는 시간. 그동안 움직일 수 없고 맞으면 끊긴다.
@@ -368,12 +368,13 @@ func _apply_abilities() -> void:
 	attack_multiplier = 1.0 + Progress.upgrades.get("attack", 0.0)
 	# 이슬도 체력처럼 늘어난 만큼 채운다. 방에 들어오면 소녀가 새로 만들어져 _ready 가 기본값 3개만 채우므로,
 	# 여기서 더해 주지 않으면 산 이슬·주운 이슬이 방을 옮길 때마다 빈 칸이 됐다 (2026-10-19 검수).
+	# 이슬은 최대 8 (Progress.MAX_DEWS, 2026-10-20 기획자 결정). 넘친 이슬은 하나마다 회복량 +10 으로 바뀐다 (Progress.heal_bonus).
 	var old_max_dews := max_dews
-	max_dews = 3 + int(Progress.upgrades.get("dews", 0))
+	max_dews = Progress.dew_max()
 	if max_dews > old_max_dews:
 		dews += max_dews - old_max_dews
 	dews = mini(dews, max_dews)
-	heal_amount = 45.0 + Progress.upgrades.get("heal", 0.0)   # 회복량 아이템(맑은 샘물)
+	heal_amount = 45.0 + Progress.heal_bonus()   # 회복량 아이템(맑은 샘물)·성장 + 넘친 이슬
 	hp_changed.emit(hp, max_hp)
 	dews_changed.emit(dews)
 

@@ -9,6 +9,9 @@ class_name MiniBossRoom
 @export var reward_type := "attack"
 @export var reward_amount := 0.1
 @export var reward_text := "거인의 힘이 검에 깃들었다 — 공격력 +10%"
+## 보상이 이슬(reward_type "dews")인데 이슬이 이미 가득(8개)해 회복량으로 바뀌었을 때 대신 띄울 글자. {heal} 은 늘어난 회복량.
+## 비어 있으면 Pickup.dew_reward_text 의 기본 안내("<보스 이름> — 이슬이 가득해 회복량이 늘었다 (회복량 +10)").
+@export var reward_text_full := ""
 ## 쓰러뜨리면 떨어지는 재화 '빛 가루' (2026-10-19 기획자 요청 9번). 보스 자신의 dust_value 는 0 으로 두고 방이 이만큼 준다 (깃발로 한 번만).
 @export var dust_reward := 60
 ## 싸움이 시작되면 트는 곡 (audio/music/). 지역마다 그 지역 보스곡을 쓴다 (전용 중간 보스곡은 13단계 음악에서).
@@ -102,7 +105,17 @@ func _on_boss_died(_purified: bool) -> void:
 	Music.play_region(region, room_id)
 	var hud := get_node_or_null("CombatHUD")
 	if hud:
-		hud.show_message(reward_text, 4.0)
+		hud.show_message(reward_message(), 4.0)
+
+
+## 보상 안내 글자 (add_upgrade 뒤에 부른다). 이슬 보상이 가득한 이슬 때문에 회복량이 됐으면 그렇게 말한다.
+func reward_message() -> String:
+	if reward_type != "dews":
+		return reward_text
+	var over := Progress.dew_overflow_of(reward_amount)
+	if over > 0 and over >= roundi(reward_amount) and reward_text_full != "":
+		return reward_text_full.format({"heal": int(round(over * Progress.DEW_OVERFLOW_HEAL))})
+	return Pickup.dew_reward_text(reward_amount, reward_text, boss_name)
 
 
 func _on_player_died() -> void:

@@ -289,18 +289,23 @@ func _ready() -> void:
 	await _frames(1)
 	_check(_draws > draws0 + 5, "영혼 상태를 바꾸는 동안 HUD 가 계속 그려졌다 (%d회)" % (_draws - draws0))
 
-	# ── 이슬 9개: 둘째 줄, 영혼 줄은 그 아래로
+	# ── 이슬 최대 8개 (2026-10-20 기획자 결정): 5 + 4 = 9 를 받아도 8개 = 첫 줄 7 + 둘째 줄 1, 영혼 줄은 그 아래로
 	Progress.add_upgrade("dews", 4)
 	_player._apply_abilities()
 	await _frames(2)
 	slots = _hud.dew_slots()
-	print("[probe] 이슬 +4 → 최대 %d, 줄 %d, 자리: %s" % [_player.max_dews, _hud.dew_rows(), _fmt_slots(slots)])
-	_check(slots.size() == 9 and _hud.dew_rows() == 2 and _no_overlap(slots), "이슬 9개: 겹침 없음, 두 줄")
+	print("[probe] 이슬 +4 → 최대 %d (받은 성장 %d, 넘침 %d), 줄 %d, 자리: %s" % [_player.max_dews, Progress.dew_total(), Progress.dew_overflow(), _hud.dew_rows(), _fmt_slots(slots)])
+	_check(_player.max_dews == Progress.MAX_DEWS and Progress.dew_overflow() == 1, "이슬은 최대 8개 (넘친 1개는 회복량으로)")
+	_check(slots.size() == 8 and _hud.dew_rows() == 2 and _no_overlap(slots), "이슬 8개: 겹침 없음, 두 줄 (7 + 1)")
 	_check(is_equal_approx(slots[7].x, slots[0].x) and slots[7].y > slots[0].y + _hud.dew_size(0).y * 0.9 and is_equal_approx(slots[6].y, slots[0].y), "8번째부터 둘째 줄 (첫 줄 7개)")
 	var soul_y: float = _hud.soul_origin().y
 	print("[probe] 영혼 줄 기준선 y %.1f, 둘째 줄 이슬 아래 %.1f" % [soul_y, slots[7].y + _hud.dew_size(7).y])
 	_check(soul_y >= slots[7].y + _hud.dew_size(7).y, "영혼 줄은 둘째 이슬 줄 아래로 내려간다")
 	_check(_hud.growth_origin().x >= slots[6].x + _hud.dew_size(6).x, "성장 표시는 첫 줄의 마지막(7번째) 이슬 오른쪽")
+	Progress.add_upgrade("dews", 3)   # 더 받아도 8개 그대로
+	_player._apply_abilities()
+	await _frames(2)
+	_check(_hud.dew_slots().size() == 8 and _hud.dew_rows() == 2, "이슬을 더 받아도 HUD 는 8개 (%d)" % _hud.dew_slots().size())
 	await _test_dust_box_layout(room, "이슬 두 줄·성장 둘")
 	await _frames(3)
 	print("[probe] draw 호출 수 %d" % _draws)

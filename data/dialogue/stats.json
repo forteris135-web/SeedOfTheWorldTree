@@ -4,6 +4,9 @@
   "currency": "빛 가루",
   "not_enough": "빛 가루가 모자라다",
   "maxed": "더는 자랄 수 없다",
+  "dews_full": "이슬이 가득하다 — 이슬은 {max}개까지 맺힌다",
+  "dews_full_desc": "이슬은 {max}개까지 — 가득 찼다",
+  "full_label": "가득",
   "touch_again": "한 번 더 누르면 성장",
   "bought": "{name} {amount}  (이제 {now})  — 빛 가루 {cost}",
   "items": [

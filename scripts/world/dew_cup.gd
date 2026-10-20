@@ -34,7 +34,8 @@ func _collect(player: Player) -> void:
 	super(player)
 	var hud := get_tree().current_scene.get_node_or_null("CombatHUD")
 	if hud:
-		hud.show_message("이슬잔 — 이슬 방울을 하나 더 담을 수 있다 (이제 %d개)" % player.max_dews, 3.0)
+		# 이슬이 가득(8개)하면 잔에 담긴 이슬은 회복량이 된다 (Pickup.dew_reward_text)
+		hud.show_message(dew_reward_text(amount, "이슬잔 — 이슬 방울을 하나 더 담을 수 있다 (이제 %d개)" % player.max_dews, "이슬잔"), 3.0)
 
 
 ## 구슬 대신 잔 그림을 쓰므로 바탕 원은 그리지 않는다 (빛 테두리만).

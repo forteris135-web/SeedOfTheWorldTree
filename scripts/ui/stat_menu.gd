@@ -6,9 +6,12 @@ class_name StatMenu
 ## 소녀가 _apply_abilities 로 다시 계산한다 — 아이템·구원 보상과 같은 길.
 ## 이 노드는 CanvasLayer 가 아니라 Control 이다: GrassMenu(달빛풀 메뉴)가 자기 판 안에 넣고 open()/handle()/close() 로 부린다.
 ## 안내 글자는 메뉴 안에만 둔다 (기획자 결정: 플레이 화면에 설명 글자 없음).
+## 이슬은 최대 8개 (Progress.MAX_DEWS, 2026-10-20 기획자 결정): 이슬이 가득하면 이슬 줄은 비용 대신 '가득'을 보이고 사지 않는다
+## (거절 이유 "full"). 빛 가루가 회복량으로 바뀌어 사라지는 것보다 분명하다 — 회복량을 원하면 회복량 줄을 산다.
+## 단계·비용은 그대로라 단계 눈금이 덜 찬 채 '가득'일 수 있다 (구슬·이슬잔·구원·중간 보스로 먼저 찬 경우).
 
 signal purchased(kind: String, level: int, cost: int)
-## "no_dust"(모자람) / "maxed"(최대 단계)
+## "no_dust"(모자람) / "maxed"(최대 단계) / "full"(이슬이 이미 가득 — 이슬 줄만)
 signal rejected(kind: String, reason: String)
 
 const DATA_PATH := "res://data/dialogue/stats.json"
@@ -16,6 +19,8 @@ const ACCENT := Color(1.0, 0.86, 0.5)
 const DUST_COLOR := Color(1.0, 0.92, 0.62)
 const BAD := Color(1.0, 0.45, 0.4)
 const GOOD := Color(0.75, 0.95, 0.8)
+## 이슬이 가득할 때 이슬 줄의 '가득' 글자 색 (달빛 이슬 구슬의 은청색)
+const FULL_COLOR := Color(0.62, 0.85, 1.0)
 ## 터치: 첫 누르기는 고르기(+ "한 번 더 누르면 성장" 글자), 같은 줄을 한 번 더 누르면 산다 (잘못 눌러 쓰지 않게).
 ## 이미 골라진 줄(처음 연 첫 줄, 키보드로 고른 줄)도 터치 첫 누르기는 고르기만 한다. false 면 한 번에 산다.
 const TOUCH_TWO_TAP := true
@@ -70,15 +75,22 @@ static func cost_of(item: Dictionary, level: int) -> int:
 	return int(item.get("base_cost", 0)) + int(item.get("cost_step", 0)) * level
 
 
-## 지금 살 수 있는가: "" 이면 가능, 아니면 이유 "maxed" / "no_dust"
+## 지금 살 수 있는가: "" 이면 가능, 아니면 이유 "maxed" / "full" / "no_dust"
 static func can_buy(item: Dictionary) -> String:
 	var kind: String = item.get("kind", "")
 	var lvl := level_of(kind)
 	if lvl >= max_level_of(item):
 		return "maxed"
+	if is_full(kind):
+		return "full"
 	if Progress.dust < cost_of(item, lvl):
 		return "no_dust"
 	return ""
+
+
+## 단계와 상관없이 더 받을 수 없는가: 이슬이 이미 최대(8개)다.
+static func is_full(kind: String) -> bool:
+	return kind == "dews" and Progress.dews_full()
 
 
 ## 한 단계 산다. 돌려주는 값: "" 이면 성공, 아니면 거절 이유. 성공하면 빛 가루가 줄고 성장이 들어간다.
@@ -112,9 +124,9 @@ static func current_value_text(kind: String, p: Player = null) -> String:
 			var mult: float = p.attack_multiplier if alive else 1.0 + float(Progress.upgrades.get("attack", 0.0))
 			return "+%d%%" % int(round((mult - 1.0) * 100.0))
 		"heal":
-			return "%d" % int(p.heal_amount if alive else 45.0 + float(Progress.upgrades.get("heal", 0.0)))
+			return "%d" % int(p.heal_amount if alive else 45.0 + Progress.heal_bonus())
 		"dews":
-			return "%d개" % int(p.max_dews if alive else 3 + int(Progress.upgrades.get("dews", 0)))
+			return "%d개" % int(p.max_dews if alive else Progress.dew_max())
 	return ""
 
 
@@ -225,8 +237,18 @@ func try_buy(i: int) -> String:
 			Sfx.play("blip", -6.0)
 			_say(_data.get("maxed", "더는 자랄 수 없다"), Color(0.8, 0.8, 0.8))
 			rejected.emit(kind, why)
+		"full":
+			_shake = 0.6
+			Sfx.play("blip", -6.0)
+			_say(full_text(_data), FULL_COLOR)
+			rejected.emit(kind, why)
 	queue_redraw()
 	return why
+
+
+## 이슬이 가득해 못 살 때의 안내 (stats.json "dews_full", {max} = 최대 개수)
+static func full_text(data: Dictionary) -> String:
+	return str(data.get("dews_full", "이슬이 가득하다 (최대 {max}개)")).format({"max": Progress.MAX_DEWS})
 
 
 func _say(text: String, color: Color) -> void:
@@ -294,10 +316,16 @@ func _draw() -> void:
 			var pip := Rect2(r.position + Vector2(46 + k * 18.0, 54), Vector2(12, 12))
 			draw_rect(pip, DUST_COLOR if k < lvl else Color(1, 1, 1, 0.15))
 		draw_string(font, r.position + Vector2(46 + maxl * 18.0 + 10, 66), "%d / %d" % [lvl, maxl], HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, 0.55))
-		draw_string(font, r.position + Vector2(DESC_X, 66), str(item.get("desc", "")), HORIZONTAL_ALIGNMENT_LEFT, 300, 18, Color(1, 1, 1, 0.5))
+		var full := lvl < maxl and is_full(kind)
+		var desc := str(item.get("desc", ""))
+		if full:
+			desc = str(_data.get("dews_full_desc", "이슬은 {max}개까지")).format({"max": Progress.MAX_DEWS})
+		draw_string(font, r.position + Vector2(DESC_X, 66), desc, HORIZONTAL_ALIGNMENT_LEFT, 300, 18, Color(FULL_COLOR, 0.75) if full else Color(1, 1, 1, 0.5))
 		# 비용 (오른쪽)
 		if lvl >= maxl:
 			draw_string(font, r.position + Vector2(r.size.x - 180, 44), "최대", HORIZONTAL_ALIGNMENT_RIGHT, 160, 26, Color(0.65, 0.65, 0.65))
+		elif full:
+			draw_string(font, r.position + Vector2(r.size.x - 180, 44), str(_data.get("full_label", "가득")), HORIZONTAL_ALIGNMENT_RIGHT, 160, 26, FULL_COLOR)
 		else:
 			var cost := cost_of(item, lvl)
 			var ok := Progress.dust >= cost

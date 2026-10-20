@@ -5,6 +5,7 @@ extends CanvasLayer
 ##
 ## 성장이 HUD 에 반영되는 규칙
 ## - 이슬: max_dews 만큼 겹치지 않게 늘어놓는다 (한 줄 7개, 넘으면 둘째 줄). 새로 늘어난 이슬은 0.6초 반짝이며 커졌다 작아진다.
+##   최대 8개 (Progress.MAX_DEWS, 2026-10-20 기획자 결정) → 가득하면 첫 줄 7 + 둘째 줄 1. 넘친 이슬은 회복량 성장(물방울 "+N")에 더해 보인다.
 ## - 체력 막대: max_hp 에 비례해 길어진다 (100 기준 1.0, 최대 1.6배). 틀 그림은 세 조각(왼쪽 / 늘림 조각 / 오른쪽 끝)으로 그려
 ##   끝 장식이 깨지지 않는다. 늘어나는 순간 0.5초에 걸쳐 자라며 한 번 번쩍.
 ## - 공격 배수·회복량 성장: 이슬 오른쪽에 작은 검 / 물방울 아이콘 + "+10%" / "+15" (성장이 없으면 아무것도 없음).
@@ -234,7 +235,16 @@ func _track_growth(delta: float) -> void:
 func _on_upgraded(kind: String, amount: float) -> void:
 	var text := ""
 	match kind:
-		"dews": text = "이슬 +%d" % int(round(amount))
+		"dews":
+			# 이슬이 가득(8개)해 회복량으로 바뀐 몫은 그렇게 보인다 (Progress.dew_overflow_of — add_upgrade 뒤라 이미 더해졌다)
+			var over := Progress.dew_overflow_of(amount)
+			var added := roundi(amount) - over
+			if over <= 0:
+				text = "이슬 +%d" % added
+			elif added <= 0:
+				text = "이슬 가득 · 회복 +%d" % int(round(over * Progress.DEW_OVERFLOW_HEAL))
+			else:
+				text = "이슬 +%d · 회복 +%d" % [added, int(round(over * Progress.DEW_OVERFLOW_HEAL))]
 		"max_hp": text = "체력 +%d" % int(round(amount))
 		"attack": text = "공격 +%d%%" % int(round(amount * 100.0))
 		"heal": text = "회복 +%d" % int(round(amount))
@@ -327,17 +337,22 @@ func hp_frame_pieces(scale := -1.0) -> Array:
 	return out
 
 
+## 그릴 이슬 수: 소녀의 최대 이슬 (상한 Progress.MAX_DEWS 를 넘지 않게 한 번 더 막는다)
+func dew_count() -> int:
+	return mini(_player.max_dews if _player else Progress.BASE_DEWS, Progress.MAX_DEWS)
+
+
 ## 이슬 줄 수 (7개까지 한 줄)
 func dew_rows(count := -1) -> int:
 	if count < 0:
-		count = _player.max_dews if _player else 3
+		count = dew_count()
 	return maxi(1, ceili(float(count) / DEW_PER_ROW))
 
 
 ## 이슬 자리 (화면 좌표, 그림 왼쪽 위). 첫 자리에서 오른쪽으로 DEW_STEP 간격, 7개 넘으면 둘째 줄.
 func dew_slots(count := -1) -> Array[Vector2]:
 	if count < 0:
-		count = _player.max_dews if _player else 3
+		count = dew_count()
 	var out: Array[Vector2] = []
 	for i in count:
 		var col := i % DEW_PER_ROW
@@ -362,7 +377,7 @@ func growth_items() -> Array:
 	var atk := int(round(float(Progress.upgrades.get("attack", 0.0)) * 100.0))
 	if atk > 0:
 		out.append({"kind": "attack", "text": "+%d%%" % atk})
-	var heal := int(round(float(Progress.upgrades.get("heal", 0.0))))
+	var heal := int(round(Progress.heal_bonus()))   # 회복량 성장 + 넘친 이슬(하나마다 +10)
 	if heal > 0:
 		out.append({"kind": "heal", "text": "+%d" % heal})
 	return out
@@ -377,7 +392,7 @@ func growth_labels() -> Array[String]:
 
 ## 성장 표시 줄의 시작점 (화면 좌표: 첫 아이콘 가운데 높이의 왼쪽 끝) — 이슬 첫 줄 오른쪽
 func growth_origin() -> Vector2:
-	var n := mini(_player.max_dews if _player else 3, DEW_PER_ROW)
+	var n := mini(dew_count(), DEW_PER_ROW)
 	var slots := dew_slots(mini(n, DEW_PER_ROW))   # 첫 줄 마지막 이슬의 오른쪽
 	return slots[slots.size() - 1] + Vector2(dew_size(mini(n, DEW_PER_ROW) - 1).x + GROWTH_GAP * SHEET_SCALE, DEWS[0].get_height() * 0.5 * SHEET_SCALE)
 

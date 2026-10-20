@@ -2,6 +2,7 @@ extends Area2D
 class_name Pickup
 ## 떠 있는 빛나는 구슬. 소녀가 닿으면 모아져 저절로 성장한다 (자동 스펙업).
 ## 종류: max_hp(세계수의 수액, 최대 체력) / attack(바람의 결, 공격력) / dews(달빛 이슬, 이슬 개수) / heal(맑은 샘물, 회복량).
+## 이슬은 최대 8개 (Progress.MAX_DEWS): 가득할 때 모은 이슬은 회복량 +10 이 되고, 안내도 그렇게 말한다 (dew_reward_text).
 ## 한 번 모은 것은 Progress.collected[pickup_id] 에 남아 다시 생기지 않는다.
 ## 비밀 벽·천장 안의 것(hidden_in)은 그 비밀이 부서질 때 나타난다 (천장이면 fall_to 로 떨어져 안착).
 
@@ -141,6 +142,20 @@ func _on_body_entered(body: Node) -> void:
 		_collect(body)
 
 
+## 이슬 성장(amount 개)의 안내 글자. Progress.add_upgrade("dews", amount) 뒤에 부른다 — 구슬·이슬잔·구원 보상·중간 보스가 같이 쓴다.
+## 이슬이 늘었으면 normal 그대로. 가득해서 다 회복량이 됐으면 "<label> — 이슬이 가득해 회복량이 늘었다 (회복량 +10)"
+## (label 이 비면 앞부분 없이), 일부만 넘쳤으면 normal 뒤에 " · 넘친 이슬로 회복량 +10".
+static func dew_reward_text(amount: float, normal: String, label := "") -> String:
+	var over := Progress.dew_overflow_of(amount)
+	if over <= 0:
+		return normal
+	var heal := int(round(over * Progress.DEW_OVERFLOW_HEAL))
+	if over >= roundi(amount):
+		var full := "이슬이 가득해 회복량이 늘었다 (회복량 +%d)" % heal
+		return full if label == "" else "%s — %s" % [label, full]
+	return "%s · 넘친 이슬로 회복량 +%d" % [normal, heal]
+
+
 ## 소녀가 닿았다: 성장을 적용하고 빛이 터진 뒤 사라진다.
 func _collect(player: Player) -> void:
 	_taken = true
@@ -154,7 +169,7 @@ func _collect(player: Player) -> void:
 		"dews":
 			# 늘어난 칸은 소녀 _apply_abilities 가 이미 채웠다 (여기서 또 더하면 하나가 아니라 둘이 찼다)
 			player.dews_changed.emit(player.dews)
-			text = "달빛 이슬이 하나 늘었다 (이제 %d개)" % player.max_dews
+			text = dew_reward_text(amount, "달빛 이슬이 하나 늘었다 (이제 %d개)" % player.max_dews, "달빛 이슬")
 		"max_hp":
 			text = "세계수의 수액 — 최대 체력 +%d" % int(amount)
 		"attack":

@@ -238,6 +238,9 @@ static func settle_reward(id: String) -> String:
 	if not kind in ["max_hp", "attack", "dews", "heal"] or amount == 0.0:
 		return ""
 	Progress.add_upgrade(kind, amount)
+	if kind == "dews":
+		# 이슬이 가득(8개)하면 보상 이슬은 회복량이 된다 — 안내도 실제로 일어난 일을 말한다
+		return Pickup.dew_reward_text(amount, reward_text(reward))
 	return reward_text(reward)
 
 

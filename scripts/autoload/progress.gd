@@ -16,6 +16,7 @@ var next_spawn := ""
 var pending_memory := ""
 var memory_return_scene := ""
 ## 성장 보상 누적: max_hp(+체력), attack(+배수, 0.1 = 10%), dews(+개수), heal(+회복량)
+## dews 는 상한 없이 받은 만큼 다 센다 (세이브 호환). 실제 이슬 개수는 dew_max() — 아래 '이슬 상한'.
 var upgrades := {}
 ## 피워 둔 달빛풀: id -> {"scene": 경로, "name": 표시 이름}
 var grasses := {}
@@ -71,6 +72,48 @@ func add_upgrade(kind: String, amount: float) -> void:
 	upgrades[kind] = upgrades.get(kind, 0.0) + amount
 	upgraded.emit(kind, amount)
 	ability_gained.emit("upgrade")
+
+
+# ---------- 이슬 상한 (2026-10-20 기획자 결정 "이슬 최대 8 → 유지") ----------
+# 이슬 방울은 기본 BASE_DEWS 개 + 성장(upgrades["dews"])이지만 MAX_DEWS 개를 넘지 않는다.
+# 모을 수 있는 이슬 성장은 모두 12 (숨은 구슬 3 + 이슬잔 3 + 구원 보상 2 + 중간 보스 1 + 달빛풀 성장 3) → 기본과 합쳐 15.
+# 넘친 이슬은 버리지 않는다: 하나마다 회복량 +DEW_OVERFLOW_HEAL — 맑은 샘물 구슬·성장 메뉴 회복량 한 단계와 같은 값.
+# upgrades["dews"] 는 예전처럼 받은 만큼 다 세므로 옛 세이브(예: dews 12)도 그대로 읽혀 이슬 8 + 회복량 +70 이 된다.
+# 성장 메뉴(StatMenu)는 이슬이 가득하면 이슬을 팔지 않는다 ('가득' 표시) — 빛 가루를 회복량으로 바꾸려면 회복량 줄을 사면 되므로.
+const BASE_DEWS := 3
+const MAX_DEWS := 8
+const DEW_OVERFLOW_HEAL := 10.0
+
+
+## 받은 이슬을 상한 없이 모두 센 수 (기본 포함)
+func dew_total() -> int:
+	return BASE_DEWS + roundi(float(upgrades.get("dews", 0.0)))
+
+
+## 실제 이슬 방울 최대 개수 (MAX_DEWS 를 넘지 않음)
+func dew_max() -> int:
+	return mini(dew_total(), MAX_DEWS)
+
+
+## 상한을 넘어 회복량으로 바뀐 이슬 수
+func dew_overflow() -> int:
+	return maxi(dew_total() - MAX_DEWS, 0)
+
+
+## 이슬이 가득 찼다 (이제 받는 이슬은 회복량으로 바뀐다)
+func dews_full() -> bool:
+	return dew_total() >= MAX_DEWS
+
+
+## 방금 받은 이슬 성장 amount 개 가운데 넘쳐서 회복량으로 바뀐 개수. add_upgrade("dews", amount) 뒤에 부른다.
+func dew_overflow_of(amount: float) -> int:
+	var before := dew_total() - roundi(amount)
+	return clampi(dew_overflow() - maxi(before - MAX_DEWS, 0), 0, maxi(roundi(amount), 0))
+
+
+## 회복량 성장 합: 회복량 보상(upgrades["heal"]) + 넘친 이슬. 소녀의 회복량 = 45 + 이것.
+func heal_bonus() -> float:
+	return float(upgrades.get("heal", 0.0)) + dew_overflow() * DEW_OVERFLOW_HEAL
 
 
 func has(flag: String) -> bool:
