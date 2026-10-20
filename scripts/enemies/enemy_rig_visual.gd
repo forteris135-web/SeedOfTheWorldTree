@@ -198,8 +198,10 @@ func is_facing_settled() -> bool:
 
 
 ## 구원되어 사람으로 돌아올 때의 모습 (EnemyBase._finish_fall 이 읽는다).
+## floor_y: 발이 닿는 땅 = 몸 충돌 캡슐의 바닥 (적 원점 기준) — 뼈대 사람을 여기에 세운다.
 func npc_look() -> Dictionary:
-	return {"rig": npc_rig, "rig_scale": art_scale, "texture": texture, "art_faces_right": npc_faces_right, "art_scale": npc_art_scale}
+	var fy := _floor_y if _floor_known else (_find_floor_y() if _enemy else 0.0)
+	return {"rig": npc_rig, "rig_scale": art_scale, "texture": texture, "art_faces_right": npc_faces_right, "art_scale": npc_art_scale, "floor_y": fy}
 
 
 # ---------- 1회 연출 (EnemyBase 가 부른다) ----------
@@ -455,6 +457,9 @@ func _process(delta: float) -> void:
 					motion.tilt_scale = lerpf(tilt_scale, 1.0, knees)
 					if _fall_sign > 0.0:
 						p = motion.mix(motion.mix(_state_from, motion.pose("dead_knees"), knees), motion.pose("dead_lie"), slump)
+						# 엎어지는 동안 내려놓기: 몸(가슴·머리·팔)이 땅에 닿을 때까지 엉덩이가 꿇은 무릎을 축으로 내려오거나 올라간다
+						# (RigMotion: 무릎은 땅에 남는다 — 몸이 얇으면 허벅지가 눕고, 두꺼우면 허벅지가 서서 엉덩이가 들린다)
+						settle = slump
 					else:
 						p = motion.mix(motion.mix(_state_from, motion.pose("dead_back"), knees), motion.pose("dead_back_lie"), slump)
 						settle = knees

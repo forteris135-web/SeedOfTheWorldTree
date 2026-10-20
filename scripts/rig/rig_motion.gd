@@ -79,6 +79,7 @@ class Leg:
 	var knee_set := false
 	var kneel_phi := 0.0       # 무릎 꿇은 발의 각도 (부드럽게 따라간다 — 고른 각도가 프레임마다 튀지 않게)
 	var kneel_phi_set := false
+	var knee_rise := 0.0       # 쓰러지는 중 꿇은 무릎을 땅에서 띄우는 높이 (두꺼운 허벅지·정강이가 땅에 묻히지 않게 — 프레임마다 맞춰 간다)
 
 
 ## 보간 방식 (상태마다 고른다)
@@ -105,6 +106,8 @@ const GUARD_LIMITS := [1.3, 0.45, 0.45]   # 어깨, 팔꿈치, 손목(무기) (�
 const EARLY_UNWIND := 0.4
 ## 부드러운 부위가 땅에 눌려 접히는 한계 (세로 배율)
 const SOFT_MIN := 0.35
+## 두 무릎을 꿇을 때 몸을 받치는 축 무릎을 바꾸는 차이 (꿇기 채널 값)
+const KNEEL_PIVOT_HYST := 0.05
 
 # ---- 공개 값 (그림 스크립트·시험이 읽거나 정한다) ----
 # 읽기·쓰기: poses(자세 사전 — 상태에 따라 한 자세를 다른 자세로 바꿔 끼워도 된다), target(이번 프레임 목표 — 갈고리에서 고쳐도 된다),
@@ -152,6 +155,7 @@ var _tgt_prev := {}
 var _tgt_vel := {}
 var _phase := 0.0
 var _airborne := false
+var _kneel_pivot: Leg = null
 var _chains: Array = []   # [뼈 번호, 강성, 감쇠, 끌림, 중력, 최대(라디안), Chan(세상 각도), 처음인가]
 var _guard_bones: PackedInt32Array = []
 var _guard_chain: PackedInt32Array = []   # [어깨, 팔꿈치, 손목] 뼈 번호 (없으면 -1)
@@ -159,6 +163,8 @@ var _bone_keys: Array = []   # [채널 이름, 뼈 번호]
 var _lock_bones: PackedInt32Array = []   # 땅 닿기에 쓰는 뼈 (무기 사슬·부드러운 부위 빼고)
 var _settle_bones: PackedInt32Array = [] # 내려놓기에 쓰는 뼈 (땅 닿기 뼈에서 다리 빼고)
 var _soft_bones: PackedInt32Array = []   # 부드러운 부위 (땅에 눌려 접힌다)
+var _soft_flat := {}   # 땅에 묻히면 관절을 축으로 빼내는 늘어진 천 (chain 이고 자식이 모두 부드러운 뼈) → true
+var _soft_esc := {}    # 뼈 번호 → 빼내려고 더 돌린 각도 (라디안, 프레임마다 부드럽게 따라간다)
 ## 움직임 지도 (원형별, _init 에서 읽어 둔다 — 매 프레임 사전을 찾지 않게 [채널, 값] 배열로)
 var strike_lag := {}
 var early_keys: Array = []
@@ -208,6 +214,20 @@ func _init(part_rig: PartRig) -> void:
 	for i in rig.names.size():
 		if soft_names.has(rig.names[i]) or (d["bones"][i] as Dictionary).has("chain"):
 			_soft_bones.append(i)
+	for i in _soft_bones:
+		if i == root or not (d["bones"][i] as Dictionary).has("chain"):
+			continue
+		var all_soft := true
+		for j in rig.names.size():
+			if j != i and rig._is_descendant(j, i) and not _soft_bones.has(j):
+				all_soft = false
+				break
+		if all_soft:
+			var desc := PackedInt32Array()
+			for j in rig.names.size():
+				if j != i and rig._is_descendant(j, i):
+					desc.append(j)
+			_soft_flat[i] = desc
 	var leg_roots := PackedInt32Array()
 	for leg in legs:
 		leg_roots.append(leg.up)
@@ -695,7 +715,7 @@ func update(delta: float, ctx: Dictionary) -> void:
 	# 8) 늘어진 천·잎
 	_update_chains(delta, speed, vy)
 	# 9) 부드러운 부위가 땅에 눌려 접힘
-	_soft_ground()
+	_soft_ground(delta)
 	rig.apply()
 
 
@@ -737,16 +757,25 @@ func _apply_body() -> void:
 	var ry := stand_root_y + float(fin["hip_y"]) * L - _swing_bob
 	var rx := float(fin["hip_x"]) * L
 	# 무릎 꿇기: 가장 깊이 꿇는 다리의 무릎을 땅의 한 자리에 고정하고(knee_x), 허벅지가 그 무릎에서 서 있는 각도(pitch)로
-	# 뿌리 자리를 정한다. pitch 0 = 허벅지가 똑바로 서서 엉덩이가 무릎 위, 1 = 허벅지가 앞으로 80도 눕혀져 엉덩이가 무릎 높이 (엎어짐).
+	# 뿌리 자리를 정한다. pitch 0 = 허벅지가 똑바로 서서 엉덩이가 무릎 위, 1 = 허벅지가 앞으로 80도 눕혀져 엉덩이가 무릎 높이 (엎어짐),
+	# − = 엉덩이가 무릎 뒤로 (−0.8: 뒤꿈치 위에 주저앉음 — 무릎 꿇고 앞으로 쓰러져 엎드린 자세).
 	var kw := 0.0
 	var kleg: Leg = null
 	for leg in legs:
 		var k := clampf(float(fin.get(leg.k_kneel, 0.0)), 0.0, 1.0)
 		if k <= 0.01:
 			leg.knee_set = false
+			leg.knee_rise = 0.0
 		if k > kw and leg.lo >= 0:
 			kw = k
 			kleg = leg
+	# 축 무릎은 쉽게 바꾸지 않는다: 두 무릎을 다 꿇는 자세(엎어짐)에서 채널이 1 근처에서 출렁이며 축이 오가면 몸이 한 프레임에 튄다
+	if _kneel_pivot != null and kleg != null and _kneel_pivot != kleg:
+		var kp := clampf(float(fin.get(_kneel_pivot.k_kneel, 0.0)), 0.0, 1.0)
+		if kp > 0.01 and kw - kp < KNEEL_PIVOT_HYST:
+			kleg = _kneel_pivot
+			kw = kp
+	_kneel_pivot = kleg
 	for leg in legs:
 		var k := clampf(float(fin.get(leg.k_kneel, 0.0)), 0.0, 1.0)
 		if k > 0.01 and not leg.knee_set and leg.lo >= 0:
@@ -757,7 +786,7 @@ func _apply_body() -> void:
 			leg.kneel_phi_set = false
 	if kleg:
 		var j0 := rig.base_pos[kleg.up].rotated(rig.rot[root])
-		var phi := deg_to_rad(clampf(float(fin.get("pitch", 0.0)), 0.0, 1.0) * 80.0)
+		var phi := deg_to_rad(clampf(float(fin.get("pitch", 0.0)), -1.0, 1.0) * 80.0)
 		var jd := Vector2(kleg.knee_x, -L * 0.06) + Vector2(sin(phi), -cos(phi)) * kleg.a
 		var rk := jd - j0
 		ry = lerpf(ry, maxf(ry, rk.y), kw)
@@ -772,11 +801,31 @@ func _apply_body() -> void:
 			v *= lerpf(1.0, tilt_scale, 0.5)
 		rig.rot[i] = v if rig.has_axis[i] == 1 else rig.rest[i] + v
 	rig.compute()
-	# 내려놓기: 몸(다리 뺌)의 가장 낮은 점을 땅에 — 내리기도 한다 (다리는 다음 단계 IK 가 딛은 발에 맞춘다)
-	if ground_settle > 0.0 and _settle_bones.size() > 0:
+	# 내려놓기: 몸(다리 뺌)의 가장 낮은 점을 땅에 — 내리기도 한다 (다리는 다음 단계 IK 가 딛은 발에 맞춘다).
+	# 무릎을 꿇은 채 땅 닿기(ground_lock)가 켜져 있으면(앞으로 엎어지는 쓰러짐) 몸(다리 뺌)이 땅 아래로 들어간 만큼도 여기서
+	# 뿌리를 올린다 — 몸 전체(body_xf)를 들면 이미 땅에 꿇린 무릎·정강이까지 허공에 들리므로(2026-10-20 검수: 엎드린 몸의 다리가
+	# 28~47px 떠 '널빤지'처럼 보였다). 다리는 그다음 IK 가 들린 엉덩이에서 땅으로 내려 딛는다 (_solve_leg 의 무릎 꿇기 해).
+	# 꿇은 무릎이 있으면 엉덩이를 그 무릎(축 무릎)을 중심으로 허벅지 길이만큼의 원을 따라 올리거나 내린다 → 무릎은 땅에 남는다.
+	# 원으로 모자란 몫(허벅지가 다 서도)만 그냥 올리고, 그때 다리는 _solve_leg 가 정강이를 땅 쪽으로 기울여 발끝을 땅에 댄다.
+	if _settle_bones.size() > 0 and (ground_settle > 0.0 or (kleg and ground_lock > 0.0)):
 		var low := rig.lowest_y(_settle_bones, false)
-		if absf(low) > 0.01:
-			rig.root_pos.y -= low * clampf(ground_settle, 0.0, 1.0)
+		var shift := low * clampf(ground_settle, 0.0, 1.0)
+		if kleg and ground_lock > 0.0 and low - shift > 0.0:
+			shift += (low - shift) * clampf(ground_lock, 0.0, 1.0) * kw
+		if absf(shift) > 0.01:
+			var plain := rig.root_pos - Vector2(0.0, shift)
+			if kleg and kleg.knee_set:
+				var j0 := rig.base_pos[kleg.up].rotated(rig.rot[root])
+				var hip := rig.root_pos + j0
+				var knee := Vector2(kleg.knee_x, -L * 0.06 - kleg.knee_rise)
+				var want_y := hip.y - shift
+				var dy := clampf(knee.y - want_y, 0.0, kleg.a * 0.98)
+				var side := 1.0 if hip.x >= knee.x else -1.0
+				var on := Vector2(knee.x + side * sqrt(kleg.a * kleg.a - dy * dy), knee.y - dy)
+				on.y = minf(on.y, want_y)   # 원으로 모자란 만큼은 그냥 올린다 (내릴 때는 허벅지가 눕는 데까지만)
+				rig.root_pos = plain.lerp(on - j0, kw)
+			else:
+				rig.root_pos = plain
 			rig.compute()
 
 
@@ -926,6 +975,8 @@ func _solve_legs() -> void:
 		if kw <= 0.0 or leg.lo < 0:
 			continue
 		var low := rig.lowest_y(PackedInt32Array([leg.lo, leg.foot]), false)
+		if ground_lock > 0.5:
+			low = maxf(low, 0.0)   # 쓰러지는 중엔 올리기만 (내리면 땅 닿기가 올려 둔 몸이 다시 땅에 묻힌다)
 		if kw > kmax:
 			kmax = kw
 			lift = low * kw
@@ -935,6 +986,17 @@ func _solve_legs() -> void:
 		for leg in legs:
 			_solve_leg(leg)
 		rig.compute()
+	if ground_lock > 0.5:
+		# 쓰러지는 중: 꿇은 다리의 정강이(발끝 각도로도 안 되면 발)가 땅에 묻히면 그 무릎을 조금씩 띄우고, 떠 있으면 내린다 (다음 프레임부터 반영 —
+		# 몸 전체를 들어 다른 다리까지 허공에 띄우지 않게)
+		for leg in legs:
+			if leg.lo < 0 or not leg.knee_set or float(fin.get(leg.k_kneel, 0.0)) < 0.5:
+				continue
+			var lw := rig.lowest_y(PackedInt32Array([leg.lo]), false)
+			var lf := rig.lowest_y(PackedInt32Array([leg.foot]), false)
+			if lf > 0.5:
+				lw = maxf(lw, lf)   # 발끝 각도로도 발이 묻히면 무릎을 더 띄운다
+			leg.knee_rise = clampf(leg.knee_rise + lw * 0.5, 0.0, L * 0.4)
 
 
 func _solve_leg(leg: Leg) -> void:
@@ -963,9 +1025,23 @@ func _solve_leg(leg: Leg) -> void:
 	var r_lo := th2 - leg.ankle_vec.angle()
 	if kw > 0.0:
 		# 무릎 꿇기 해: 무릎을 땅에 (엉덩이 관절보다 조금 앞), 정강이는 뒤로 눕고, 발끝이 땅을 짚는다
-		var knee_k := Vector2(leg.knee_x if leg.knee_set else j.x + leg.a * 0.12, -L * 0.06)
+		var knee_k := Vector2(leg.knee_x if leg.knee_set else j.x + leg.a * 0.12, -L * 0.06 - leg.knee_rise)
+		# 쓰러지는 중(땅 닿기)에 꿇은 무릎 자리가 허벅지 길이에서 벗어나면(엉덩이가 다른 무릎을 축으로 들리거나 옮겨 갔을 때)
+		# 무릎이 땅을 따라 미끄러져 허벅지가 닿는 자리로 온다 — 허공에서 무릎 자리를 가리키며 뜨거나 땅에 박히지 않게 (같은 쪽으로)
+		if leg.knee_set and kw > 0.5 and ground_lock > 0.5 and leg != _kneel_pivot:
+			var ddy := knee_k.y - j.y
+			if absf(ddy) < leg.a * 0.99 and absf((knee_k - j).length() - leg.a) > 0.5:
+				var reach_x := sqrt(leg.a * leg.a - ddy * ddy)
+				knee_k.x = j.x + (reach_x if knee_k.x >= j.x else -reach_x)
+				leg.knee_x = knee_k.x
 		var th1k := (knee_k - j).angle()
 		var th2k := PI + 0.3       # 정강이는 뒤로, 발목 쪽이 조금 들린다 (발끝을 세워 땅을 짚는다)
+		if ground_lock > 0.5:
+			# 쓰러지는 중: 엉덩이가 들려 무릎이 땅에 닿지 못하면 정강이를 땅 쪽으로 기울여 발목을 무릎 꿇기 때와 같은 높이에 둔다
+			# (엎드린 두꺼운 몸에서 다리가 엉덩이부터 발끝까지 땅으로 비스듬히 내려온다 — 허공에 수평으로 뻗지 않게)
+			var knee_at := j + Vector2.from_angle(th1k) * leg.a
+			var ankle_y := -L * 0.06 - leg.knee_rise - leg.b * sin(0.3)
+			th2k = PI - asin(clampf((ankle_y - knee_at.y) / maxf(leg.b, 0.001), -1.0, 1.0))
 		var r_up_k := th1k - leg.knee_vec.angle()
 		var r_lo_k := th2k - leg.ankle_vec.angle()
 		var phi_best := _kneel_foot_angle(leg, j + Vector2.from_angle(th1k) * leg.a + Vector2.from_angle(th2k) * leg.b)
@@ -987,7 +1063,9 @@ func _solve_leg(leg: Leg) -> void:
 func _kneel_foot_angle(leg: Leg, ankle: Vector2) -> float:
 	var best := leg.foot_rest_world + 1.0
 	var best_err := INF
-	for k in 31:
+	# 쓰러지는 중(땅 닿기)에는 발등을 땅에 눕히는 각도까지 (정강이가 땅 가까이 누우면 발끝을 세울 자리가 없다)
+	var n := 60 if ground_lock > 0.5 else 31
+	for k in n:
 		var phi := leg.foot_rest_world + 0.2 + k * 0.05
 		var low := -INF
 		for q in rig.hulls[leg.foot]:
@@ -1101,20 +1179,92 @@ func _update_chains(delta: float, speed: float, vy: float) -> void:
 ## 그래도 남으면 그 관절을 축으로 그림을 땅 쪽으로 눌러 접는다 (보이는 자리 = body_xf 포함). 관절 자체가 땅 아래면 가장 많이 누른다.
 ## 매 프레임 기하로 정하므로 몸이 움직이면 이어서 바뀐다 (천의 스프링 상태는 건드리지 않는다).
 const SOFT_TURN := 1.4
+## 관절이 땅 아래인 늘어진 천을 빼낼 때 견줘 보는 각도 수 (한 바퀴)
+const SOFT_ESCAPE_STEPS := 16
 
-func _soft_ground() -> void:
+
+## 뼈 틀 t 의 껍질 점 q 를 관절을 축으로 dd 만큼 더 돌렸을 때 관절에서의 상대 자리 (화면 틀)
+static func q_rot(t: Transform2D, q: Vector2, dd: float) -> Vector2:
+	return (t * q - t.origin).rotated(dd)
+
+
+## 늘어진 천의 자식(덩굴 끝 등) 중 땅 아래로 들어간 것이 있는가 (body_xf 포함)
+func _subtree_buried(i: int) -> bool:
+	for j in _soft_flat[i]:
+		var tj := rig.body_xf * rig.xf[j]
+		for q in rig.hulls[j]:
+			if (tj * q).y > 0.0:
+				return true
+	return false
+
+
+## 늘어진 천 빼내기: 축 뼈(틀 pivot_t)를 dd 만큼 더 돌렸을 때 뼈 j(틀 tj)가 제 관절을 축으로 접히고도 땅 아래로 보이는 깊이 (+ = 묻힘)
+func _soft_seen(pivot_t: Transform2D, tj: Transform2D, dd: float, j: int) -> float:
+	var o := pivot_t.origin
+	var jy := o.y + (tj.origin - o).rotated(dd).y
+	var m := -INF
+	for q in rig.hulls[j]:
+		m = maxf(m, o.y + (tj * q - o).rotated(dd).y)
+	return jy + (m - jy) * SOFT_MIN if m > 0.0 else m
+
+func _soft_ground(delta := 0.0) -> void:
 	var bx := rig.body_xf
 	for i in _soft_bones:
 		var t := bx * rig.xf[i]
 		var py := t.origin.y
 		var low := -INF
 		var q_low := Vector2.ZERO
+		var cen := Vector2.ZERO
 		for q in rig.hulls[i]:
 			var w := t * q
+			cen += w
 			if w.y > low:
 				low = w.y
 				q_low = w
-		if low > 0.0 and py < 0.0 and rig.has_axis[i] == 1:
+		if _soft_flat.has(i) and rig.hulls[i].size() > 0 and (low > 0.0 or _subtree_buried(i)):
+			# 늘어진 천(자식까지 모두 부드러운 사슬 — 등에 멘 씨앗 꼬투리·덩굴·잎 자락)이 땅에 묻히면 관절을 축으로 돌려
+			# 가장 덜 묻히는 쪽(같으면 덜 도는 쪽)으로 눕히거나 몸 밖으로 빼낸 뒤 접는다 — 자식(덩굴 끝)도 함께 따라간다.
+			# 관절까지 땅 아래면(몸이 그 위에 누움) 접기만으로는 관절 아래로 그대로 묻혀 지형 위에 비쳤다
+			# (2026-10-20 검수: 정원사가 뒤로 쓰러질 때 덩굴이 바닥 아래 32px 까지, 돌리기 한계 SOFT_TURN 도 모자랐다).
+			# 지난 프레임에 고른 각도도 후보로, 바꾸는 만큼 벌점 → 격자 각도 사이를 오가며 떨지 않게.
+			var prev: float = _soft_esc.get(i, 0.0)
+			var best_d := prev
+			var best_score := INF
+			for k in SOFT_ESCAPE_STEPS + 1:
+				var dd := prev if k == SOFT_ESCAPE_STEPS else (float(k) / SOFT_ESCAPE_STEPS - 0.5) * TAU
+				# 접어서(SOFT_MIN) 땅 위에 들어오면 그걸로 된다 (망토처럼 큰 천을 굳이 하늘로 세우지 않게) — 접고도 보이는 깊이로 잰다.
+				# 자식(덩굴 끝)도 함께 돌므로 같이 잰다 (자식은 제 관절을 축으로 접힌다)
+				var seen := _soft_seen(t, t, dd, i)
+				for j in _soft_flat[i]:
+					seen = maxf(seen, _soft_seen(t, bx * rig.xf[j], dd, j))
+				var score := maxf(seen, 0.0) + absf(dd) * L * 0.02 + absf(wrapf(dd - prev, -PI, PI)) * L * 0.04
+				if score < best_score:
+					best_score = score
+					best_d = dd
+			# 고른 각도로 바로 (묻힌 채 따라가며 한두 프레임 지형 위에 비치지 않게 — 오가며 떠는 것은 위의 바꿈 벌점이 막는다)
+			var applied := best_d
+			_soft_esc[i] = applied
+			if absf(applied) > 0.001:
+				rig.rot[i] += applied
+				rig.compute_from(i)
+				t = bx * rig.xf[i]
+				low = -INF
+				for q in rig.hulls[i]:
+					low = maxf(low, (t * q).y)
+		elif _soft_esc.has(i):
+			# 더 묻히지 않으면 빼냈던 각도를 천천히 풀어 늘어진 천의 흔들림으로 돌려준다
+			var back := lerp_angle(float(_soft_esc[i]), 0.0, 1.0 - exp(-6.0 * delta)) if delta > 0.0 else 0.0
+			if absf(back) < 0.002:
+				_soft_esc.erase(i)
+			else:
+				_soft_esc[i] = back
+				rig.rot[i] += back
+				rig.compute_from(i)
+				t = bx * rig.xf[i]
+				low = -INF
+				for q in rig.hulls[i]:
+					low = maxf(low, (t * q).y)
+		if low > 0.0 and py < 0.0 and rig.has_axis[i] == 1 and not _soft_esc.has(i):
 			# 천을 땅 위로 돌린다: 가장 깊은 점이 땅에 오는 두 각도 중 덜 도는 쪽
 			var rr := (q_low - t.origin).length()
 			if rr > 1.0:

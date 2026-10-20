@@ -14,7 +14,8 @@ extends Node2D
 ##       (상태는 EnemyBase 를 직접 바꿔 돌린다 — 판정·시간은 실제 게임과 같다)
 ##   공통: --zoom 2.5 (카메라 배율), --every 0.05 (필름 칸 간격, 초), --cols 5, --crop 0.5 (필름 칸에 남길 화면 몫)
 ##   자세 모드: --cam_y 0.5 / --cam_x 0 (카메라 자리, 키의 몇 배 — 발을 크게 보려면 --zoom 8 --cam_y 0.1),
-##             --variant head@human (변형 그림 끼워 보기), --flash 0.7 (번쩍임 세기 보기), --nomat (셰이더 없이)
+##             --variant head@human (변형 그림 끼워 보기), --flash 0.7 (번쩍임 세기 보기), --nomat (셰이더 없이),
+##             --lock (땅 닿기·내려놓기를 켜고 — 쓰러져 누운 자세 dead_lie·dead_back_lie 를 게임처럼 볼 때)
 
 const FLOOR_Y := 600.0
 ## 동작마다 몹을 옮기는 간격 (게임 px) — 바닥은 동작 수에 맞춰 넓힌다
@@ -121,6 +122,8 @@ func _run_poses(id: String) -> void:
 			print("[rig_preview] 없는 자세: ", pname)
 			continue
 		motion.set_target(motion.pose(pname), RigMotion.Drive.NORMAL, RigMotion.Feet.AIR if pname == "air" else RigMotion.Feet.POSE)
+		motion.ground_lock = 1.0 if _args.has("lock") else 0.0   # --lock: 쓰러진 자세처럼 땅 닿기(올리기)·내려놓기(붙이기)를 켜고 본다
+		motion.ground_settle = 1.0 if _args.has("lock") else 0.0
 		motion.snap_feet()
 		for f in 150:
 			motion.update(1.0 / 60.0, {"grounded": pname != "air"})

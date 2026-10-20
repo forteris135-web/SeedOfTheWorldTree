@@ -676,6 +676,8 @@ func _post_solve(delta: float) -> void:
 	hand.y = minf(hand.y, -HAND_GROUND)   # 주먹이 땅 아래로 가지 않게 (엎어져 팔을 뻗을 때)
 	_solve_arm(_i_af_up, _i_af_lo, hand, 1.0)
 	if _lock > 0.5:
+		# 엎드린 몸에서 팔꿈치가 땅으로 굽는다 → 어깨를 축으로 위팔부터 들고, 남으면 아래팔 (다리가 땅에 붙은 만큼 몸이 낮아졌다)
+		_lift_bone(_i_af_up, 3.0, 1.2)
 		_lift_bone(_i_af_lo, 3.0, 1.2)
 	# 2) 창: 앞손(아래팔 축 끝)에 붙어 세상 각도로 선다. 손을 떠났으면 세상 자리 그대로.
 	if _spear_free:
@@ -702,6 +704,7 @@ func _post_solve(delta: float) -> void:
 	tb.y = minf(tb.y, -HAND_GROUND)
 	_solve_arm(_i_ab_up, _i_ab_lo, tb, 1.0)
 	if _lock > 0.5:
+		_lift_bone(_i_ab_up, 3.0, 1.2)
 		_lift_bone(_i_ab_lo, 3.0, 1.2)
 	# 5) 등불 진자
 	_update_lantern(delta)

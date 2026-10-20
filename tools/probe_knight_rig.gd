@@ -240,6 +240,18 @@ func _fallen(purify: bool) -> void:
 		_check(worst_hip <= HIP_JUMP * 1.5, "쓰러지는 동안 몸이 툭 떨어지지 않는다 (엉덩이 한 프레임 %.1fpx)" % worst_hip)
 		_check(spear_low <= 3.0 and spear_low >= -24.0 and spear_top <= 60.0, "쓰러짐: 놓친 창이 땅 위에 눕는다 (가장 낮은 점 %+.1f, 꼭대기 %+.0f — 창날·잎 두께 60 아래)" % [spear_low, spear_top])
 		_check(lan_low <= 4.0, "쓰러짐: 등불이 땅에 박히지 않는다 (%+.1f)" % lan_low)
+		# 엎드린 몸의 다리가 허공에 들리지 않는다 (2026-10-20 검수: 뒷다리 허벅지·정강이·장화가 41~124px 떠 있었다)
+		var leg_hi := 0.0
+		var leg_name := ""
+		for leg in m.legs:
+			for bi in [leg.up, leg.lo, leg.foot]:
+				if bi < 0:
+					continue
+				var lh := -rig.lowest_y(PackedInt32Array([bi])) * k
+				if lh > leg_hi:
+					leg_hi = lh
+					leg_name = rig.names[bi]
+		_check(leg_hi <= stand_h * 0.08, "쓰러짐: 다리 뼈마다 가장 낮은 점이 땅 가까이 — 키의 8%% 안 (가장 뜬 %s %+.0fpx = %.0f%%)" % [leg_name, leg_hi, leg_hi / stand_h * 100.0])
 	else:
 		b.purified_by(null)
 		for f in 100:

@@ -19,6 +19,9 @@ const SINK_TOL := 4.0
 const LIE_TORSO := 0.3
 const LIE_HEAD := 0.35
 const LIE_WEAPON := 0.45
+## 쓰러져 누운 끝: 다리 뼈(허벅지·정강이·발)마다 가장 낮은 점의 땅 위 높이 상한 (키의 몫) — 엎드린 몸에서 다리가 허공에 들리지 않게
+## (2026-10-20 검수: 앞으로 쓰러지면 가슴만 땅에 닿고 엉덩이·무릎·발이 28~47px(키의 18~30%) 떠 있었다)
+const LIE_LEG := 0.12
 
 var _fail := 0
 
@@ -324,6 +327,8 @@ func _probe_enemy_fall(path: String, from_front: bool) -> void:
 	var torso_h := 0.0
 	var head_h := 0.0
 	var weapon_hi := 0.0
+	var leg_hi := 0.0
+	var leg_hi_name := ""
 	for i in 40:   # 0.67초 (쓰러짐 0.75초 안)
 		e._physics_process(STEP)
 		vis._process(STEP)
@@ -332,6 +337,22 @@ func _probe_enemy_fall(path: String, from_front: bool) -> void:
 			torso_h = -_center_y(rig, "torso") * gs
 			head_h = -_center_y(rig, "head") * gs
 			weapon_hi = -_top_y(rig, "weapon") * gs
+			# 앞으로(무릎 꿇고 엎드림): 다리 뼈(허벅지·정강이·발) 하나하나가 땅 가까이 (무릎·정강이가 땅에 — 다리를 허공에 들지 않음).
+			# 뒤로(등으로 누움): 무릎은 서도 되지만 두 다리 중 한 점은 땅에 닿는다 (발을 딛음)
+			for leg in vis.motion.legs:
+				var ids: Array = [leg.up, leg.lo, leg.foot]
+				for b in ids:
+					if int(b) < 0 or rig.hulls[int(b)].is_empty():
+						continue
+					var lh := -rig.lowest_y(PackedInt32Array([int(b)]), true) * gs
+					if from_front:
+						# 뒤로: 발을 차 내며 한 걸음 옮기는 중일 수 있다 → 두 다리 중 가장 낮은 점 하나가 땅에 (발을 딛음)
+						if leg_hi_name == "" or lh < leg_hi:
+							leg_hi = lh
+							leg_hi_name = rig.names[int(b)]
+					elif lh > leg_hi:
+						leg_hi = lh
+						leg_hi_name = rig.names[int(b)]
 			if no_torso:
 				torso_h = -_center_y(rig, rig.names[0]) * gs
 				head_h = -rig.lowest_y(PackedInt32Array([0])) * gs   # 몸통 없는 뼈대: 몸(뿌리 부위) 아랫면의 땅 위 높이
@@ -350,6 +371,8 @@ func _probe_enemy_fall(path: String, from_front: bool) -> void:
 	_check(torso_h <= stand_h * LIE_TORSO and head_h <= stand_h * LIE_HEAD,
 		"%s: %s 쓰러져 누웠다 — 몸통 가운데 ≤ 키의 %d%%, 머리 가운데 ≤ 키의 %d%% (몸통 %.0f%%, 머리 %.0f%%)" % [path.get_file(), side,
 		int(LIE_TORSO * 100.0), int(LIE_HEAD * 100.0), torso_h / stand_h * 100.0, head_h / stand_h * 100.0])
+	_check(leg_hi <= stand_h * LIE_LEG, "%s: %s 쓰러져 누운 다리가 땅에 닿는다 — %s 가장 낮은 점 ≤ 키의 %d%% (%s %+.1fpx = %.0f%%)" % [path.get_file(), side,
+		"두 다리 중" if from_front else "다리 뼈마다", int(LIE_LEG * 100.0), leg_hi_name, leg_hi, leg_hi / stand_h * 100.0])
 	if rig.has_bone("weapon"):
 		_check(weapon_hi <= stand_h * LIE_WEAPON, "%s: %s 쓰러진 무기가 하늘로 들리지 않는다 — 무기 꼭대기 ≤ 키의 %d%% (%.0f%%)" % [path.get_file(), side,
 			int(LIE_WEAPON * 100.0), weapon_hi / stand_h * 100.0])

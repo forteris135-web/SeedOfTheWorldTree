@@ -608,6 +608,10 @@ func _finish_fall() -> void:
 				npc.art_scale = vis.get("art_scale") if vis else 0.17
 			npc.facing = -_fall_facing
 			npc.global_position = _fall_at
+			if vis and vis.has_method("npc_look"):
+				# 뼈대 사람은 원점이 발바닥이다 → 몸 충돌(캡슐)의 바닥에 세운다 (hurt_height 절반은 캡슐 바닥보다 5px 아래라
+				# 무릎 꿇은 몹이 사람으로 바뀌는 순간 땅속으로 툭 떨어졌다 — 2026-10-20 검수)
+				npc.global_position.y = _fall_at.y - hurt_height * 0.5 + float(vis.npc_look().get("floor_y", hurt_height * 0.5))
 			get_parent().add_child(npc)
 			if is_instance_valid(_fall_by):
 				npc.greet(_fall_by)

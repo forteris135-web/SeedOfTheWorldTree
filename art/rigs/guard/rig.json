@@ -1578,7 +1578,7 @@
     "dead_lie": {
       "arm_f_up": -4.0,
       "arm_f_lo": 0.0,
-      "weapon": 2.0,
+      "weapon": 18.0,
       "arm_b_up": -10.0,
       "arm_b_lo": -10.0
     },

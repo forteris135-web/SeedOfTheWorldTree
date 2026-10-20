@@ -155,6 +155,10 @@ func _process(delta: float) -> void:
 ## 구원 직후: 빛이 번지고 첫 말, 감사의 말이 끝나면 보상 안내.
 func greet(by: Player) -> void:
 	_greeting = true
+	# 구원한 소녀 쪽을 보고 인사한다 (정화는 말 걸기 영역보다 먼 곳에서도 되어, 등을 보인 채 감사 인사를 하던 일이 있었다)
+	if is_instance_valid(by):
+		facing = 1 if by.global_position.x >= global_position.x else -1
+		_face(facing > 0)
 	# 보통은 구원 순간(적의 rescued 신호)에 이미 적혀 있다. 감시 밖의 적이었다면 여기서 적는다.
 	RescuedHomes.mark_reward_due(rescue_id)
 	var tw := create_tween()

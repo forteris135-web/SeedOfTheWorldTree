@@ -198,9 +198,10 @@
   "foot_f": 0.46
  },
  "dead_lie": {
-  "lean": 84,
-  "torso": 18,
-  "head": 14,
+  "torso": 80,
+  "head": 6,
+  "pods": -70,
+  "vine": -30,
   "arm_f_up": -168,
   "arm_f_lo": -6,
   "weapon": -2,
