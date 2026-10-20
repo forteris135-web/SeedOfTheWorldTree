@@ -21,6 +21,10 @@ class_name SapPool
 ##      정화 전에는 탁하다 (deep_ash·alpha_ash·tint_ash·art_alpha_ash — 잿빛 표를 거쳐 회색이 된다), 정화되면(방의 지역 Purity) 맑아지고, 수액 위 걷기가 있으면 조금 밝다.
 ##    water 조각이 없는 그림 옷이면 몸통을 코드로 그린다 (깊이 그라데이션 6줄).
 ##  - 그 위에 코드로: 흐르는 빛 띠, 떠오르는 방울, 일렁이는 수면선(밝은 테두리), 소녀 발 자리의 납작한 잔물결 고리.
+##  - **앞 물(FrontWater)**: 웅덩이는 방 트리에서 소녀·몹보다 앞 순서라 위 그림이 모두 몸 '뒤'에 그려진다 (수면 아래 다리·망토가
+##    물 상자 위에 또렷이 보였다 — 2026-10-20 검수). 그래서 수면(물결선)에서 바닥 윗면까지 반투명 물빛 겹을 캐릭터(z 0)보다 높은
+##    z(FRONT_Z, 이펙트 z 6 보다는 아래)로 한 번 더 그리고, 밝은 수면선·발 잔물결 고리도 그 겹에 그려 수면선이 몸을 가로지르게 한다.
+##    진하기 params.water.front = [수면 바로 아래, 바닥] (없으면 FRONT_ALPHA), 색은 물빛 겹과 같은 지역 물 색(정화 전·후).
 ## 세기 조절: 아래 상수들과 data/terrain/<그림 옷>.json 의 params.water (TERRAIN.md 6장).
 
 @export var size := Vector2(600, 120):
@@ -59,6 +63,11 @@ const FLOOR_SINK := 22.0
 ## 물결 띠 흔들림 (px)
 const WAVE_SWAY := 7.0
 const WAVE_BOB := 1.6
+## 앞 물: z (캐릭터 0 < 이 값 < 이펙트 6), 진하기 [수면 바로 아래, 바닥 윗면] (데이터 params.water.front 가 있으면 그 값),
+## 열린 끝(물가)에서 판정 안쪽으로 사라지는 길이 (px — 물가 흙 위에 물빛을 칠하지 않게)
+const FRONT_Z := 3
+const FRONT_ALPHA := [0.34, 0.6]
+const FRONT_SHORE := 60.0
 
 var _shape: CollisionShape2D
 var _t := 0.0
@@ -83,6 +92,16 @@ var _phase := 0.0
 var _murk_ci := RID()
 var _murk_y := INF
 const MURK_DRAW_INDEX := -300000
+## 앞 물 (위 설명): 물빛 앞 겹(보통 혼합)과 그 자식 수면선 겹(더하기 혼합). 기둥 x·물가 알파·삼각형은 한 번 만들고 수면 줄만 매 프레임
+var _front: Node2D
+var _front_line: Node2D
+var _front_alpha: Array = FRONT_ALPHA
+var _front_floor := 0.0
+var _front_xs := PackedFloat32Array()
+var _front_xa := PackedFloat32Array()
+var _front_idx := PackedInt32Array()
+var _front_pts := PackedVector2Array()
+var _front_cols := PackedColorArray()
 var _deep_top := PackedInt32Array()      # 물빛 겹의 수면 줄 꼭짓점 (위 진하기가 정화 전·후로 달라 _tick_art 가 바꾼다)
 var _deep_top_a := PackedFloat32Array()  # 그 꼭짓점의 물가 알파
 
@@ -96,6 +115,7 @@ func _ready() -> void:
 	_seed = int(global_position.x * 3.0 + global_position.y * 7.0 + size.x)
 	_sync_start()
 	_build_art()
+	_build_front()
 	Purity.region_changed.connect(_on_region_changed)
 	add_child(preload("res://scripts/fx/water_fx.gd").new())   # 이펙트 리뉴얼 F2: 물보라·잔물결·떨어지는 방울 (판정과 무관)
 	# 방(BossRoom)의 _ready 가 이 뒤에 지역 상태를 바꿀 수 있다 (회상에서 막 돌아와 잠깐 잿빛으로 돌림) → 한 번 더 맞춘다
@@ -169,6 +189,9 @@ func _process(delta: float) -> void:
 		_place_murk()
 		_tick_art()
 	queue_redraw()
+	if _front:
+		_front.queue_redraw()
+		_front_line.queue_redraw()
 
 
 func _physics_process(delta: float) -> void:
@@ -238,22 +261,132 @@ func _draw() -> void:
 		pts.append(Vector2(x2, _surface_y(x2, top)))
 		pts2.append(Vector2(x2, _surface_y(x2 + 40.0, top) + 5.0))
 		x2 += SURFACE_STEP
-	var line_a := (0.85 if walk else 0.6) + 0.15 * lit
+	draw_polyline(pts2, Color(hl.darkened(0.15), _line_alpha() * 0.35), SURFACE_WIDTH * 1.6, true)
+	# 앞 한 줄(밝은 수면선)과 소녀 발 자리 잔물결 고리는 앞 물 겹(_draw_front_line)이 그린다 — 몸 앞을 가로지르게
+	if _front == null:
+		_draw_line_and_rings(self, pts, top)
+
+
+func _line_alpha() -> float:
+	var lit := maxf(_alive, _clear)
+	var line_a := (0.85 if can_walk() else 0.6) + 0.15 * lit
 	if _art:
 		line_a *= float(_wp.get("line_alpha", 0.55))   # 그림의 수면 테두리 위에 옅게
-	draw_polyline(pts2, Color(hl.darkened(0.15), line_a * 0.35), SURFACE_WIDTH * 1.6, true)
-	draw_polyline(pts, Color(hl, line_a), SURFACE_WIDTH, true)
-	# 소녀가 빠져 있으면 발 자리의 잔물결 고리 (수면에 누운 납작한 고리)
+	return line_a
+
+
+## 밝은 수면선 + 소녀가 빠져 있으면 발 자리의 잔물결 고리 (수면에 누운 납작한 고리). ci 에 그린다 (앞 물 겹 또는 웅덩이 자신).
+func _draw_line_and_rings(ci: CanvasItem, pts: PackedVector2Array, top: float) -> void:
+	var hl: Color = _wp.get("line", Color(0.75, 0.95, 1.0))
+	ci.draw_polyline(pts, Color(hl, _line_alpha()), SURFACE_WIDTH, true)
 	for p in _players_in:
 		if not is_instance_valid(p):
 			continue
 		var lp: Vector2 = to_local(p.global_position + Vector2(0, 60.0))
 		var ring := fmod(_t * 1.6, 1.0)
 		var ring2 := fmod(ring + 0.5, 1.0)
-		draw_set_transform(Vector2(lp.x, top + 3.0), 0.0, Vector2(1.0, 0.32))
-		draw_arc(Vector2.ZERO, 18.0 + ring * 40.0, 0.0, TAU, 28, Color(hl.lightened(0.3), 0.45 * (1.0 - ring)), 3.0, true)
-		draw_arc(Vector2.ZERO, 10.0 + ring2 * 40.0, 0.0, TAU, 28, Color(hl.lightened(0.3), 0.32 * (1.0 - ring2)), 3.0, true)
-		draw_set_transform(Vector2.ZERO)
+		ci.draw_set_transform(Vector2(lp.x, top + 3.0), 0.0, Vector2(1.0, 0.32))
+		ci.draw_arc(Vector2.ZERO, 18.0 + ring * 40.0, 0.0, TAU, 28, Color(hl.lightened(0.3), 0.45 * (1.0 - ring)), 3.0, true)
+		ci.draw_arc(Vector2.ZERO, 10.0 + ring2 * 40.0, 0.0, TAU, 28, Color(hl.lightened(0.3), 0.32 * (1.0 - ring2)), 3.0, true)
+		ci.draw_set_transform(Vector2.ZERO)
+
+
+# ---------------------------------------------------------------- 앞 물
+## 앞 물 겹을 만든다 (방에 들어올 때 한 번 — 위 '앞 물' 설명). 기둥은 SURFACE_STEP 간격, 줄은 수면(물결) / 바닥 윗면 / 바닥 아래 FLOOR_SINK(사라짐).
+## 막힌 끝은 지형 속으로 TUCK, 열린 끝(물가)은 판정 끝 안쪽 FRONT_SHORE px 동안 사라진다.
+func _build_front() -> void:
+	var skin := TerrainSkin.for_node(self)
+	if skin and skin.has_role("water"):
+		var v = skin.param("water", "front", null)
+		if v is Array and v.size() >= 2:
+			_front_alpha = v
+	var surf0 := size.y * SURFACE_FRAC
+	var left_open := not _blocked(Vector2(-TUCK - 4.0, surf0 + 12.0))
+	var right_open := not _blocked(Vector2(size.x + TUCK + 4.0, surf0 + 12.0))
+	_front_floor = minf(_floor_below(), size.y)
+	var a := 0.0 if left_open else -TUCK
+	var b := size.x + (0.0 if right_open else TUCK)
+	_front_xs = PackedFloat32Array()
+	_front_xa = PackedFloat32Array()
+	var x := a
+	while true:
+		var fa := 1.0
+		if left_open:
+			fa = minf(fa, clampf((x - a) / FRONT_SHORE, 0.0, 1.0))
+		if right_open:
+			fa = minf(fa, clampf((b - x) / FRONT_SHORE, 0.0, 1.0))
+		_front_xs.append(x)
+		_front_xa.append(fa)
+		if x >= b:
+			break
+		x = minf(x + SURFACE_STEP, b)
+	var n := _front_xs.size()
+	_front_pts.resize(n * 3)
+	_front_cols.resize(n * 3)
+	_front_idx = PackedInt32Array()
+	for i in n - 1:
+		for r in 2:
+			var p := i * 3 + r
+			_front_idx.append_array(PackedInt32Array([p, p + 1, p + 3, p + 1, p + 4, p + 3]))
+	_front = Node2D.new()
+	_front.name = "FrontWater"
+	_front.z_index = FRONT_Z
+	_front.material = preload("res://shaders/ash_purify.tres")   # 물빛 겹과 같은 보통 혼합 + 잿빛 팔레트
+	_front.draw.connect(_draw_front)
+	add_child(_front)
+	_front_line = Node2D.new()
+	_front_line.name = "FrontLine"
+	_front_line.material = preload("res://shaders/ash_purify_add.tres")   # 웅덩이 자신과 같은 더하기 혼합
+	_front_line.draw.connect(_draw_front_line)
+	_front.add_child(_front_line)
+
+
+## 앞 물의 색: 물 그림이 있으면 물빛 겹과 같은 지역 물 색(정화 전 deep_ash → 후 deep, 수액 위 걷기면 조금 밝게), 없으면 코드 몸통 색.
+func _front_color() -> Color:
+	var c: Color
+	if _art:
+		c = (_wp["deep_ash"] as Color).lerp(_wp["deep"], _clear)
+	else:
+		c = color.lerp(ALIVE_COLOR, _alive)
+	if can_walk():
+		c = c.lightened(0.08)
+	return Color(c.r, c.g, c.b, 1.0)
+
+
+func _draw_front() -> void:
+	var n := _front_xs.size()
+	if n < 2:
+		return
+	var top := surface_top()
+	var bot := maxf(_front_floor, top + 8.0)
+	var col := _front_color()
+	var a0 := float(_front_alpha[0])
+	var a1 := float(_front_alpha[1])
+	for i in n:
+		var x := _front_xs[i]
+		var h := _front_xa[i]
+		_front_pts[i * 3] = Vector2(x, _surface_y(x, top))
+		_front_pts[i * 3 + 1] = Vector2(x, bot)
+		_front_pts[i * 3 + 2] = Vector2(x, bot + FLOOR_SINK)
+		_front_cols[i * 3] = Color(col, a0 * h)
+		_front_cols[i * 3 + 1] = Color(col, a1 * h)
+		_front_cols[i * 3 + 2] = Color(col, 0.0)
+	RenderingServer.canvas_item_add_triangle_array(_front.get_canvas_item(), _front_idx, _front_pts, _front_cols)
+
+
+func _draw_front_line() -> void:
+	var top := surface_top()
+	var pts := PackedVector2Array()
+	var x := 0.0
+	while x <= size.x:
+		pts.append(Vector2(x, _surface_y(x, top)))
+		x += SURFACE_STEP
+	_draw_line_and_rings(_front_line, pts, top)
+
+
+## 시험용: 앞 물 겹 (z·진하기 확인)
+func front_layer() -> Node2D:
+	return _front
 
 
 # ---------------------------------------------------------------- 물 그림

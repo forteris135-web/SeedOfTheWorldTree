@@ -53,6 +53,8 @@ signal laser_charge_started
 signal laser_fired(hits: int)
 signal soul_changed(soul: String)
 signal blocked
+## 칼이 실제로 닿은 순간 (불꽃·히트스톱이 나는 때 — 판정보다 조금 늦을 수 있다. 아래 '타격 연출 미루기')
+signal hit_impact(result: String, target: Node)
 
 @export_group("걷기와 달리기")
 ## 걷는 속도 (픽셀/초). 화면 기준 1920×1080.
@@ -389,6 +391,7 @@ func _now() -> float:
 func _physics_process(delta: float) -> void:
 	var on_floor := is_on_floor()
 	_tick_timers(delta, on_floor)
+	_tick_impacts(delta)
 
 	match state:
 		State.DEAD, State.PURIFY, State.REST:
@@ -776,16 +779,28 @@ func _handle_interact() -> void:
 		_interact_buffer = 0.25   # 공격이 끝나기 직전에 눌러도 기억했다가 실행
 	if _interact_buffer > 0.0 and can_interact and state in LOCOMOTION:
 		_interact_buffer = 0.0
-		var best: Node2D = null
-		var best_d := INF
-		for n in interactables:
-			if is_instance_valid(n):
-				var d: float = global_position.distance_to(n.global_position)
-				if d < best_d:
-					best_d = d
-					best = n
+		var best := pick_interactable()
 		if best and best.has_method("interact"):
 			best.interact(self)
+
+
+## 손길 버튼이 고를 대상: 정화를 기다리는 적·보스(무너짐에는 제한 시간이 있다)가 먼저, 그다음은 가장 가까운 것.
+## 터치 상황 버튼의 글자·그림도 이 값을 따른다 (2026-10-20 검수: 무너진 경비병 옆 포탈이 더 가까우면 정화 대신 방을 나갔고,
+## 반대로 포탈이 목록에 있기만 하면 버튼이 '들어가기' 그림이었다).
+func pick_interactable() -> Node2D:
+	var best: Node2D = null
+	var best_d := INF
+	var best_urgent := false
+	for n in interactables:
+		if not is_instance_valid(n):
+			continue
+		var urgent: bool = n is EnemyBase or (n as Node).is_in_group("boss")
+		var d: float = global_position.distance_to(n.global_position)
+		if (urgent and not best_urgent) or (urgent == best_urgent and d < best_d):
+			best_d = d
+			best = n
+			best_urgent = urgent
+	return best
 
 
 ## 보스의 날갯바람 등 바깥 힘. 매 물리 프레임 불러야 한다.
@@ -1233,6 +1248,7 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	_hit_timer = hit_stun
 	_invuln_timer = invuln_time
 	hitbox.deactivate()
+	Fx.spawn("hit_spark", _hurt_point(hit, from_dir), {"facing": -from_dir, "palette": "red", "scale": 0.85})   # 맞은 자리에 붉은 불꽃
 	Juice.hitstop(hit.hitstop, 0.05)
 	Juice.rumble(0.5, 0.8, 0.15)
 	Juice.shake(6.0)
@@ -1243,40 +1259,117 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	return "hit"
 
 
+## 맞은 자리 (붉은 피격 불꽃): 때린 쪽 판정 상자가 켜져 있고 소녀 몸과 겹치면 그 겹친 곳의 가운데,
+## 아니면(투사체·몸통 부딪힘) 몸통에서 때린 쪽으로 조금 (2026-10-20 검수: 몹에게 맞아도 소녀 몸에 이펙트가 없었다).
+func _hurt_point(hit: HitData, from_dir: int) -> Vector2:
+	var body := Rect2(global_position + Vector2(-25.0, -66.0), Vector2(50.0, 132.0))
+	var at := global_position + Vector2(from_dir * 18.0, -16.0)
+	var src := hit.source
+	if src and is_instance_valid(src):
+		var hb = src.get("hitbox")
+		if hb is Hitbox and is_instance_valid(hb) and hb._active and hb._shape and hb._shape.shape is RectangleShape2D:
+			var sz: Vector2 = (hb._shape.shape as RectangleShape2D).size
+			var r := Rect2(hb._shape.global_position - sz * 0.5, sz)
+			var ov := r.intersection(body)
+			if ov.has_area():
+				at = ov.get_center()
+				at.y = clampf(at.y, global_position.y - 50.0, global_position.y + 30.0)
+	return at
+
+
+## ---- 타격 연출 미루기 (2026-10-20 검수) ----
+## 약공격·씨앗 베기는 판정이 켜지는 첫 틱에 이미 겹친 적을 맞히는데, 그때 칼은 아직 몸 뒤(휘두름의 6%)라
+## 불꽃이 칼보다 먼저 뜨고 히트스톱이 그 틀린 장면을 멈춰 보여 줬다. 그래서 피해·흐트러짐·튕김·밀려남은 그대로 즉시,
+## 불꽃·타격음·히트스톱·흔들림·진동(+ 그림의 반동, 신호 hit_impact)만 칼끝이 대상 쪽으로 지나갈 때까지 미룬다
+## (칼끝이 몸 앞 IMPACT_TIP_FRONT px 또는 대상 x 를 넘으면, 늦어도 IMPACT_WAIT_MAX 초 뒤·공격이 끊기면 바로).
+const IMPACT_WAIT_MAX := 0.1
+const IMPACT_TIP_FRONT := 60.0
+var _impacts: Array = []   # {"result", "target", "at", "big", "palette", "plunge_land", "dx", "t"}
+
+
 func _on_hit_landed(result: String, target: Node) -> void:
-	if result == "hit" or result == "blocked":
-		_spawn_hit_fx(target, result)
+	if result != "hit" and result != "blocked":
+		hit_impact.emit(result, target)   # (막힘 "guard" 등 — 그림의 반동은 바로)
+		return
+	var imp := {"result": result, "target": target, "at": _hit_fx_point(target),
+		"big": state == State.SOUL_SLASH or state == State.PLUNGE, "palette": "seed" if state == State.SOUL_SLASH else "",
+		"plunge_land": state == State.PLUNGE and attack_phase == "land", "dx": INF, "t": 0.0}
+	if target is Node2D and is_instance_valid(target):
+		imp["dx"] = ((target as Node2D).global_position.x - global_position.x) * facing
+	if (state == State.ATTACK or state == State.SOUL_SLASH) and not _blade_past(imp):
+		_impacts.append(imp)
+	else:
+		_impact_feel(imp)
 	if result == "hit":
-		# 낙하 공격 착지 충격은 착지음(plunge_landed → heavy_hit)이 이미 났으니 타격음을 또 내지 않는다
-		if not (state == State.PLUNGE and attack_phase == "land"):
-			Sfx.play("heavy_hit" if (state == State.SOUL_SLASH or state == State.PLUNGE) else "hit", -3.0, 0.1)
-		Juice.hitstop(0.05, 0.05)
-		Juice.rumble(0.25, 0.5, 0.08)
-		Juice.shake(3.0)
 		# 낙하 공격으로 적을 맞혔다: 튕겨 오른다 (떨어지는 중에만. 착지 충격은 그대로)
 		if state == State.PLUNGE and attack_phase == "dive":
 			_plunge_bounce()
 	elif result == "blocked":
 		# 방패에 튕겼다: 살짝 밀려난다
 		velocity.x = -facing * 260.0
-		Juice.rumble(0.1, 0.2, 0.06)
 		blocked.emit()
 		if state == State.PLUNGE and attack_phase == "dive":
 			_plunge_bounce()
 
 
-## 칼이 닿은 자리에 불꽃: 판정 상자 안에서 상대 쪽으로 (큰 공격은 큰 불꽃, 방패에 막히면 하얀 고리)
-func _spawn_hit_fx(target: Node, result: String) -> void:
+## 칼끝(그림)이 이미 대상 쪽으로 지나갔는가 (그림이 없으면 늘 지나간 것으로)
+func _blade_past(imp: Dictionary) -> bool:
+	var vis := get_node_or_null("Visual")
+	if vis == null or not vis.has_method("sword_point"):
+		return true
+	var tip: Vector2 = vis.to_global(vis.sword_point(112.0))
+	var tip_dx := (tip.x - global_position.x) * facing
+	return tip_dx >= minf(IMPACT_TIP_FRONT, float(imp["dx"]))
+
+
+## 미룬 타격 연출: 매 물리 틱 칼끝을 보고 낸다
+func _tick_impacts(delta: float) -> void:
+	if _impacts.is_empty():
+		return
+	var attacking := state == State.ATTACK or state == State.SOUL_SLASH
+	var keep: Array = []
+	for imp in _impacts:
+		imp["t"] = float(imp["t"]) + delta
+		if not attacking or float(imp["t"]) >= IMPACT_WAIT_MAX or _blade_past(imp):
+			_impact_feel(imp)
+		else:
+			keep.append(imp)
+	_impacts = keep
+
+
+## 타격 연출 (불꽃·소리·히트스톱·흔들림·진동)
+func _impact_feel(imp: Dictionary) -> void:
+	var result: String = imp["result"]
+	_spawn_hit_fx_at(imp["at"], result, bool(imp["big"]), str(imp["palette"]))
+	if result == "hit":
+		# 낙하 공격 착지 충격은 착지음(plunge_landed → heavy_hit)이 이미 났으니 타격음을 또 내지 않는다
+		if not bool(imp["plunge_land"]):
+			Sfx.play("heavy_hit" if bool(imp["big"]) else "hit", -3.0, 0.1)
+		Juice.hitstop(0.05, 0.05)
+		Juice.rumble(0.25, 0.5, 0.08)
+		Juice.shake(3.0)
+	else:
+		Juice.rumble(0.1, 0.2, 0.06)
+	var t: Node = imp["target"] if is_instance_valid(imp["target"]) else null
+	hit_impact.emit(result, t)
+
+
+## 칼이 닿은 자리: 판정 상자 안에서 상대 쪽으로
+func _hit_fx_point(target: Node) -> Vector2:
 	var box := _hitbox_world_rect()
 	var at := box.get_center()
 	if target is Node2D and is_instance_valid(target):
 		at.x = clampf((target as Node2D).global_position.x, box.position.x, box.end.x)
 		at.x = lerpf(at.x, box.get_center().x, 0.25)
+	return at
+
+
+## 칼이 닿은 자리에 불꽃 (큰 공격은 큰 불꽃, 방패에 막히면 하얀 고리)
+func _spawn_hit_fx_at(at: Vector2, result: String, big: bool, palette: String) -> void:
 	if result == "blocked":
 		Fx.spawn("ring_pop", at, {"facing": facing, "palette": "white", "scale": 0.8})
 		return
-	var big := state == State.SOUL_SLASH or state == State.PLUNGE
-	Fx.spawn("hit_spark_big" if big else "hit_spark", at, {"facing": facing, "palette": "seed" if state == State.SOUL_SLASH else ""})
+	Fx.spawn("hit_spark_big" if big else "hit_spark", at, {"facing": facing, "palette": palette})
 
 
 ## 지금 판정 상자 (세계 좌표)

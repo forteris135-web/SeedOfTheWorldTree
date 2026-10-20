@@ -27,6 +27,21 @@ var _rng_seed := 0
 ## 그림 조각 금 간 벽 (지역 그림 옷에 cracked 조각이 있으면). 있으면 옛 코드 그리기는 쓰지 않는다.
 var _crack: CrackedArt
 
+## 벽 뒤 작은 방의 '동굴 속' 바탕 (2026-10-20 검수): 단단한 지형 덩어리 한가운데 각진 구멍으로 먼 배경 그림이 비쳐
+## 직사각형 창처럼 보였고, 비밀 자리도 미리 드러났다 → 작은 방 안쪽(+ 벽 자리)에 어두운 바탕을 지형 묶음 맨 뒤(뒤 그림자보다 뒤)에 깐다.
+## 닫혀 있을 땐 불투명(지형 속처럼), 부서지면 NICHE_OPEN_ALPHA 로 옅어져 동굴 속이 된다. 위·아래·안쪽 끝은 지형 그림 밑으로 NICHE_TUCK 만큼,
+## 입구(벽의 방 쪽 면)는 벽 두께만큼 서서히 사라진다. 벽 한쪽 위·아래가 지형으로 막혀 있을 때만 (그쪽이 작은 방).
+const NICHE_DRAW_INDEX := -250000
+const NICHE_TUCK := 28.0
+const NICHE_SCAN := 900.0
+const NICHE_OPEN_ALPHA := 0.86
+## 색: 위·아래 가장자리(지형 밑으로 들어가는 곳) / 가운데 줄 입구 쪽(빛이 조금 드는 곳) / 가운데 줄 안쪽 끝 — 새까만 구멍이 아니라 그늘진 굴로 읽히게
+const NICHE_COLOR := Color(0.16, 0.14, 0.125)
+const NICHE_COLOR_LIT := Color(0.42, 0.38, 0.34)
+const NICHE_COLOR_DEEP := Color(0.27, 0.24, 0.21)
+var _niche_ci := RID()
+var _niche_rect := Rect2()
+
 
 func _ready() -> void:
 	super()   # 충돌 모양 + 잿빛 재질
@@ -69,6 +84,8 @@ func _ready() -> void:
 		_dust.color = Color(0.72, 0.62, 0.5, 0.55)
 	if secret_id != "" and Progress.is_collected(secret_id):
 		_set_broken_quietly()
+	if breaks_by_attack:
+		_build_niche.call_deferred()   # 형제 지형이 모두 자리 잡은 뒤
 
 
 ## 그림 조각 금 간 벽의 모양 (벽: 사각형). 천장은 덮어쓴다 (아래가 둥근 옹이).
@@ -134,6 +151,8 @@ func _break() -> void:
 	Sfx.play("broke", -2.0, 0.08)
 	_dust.emitting = false
 	queue_redraw()
+	if _niche_ci.is_valid():
+		create_tween().tween_method(_set_niche_alpha, 1.0, NICHE_OPEN_ALPHA, 0.6)
 	if secret_id != "":
 		Progress.collect(secret_id)   # 숨은 아이템이 이 신호를 듣고 나타난다
 	broken.emit()
@@ -146,6 +165,109 @@ func _set_broken_quietly() -> void:
 	_dust.emitting = false
 	visible = false
 	set_process(false)
+
+
+# ---------------------------------------------------------------- 동굴 속 바탕 (위 설명)
+func _build_niche() -> void:
+	_free_niche()
+	if not is_inside_tree() or not (get_parent() is CanvasItem):
+		return
+	var r := Rect2(global_position, size)
+	var cy := r.get_center().y
+	var side := 0
+	for sd in [1, -1]:
+		var x: float = (r.end.x + 20.0) if sd > 0 else (r.position.x - 20.0)
+		if _solid_at(Vector2(x, r.position.y - 8.0)) and _solid_at(Vector2(x, r.end.y + 8.0)) and not _solid_at(Vector2(x, cy)):
+			side = sd
+			break
+	if side == 0:
+		return
+	var x0: float = r.end.x if side > 0 else r.position.x
+	var d := 0.0
+	while d < NICHE_SCAN and not _solid_at(Vector2(x0 + side * (d + 8.0), cy)):
+		d += 8.0
+	if d >= NICHE_SCAN:
+		return
+	var mid_x := x0 + side * d * 0.5
+	var top := cy
+	while cy - top < NICHE_SCAN and not _solid_at(Vector2(mid_x, top - 8.0)):
+		top -= 8.0
+	var bot := cy
+	while bot - cy < NICHE_SCAN and not _solid_at(Vector2(mid_x, bot + 8.0)):
+		bot += 8.0
+	var mouth: float = r.position.x if side > 0 else r.end.x      # 벽의 방 쪽 면 (여기서 0)
+	var full: float = mouth + side * size.x                         # 벽 두께만큼 들어가면 다 진함
+	var inner := x0 + side * (d + NICHE_TUCK)                       # 안쪽 끝 (지형 밑으로)
+	var xs := PackedFloat32Array([mouth, full, inner])
+	var xa := PackedFloat32Array([0.0, 1.0, 1.0])
+	if side < 0:
+		xs.reverse()
+		xa.reverse()
+	var ys := PackedFloat32Array([top - NICHE_TUCK, (top + bot) * 0.5, bot + NICHE_TUCK])
+	var mid_c := [NICHE_COLOR_LIT, NICHE_COLOR_LIT, NICHE_COLOR_DEEP]   # 가운데 줄: 입구 → 안쪽 끝
+	if side < 0:
+		mid_c.reverse()
+	var parent := get_parent() as CanvasItem
+	var inv := parent.get_global_transform().affine_inverse()
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	for xi in 3:
+		for yi in 3:
+			pts.append(inv * Vector2(xs[xi], ys[yi]))
+			var c: Color = mid_c[xi] if yi == 1 else NICHE_COLOR
+			cols.append(Color(c, xa[xi]))
+	var idx := PackedInt32Array()
+	for xi in 2:
+		for yi in 2:
+			var p := xi * 3 + yi
+			idx.append_array(PackedInt32Array([p, p + 1, p + 3, p + 1, p + 4, p + 3]))
+	var rs := RenderingServer
+	_niche_ci = rs.canvas_item_create()
+	rs.canvas_item_set_parent(_niche_ci, parent.get_canvas_item())
+	rs.canvas_item_set_draw_index(_niche_ci, NICHE_DRAW_INDEX)
+	if material:
+		rs.canvas_item_set_material(_niche_ci, material.get_rid())   # 지형과 같은 잿빛 재질 (정화 전엔 회색 굴)
+	rs.canvas_item_add_triangle_array(_niche_ci, idx, pts, cols)
+	rs.canvas_item_set_modulate(_niche_ci, Color(1, 1, 1, NICHE_OPEN_ALPHA if _broken else 1.0))
+	_niche_rect = Rect2(Vector2(minf(xs[0], xs[2]), ys[0]), Vector2(absf(xs[2] - xs[0]), ys[2] - ys[0]))
+
+
+func _set_niche_alpha(a: float) -> void:
+	if _niche_ci.is_valid():
+		RenderingServer.canvas_item_set_modulate(_niche_ci, Color(1, 1, 1, a))
+
+
+## 세상 자리 g 가 형제 지형(비밀 벽은 빼고) 안이거나 방 경계 밖인가 (방 끝에 붙은 작은 방은 경계가 안쪽 끝)
+func _solid_at(g: Vector2) -> bool:
+	var room := TerrainStyle.room_of(self)
+	if room and "bounds" in room and (room.bounds as Rect2).has_area() and not (room.bounds as Rect2).has_point(g):
+		return true
+	for c in get_parent().get_children():
+		if c == self or c is SecretWall:
+			continue
+		if c is Platform:
+			if Rect2((c as Node2D).global_position, c.size).has_point(g):
+				return true
+		elif c is TerrainPolygon:
+			if Geometry2D.is_point_in_polygon(g - (c as Node2D).global_position, c.polygon):
+				return true
+	return false
+
+
+func _free_niche() -> void:
+	if _niche_ci.is_valid():
+		RenderingServer.free_rid(_niche_ci)
+	_niche_ci = RID()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_EXIT_TREE or what == NOTIFICATION_PREDELETE:
+		_free_niche()
+
+
+## 시험용: 동굴 속 바탕이 깔린 자리 (세상 좌표, 없으면 빈 사각형)
+func niche_rect() -> Rect2:
+	return _niche_rect if _niche_ci.is_valid() else Rect2()
 
 
 func _disable_collision() -> void:

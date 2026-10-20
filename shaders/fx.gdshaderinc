@@ -24,6 +24,11 @@ uniform float wipe_tail = 4.0;
 uniform float wipe_soft = 0.12;
 uniform float wipe_glow = 0.6;
 uniform float wipe_gap_hide = 0.0;   // 1 이면 호 범위 밖(초승달 안쪽 꽃잎 등)은 그리지 않는다
+// 3) 둥근 테(round): 그림 가운데(UV 0.5)에서 round_r0 ~ round_r1 사이에서 서서히 지운다 — 그림 가장자리가 잘려 있는(알파가 0 이 아닌)
+//    그림을 크게 키워 돌려도 곧은 테두리(마름모·사각)가 보이지 않게 (포자 구름 — 2026-10-20 검수). 기본은 꺼짐.
+uniform bool round_on = false;
+uniform float round_r0 = 0.3;
+uniform float round_r1 = 0.5;
 
 varying vec4 v_mod;
 
@@ -52,6 +57,9 @@ void fragment() {
 		vis *= smoothstep(wipe_head - wipe_tail - wipe_soft, wipe_head - wipe_tail, t);
 		a *= vis;
 		rgb += vec3(wipe_glow) * (1.0 - smoothstep(0.0, wipe_soft * 1.6, abs(t - wipe_head + wipe_soft * 0.5))) * step(wipe_head, 1.0);
+	}
+	if (round_on) {
+		a *= 1.0 - smoothstep(round_r0, round_r1, length(UV - vec2(0.5)));
 	}
 	COLOR = vec4(rgb, a) * v_mod;
 }

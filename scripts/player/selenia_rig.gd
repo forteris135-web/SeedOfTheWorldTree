@@ -250,10 +250,8 @@ func _ready() -> void:
 	_make_tip_glow()
 	_player.plunge_landed.connect(_on_plunge_landed)
 	# 히트박스(@onready)는 부모가 준비된 뒤에야 있다 (자식의 _ready 가 먼저 불린다)
-	if _player.is_node_ready():
-		_player.hitbox.landed.connect(_on_hit_landed)
-	else:
-		_player.ready.connect(func(): _player.hitbox.landed.connect(_on_hit_landed))
+	# 반동은 칼이 실제로 닿은 순간에 (Player.hit_impact — 판정이 켜지는 첫 틱이 아니라. 칼이 몸 뒤일 때 팔이 튕기지 않게)
+	_player.hit_impact.connect(_on_hit_landed)
 
 
 ## 스프링에 '충격'을 준다 (속도를 더한다). 자세는 스스로 출렁이며 돌아온다.
@@ -954,7 +952,11 @@ func _on_guard_hit(_d: float) -> void:
 func _on_purified(target: Node) -> void:
 	_flash = 1.0
 	var at: Vector2 = (target as Node2D).global_position if target is Node2D and is_instance_valid(target) else _front(60.0, 0.0)
-	Fx.spawn("purify", Vector2(at.x, _feet().y))
+	# 거대화 중간 보스(EnemyBase.fx_scale 1.8)는 금빛 기둥도 그만큼 크게 (무너짐·쓰러짐 이펙트와 같게 — 2026-10-20 검수)
+	var k := 1.0
+	if target is EnemyBase and is_instance_valid(target):
+		k = maxf((target as EnemyBase).fx_scale, 1.0)
+	Fx.spawn("purify", Vector2(at.x, _feet().y), {"scale": k} if k > 1.0 else {})
 
 
 func _on_soul_changed(soul: String) -> void:

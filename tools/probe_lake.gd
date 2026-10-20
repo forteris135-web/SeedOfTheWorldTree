@@ -228,6 +228,10 @@ func _probe_sap_pool() -> void:
 	_check(_player.hp == hp0, "수액 위 걷기(능력): 체력 그대로 (%.0f)" % _player.hp)
 	var pool: SapPool = _room.get_node("Lake1")
 	_check(pool.region == "sap_lake" and pool.surface_y() == 2840.0, "웅덩이 region sap_lake, 수면 y=%.0f" % pool.surface_y())
+	# 앞 물 (2026-10-20 검수): 수면 아래 몸이 물에 잠겨 보이게 캐릭터(z 0)보다 앞, 이펙트(z 6)보다 뒤에 물빛 겹이 있다
+	var front: Node2D = pool.front_layer() if pool.has_method("front_layer") else null
+	var fz := front.z_index if front else -99
+	_check(front != null and front.is_visible_in_tree() and fz > _player.z_index and fz < 6, "웅덩이 앞 물 겹: z %d (소녀 z %d 보다 앞, 이펙트 6 보다 뒤)" % [fz, _player.z_index])
 	# 구르기 거리: 땅 / 수액(능력 없음) / 수액(능력 있음)
 	Progress.abilities.erase("sap_walk")
 	var roll_land := await _roll_distance(Vector2(340, 2833))

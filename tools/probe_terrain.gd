@@ -88,8 +88,31 @@ func _ready() -> void:
 	await _probe_glow_lights()
 	TerrainSkin.enabled = true
 	await _probe_art()
+	await _probe_secret_niches()
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
+
+
+## 비밀 벽 뒤 작은 방의 '동굴 속' 바탕 (2026-10-20 검수): 벽마다 위·아래가 막힌 쪽에 바탕이 깔리고, 그 자리는 벽 바로 옆(작은 방 쪽)이다
+func _probe_secret_niches() -> void:
+	for id in ["canopy_01", "canopy_04", "canopy_05", "mine_01", "sap_lake_02"]:
+		var room := await _load_room(id)
+		await _frames(2)
+		var n := 0
+		var stack: Array = [room]
+		while not stack.is_empty():
+			var c: Node = stack.pop_back()
+			stack.append_array(c.get_children())
+			if c is SecretWall and not (c is SecretCeiling):
+				var sw := c as SecretWall
+				var r: Rect2 = sw.niche_rect()
+				var wall := Rect2(sw.global_position, sw.size)
+				var ok := r.has_area() and r.size.x > wall.size.x + 60.0 and r.intersects(wall.grow(2.0)) \
+					and r.position.y <= wall.position.y and r.end.y >= wall.end.y
+				_check(ok, "%s %s: 비밀 벽 뒤 동굴 속 바탕 %s (벽 %s)" % [id, sw.name, r, wall])
+				n += 1
+		_check(n > 0, "%s: 비밀 벽이 있다 (%d)" % [id, n])
+		await _free_room(room)
 
 
 func _frames(n: int) -> void:

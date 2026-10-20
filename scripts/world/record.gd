@@ -22,6 +22,19 @@ const PARCHMENT_LOOK := {
 	"page": [Vector2(0, -68), 88.0, 0.0],
 }
 
+## 비석: 기획자 그림(art/objects/record_stone.png — ART_PROMPTS 2장)이 오면 그 그림을 세워 쓴다 (높이 STONE_H, 밑동이 원점).
+## 그림이 오기 전에는 방의 지형 몸통 결(그림 옷의 fill — 뿌리·바위 결)을 입힌 아치형 비석에 새긴 글줄·이끼·그림자를 코드로 얹는다
+## (2026-10-20 검수: 회색 다각형 + 흰 줄 다섯 개라 정화 뒤 밝은 호수에서 새까만 판처럼 보였다).
+const STONE_ART := "res://art/objects/record_stone.png"
+const STONE_H := 170.0
+const STONE_TINT := Color(0.78, 0.8, 0.86)
+var _stone_tex: Texture2D
+var _stone_body := PackedVector2Array()
+var _stone_uv := PackedVector2Array()
+var _stone_panel := PackedVector2Array()
+var _stone_runes: Array = []   # [시작, 끝] 짧은 새김 줄들
+var _stone_moss: Array = []    # [자리, 반지름]
+
 var _data := {}
 var _prompt: Label
 var _near: Player
@@ -61,6 +74,66 @@ func _ready() -> void:
 		_sheet.scale = Vector2.ONE * (float(look[1]) / _sheet.texture.get_height())
 		_sheet.rotation_degrees = float(look[2])
 		add_child(_sheet)
+	elif kind == "stone":
+		_setup_stone()
+
+
+func _setup_stone() -> void:
+	if ResourceLoader.exists(STONE_ART):
+		_sheet = Sprite2D.new()
+		_sheet.texture = load(STONE_ART)
+		_sheet.use_parent_material = true
+		_sheet.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		var k := STONE_H / _sheet.texture.get_height()
+		_sheet.scale = Vector2(k, k)
+		_sheet.position = Vector2(0, -STONE_H * 0.5 + 6.0)   # 밑동을 땅에 조금 묻는다
+		add_child(_sheet)
+		return
+	var skin := TerrainSkin.for_node(self)
+	if skin and skin.fill:
+		_stone_tex = skin.fill
+		texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(record_id) if record_id != "" else 7
+	# 몸통: 아래가 조금 넓은 아치 (밑동은 땅에 6px 묻힘)
+	var w0 := 54.0
+	var w1 := 46.0
+	var top := -128.0
+	_stone_body = PackedVector2Array([Vector2(-w0, 6.0), Vector2(-w1 - rng.randf_range(0, 3), top)])
+	for i in range(1, 12):
+		var a := PI + PI * float(i) / 12.0
+		_stone_body.append(Vector2(cos(a) * w1, top + sin(a) * 40.0 + rng.randf_range(-2.0, 2.0)))
+	_stone_body.append(Vector2(w1 + rng.randf_range(0, 3), top))
+	_stone_body.append(Vector2(w0, 6.0))
+	_stone_uv = PackedVector2Array()
+	var ofs := Vector2(rng.randf_range(0, 512), rng.randf_range(0, 512))
+	for q in _stone_body:
+		_stone_uv.append((q * 1.2 + ofs) / 512.0)
+	# 새긴 판 (안쪽 아치)
+	_stone_panel = PackedVector2Array([Vector2(-34, -18), Vector2(-34, top + 4.0)])
+	for i in range(1, 10):
+		var a := PI + PI * float(i) / 10.0
+		_stone_panel.append(Vector2(cos(a) * 34.0, top + 4.0 + sin(a) * 26.0))
+	_stone_panel.append(Vector2(34, top + 4.0))
+	_stone_panel.append(Vector2(34, -18))
+	# 새김 글줄: 다섯 줄, 줄마다 짧은 획 두세 개
+	_stone_runes = []
+	for row in 5:
+		var y := top + 2.0 + row * 20.0
+		var x := -26.0
+		while x < 24.0:
+			var len := rng.randf_range(7.0, 18.0)
+			var x2 := minf(x + len, 26.0)
+			_stone_runes.append([Vector2(x, y + rng.randf_range(-1.5, 1.5)), Vector2(x2, y + rng.randf_range(-1.5, 1.5))])
+			x = x2 + rng.randf_range(4.0, 8.0)
+	# 이끼: 아치 위와 밑동
+	_stone_moss = []
+	for i in 7:
+		var a := PI + rng.randf_range(0.15, 0.85) * PI
+		_stone_moss.append([Vector2(cos(a) * w1 * 0.95, top + sin(a) * 38.0 + 2.0), rng.randf_range(3.0, 6.5)])
+	for i in 6:
+		_stone_moss.append([Vector2(rng.randf_range(-w0, w0), rng.randf_range(-6.0, 2.0)), rng.randf_range(3.0, 7.0)])
 
 
 func _process(delta: float) -> void:
@@ -102,6 +175,35 @@ func interact(_by: Player) -> void:
 				hud.show_message(msg % n if "%d" in msg else msg, 3.0))
 
 
+## 그림이 오기 전의 비석 (위 STONE_ART 설명): 그림자 → 결을 입힌 몸통 → 어두운 테·밝은 왼쪽 위 테 → 새긴 판 → 새김 글줄(희미한 빛) → 이끼
+func _draw_stone(glow: float) -> void:
+	if _stone_body.is_empty():
+		return
+	draw_set_transform(Vector2(0, 4), 0.0, Vector2(1.0, 0.22))
+	draw_circle(Vector2.ZERO, 70.0, Color(0, 0, 0, 0.32))
+	draw_set_transform(Vector2.ZERO)
+	if _stone_tex:
+		draw_colored_polygon(_stone_body, STONE_TINT, _stone_uv, _stone_tex)
+	else:
+		draw_colored_polygon(_stone_body, Color(0.42, 0.42, 0.46))
+	var outline := _stone_body.duplicate()
+	outline.append(_stone_body[0])
+	draw_polyline(outline, Color(0.05, 0.05, 0.06, 0.55), 3.0, true)
+	var lit := PackedVector2Array()
+	for i in range(1, _stone_body.size() / 2 + 1):
+		lit.append(_stone_body[i] + Vector2(3, 2))
+	draw_polyline(lit, Color(1, 0.97, 0.9, 0.22), 2.0, true)
+	draw_colored_polygon(_stone_panel, Color(0.0, 0.0, 0.02, 0.28))
+	var rune_c := Color(0.62, 0.8, 1.0, 0.35 + 0.25 * glow)
+	for r in _stone_runes:
+		draw_line(r[0], r[1], Color(0.02, 0.02, 0.03, 0.75), 3.2, true)
+		draw_line((r[0] as Vector2) + Vector2(0, 1.5), (r[1] as Vector2) + Vector2(0, 1.5), Color(1, 1, 1, 0.12), 1.2, true)
+		draw_line(r[0], r[1], rune_c, 1.3, true)
+	for m in _stone_moss:
+		draw_circle(m[0], m[1], Color(0.28, 0.42, 0.2, 0.85))
+		draw_circle((m[0] as Vector2) + Vector2(-1, -1.5), float(m[1]) * 0.55, Color(0.45, 0.6, 0.3, 0.8))
+
+
 ## when: 비어 있으면 항상. "flag" 는 깃발이 서 있을 때, "!flag" 는 안 서 있을 때. 여러 개는 쉼표 (npc.gd 와 같은 형식).
 func _condition_ok(when: String) -> bool:
 	if when.strip_edges() == "":
@@ -118,10 +220,8 @@ func _condition_ok(when: String) -> bool:
 
 func _draw() -> void:
 	var glow := 0.6 + 0.4 * sin(_t * 2.0)
-	if kind == "stone":
-		draw_colored_polygon(PackedVector2Array([Vector2(-50, 0), Vector2(-44, -140), Vector2(0, -170), Vector2(44, -140), Vector2(50, 0)]), Color(0.3, 0.3, 0.34))
-		for i in 5:
-			draw_line(Vector2(-26, -120 + i * 20), Vector2(26, -120 + i * 20), Color(0.6, 0.62, 0.7, 0.7), 2.0)
+	if kind == "stone" and _sheet == null:
+		_draw_stone(glow)
 	elif _sheet:
 		# 양피지 뒤의 은은한 빛 (읽을 수 있다는 표시)
 		draw_circle(_sheet.position, float(PARCHMENT_LOOK[kind][1]) * 0.55 * glow, Color(1.0, 0.88, 0.6, 0.07))

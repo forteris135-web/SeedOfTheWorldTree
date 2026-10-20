@@ -90,6 +90,19 @@ func _on_trigger(body: Node) -> void:
 	if _rush:
 		BossRush.fight_started()
 		_rush_shorten_intro()
+	_frame_intro()
+
+
+## 보스 등장 구도: 이름 카드가 뜨는 동안(INTRO 남은 시간) 카메라가 소녀와 보스 가운데를 보여 준다 (2026-10-20 검수 —
+## 보스가 x 2550~2600 에서 등장해 화면 오른쪽 끝에 반쯤 잘리고 터치 버튼 뒤에 가려졌다). 보스 자리·싸움은 그대로.
+func _frame_intro() -> void:
+	var cam := player.get_node_or_null("Camera2D") if player else null
+	if cam == null or not cam.has_method("frame_with") or not is_instance_valid(boss):
+		return
+	var left := 1.6
+	if boss.has_method("state_name") and boss.state_name() == "INTRO" and "_timer" in boss:
+		left = float(boss.get("_timer"))
+	cam.frame_with(boss, clampf(left - 0.6, 0.3, 2.4))
 
 
 func _on_boss_telegraph(kind: String) -> void:
@@ -146,6 +159,8 @@ func _on_player_died() -> void:
 	player.revive(rest_point)
 	var cam := player.get_node_or_null("Camera2D")
 	if cam:
+		if cam.has_method("clear_focus"):
+			cam.clear_focus()
 		cam.reset_smoothing()
 
 

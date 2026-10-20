@@ -21,6 +21,13 @@ var _burn_fx := false
 ## 안개 겹: (자리 비율 x, y, 배율 비율, 도는 빠르기 rad/s, 투명도)
 const PUFFS := [[0.0, 0.0, 1.0, 0.25, 0.5], [-0.35, 0.12, 0.7, -0.4, 0.42], [0.36, -0.1, 0.72, 0.35, 0.42], [0.05, -0.32, 0.6, -0.3, 0.38]]
 const ART := "spore_ring"
+## 안개 그림의 둥근 테 (fx 셰이더 round_on): 가운데에서 이 비율(UV)부터 지워 끝에서 0 — spore_ring 그림은 가장자리가 잘려 있어
+## 크게 키워 돌리면 어두운 방에서 곧은 사선(마름모)이 보였다 (2026-10-20 검수)
+const ROUND_R0 := 0.26
+const ROUND_R1 := 0.5
+## 둥근 테로 바깥이 지워진 만큼 안개 그림을 키운다 (보이는 구름 크기가 판정 원과 비슷하게)
+const ROUND_GROW := 1.2
+static var _round_mat: ShaderMaterial
 
 
 func _ready() -> void:
@@ -47,14 +54,19 @@ func _ready() -> void:
 	add_child(_particles)
 	var tex := Fx.texture(ART)
 	if tex:
-		var mat := Fx.shared_material("spore", false, 0.3)
+		if _round_mat == null:
+			_round_mat = Fx.make_material("spore", false, 0.3)
+			_round_mat.set_shader_parameter(&"round_on", true)
+			_round_mat.set_shader_parameter(&"round_r0", ROUND_R0)
+			_round_mat.set_shader_parameter(&"round_r1", ROUND_R1)
+		var mat := _round_mat
 		for pf in PUFFS:
 			var sp := Sprite2D.new()
 			sp.texture = tex
 			sp.material = mat
 			sp.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 			sp.position = Vector2(pf[0], pf[1]) * radius
-			var k: float = radius * 2.0 / tex.get_width() * float(pf[2])
+			var k: float = radius * 2.0 / tex.get_width() * float(pf[2]) * ROUND_GROW
 			sp.scale = Vector2(k, k)
 			sp.rotation = randf() * TAU
 			sp.modulate = Color(1, 1, 1, 0.0)
@@ -80,7 +92,7 @@ func _process(delta: float) -> void:
 		var pf: Array = PUFFS[i]
 		sp.rotation += float(pf[3]) * delta
 		sp.modulate = Color(1, 1, 1, float(pf[4]) * _alpha)
-		var k: float = radius * 2.0 / sp.texture.get_width() * float(pf[2]) * pulse
+		var k: float = radius * 2.0 / sp.texture.get_width() * float(pf[2]) * pulse * ROUND_GROW
 		sp.scale = Vector2(k, k)
 	if _burning:
 		_alpha = move_toward(_alpha, 0.0, delta * 2.5)

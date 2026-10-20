@@ -11,6 +11,9 @@ const REMAINS_META := "iron_pump_remains"
 ## 2페이즈 순간 곡이 휘청이는 깊이(재생 속도를 이만큼 낮춤)와 길이(초). 0 이면 휘청이지 않는다.
 const FALTER_DEPTH := 0.16
 const FALTER_TIME := 1.4
+## 회상에서 돌아와 AfterBoss(1800)에 설 때 멈춘 펌프 그림과 겹치면 (펌프가 그 근처에서 쓰러짐) 펌프 옆 빈 자리로 비켜 선다 —
+## 영혼 구슬이 내려오는 보상 연출 내내 소녀가 대포 입구에 겹쳐 서 있었다 (2026-10-20 검수). 그림 끝에서 이만큼(px) 떨어진다.
+const REMAINS_CLEAR := 70.0
 
 
 func _ready() -> void:
@@ -26,11 +29,35 @@ func _ready() -> void:
 			var at: Vector2 = Progress.get_meta(REMAINS_META)   # (x, 좌우 배율)
 			remains.position.x = at.x
 			remains.scale.x = at.y
+		if remains.visible:
+			_clear_of_remains(remains)
 	if is_instance_valid(boss) and not Progress.has(defeat_flag):
 		boss.purified.connect(_on_pump_stopped)
 		boss.phase_changed.connect(_on_pump_phase)
 	if "--pumpshots" in args or "--bossshots" in args:
 		_bossshots()
+
+
+## 소녀가 멈춘 펌프 그림 안에 서 있으면 들어온 문 쪽(왼쪽) 빈 자리로, 거기가 방 끝에 너무 가까우면 오른쪽으로 옮긴다.
+func _clear_of_remains(remains: Node2D) -> void:
+	if player == null or not remains.has_method("world_span"):
+		return
+	var span: Vector2 = remains.world_span()
+	var x := player.global_position.x
+	if x < span.x - REMAINS_CLEAR or x > span.y + REMAINS_CLEAR:
+		return
+	var left := span.x - REMAINS_CLEAR
+	var right := span.y + REMAINS_CLEAR
+	x = left if left > bounds.position.x + 260.0 else right
+	var old_spawn := _spawn
+	player.global_position.x = x
+	player.facing = 1 if remains.global_position.x > x else -1
+	_spawn = player.position
+	if rest_point == old_spawn:
+		rest_point = _spawn
+	var cam := player.get_node_or_null("Camera2D") as Camera2D
+	if cam:
+		cam.reset_smoothing.call_deferred()
 
 
 ## 정화의 손길: 펌프가 빛으로 흩어지는 그 자리에 멈춘 펌프가 나타나고 싹이 튼다 (BossRoom 이 1.8초 뒤 회상으로 넘어간다).

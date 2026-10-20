@@ -126,7 +126,8 @@ func _room() -> Node:
 
 func _process(delta: float) -> void:
 	_time += delta
-	if _player_near and not _used:
+	# 손길이 다른 대상을 고를 때(정화 기다리는 적이 먼저 — Player.pick_interactable)는 '들어가기'를 띄우지 않는다 (두 안내가 겹치지 않게)
+	if _player_near and not _used and _player_near.pick_interactable() == self:
 		_prompt.visible = true
 		var locked := requires_ability != "" and not Progress.has_ability(requires_ability)
 		_prompt.text = "잠긴 길" if locked else "%s  들어가기" % InputDevice.prompt("interact")

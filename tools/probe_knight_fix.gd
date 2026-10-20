@@ -7,6 +7,7 @@ extends Node
 ##  E. 높은 가지(Branch3) 위에서 버티면 1페이즈에도 검기가 소녀 쪽으로 올라온다 (30초에 두 번 넘게 맞는다)
 ##  F. 공격 없이 몸만 틀 때 궤적(빛의 띠) 점이 생기지 않는다
 ##  G. 창끝이 땅에 파묻히지 않는다(3연격 둘째·셋째 타, 돌진), 찌르기 창끝이 판정 끝에서 크게 벗어나지 않는다
+##  H. 소녀가 쓰러져 싸움이 되돌려질 때(reset_fight → 집 자리로 순간이동) 뼈대가 몸을 따라온다 (torso 와 몸 x 차이 30px 아래)
 ## 실행: Godot --headless --path . res://tools/probe_knight_fix.tscn
 
 const ROOM := "res://scenes/rooms/mine_boss.tscn"
@@ -38,6 +39,7 @@ func _ready() -> void:
 	await _f()
 	await _g()
 	await _e()
+	await _h()
 	await _b()
 	print("[knightfix] 끝: 실패 %d" % _fail)
 	get_tree().quit(_fail)
@@ -265,6 +267,26 @@ func _e() -> void:
 		by[h[0]] = by.get(h[0], 0.0) + h[1]
 	_check(_hits.size() >= 2 and by.has("WAVE"), "E 높은 가지 1페이즈 30초: 맞은 횟수 %d(2 이상), 피해 %.0f, 공격별 피해 %s, 떨어짐 %d, 기사가 쓴 패턴 %s" % [
 		_hits.size(), total, by, knocked, attacks])
+	await _calm()
+
+
+## H. 기사가 집 자리(2600)에서 멀리 걸어가 있다가 reset_fight 로 순간이동하면 뼈대도 곧바로 따라온다
+## (예전: 디딘 발이 옛 자리에 남아 torso 가 몸보다 1500px 왼쪽에 있었다 — 다시 싸움을 걸면 기사가 소녀 자리에 서 있다 순간이동해 보였다)
+func _h() -> void:
+	await _calm()
+	await _place(1100.0, 800.0, 1)
+	_player._invuln_timer = 9999.0
+	_boss._timer = 99.0
+	await get_tree().create_timer(1.0).timeout
+	var rig = _vis.rig
+	var before: float = rig.bone_global("torso").x - _boss.global_position.x
+	_boss.reset_fight()
+	await get_tree().create_timer(0.3).timeout
+	var after: float = rig.bone_global("torso").x - _boss.global_position.x
+	var far := absf(_boss.global_position.x - 1100.0)
+	_check(far > 1000.0 and absf(after) < 30.0, "H 싸움 되돌림 순간이동 %.0fpx 뒤 torso − 몸 x: 전 %+.0f, 뒤 %+.0f (30 아래)" % [far, before, after])
+	_boss.visible = true
+	_player._invuln_timer = 0.0
 	await _calm()
 
 

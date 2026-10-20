@@ -123,16 +123,17 @@ func _has_player() -> bool:
 	return _player != null and is_instance_valid(_player)
 
 
-## 상황 버튼의 글자: 쉬는 중 '이동·성장'(달빛풀 메뉴: 이동 / 성장 탭), 포탈 앞 '들어가기', 그 밖엔 '손길'.
+## 상황 버튼의 글자: 쉬는 중 '이동·성장'(달빛풀 메뉴: 이동 / 성장 탭), 손길이 고를 대상(Player.pick_interactable —
+## 정화 기다리는 적이 먼저, 그다음 가장 가까운 것)이 포탈이면 '들어가기', 그 밖엔 '손길'.
 func _interact_label() -> String:
 	if _player.state == Player.State.REST:
 		return "이동·성장"
-	for n in _player.interactables:
-		if n is Portal:
-			# 아직 드러나지 않은 숨은 입구는 '손길' 그대로 (틈의 정체를 버튼 글자가 먼저 알려 주지 않게)
-			if n is HiddenPortal and not n.is_revealed():
-				return "손길"
-			return "들어가기"
+	var n := _player.pick_interactable()
+	if n is Portal:
+		# 아직 드러나지 않은 숨은 입구는 '손길' 그대로 (틈의 정체를 버튼 글자가 먼저 알려 주지 않게)
+		if n is HiddenPortal and not n.is_revealed():
+			return "손길"
+		return "들어가기"
 	return "손길"
 
 

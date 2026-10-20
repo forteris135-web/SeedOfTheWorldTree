@@ -74,6 +74,30 @@ func match_pose(vis: Node) -> void:
 	_find_points()
 
 
+## 그림이 덮는 세상 x 범위 (Vector2(왼쪽, 오른쪽)) — 방이 회상에서 돌아온 소녀를 이 범위 밖에 세울 때 묻는다. 뼈대가 없으면 원점 ± 300.
+## (보이는 부위 그림들의 상자로 잰다 — 뼈대 bounds 는 안 보이는 부위까지 들어가 실제보다 훨씬 넓었다)
+func world_span() -> Vector2:
+	var lo := INF
+	var hi := -INF
+	if rig:
+		var stack: Array = [rig]
+		while not stack.is_empty():
+			var n: Node = stack.pop_back()
+			stack.append_array(n.get_children())
+			var sp := n as Sprite2D
+			if sp == null or sp.texture == null or not sp.is_visible_in_tree() or sp.self_modulate.a < 0.05:
+				continue
+			var r := sp.get_rect()
+			var t := sp.get_global_transform()
+			for q in [r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]:
+				var x: float = (t * q).x
+				lo = minf(lo, x)
+				hi = maxf(hi, x)
+	if lo > hi:
+		return Vector2(global_position.x - 300.0, global_position.x + 300.0)
+	return Vector2(lo, hi)
+
+
 func _find_points() -> void:
 	var socks: Dictionary = rig.data.get("sockets", {})
 	for pair in [["tank_top", "_top"], ["core", "_core"]]:

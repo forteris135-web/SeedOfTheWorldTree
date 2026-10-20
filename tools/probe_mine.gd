@@ -883,12 +883,17 @@ func _probe_remains_and_music() -> void:
 	# 회상에서 돌아온 뒤 (깃발이 서 있음): 같은 자리·같은 방향
 	Progress.set_flag("boss_pump_defeated")
 	Progress.set_flag("after_boss_pump_defeated")
+	Progress.next_spawn = "AfterBoss"   # 회상에서 돌아오는 자리 (1800 — 2100 의 멈춘 펌프 그림과 겹친다)
 	var room2 = load("res://scenes/rooms/flooded_mine_boss.tscn").instantiate()
 	add_child(room2)
 	await _frames(3)
 	var r2: Node2D = room2.get_node("PumpRemains")
 	var kept: bool = r2.visible and absf(r2.position.x - 2100.0) < 1.0 and r2.scale.x < 0.0
 	_check(hidden_before and shown and grown > 0.95 and kept, "정화 순간 멈춘 펌프+싹: 처음 숨김 %s → 펌프 자리(2100, 오른쪽을 봄)에 나타남 %s, 싹 자람 %.2f, 회상 뒤 같은 자리 %s" % [hidden_before, shown, grown, kept])
+	# 회상에서 돌아온 소녀는 멈춘 펌프 그림 밖에 선다 (2026-10-20 검수: 대포 입구에 겹쳐 서 있었다)
+	var span: Vector2 = r2.world_span()
+	var px: float = room2.player.global_position.x if room2.player else INF
+	_check(px < span.x or px > span.y, "회상 뒤 소녀 자리 x %.0f 가 멈춘 펌프 그림(%.0f ~ %.0f) 밖" % [px, span.x, span.y])
 	_check(track == "boss_iron_pump" and faltered, "2페이즈 음악: 곡 그대로 %s, 휘청 %s" % [track, faltered])
 	room2.queue_free()
 	await _frames(3)

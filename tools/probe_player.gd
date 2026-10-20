@@ -103,6 +103,7 @@ func _run() -> void:
 	await _test_soul_persist()
 	await _test_keymap_old_file()
 	await _test_shield_and_crescent_geometry()
+	await _test_field_fixes()
 	await _test_guard()
 
 
@@ -1080,6 +1081,87 @@ func _test_shield_and_crescent_geometry() -> void:
 
 
 # ---------- (d) 가드: 일반 막기 신호 ----------
+## 2026-10-20 현장 검수 반영: (1) 손길은 무너진 적을 더 가까운 다른 대상(포탈 등)보다 먼저 고른다,
+## (2) 약공격 불꽃·히트스톱은 판정 첫 틱이 아니라 칼끝이 대상 쪽으로 지나갈 때 (피해는 그대로 즉시),
+## (3) 몹에게 맞으면 소녀 몸에 붉은 피격 불꽃
+func _test_field_fixes() -> void:
+	var wc := _enemy("Woodcutter1")
+	if wc == null:
+		wc = _enemy("Woodcutter2")
+	_check(wc != null, "현장 검수 시험용 나무꾼이 있다")
+	if wc == null:
+		return
+	_reset_enemy(wc)
+	# (1) 고르기: 가까운 보통 대상 vs 조금 먼 무너진 적
+	var saved := _player.interactables.duplicate()
+	_player.interactables.clear()
+	var near := Node2D.new()
+	_room.add_child(near)
+	near.global_position = _player.global_position + Vector2(40, 0)
+	wc.global_position = _player.global_position + Vector2(150, 0)
+	_player.interactables.append(near)
+	_player.interactables.append(wc)
+	var pick1 := _player.pick_interactable()
+	_player.interactables.erase(wc)
+	var pick2 := _player.pick_interactable()
+	_check(pick1 == wc and pick2 == near, "손길 고르기: 무너진 적(150px)이 더 가까운 대상(40px)보다 먼저, 적이 없으면 가까운 것 (%s / %s)" % [pick1, pick2])
+	_player.interactables = saved
+	near.queue_free()
+	# (2) 타격 연출 미루기
+	_reset_enemy(wc)
+	var mh0: float = wc.max_hp
+	wc.max_hp = 9999.0
+	wc.hp = 9999.0
+	wc.set_physics_process(false)
+	_teleport(wc.global_position + Vector2(-110, -2), 1)
+	await _frames(8)
+	var vis = _player.get_node("Visual")
+	var marks := {"land_t": -1.0, "imp_t": -1.0, "land_tip": 0.0, "imp_tip": 0.0, "hp": wc.hp}
+	var t0 := Time.get_ticks_usec()
+	var on_land := func(res: String, _t) -> void:
+		if res == "hit" and marks["land_t"] < 0.0:
+			marks["land_t"] = (Time.get_ticks_usec() - t0) / 1e6
+			marks["land_tip"] = (vis.to_global(vis.sword_point(112.0)).x - _player.global_position.x) * _player.facing
+			marks["hp"] = wc.hp
+	var on_imp := func(res: String, _t) -> void:
+		if res == "hit" and marks["imp_t"] < 0.0:
+			marks["imp_t"] = (Time.get_ticks_usec() - t0) / 1e6
+			marks["imp_tip"] = (vis.to_global(vis.sword_point(112.0)).x - _player.global_position.x) * _player.facing
+	_player.hitbox.landed.connect(on_land)
+	_player.hit_impact.connect(on_imp)
+	await _tap("attack_light")
+	for i in 40:
+		await get_tree().physics_frame
+		if float(marks["imp_t"]) >= 0.0:
+			break
+	_player.hitbox.landed.disconnect(on_land)
+	_player.hit_impact.disconnect(on_imp)
+	var dmg_now: bool = float(marks["hp"]) < 9999.0
+	var gap := float(marks["imp_t"]) - float(marks["land_t"])
+	_check(float(marks["land_t"]) >= 0.0 and dmg_now and float(marks["imp_t"]) >= 0.0 and gap >= 0.0 and gap < 0.2 \
+		and float(marks["imp_tip"]) >= minf(Player.IMPACT_TIP_FRONT, 110.0) - 1.0,
+		"약공격: 판정 순간 피해 즉시(%s), 칼끝 %+.0f px → 불꽃·히트스톱은 %.3f초 뒤 칼끝 %+.0f px (몸 앞 %.0f 이상)" % [dmg_now, marks["land_tip"], gap, marks["imp_tip"], Player.IMPACT_TIP_FRONT])
+	wc.set_physics_process(true)
+	wc.max_hp = mh0
+	await _frames(30)
+	_reset_enemy(wc)
+	# (3) 피격 불꽃
+	_teleport(wc.global_position + Vector2(-130, -2), 1)
+	await _frames(4)
+	_player._invuln_timer = 0.0
+	var hp0 := _player.hp
+	var res: String = _player.receive_hit(HitData.make(5.0, 0.0, wc), null)
+	var spark := false
+	for f in Fx._active:
+		if f.visible and f.fx_name == "hit_spark" and f.global_position.distance_to(_player.global_position) < 90.0:
+			spark = true
+	_check(res == "hit" and spark, "몹에게 맞으면 소녀 몸 가까이 피격 불꽃 (결과 %s, 불꽃 %s)" % [res, spark])
+	_player.hp = hp0
+	_player._invuln_timer = 9999.0
+	await _frames(40)
+	_teleport(_player.global_position, 1)
+
+
 func _test_guard() -> void:
 	var wc := _enemy("Woodcutter2")
 	if wc == null:

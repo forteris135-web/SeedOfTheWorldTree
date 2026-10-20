@@ -307,6 +307,9 @@ func _process(delta: float) -> void:
 	# 몸이 간 거리 (뼈대 단위, 보는 쪽 + 앞)
 	var dxw := boss.global_position.x - _prev_x
 	_prev_x = boss.global_position.x
+	if absf(dxw) > 200.0:
+		_on_teleport()   # 순간이동 (소녀가 쓰러져 싸움을 되돌림 → 집 자리) — 뿌리지기·무쇠 펌프와 같게
+		dxw = 0.0
 	# 돌진(초속 1250px)은 다리가 따라갈 수 없는 빠르기라 걸음에는 줄여서 준다 (발이 조금 미끄러지는 대신 다리가 닿지 않아
 	# 엉덩이가 툭툭 떨어지지 않게 — 빠른 돌진이라 미끄러짐은 거의 안 보인다)
 	var gait_k := 0.5 if st == LanternKnight.State.CHARGE and boss.attack_phase == "active" else 1.0
@@ -1054,6 +1057,28 @@ func _tip_global() -> Vector2:
 
 func _lantern_global() -> Vector2:
 	return rig.to_global(rig.to_rig_local(rig.xf[_i_lantern] * LANTERN_CENTER))
+
+
+## 몸이 한 프레임에 200px 넘게 옮겨졌을 때 (reset_fight 가 집 자리로 순간이동): 디딘 발을 새 자리에 다시 딛고,
+## 세상 자리를 기억하는 것들(등불 진자의 이전 자리, 창끝·등불 속도, 등불 빛 자리, 세상에 남는 궤적·먼지·불씨)을 비운다.
+## 이게 없으면 디딘 발이 옛 자리에 남아 뼈대 전체가 1500px 떨어진 곳에 서 있다가, 다시 싸움을 걸면 순간이동해 보였다 (2026-10-20 검수).
+func _on_teleport() -> void:
+	motion.snap_feet()
+	_lan_prev = Vector2.INF
+	_lan_vel = Vector2.ZERO
+	_prev_tip = Vector2.ZERO
+	_prev_lantern = Vector2.ZERO
+	_tip_speed = 0.0
+	_lantern_speed = 0.0
+	_light_pos = Vector2.ZERO
+	_trail_pts.clear()
+	_trail_dirty = true
+	if _trail:
+		_trail.queue_redraw()
+	for p in [_dust, _embers]:
+		if p:
+			(p as CPUParticles2D).restart()   # 남은 알갱이를 지우고
+			(p as CPUParticles2D).emitting = false   # 새로 뿜지는 않는다
 
 
 ## 궤적: 창끝과 등불이 빠르게 지나간 자리를 빛의 띠로 남긴다 (느릴 땐 보이지 않는다).
