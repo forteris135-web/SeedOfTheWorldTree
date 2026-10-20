@@ -1,7 +1,7 @@
 extends EnemyRigVisual
 ## 수액 어부의 그림: 부위 뼈대(EnemyRigVisual) + **줄 물리로 움직이는 낚싯줄**.
 ## 줄은 뼈대 설계도(data/rigs/sap_fisher*.json)의 숨은 부위 whip_00(끝) ~ whip_NN(손 쪽) 덩굴 조각들이다.
-## PartRig 는 숨은 부위를 그리지 않으므로 이 그림이 조각을 직접 뼈대(_skel) 안, 손 그림 바로 아래 순서에 늘어놓는다
+## PartRig 는 숨은 부위를 그리지 않으므로 이 그림이 조각을 직접 뼈대 그림 노드(rig.skeleton_node()) 안, 손 그림 바로 아래 순서에 늘어놓는다
 ## (번쩍임·흩어짐 셰이더를 함께 쓴다). 구원되어 사람으로 돌아온 어부(RescuedPerson)는 줄 없이 선다.
 ##
 ## 줄 = 마디가 이어진 밧줄(베를레 적분: 중력·관성·땅에 닿으면 눕기). 손이 움직이면 줄이 한 박자 늦게 따라오고,
@@ -84,7 +84,7 @@ func _setup_whip() -> void:
 	_grip_bone = rig.bone_index(str(socks["grip"]["bone"]))
 	_grip = PartRig._v(socks["grip"]["pos"])
 	var hand_spr := rig.sprite_of(str(socks["grip"]["bone"]))
-	var skel: Node2D = rig._skel
+	var skel: Node2D = rig.skeleton_node()
 	var at := hand_spr.get_index() if hand_spr else skel.get_child_count()
 	for nm in names:
 		var b: Dictionary = bones[rig.bone_index(nm)]
@@ -428,7 +428,7 @@ func _strike_target_world(f: float) -> Vector2:
 
 
 ## 줄 조각을 줄 마디에 놓는다: 조각 j 는 손 쪽 점(j+1)이 관절, 축(그림의 pivot → tip)이 끝 쪽 점(j)을 향한다.
-## 뼈대 틀(_skel 안, body_xf 앞) 좌표로 바꿔 놓는다 → 쓰러짐·좌우 뒤집기·찌그러짐을 그대로 따른다.
+## 뼈대 틀(skeleton_node() 안, body_xf 앞) 좌표로 바꿔 놓는다 → 쓰러짐·좌우 뒤집기·찌그러짐을 그대로 따른다.
 func _place_segments() -> void:
 	var inv := rig.body_xf.affine_inverse()
 	var gs := rig.game_scale

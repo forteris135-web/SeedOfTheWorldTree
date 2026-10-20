@@ -69,15 +69,8 @@ func match_pose(vis: Node) -> void:
 	if rig == null or vis == null or not ("rig" in vis):
 		return
 	var src: PartRig = vis.rig
-	if src == null or src.rot.size() != rig.rot.size():
+	if not rig.copy_pose_from(src):
 		return
-	rig.rot = src.rot.duplicate()
-	rig.off = src.off.duplicate()
-	rig.scl = src.scl.duplicate()
-	rig.squash_y = src.squash_y.duplicate()
-	rig.root_pos = src.root_pos
-	rig.body_xf = src.body_xf
-	rig.apply()
 	_find_points()
 
 

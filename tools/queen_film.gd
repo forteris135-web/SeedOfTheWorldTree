@@ -593,7 +593,7 @@ func _probe() -> void:
 					prev_v[k] = v
 				prev[k] = pt
 			# 땅: 내려앉음(받은 뒤 0.35초~), 무너짐·쓰러짐(땅에 닿고 0.9초~)
-			var low := rig.lowest_y(motion._settle_bones) * rig.game_scale
+			var low := rig.lowest_y(motion.settle_bones()) * rig.game_scale
 			var grounded: bool = st == SapQueen.State.LANDED and float(_vis.get("_land_t")) > 0.35
 			if st in [SapQueen.State.BROKEN, SapQueen.State.FALLEN] and _boss.is_ground():
 				if down_t < 0.0:

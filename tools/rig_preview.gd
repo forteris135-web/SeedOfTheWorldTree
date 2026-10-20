@@ -287,7 +287,8 @@ func _run_enemy(scene_path: String) -> void:
 	for seq in seqs:
 		seq_i += 1
 		var path := scene_path
-		if seq == "kneel" and not scene_path.contains("savable"):
+		# 구원형 무릎 꿇기: <몹>_savable.tscn 이 있으면 그것으로 (오웬처럼 씬 자체가 구원형이면 그대로)
+		if seq == "kneel" and not scene_path.contains("savable") and ResourceLoader.exists(scene_path.replace(".tscn", "_savable.tscn")):
 			path = scene_path.replace(".tscn", "_savable.tscn")
 		var e: EnemyBase = (load(path) as PackedScene).instantiate()
 		if seq == "aim":
@@ -345,6 +346,8 @@ func _run_enemy(scene_path: String) -> void:
 				add_child(src)
 				src.global_position = e.global_position + Vector2(120, 0)
 				e.hp = 1.0
+				if "_block_open" in e:
+					e.set("_block_open", 99.0)   # 방패 몹(경비병): 방패를 든 채로 — 앞에서 친 공격을 막지 않게 (probe_rigs 와 같게)
 				e.receive_hit(HitData.make(5.0, 10.0, src), null)
 				src.queue_free()
 				dur = 0.8

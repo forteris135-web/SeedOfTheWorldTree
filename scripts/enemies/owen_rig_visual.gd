@@ -104,8 +104,8 @@ func _solve_back_arm(w: float) -> void:
 	var parent_rot := rig.xf[rig.parent[_i_up]].get_rotation()
 	var up_local := (phi1 - PI * 0.5) - parent_rot
 	var lo_local := (phi2 - PI * 0.5) - (phi1 - PI * 0.5)
-	rig.rot[_i_up] = lerp_angle(rig.rot[_i_up], up_local, w)
-	rig.rot[_i_lo] = lerp_angle(rig.rot[_i_lo], lo_local, w)
+	rig.set_bone_rot(_i_up, lerp_angle(rig.bone_rot(_i_up), up_local, w), false)
+	rig.set_bone_rot(_i_lo, lerp_angle(rig.bone_rot(_i_lo), lo_local, w), false)
 	rig.compute_from(_i_up)
 	rig.apply()
 

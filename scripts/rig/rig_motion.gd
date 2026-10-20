@@ -10,7 +10,9 @@ extends RefCounted
 ##     → 되돌림(출렁이며 준비 자세).
 ##  3) 발: 땅을 딛은 발은 세상에 고정(미끄러지지 않음). 걸을 때는 '걸은 거리'로 도는 걸음 위상이 두 발을 번갈아 옮기고,
 ##     서 있을 때·공격 중에는 자세의 발 자리에서 많이 어긋난 발만 한 걸음 옮긴다 (내딛기). 공중이면 다리를 접는다.
-##  4) 다리 IK: 허벅지·정강이 두 뼈 (무릎은 앞으로) 또는 한 뼈 다리. 발이 닿지 않으면 엉덩이를 낮춘다 → 어떤 자세에서도 발바닥이 땅(y=0).
+##     방향이 바뀌거나 서 있다 걷기 시작해 딛은 발이 가는 쪽 반대편 멀리 남았으면 그 발부터 옮긴다 (걸음 위상 다시 맞추기, GAIT_RESYNC).
+##  4) 다리 IK: 허벅지·정강이 두 뼈 (무릎은 앞으로, knee_back 이면 뒤로) 또는 한 뼈 다리. 발이 닿지 않으면 엉덩이를 낮춘다(한계 DROP_MAX)
+##     → 어떤 자세에서도 발바닥이 땅(y=0). 다리 길이 단위 L 은 다리+발 높이 평균 (원형 _motion.leg_unit_reach 가 있으면 두 마디 길이 × 그 값).
 ##     무릎 꿇기(kneel_*)는 무릎을 땅에 대고 정강이를 뒤로 눕힌 해와 섞는다.
 ##  5) 무기 땅 막기: ground_guard 부위의 껍질이 땅 아래로 들어가면 손목→팔꿈치→어깨 순으로 들어 올린다 (칼끝이 땅에 닿아 멈춘 것처럼).
 ##  6) 늘어진 천·잎(chain): 세상 각도로 스프링 → 몸이 돌면 한 박자 늦게 따라오고, 달리면 뒤로 날린다.
@@ -104,14 +106,19 @@ const EARLY_UNWIND := 0.4
 ## 부드러운 부위가 땅에 눌려 접히는 한계 (세로 배율)
 const SOFT_MIN := 0.35
 
+# ---- 공개 값 (그림 스크립트·시험이 읽거나 정한다) ----
+# 읽기·쓰기: poses(자세 사전 — 상태에 따라 한 자세를 다른 자세로 바꿔 끼워도 된다), target(이번 프레임 목표 — 갈고리에서 고쳐도 된다),
+#           breath, tilt_scale, fall_angle/fall_pivot, ground_lock, ground_settle
+# 읽기만: rig, keys, fin(최종 값), legs(다리 — Leg 의 x/h/planted_now 를 읽기만; 옮길 땐 아래 '공개 도우미'), L, stand_root_y, root, time
+# 그 밖의 _ 로 시작하는 값은 속 사정이다 — 필요하면 '공개 도우미'를 더한다 (걸음 위상·다리 맞바꾸기·떠 있는 높이·땅 닿기 뼈·천 설정 등).
 var rig: PartRig
 var poses := {}
 var keys: Array = []
-var ch := {}            # 채널 이름 → Chan
+var ch := {}            # 채널 이름 → Chan (값은 channel(이름) 으로 읽는다)
 var target := {}
 var drive := Drive.NORMAL
 var feet_mode := Feet.POSE
-## 다리 길이 단위 L (뼈대 단위)와 서 있는 뿌리 높이(뿌리 y, 땅 0, 위 −)
+## 다리 길이 단위 L (뼈대 단위)와 서 있는 뿌리 높이(뿌리 y, 땅 0, 위 −). stand_root_y 는 읽기만 — 띄우려면 set_root_lift().
 var L := 100.0
 var stand_root_y := -100.0
 var legs: Array[Leg] = []
@@ -164,6 +171,8 @@ var _m_breath: Array = []   # [채널, 세기, 위상]
 var _m_swing: Array = []
 var _m_swing_abs: Array = []
 var _swing_bob := 0.0
+var _stand_root_y0 := -100.0   # 설계도로 정해진 서 있는 뿌리 높이 (set_root_lift 의 기준)
+var _root_lift := 0.0
 ## 다리 길이 단위 L 을 '두 마디(허벅지+정강이) 길이 × 이 값'으로 (원형 _motion 의 "leg_unit_reach", 0 = 쓰지 않음 — 다리+발 높이 평균).
 ## 발이 높이 그려진 새처럼 발 높이까지 넣으면 보폭이 다리가 닿는 거리보다 길어지는 원형이 쓴다.
 var leg_unit_reach := 0.0
@@ -299,6 +308,7 @@ func _setup_legs() -> void:
 	if legs.is_empty():
 		L = maxf(float(d.get("height", 300.0)) * 0.45, 1.0)
 		stand_root_y = float(d.get("root_offset", [0, -L])[1])
+		_stand_root_y0 = stand_root_y
 		return
 	L = total / legs.size()
 	if leg_unit_reach > 0.0:
@@ -324,6 +334,7 @@ func _setup_legs() -> void:
 			need = -sqrt(maxf(r1 * r1 - dx1 * dx1, 1.0)) - j0.y
 		ry = maxf(ry, need)
 	stand_root_y = ry
+	_stand_root_y0 = ry
 
 
 func _setup_guard() -> void:
@@ -425,6 +436,114 @@ func snap_feet() -> void:
 		leg.x = float(target.get(leg.k_foot, 0.0)) * L
 		leg.h = 0.0
 		leg.swing = false
+
+
+# ---------- 공개 도우미 (그림 스크립트가 속 값을 직접 고치지 않게) ----------
+
+## 걸음 위상 (0~1 이 한 주기, 걸은 거리로 쌓인다 — 다리 k 의 위상은 이 값 + (홀수 다리면 0.5)).
+## 걸음 맞춰 몸을 흔들 때 읽는다.
+func gait_phase() -> float:
+	return _phase
+
+
+## 걸음 위상을 정한다 (걷기 시작할 때 '어느 발부터 내딛는지' 맞추기). 위상 0 = 짝수 다리가 막 내딛기 시작.
+## land_feet 이면 옮기던 발을 모두 '디딘 발'로 돌린다 (그 자리에서 새 위상으로 다시 시작).
+func set_gait_phase(p: float, land_feet := false) -> void:
+	_phase = p
+	if land_feet:
+		for leg in legs:
+			leg.swing = false
+
+
+## 두 다리가 서로의 디딘 발 자리를 맞바꾼다 (옆모습 네발·두발 짐승이 돌아설 때: 앞다리가 뒷다리가 되므로 —
+## flip_feet() 다음에 부른다). 두 다리 모두 디딘 채(높이 0, 무릎 꿇기 풀림)로 다시 시작한다.
+func swap_leg_sides(a := 0, b := 1) -> void:
+	if a < 0 or b < 0 or a >= legs.size() or b >= legs.size() or a == b:
+		return
+	var la := legs[a]
+	var lb := legs[b]
+	var ax := la.x
+	la.x = lb.x
+	lb.x = ax
+	for leg in [la, lb]:
+		leg.h = 0.0
+		leg.swing = false
+		leg.knee_set = false
+
+
+## 떠 있는 높이 (뼈대 단위, + 위): 서 있는 뿌리 높이(stand_root_y)를 설계도 값에서 그만큼 올린다 (나는 새·떠 있는 보스).
+## move_hanging_feet 이면 매달린 발(공중)도 높이가 바뀐 만큼 같이 옮긴다 (발이 높이 변화에 끌려 늦지 않게).
+func set_root_lift(h: float, move_hanging_feet := false) -> void:
+	if move_hanging_feet:
+		for leg in legs:
+			leg.h += h - _root_lift
+	_root_lift = h
+	stand_root_y = _stand_root_y0 - h
+
+
+func root_lift() -> float:
+	return _root_lift
+
+
+## 발을 끌어서(들지 않고) 자세의 발 자리로 미끄러뜨린다 (무너지는 무게에 눌려 다리가 벌어질 때 — 걸음 대신 땅을 긁으며).
+## update() 전에(갈고리 등에서) 부른다.
+func slide_feet_to_pose(speed: float, delta: float) -> void:
+	for leg in legs:
+		leg.swing = false
+		leg.h = 0.0
+		leg.x = Motion.damp(leg.x, float(target.get(leg.k_foot, 0.0)) * L, speed, delta)
+
+
+## 지금 공중 자세인가 (다리를 접어 매단 상태)
+func is_airborne() -> bool:
+	return _airborne
+
+
+## 채널의 지금 값 (스프링이 쫓는 값 — 충격·숨쉬기 같은 덧붙임은 빠짐. 덧붙임까지 든 값은 fin)
+func channel(k: String) -> float:
+	return (ch[k] as Chan).v if ch.has(k) else 0.0
+
+
+## 땅 닿기(ground_lock)에 쓰는 뼈들 (무기 사슬·부드러운 부위 뺌) / 내려놓기(ground_settle)에 쓰는 뼈들 (거기서 다리도 뺌) /
+## 부드러운 부위. 시험·그림이 '몸의 가장 낮은 점'을 잴 때 쓴다 (rig.lowest_y(...)). 고치지 않는다.
+func lock_bones() -> PackedInt32Array:
+	return _lock_bones
+
+
+func settle_bones() -> PackedInt32Array:
+	return _settle_bones
+
+
+func soft_bones() -> PackedInt32Array:
+	return _soft_bones
+
+
+## 몸(무기 사슬·부드러운 부위 뺌)의 가장 낮은 점 (뼈대 단위, 땅 0, 아래 +, body_xf 포함)
+func body_lowest_y() -> float:
+	return rig.lowest_y(_lock_bones)
+
+
+## 늘어진 천(chain) 부위의 설정: {"gravity": 0~1, "max": 라디안}. chain 부위가 아니면 빈 사전.
+func chain_setting(bone_name: String) -> Dictionary:
+	var c := _chain_of(bone_name)
+	return {} if c.is_empty() else {"gravity": float(c[4]), "max": float(c[5])}
+
+
+## 늘어진 천의 중력·최대 흔들림 각도를 바꾼다 (쓰러져 누울 때 망토를 땅에 늘어뜨리기 등). chain 부위가 아니면 아무것도 안 한다.
+func set_chain_setting(bone_name: String, gravity: float, max_angle: float) -> void:
+	var c := _chain_of(bone_name)
+	if c.is_empty():
+		return
+	c[4] = gravity
+	c[5] = max_angle
+
+
+func _chain_of(bone_name: String) -> Array:
+	var i := rig.bone_index(bone_name)
+	for c in _chains:
+		if int(c[0]) == i:
+			return c
+	return []
 
 
 ## 휘두르기 세 박자. phase: "windup"/"strike"/"recover", p: 그 국면의 진행도(0→1).

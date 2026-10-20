@@ -197,10 +197,7 @@ func _pre_motion(delta: float) -> void:
 	# 부서져 쓰러질 때: 무게에 눌려 발이 바깥으로 미끄러지며 다리가 벌어지고 배가 땅에 닿는다
 	# (한 걸음씩 들어 옮기지 않고 땅을 긁으며 — 걸음 방식이면 넷을 차례로 옮기느라 쓰러짐 0.75초 안에 끝나지 않는다)
 	if st == EnemyBase.State.DEAD and not _fall_gentle:
-		for leg in motion.legs:
-			leg.swing = false
-			leg.h = 0.0
-			leg.x = Motion.damp(leg.x, float(motion.target.get(leg.k_foot, 0.0)) * motion.L, 9.0, delta)
+		motion.slide_feet_to_pose(9.0, delta)
 	# 대롱: 제자리에서 늘 겨눈다 (EnemyRigVisual 은 쫓기·공격 중에만 겨눈다)
 	if aim_always_range > 0.0 and _aim_i >= 0 and st in AIM_IDLE_STATES:
 		var pl := _enemy.player

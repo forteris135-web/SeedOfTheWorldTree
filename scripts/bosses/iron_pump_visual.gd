@@ -472,7 +472,7 @@ func _process(delta: float) -> void:
 	# 아무 위상에서나 시작하면 서 있던 뒷발이 한 걸음 넘게 디딘 채 몸 뒤로 멀어져 엉덩이가 확 내려앉고 앞다리 무릎이 땅에 박혔다.
 	var gait: bool = info["feet"] == RigMotion.Feet.GAIT
 	if gait and not _was_gait:
-		motion._phase = GAIT_START_PHASE
+		motion.set_gait_phase(GAIT_START_PHASE)
 	_was_gait = gait
 	motion.set_target(_out, drive, info["feet"])
 	# 몸이 간 거리 (뼈대 단위, 보는 쪽 + 앞)
@@ -497,8 +497,7 @@ func _guard_cannon() -> void:
 	for it in 24:
 		if rig.lowest_y(_cannon_only) < -3.0:
 			break
-		rig.rot[_i_cannon] -= 0.06   # 위로(앞쪽으로) 들어 올린다 (최대 약 80도)
-		rig.compute_from(_i_cannon)
+		rig.turn_bone(_i_cannon, -0.06)   # 위로(앞쪽으로) 들어 올린다 (최대 약 80도)
 		fixed = true
 	if fixed:
 		rig.apply()
@@ -508,17 +507,7 @@ func _guard_cannon() -> void:
 ## (옆모습의 앞다리는 돌아서면 뒷다리가 된다 — 그대로 두면 앞다리가 몸 뒤의 발까지 닿지 못해 두 발이 허공에 떴다).
 func _flip_legs() -> void:
 	motion.flip_feet()
-	if motion.legs.size() < 2:
-		return
-	var a: RigMotion.Leg = motion.legs[0]
-	var b: RigMotion.Leg = motion.legs[1]
-	var ax := a.x
-	a.x = b.x
-	b.x = ax
-	for leg in [a, b]:
-		leg.h = 0.0
-		leg.swing = false
-		leg.knee_set = false
+	motion.swap_leg_sides(0, 1)
 
 
 ## 상태 → 목표 자세. info 에 보간 방식·발 방식·떨림·핵 밝기·박 세기를 적는다.
@@ -1036,8 +1025,8 @@ func probe_pose() -> Dictionary:
 		soles.append(y * _k + rig.position.y)
 	return {
 		"soles": soles,
-		"lowest": rig.lowest_y(motion._lock_bones) * _k + rig.position.y,
-		"settle_low": rig.lowest_y(motion._settle_bones) * _k + rig.position.y,
+		"lowest": rig.lowest_y(motion.lock_bones()) * _k + rig.position.y,
+		"settle_low": rig.lowest_y(motion.settle_bones()) * _k + rig.position.y,
 		"top": rig.highest_y() * _k + rig.position.y,
 		"body_y": rig.to_global(rig.to_rig_local(rig.xf[_i_body].origin)).y - global_position.y,
 		"mouth": _sock_global("mouth"),
@@ -1054,7 +1043,7 @@ func probe_pose() -> Dictionary:
 func _lowest_bone() -> String:
 	var best := -INF
 	var name := ""
-	for i in motion._lock_bones:
+	for i in motion.lock_bones():
 		var y := rig.lowest_y(PackedInt32Array([i]))
 		if y > best:
 			best = y

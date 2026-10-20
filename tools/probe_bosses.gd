@@ -523,10 +523,14 @@ func _settled(vis: Node2D) -> bool:
 
 
 ## 그림의 몸 자세 [기울기(라디안), 배율, 세로 자리(px, + 아래)]. 부위 뼈대 그림은 노드 변환이 늘 그대로라(뼈대가 안에서 움직인다)
-## 그림이 내주는 probe_pose() 를 쓴다 (등불 기사). 예전 한 장 그림은 노드의 rotation/scale/position 그대로.
+## 그림이 내주는 probe_pose() 를 쓴다 (등불 기사 — 배열을 돌려준다). 예전 한 장 그림은 노드의 rotation/scale/position 그대로.
+## 뼈대 보스 중 probe_pose() 가 없거나 사전을 돌려주는 그림(새·뿌리지기는 뼈 값을 따로 잰다 — _bird_run / _root_watch,
+## 무쇠 펌프·여왕은 probe_pump_rig / probe_queen)은 노드 값을 읽으니 이 함수의 기울기·배율 검사가 뜻이 없다.
 func _vpose(vis: Node2D) -> Array:
 	if vis.has_method("probe_pose"):
-		return vis.probe_pose()
+		var pp = vis.probe_pose()
+		if pp is Array:
+			return pp
 	return [vis.rotation, vis.scale, vis.position.y]
 
 
@@ -1055,9 +1059,9 @@ func _bird() -> void:
 
 ## 새 한 사이클을 돌리며 뼈대 값을 기록한다. 돌려주는 값: 뼈 세계 각도의 프레임 간 최대 변화(도), 몸통 자리 최대 점프(px),
 ## 발바닥 최대 어긋남(px, 땅 상태), 날개·부리 정점 시각, 히트박스 켜진 시각 등.
-func _bird_run(boss: Node, vis: Sprite2D, done: Callable, max_time := 6.0) -> Dictionary:
-	var rig: PartRig = vis.rig
-	var motion: RigMotion = vis.motion
+func _bird_run(boss: Node, vis: Node2D, done: Callable, max_time := 6.0) -> Dictionary:
+	var rig: PartRig = vis.get("rig")
+	var motion: RigMotion = vis.get("motion")
 	var watch := ["torso", "head", "wing_f_in", "wing_f_out", "wing_b_in", "leg_f_up", "leg_b_up"]
 	var prev := {}
 	var r := {"max_d": {}, "at": {}, "max_jump": 0.0, "feet": 0.0, "frames": 0, "states": [], "active_t": -1.0,
@@ -1170,8 +1174,8 @@ func _bird_peak(label: String, r: Dictionary, kind: String, active_len: float) -
 func _bird_fall() -> void:
 	var pair := _spawn(BIRD)
 	var boss = pair[0]
-	var vis: Sprite2D = pair[1]
-	var rig: PartRig = vis.rig
+	var vis: Node2D = pair[1]
+	var rig: PartRig = vis.get("rig")
 	boss.facing = 1
 	boss.global_position = Vector2(1200, 600)
 	boss._hover_target = boss.global_position

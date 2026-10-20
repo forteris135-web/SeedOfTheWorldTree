@@ -637,7 +637,7 @@ func _process(delta: float) -> void:
 			continue
 		var phw := _flap_phase + float(WING_PHASE[w])
 		var sx := (1.0 - _flap_fold * pow(sin(phw), 2.0)) * (1.0 - 0.55 * _fold) * turn_w
-		rig.scl[wi] = Vector2(WING_SCALE * maxf(sx, 0.02), WING_SCALE * (1.0 - 0.08 * _fold))
+		rig.set_bone_scale(wi, Vector2(WING_SCALE * maxf(sx, 0.02), WING_SCALE * (1.0 - 0.08 * _fold)))
 
 	_settle = Motion.damp(_settle, settle, 9.0 if settle > _settle else 5.0, delta)
 	motion.ground_settle = _settle
@@ -654,7 +654,7 @@ func _process(delta: float) -> void:
 			continue
 		var phw := _flap_phase + float(WING_PHASE[w])
 		var up := sin(phw) * _flap_rot + _fold * 18.0 + sin(_t * 47.0 + w * 1.7) * shiver
-		rig.rot[wi] += deg_to_rad(up * _wing_sign[w])
+		rig.turn_bone(wi, deg_to_rad(up * _wing_sign[w]), false)
 	rig.apply()
 
 	# ---- 놓기: 원점 = 발이 닿는 땅 (날 때는 보스 원점 바로 위에 떠 있다) ----

@@ -571,8 +571,8 @@ func _aim_gun(st: int) -> void:
 	if st == EnemyBase.State.WINDUP:
 		want -= AIM_WINDUP_RAISE
 	var axis := (rig.body_xf * rig.xf[_aim_i]).basis_xform(Vector2.DOWN).angle()
-	var chan := deg_to_rad((motion.ch["arm_f_up"] as RigMotion.Chan).v)
-	var extra := rig.rot[_aim_arm] - chan    # 덧붙임(숨쉬기·피격·반동)
+	var chan := deg_to_rad(motion.channel("arm_f_up"))
+	var extra := rig.bone_rot(_aim_arm) - chan    # 덧붙임(숨쉬기·피격·반동)
 	var err := wrapf(want - (axis - extra), -PI, PI)
 	motion.target["arm_f_up"] = rad_to_deg(chan + err)
 

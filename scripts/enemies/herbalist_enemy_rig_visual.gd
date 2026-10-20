@@ -105,7 +105,7 @@ func _process(delta: float) -> void:
 	_mush_puff.spring(swell, 180.0, 11.0, minf(delta, 0.05))
 	var k := clampf(1.0 + _mush_puff.v, 0.8, 1.6)
 	for i in _mush_bones:
-		rig.scl[i] = Vector2(k, k)
+		rig.set_bone_scale(i, Vector2(k, k))
 	super._process(delta)
 	for key in swap:
 		motion.poses[key] = swap[key]

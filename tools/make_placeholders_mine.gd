@@ -4,9 +4,10 @@ extends SceneTree
 ## 사용: /path/to/Godot --headless --path . --script tools/make_placeholders_mine.gd [-- --force]
 ## **이미 있는 파일은 건너뛴다** — 기획자가 진짜 그림을 같은 이름으로 넣어 두었으면 그대로 둔다. 임시 그림을 다시 만들려면 --force.
 ## 만드는 것:
-##   art/bosses/boss_iron_pump_now.png (1536×1024 투명, 왼쪽을 보는 녹슨 펌프: 몸통·피스톤·관·심장(핵))
+##   (art/bosses/boss_iron_pump_now.png 는 만들지 않는다 — 무쇠 펌프는 부위 뼈대(data/rigs/iron_pump.json)로 움직이고,
+##    이 파일은 tools/pump_render.tscn 이 뼈대의 대기 자세로 그린 조립 그림이다 (2026-10-20))
 ##   art/bosses/boss_iron_pump_past.png (1536×1024, 반짝이는 새 펌프 + 등불 공방)
-##   art/enemies/enemy_small_pump.png (1536×1024 투명, 왼쪽을 보는 작은 펌프 — art_faces_right=false)
+##   art/enemies/enemy_small_pump.png (1536×1024 투명, 왼쪽을 보는 작은 펌프 — 지금은 쓰지 않는다: 작은 펌프도 부위 뼈대 small_pump)
 ##   art/objects/object_cracked_wall.png (512×1024 투명, 세로로 금 간 나무 벽 조각 — 벽의 크기에 맞춰 늘려 그린다)
 ##   art/objects/object_dew_cup.png / object_scripture_page.png (512×512 투명 아이콘)
 ##   art/backgrounds/bg_flooded_mine.png / bg_flooded_mine_boss.png (1536×1024, 붉은 녹과 수액빛)
@@ -22,7 +23,7 @@ var _made := 0
 func _init() -> void:
 	var t0 := Time.get_ticks_msec()
 	_force = "--force" in OS.get_cmdline_user_args() or "--force" in OS.get_cmdline_args()
-	_make("res://art/bosses/boss_iron_pump_now.png", 1536, 1024, true, func(u: float, v: float) -> Color: return _pump(u, v, true))
+	# 무쇠 펌프(지금)는 부위 뼈대로 바뀌어 임시 그림을 만들지 않는다 — boss_iron_pump_now.png 는 tools/pump_render.tscn 의 조립 그림 (2026-10-20)
 	_make("res://art/bosses/boss_iron_pump_past.png", 1536, 1024, false, _pump_past)
 	_make("res://art/enemies/enemy_small_pump.png", 1536, 1024, true, _small_pump)
 	_make("res://art/objects/object_cracked_wall.png", 512, 1024, true, _cracked_wall)
@@ -34,7 +35,7 @@ func _init() -> void:
 	_make("res://art/memories/memory_pump_2.png", 1536, 1024, false, _memory_2)
 	_make("res://art/memories/memory_pump_3.png", 1536, 1024, false, _memory_3)
 	_make("res://art/memories/ending_third_way.png", 1536, 864, false, _ending)
-	print("임시 그림 %d장 생성 (12장 중, 나머지는 이미 있어 건너뜀) (%.1f초)" % [_made, (Time.get_ticks_msec() - t0) / 1000.0])
+	print("임시 그림 %d장 생성 (11장 중, 나머지는 이미 있어 건너뜀) (%.1f초)" % [_made, (Time.get_ticks_msec() - t0) / 1000.0])
 	quit()
 
 
@@ -151,7 +152,7 @@ func _pump(u: float, v: float, sick: bool) -> Color:
 		col = _rust(u, v, rust.lightened(0.08), 0.0 if sick else 0.5)
 		var band := 0.5 + 0.5 * sin(v * 160.0)
 		col = col.lerp(dark, band * 0.25)
-	# (피스톤 팔과 관(노즐)은 코드 iron_pump_visual.gd 가 그려 움직인다 — 진짜 그림에 그려져 있으면 draw_parts 를 끈다)
+	# (예전 임시 그림용 — 지금 무쇠 펌프는 부위 뼈대라 이 그림을 쓰지 않는다. 과거 모습(_pump_past)이 이 함수를 같이 쓴다)
 	# 뒤쪽의 배기관 두 개 (위로)
 	for i in 2:
 		var px := 0.62 + i * 0.07

@@ -112,7 +112,7 @@ var _glow := 1.0           # 투구 등불 밝기
 var _settle := 0.0
 var _lock := 0.0
 ## 망토(늘어진 천 사슬)의 원래 중력·흔들림 한계 — 엎어져 누우면 망토가 등 위로 솟지 않고 땅 쪽으로 늘어지게 바꾼다
-var _cape_chain: Array = []
+var _has_cape := false
 var _cape_gravity := 0.15
 var _cape_max := 0.5
 ## 호환: 예전 시험(probe_bosses / probe_knight_fix)이 읽는 값 — 창 손잡이 자리·각도를 따라가는 노드, 수평 맞춤(이제 늘 0)
@@ -156,14 +156,14 @@ func _ready() -> void:
 	_i_ab_lo = rig.bone_index("arm_b_lo")
 	_i_weapon = rig.bone_index("weapon")
 	_i_lantern = rig.bone_index("lantern")
-	rig.scl[_i_weapon] = Vector2(SPEAR_SIZE, SPEAR_SIZE)
-	rig.scl[_i_lantern] = Vector2.ONE * (LANTERN_SIZE / SPEAR_SIZE)
+	rig.set_bone_scale(_i_weapon, Vector2(SPEAR_SIZE, SPEAR_SIZE))
+	rig.set_bone_scale(_i_lantern, Vector2.ONE * (LANTERN_SIZE / SPEAR_SIZE))
 	motion = RigMotion.new(rig)
-	for c in motion._chains:
-		if rig.names[int(c[0])] == "cape":
-			_cape_chain = c
-			_cape_gravity = float(c[4])
-			_cape_max = float(c[5])
+	var cape := motion.chain_setting("cape")
+	_has_cape = not cape.is_empty()
+	if _has_cape:
+		_cape_gravity = float(cape["gravity"])
+		_cape_max = float(cape["max"])
 	rig.setup_ghosts(["torso", "arm_f_up", "arm_f_lo", "weapon", "lantern"], 6)
 	if boss:
 		_face = float(boss.facing)
@@ -309,9 +309,8 @@ func _process(delta: float) -> void:
 	_settle = Motion.damp(_settle, settle_want, 5.0, delta)
 	motion.ground_lock = _lock
 	motion.ground_settle = _settle
-	if not _cape_chain.is_empty():
-		_cape_chain[4] = lerpf(_cape_gravity, 0.9, _settle)
-		_cape_chain[5] = lerpf(_cape_max, 2.6, _settle)
+	if _has_cape:
+		motion.set_chain_setting("cape", lerpf(_cape_gravity, 0.9, _settle), lerpf(_cape_max, 2.6, _settle))
 	_sync_gait(st, absf(float(ctx["speed"])))
 	motion.update(delta, ctx)
 	_post_solve(delta)
@@ -327,9 +326,7 @@ func _sync_gait(st: LanternKnight.State, speed: float) -> void:
 		var dir := 1.0 if st == LanternKnight.State.CHARGE else (1.0 if boss.velocity.x * _sign >= 0.0 else -1.0)
 		var back := 0 if motion.legs[0].x * dir < motion.legs[1].x * dir else 1
 		# 다리 k 의 위상 = _phase + (홀수면 0.5): 뒤 발의 위상을 0(내딛기 시작)에
-		motion._phase = 0.5 if back == 1 else 0.0
-		for leg in motion.legs:
-			leg.swing = false
+		motion.set_gait_phase(0.5 if back == 1 else 0.0, true)
 	_walking = walk
 
 
@@ -568,7 +565,7 @@ func _stance(walking: bool) -> Dictionary:
 	var spd := clampf(absf(boss.velocity.x) / maxf(boss.march_speed, 1.0), 0.0, 1.0)
 	var out := motion.mix(idle, motion.pose("walk_p2" if p2 else "walk"), spd)
 	# 걸음마다 무게가 실린다: 몸이 앞뒤로 조금 흔들리고 머리는 반대로 (걸음 위상은 걸은 거리 기준이라 멈추면 멈춘다)
-	var ph := motion._phase * TAU * 2.0
+	var ph := motion.gait_phase() * TAU * 2.0
 	out["torso"] = float(out["torso"]) + sin(ph) * 2.2 * spd
 	out["head"] = float(out["head"]) - sin(ph) * 1.6 * spd
 	out["spear"] = float(out["spear"]) + sin(ph + 0.6) * 3.0 * spd
@@ -685,9 +682,8 @@ func _post_solve(delta: float) -> void:
 		_place_free_spear()
 	else:
 		var rl := sw - rig.world_rot(_i_af_lo)
-		rig.rot[_i_weapon] = rl
-		rig.off[_i_weapon] = Vector2(0, 1).rotated(rl) * slide * SPEAR_SIZE
-		rig.compute_from(_i_weapon)
+		rig.set_bone_rot(_i_weapon, rl, false)
+		rig.set_bone_offset(_i_weapon, Vector2(0, 1).rotated(rl) * slide * SPEAR_SIZE)
 		# 3) 땅에 박히지 않게 (회전 중·박힘·짚기는 뺀다 — 짚기는 밑동이 땅에 닿는 것이 맞다)
 		if boss.state != LanternKnight.State.SPIN and _anchor < 0.5 and plant < 0.5:
 			# 들어 올린 만큼 '보이는 각도'에도 넣는다 → 다음 프레임은 땅에 닿은 자리에서 이어서 움직인다 (튀지 않고 땅을 따라 미끄러진다)
@@ -735,8 +731,8 @@ func _solve_arm(up: int, lo: int, target: Vector2, w: float) -> void:
 	var pw := rig.world_rot(rig.parent[up])
 	var r_up := th1 - PI * 0.5 - pw
 	var r_lo := th2 - th1
-	rig.rot[up] = lerp_angle(rig.rot[up], r_up, w)
-	rig.rot[lo] = lerp_angle(rig.rot[lo], r_lo, w)
+	rig.set_bone_rot(up, lerp_angle(rig.bone_rot(up), r_up, w), false)
+	rig.set_bone_rot(lo, lerp_angle(rig.bone_rot(lo), r_lo, w), false)
 	rig.compute_from(up)
 
 
@@ -765,8 +761,7 @@ func _lift_bone(i: int, margin: float, max_rot: float) -> float:
 		var d1 := wrapf(s1 - cur, -PI, PI)
 		var d2 := wrapf(PI - s1 - cur, -PI, PI)
 		var dd := clampf(d1 if absf(d1) <= absf(d2) else d2, -max_rot, max_rot)
-		rig.rot[i] += dd
-		rig.compute_from(i)
+		rig.turn_bone(i, dd)
 		moved += dd
 	return moved
 
@@ -815,21 +810,19 @@ func _place_free_spear() -> void:
 	var origin := _free_butt + dir * SPEAR_BUTT * SPEAR_SIZE
 	var par := rig.xf[_i_af_lo]
 	var local := par.affine_inverse() * origin
-	rig.rot[_i_weapon] = _spear_w - rig.world_rot(_i_af_lo)
-	rig.off[_i_weapon] = local - rig.base_pos[_i_weapon]
-	rig.compute_from(_i_weapon)
+	rig.set_bone_rot(_i_weapon, _spear_w - rig.world_rot(_i_af_lo), false)
+	rig.set_bone_offset(_i_weapon, local - rig.base_pos[_i_weapon])
 	# 누운 만큼 껍질의 가장 낮은 점을 땅에 (창 그림은 축 둘레로 두께가 있다 — 축만 땅에 대면 한쪽이 떠 보인다)
 	if _free_phi > 0.6:
 		var low := rig.lowest_y(PackedInt32Array([_i_weapon]))
 		var k := clampf((_free_phi - 0.6) / 0.6, 0.0, 1.0)
-		rig.off[_i_weapon] += par.basis_xform_inv(Vector2(0, -(low + 1.0) * k))
-		rig.compute_from(_i_weapon)
+		rig.set_bone_offset(_i_weapon, rig.bone_offset(_i_weapon) + par.basis_xform_inv(Vector2(0, -(low + 1.0) * k)))
 
 
 ## 등불 진자: 매달린 자리(창 위)의 세상 가속도로 흔들린다. θ'' = −(g + a_y)/l·sinθ − a_x/l·cosθ − c·θ'
 ## 땅에 닿으면 땅 위에 눕는다 (창이 쓰러져 누웠을 때).
 func _update_lantern(delta: float) -> void:
-	rig.off[_i_lantern] = Vector2.ZERO
+	rig.set_bone_offset(_i_lantern, Vector2.ZERO, false)
 	var hang := rig.xf[_i_weapon] * rig.base_pos[_i_lantern]
 	# 세상 자리 (좌우는 지금 보는 쪽으로만 — 몸 틀기의 납작해짐은 가속도에 넣지 않는다)
 	var p := boss.global_position + Vector2(hang.x * _sign, hang.y + rig.body_xf.origin.y) * _k
@@ -859,21 +852,18 @@ func _update_lantern(delta: float) -> void:
 			_lan_th = signf(_lan_th) * LANTERN_SWING_MAX
 			_lan_w *= -0.2
 	var world := -_lan_th * _sign
-	rig.rot[_i_lantern] = world - rig.world_rot(_i_weapon)
-	rig.compute_from(_i_lantern)
+	rig.set_bone_rot(_i_lantern, world - rig.world_rot(_i_weapon))
 	var hang_y := (rig.body_xf * rig.xf[_i_lantern]).origin.y
 	if hang_y > -90.0:
 		# 매단 자리가 땅에 닿았다 (창이 쓰러져 누움): 등불도 땅 위에 옆으로 눕는다 (가까운 쪽으로)
 		var lie := PI * 0.5 if wrapf(world, -PI, PI) >= 0.0 else -PI * 0.5
 		var cur := rig.world_rot(_i_lantern)
 		var k := clampf((hang_y + 90.0) / 50.0, 0.0, 1.0)
-		rig.rot[_i_lantern] += angle_difference(cur, lie) * k
-		rig.compute_from(_i_lantern)
+		rig.turn_bone(_i_lantern, angle_difference(cur, lie) * k)
 		# 옆으로 누운 등불은 몸통 두께만큼 들어 올려 땅 위에 얹는다
 		var low := rig.lowest_y(PackedInt32Array([_i_lantern]))
 		if low > -1.0:
-			rig.off[_i_lantern] = rig.xf[_i_weapon].affine_inverse().basis_xform(Vector2(0, -(low + 1.0)))
-			rig.compute_from(_i_lantern)
+			rig.set_bone_offset(_i_lantern, rig.xf[_i_weapon].affine_inverse().basis_xform(Vector2(0, -(low + 1.0))))
 		_lan_th = -rig.world_rot(_i_lantern) * _sign
 		_lan_w *= 0.5
 	elif _lift_bone(_i_lantern, 2.0, PI) != 0.0:
@@ -1088,6 +1078,6 @@ func _update_light(delta: float, st: LanternKnight.State) -> void:
 ## 기울기는 숨쉬기·덧붙임 스프링을 뺀 채널 값에서 대기 자세를 뺀 것 (멈추면 0 으로 가라앉는다).
 func probe_pose() -> Array:
 	var idle := motion.pose("idle_p2" if boss and boss.phase == 2 else "idle")
-	var lean := ((motion.ch["lean"] as RigMotion.Chan).v + (motion.ch["torso"] as RigMotion.Chan).v) - (float(idle["lean"]) + float(idle["torso"]))
+	var lean := (motion.channel("lean") + motion.channel("torso")) - (float(idle["lean"]) + float(idle["torso"]))
 	var y := (rig.root_pos.y - motion.stand_root_y + rig.body_xf.origin.y) * _k
 	return [deg_to_rad(lean) * _sign, Vector2(scale.x, 1.0), y]

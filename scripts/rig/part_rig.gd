@@ -271,6 +271,92 @@ func world_rot(i: int) -> float:
 	return xf[i].get_rotation()
 
 
+# ---------- 덧고침 (공개 도우미) ----------
+# 그림 스크립트가 motion.update() 가 끝난 뒤 관절을 더 고칠 때 쓴다 (날갯짓 덧붙임·날개/대포 땅 막기·두 손 IK·자루 미끄럼 등).
+# 순서: turn_bone / set_bone_rot / set_bone_world_rot / set_bone_offset 로 고치면 그 뼈와 자식의 변환(xf)이 바로 다시 계산된다
+# → 다 고친 뒤 apply() 를 한 번 불러 그림에 옮긴다. (배열 rot/off/scl 을 직접 고치지 말고 이 함수들로 — 틀이 바뀌어도 안전하게.)
+# 여러 뼈를 한꺼번에 고칠 땐 recompute=false 로 고친 뒤 compute_from(맨 위 뼈) 또는 마지막 apply() 만 (apply 가 compute 한다).
+# 읽기만 하는 공개 값: xf(뼈 변환 — bone_xf), body_xf, root_pos, hulls, sole, bone_len, base_pos, rest, parent, names, data.
+
+## 뼈의 지역 회전 (라디안). motion.update() 가 적은 값.
+func bone_rot(i: int) -> float:
+	return rot[i]
+
+
+## 뼈를 지역 회전으로 angle 만큼 더 돌린다.
+func turn_bone(i: int, angle: float, recompute := true) -> void:
+	rot[i] += angle
+	if recompute:
+		compute_from(i)
+
+
+## 뼈의 지역 회전을 정한다.
+func set_bone_rot(i: int, local_angle: float, recompute := true) -> void:
+	rot[i] = local_angle
+	if recompute:
+		compute_from(i)
+
+
+## 뼈의 세계(뼈대 뿌리 틀) 회전을 정한다 (부모가 돌아간 만큼 빼서 지역 회전으로).
+func set_bone_world_rot(i: int, world_angle: float, recompute := true) -> void:
+	rot[i] = world_angle - (world_rot(parent[i]) if parent[i] >= 0 else 0.0)
+	if recompute:
+		compute_from(i)
+
+
+## 뼈 관절 자리에 더하는 자리 (부모 틀, 뼈대 단위 — 창 자루를 손 안에서 미끄러뜨리기 등)
+func bone_offset(i: int) -> Vector2:
+	return off[i]
+
+
+func set_bone_offset(i: int, offset: Vector2, recompute := true) -> void:
+	off[i] = offset
+	if recompute:
+		compute_from(i)
+
+
+## 뼈의 지역 배율 (부위 크기 맞춤·날개 접기 등). 자식에도 이어진다. 다음 compute()/apply() 에 반영된다.
+func set_bone_scale(i: int, s: Vector2) -> void:
+	scl[i] = s
+
+
+func bone_scale(i: int) -> Vector2:
+	return scl[i]
+
+
+## 부드러운 부위가 땅에 눌린 정도 (1 = 그대로, RigMotion 이 매 프레임 적는다). 그림 쪽이 그 부위를 따로 들어 올렸으면 1 로 되돌린다.
+func bone_squash(i: int) -> float:
+	return squash_y[i]
+
+
+func set_bone_squash(i: int, k: float) -> void:
+	squash_y[i] = k
+
+
+## 뼈의 변환 (뼈대 뿌리 틀, 뼈대 단위 — apply()/compute() 결과. body_xf 는 빠져 있다)
+func bone_xf(i: int) -> Transform2D:
+	return xf[i]
+
+
+## 같은 뼈대를 쓰는 다른 PartRig 의 지금 자세를 그대로 옮겨 받는다 (쓰러진 보스 → 남은 몸 등). 뼈 수가 다르면 false.
+func copy_pose_from(src: PartRig) -> bool:
+	if src == null or src.rot.size() != rot.size():
+		return false
+	rot = src.rot.duplicate()
+	off = src.off.duplicate()
+	scl = src.scl.duplicate()
+	squash_y = src.squash_y.duplicate()
+	root_pos = src.root_pos
+	body_xf = src.body_xf
+	apply()
+	return true
+
+
+## 부위 그림들이 놓인 노드 (그리기 순서대로 자식이 늘어선다, 뼈대 단위 좌표). 덧그림(낚싯줄 조각 등)을 부위 그림 사이에 끼울 때.
+func skeleton_node() -> Node2D:
+	return _skel
+
+
 ## 뼈대 단위 점(뿌리 틀) → 이 노드의 지역 좌표(게임 px). body_xf(쓰러짐 등)를 포함한다.
 func to_rig_local(p: Vector2) -> Vector2:
 	return (body_xf * p) * game_scale

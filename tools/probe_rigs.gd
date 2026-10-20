@@ -179,7 +179,7 @@ func _probe_rig(id: String) -> void:
 			body.append(i)
 	if body.is_empty():
 		# 사람 모양이 아닌 뼈대(새·기계): 무기 사슬과 늘어진 천을 뺀 모든 부위
-		for i in m._lock_bones:
+		for i in m.lock_bones():
 			if not (data["bones"][i] as Dictionary).has("chain"):
 				body.append(i)
 	var scen := [
@@ -328,7 +328,7 @@ func _probe_enemy_fall(path: String, from_front: bool) -> void:
 		e._physics_process(STEP)
 		vis._process(STEP)
 		if i == 36:
-			low_end = rig.lowest_y(vis.motion._lock_bones) * gs
+			low_end = rig.lowest_y(vis.motion.lock_bones()) * gs
 			torso_h = -_center_y(rig, "torso") * gs
 			head_h = -_center_y(rig, "head") * gs
 			weapon_hi = -_top_y(rig, "weapon") * gs

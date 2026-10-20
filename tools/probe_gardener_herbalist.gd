@@ -178,7 +178,7 @@ func _probe_scene(scene: String) -> void:
 				nan = true
 			# 발: 땅을 딛은 동안 (공중 아님, 내려앉은 뒤 0.15초는 다리가 따라 내려오는 중)
 			land_t = 0.0 if not on_floor else land_t + STEP
-			if on_floor and land_t > 0.15 and absf(e.velocity.y) < 60.0 and e.state in [EnemyBase.State.IDLE, EnemyBase.State.PATROL, EnemyBase.State.CHASE, EnemyBase.State.WINDUP, EnemyBase.State.STRIKE, EnemyBase.State.RECOVER] and not vis.motion._airborne:
+			if on_floor and land_t > 0.15 and absf(e.velocity.y) < 60.0 and e.state in [EnemyBase.State.IDLE, EnemyBase.State.PATROL, EnemyBase.State.CHASE, EnemyBase.State.WINDUP, EnemyBase.State.STRIKE, EnemyBase.State.RECOVER] and not vis.motion.is_airborne():
 				var ys := vis.motion.sole_ys()
 				var near := INF
 				var deep := -INF
@@ -188,10 +188,10 @@ func _probe_scene(scene: String) -> void:
 				if near * gs > feet_worst:
 					feet_worst = near * gs
 					feet_where = "%s %.2f초" % [e.state_name(), e.state_time]
-				var sink := maxf(deep, rig.lowest_y(vis.motion._lock_bones)) * gs
+				var sink := maxf(deep, rig.lowest_y(vis.motion.lock_bones())) * gs
 				if sink > sink_worst:
 					sink_worst = sink
-					sink_where = "%s %.2f초 %s" % [e.state_name(), e.state_time, _deepest_part(rig, vis.motion._lock_bones)]
+					sink_where = "%s %.2f초 %s" % [e.state_name(), e.state_time, _deepest_part(rig, vis.motion.lock_bones())]
 			if gun:
 				var pi_ := rig.bone_index("pods")
 				var rel := rig.world_rot(pi_) - rig.world_rot(rig.bone_index("torso"))
@@ -210,7 +210,7 @@ func _probe_scene(scene: String) -> void:
 					shot_t += STEP
 					# 반동: 위팔에 덧붙은 각도(채널 목표 밖의 몫 — 숨쉬기·충격·반동)가 위로(−) 튄 만큼
 					var arm := rig.bone_index("arm_f_up")
-					var extra := rad_to_deg(rig.rot[arm]) - (vis.motion.ch["arm_f_up"] as RigMotion.Chan).v
+					var extra := rad_to_deg(rig.bone_rot(arm)) - vis.motion.channel("arm_f_up")
 					recoil_seen = maxf(recoil_seen, -extra)
 					if shot_t > 0.12:
 						shot_t = -1.0

@@ -220,13 +220,13 @@ func _fallen(purify: bool) -> void:
 	var frames := 220 if not purify else 130
 	for f in frames:
 		_step(b)
-		var sink := rig.lowest_y(m._lock_bones) * k
+		var sink := rig.lowest_y(m.lock_bones()) * k
 		worst_sink = maxf(worst_sink, sink)
 		var y := float(vis.probe_pose()[2])
 		worst_hip = maxf(worst_hip, absf(y - prev_y))
 		prev_y = y
 	if not purify:
-		var low := rig.lowest_y(m._lock_bones) * k
+		var low := rig.lowest_y(m.lock_bones()) * k
 		var torso := -_center_y(rig, "torso") * k
 		var head := -_center_y(rig, "head") * k
 		var spear_low := rig.lowest_y(PackedInt32Array([rig.bone_index("weapon")])) * k
@@ -245,7 +245,7 @@ func _fallen(purify: bool) -> void:
 		for f in 100:
 			_step(b)
 		var head2 := -_center_y(rig, "head") * k
-		var low2 := rig.lowest_y(m._lock_bones) * k
+		var low2 := rig.lowest_y(m.lock_bones()) * k
 		print("[probe]   정화 뒤: 머리 가운데 %+.0fpx (키 %.0f), 가장 낮은 몸 점 %+.1f, 투구 빛 %.2f" % [head2, stand_h, low2, vis._glow])
 		_check(head2 >= stand_h * 0.45, "정화: 무릎 꿇은 채 몸을 일으킨다 — 머리 가운데 키의 %.0f%% (45 이상)" % (head2 / stand_h * 100.0))
 		_check(absf(low2) <= 6.0, "정화: 몸이 땅 위에 (가장 낮은 점 %+.1f)" % low2)

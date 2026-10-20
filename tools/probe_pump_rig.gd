@@ -100,7 +100,7 @@ func _measure() -> Array:
 	for x in rig.xf:
 		if is_nan(x.origin.x) or is_nan(x.origin.y):
 			nan = true
-	var sink := rig.lowest_y(m._lock_bones) * k + oy
+	var sink := rig.lowest_y(m.lock_bones()) * k + oy
 	var arm := rig.lowest_y(PackedInt32Array([rig.bone_index("arm_lo"), rig.bone_index("arm_up")])) * k + oy
 	return [feet, sink, arm, nan]
 

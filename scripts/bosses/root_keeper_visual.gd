@@ -521,8 +521,7 @@ func _staff_plant(delta: float, target: float) -> void:
 	if absf(k) < 0.05:
 		return
 	var par := rig.parent[_staff_i]
-	rig.off[_staff_i] += (rig.body_xf * rig.xf[par]).basis_xform_inv(-axis * k)
-	rig.compute_from(_staff_i)
+	rig.set_bone_offset(_staff_i, rig.bone_offset(_staff_i) + (rig.body_xf * rig.xf[par]).basis_xform_inv(-axis * k))
 	rig.apply()
 
 
@@ -536,13 +535,12 @@ var _staff_fix := 0.0
 func _staff_ground(delta: float) -> void:
 	if _staff_i < 0:
 		return
-	var base := rig.rot[_staff_i]
+	var base := rig.bone_rot(_staff_i)
 	var want := 0.0
 	var need := _staff_depth() > -STAFF_MARGIN
 	if need and absf(_staff_fix) > 0.0005:
 		# 지난 프레임의 각도로 아직 땅 위면 그대로 (매 프레임 다시 찾지 않는다 — 지팡이를 짚고 선 대기 자세에서 늘 이 경우)
-		rig.rot[_staff_i] = base + _staff_fix
-		rig.compute_from(_staff_i)
+		rig.set_bone_rot(_staff_i, base + _staff_fix)
 		if _staff_depth() <= -STAFF_MARGIN:
 			want = _staff_fix
 			need = false
@@ -554,8 +552,7 @@ func _staff_ground(delta: float) -> void:
 		for k in range(1, 28):
 			for sgn in [-1.0, 1.0]:
 				var fix: float = sgn * k * STAFF_STEP
-				rig.rot[_staff_i] = base + fix
-				rig.compute_from(_staff_i)
+				rig.set_bone_rot(_staff_i, base + fix)
 				var d := _staff_depth()
 				if d <= -STAFF_MARGIN:
 					var cost := absf(fix - _staff_fix)
@@ -571,17 +568,14 @@ func _staff_ground(delta: float) -> void:
 	_staff_fix = Motion.damp(_staff_fix, want, 10.0, delta) if delta > 0.0 else want
 	if absf(_staff_fix) < 0.0005 and want == 0.0:
 		_staff_fix = 0.0
-		rig.rot[_staff_i] = base
-		rig.compute_from(_staff_i)
+		rig.set_bone_rot(_staff_i, base)
 		return
-	rig.rot[_staff_i] = base + _staff_fix
-	rig.compute_from(_staff_i)
+	rig.set_bone_rot(_staff_i, base + _staff_fix)
 	var rest_d := _staff_depth() + STAFF_MARGIN
 	if rest_d > 0.0:
 		# 모자란 만큼 지팡이를 위로 (세상 위쪽을 부모 틀로 바꿔 자리에 더한다 — 다음 프레임에 _apply_slide 가 다시 정한다)
 		var up := (rig.body_xf * rig.xf[rig.parent[_staff_i]]).basis_xform_inv(Vector2(0.0, -rest_d))
-		rig.off[_staff_i] += up
-		rig.compute_from(_staff_i)
+		rig.set_bone_offset(_staff_i, rig.bone_offset(_staff_i) + up)
 	rig.apply()
 
 
@@ -598,8 +592,8 @@ func _staff_depth() -> float:
 func _apply_slide() -> void:
 	if _staff_i < 0 or not motion.ch.has("slide"):
 		return
-	var s := clampf((motion.ch["slide"] as RigMotion.Chan).v, -0.2, 1.2)
-	rig.off[_staff_i] = -_staff_axis * s * SLIDE_PX
+	var s := clampf(motion.channel("slide"), -0.2, 1.2)
+	rig.set_bone_offset(_staff_i, -_staff_axis * s * SLIDE_PX, false)
 
 
 func _on_entered(st: int) -> void:

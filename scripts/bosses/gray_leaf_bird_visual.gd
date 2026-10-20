@@ -40,8 +40,6 @@ var _flap_phase := 0.0
 var _flap_rate := 7.0
 var _flap_amp := 0.0
 var _floor_off := 0.0    # 바닥선의 이 노드 기준 높이 (게임 px) = Rig 의 자리 (Rig 의 y 0 은 늘 바닥선)
-var _base_root_y := 0.0  # 서 있을 때의 뿌리 높이 (RigMotion.stand_root_y 처음 값)
-var _air_h := 0.0        # 바닥 위로 떠 있는 높이 (뼈대 단위)
 var _wing_chains: Array = []   # 땅 막기할 날개 사슬 [[어깨, 손목], [접은 날개] …] (뼈 번호)
 var _wing_dir: Array = []      # 사슬마다 들어 올리는 회전 방향 (+1 / −1)
 var _wing_lift := {}           # 뼈 번호 → 지금 들어 올린 각도 (라디안)
@@ -207,7 +205,7 @@ func _ready() -> void:
 	for bn in BONE_SCALE:
 		if _idx.has(bn):
 			var k: float = BONE_SCALE[bn]
-			rig.scl[_idx[bn]] = Vector2(k, k)
+			rig.set_bone_scale(_idx[bn], Vector2(k, k))
 	for side in ["f", "b"]:
 		var spread: Array = []
 		for part in ["wing_%s_in" % side, "wing_%s_out" % side]:
@@ -216,7 +214,6 @@ func _ready() -> void:
 		_fold_sides.append({"key": "fold_" + side, "spread": spread, "fold": _spr.get("wing_%s_fold" % side),
 			"bone": _idx.get("wing_%s_in" % side, -1), "k": float(BONE_SCALE.get("wing_%s_in" % side, 1.0))})
 	rig.setup_ghosts(rig.data.get("ghost", ["wing_f_in", "wing_f_out", "head"]), 6)
-	_base_root_y = motion.stand_root_y
 	# (몸·발 채널의 단위 L 은 원형 bird.json 의 _motion.leg_unit_reach 로 '두 마디 길이 × 0.95' — 새 발은 발톱까지 높아
 	#  다리 + 발 높이로 재면 보폭이 다리가 닿는 거리보다 길어 뒷발이 닿지 못하는 순간 엉덩이가 툭 튀었다)
 	for entry in [[["wing_f_in", "wing_f_out"], -1.0], [["wing_b_in", "wing_b_out"], 1.0], [["wing_f_fold"], 1.0], [["wing_b_fold"], 1.0]]:
@@ -429,11 +426,7 @@ func _process(delta: float) -> void:
 	_clean(p)
 	motion.set_target(p, drive, feet)
 	# 떠 있는 높이: 뿌리를 그만큼 올리고, 매달린 발도 같이 올린다 (발이 높이 변화에 끌려 늦지 않게 — 늦음은 자세 바뀜에만)
-	if feet == RigMotion.Feet.AIR or not grounded:
-		for leg in motion.legs:
-			leg.h += h_rig - _air_h
-	_air_h = h_rig
-	motion.stand_root_y = _base_root_y - h_rig
+	motion.set_root_lift(h_rig, feet == RigMotion.Feet.AIR or not grounded)
 
 	# ---- 움직이기 ----
 	var vx := _boss.velocity.x
@@ -766,7 +759,7 @@ func _apply_folds() -> void:
 		var wi: int = side["bone"]
 		if wi >= 0:
 			var kk: float = float(side["k"]) * lerpf(1.0, 0.72, f)
-			rig.scl[wi] = Vector2(kk, kk)
+			rig.set_bone_scale(wi, Vector2(kk, kk))
 
 
 ## 날개 땅 막기: 펼친 날개·접은 날개가 바닥선 아래로 들어가면 어깨(그다음 손목)를 '들어 올리는 쪽'으로 돌려 날개 끝을 바닥 위에 눕힌다
@@ -821,19 +814,17 @@ func _clamp_wings(delta: float) -> void:
 				if best == INF or total + best > 2.2:
 					break
 				total += best + 0.01
-				rig.rot[jb] += dir * (best + 0.01)
-				rig.compute_from(jb)
+				rig.turn_bone(jb, dir * (best + 0.01))
 				changed = true
 			# 풀릴 때는 천천히: 이번에 필요한 것보다 더 들려 있던 몫을 조금씩 내린다
 			var lift := maxf(total, held - WING_RELEASE * delta) if delta > 0.0 else total
 			if lift > total + 0.0001:
-				rig.rot[jb] += dir * (lift - total)
-				rig.compute_from(jb)
+				rig.turn_bone(jb, dir * (lift - total))
 				changed = true
 			_wing_lift[jb] = lift
 		for jb in chain:
-			if rig.squash_y[jb] < 1.0:
-				rig.squash_y[jb] = 1.0
+			if rig.bone_squash(jb) < 1.0:
+				rig.set_bone_squash(jb, 1.0)
 				changed = true
 	if changed:
 		rig.apply()

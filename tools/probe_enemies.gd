@@ -481,7 +481,7 @@ func _probe_fall_feet_rig(e: EnemyBase, vis: Node2D) -> void:
 		c /= maxf(rig.hulls[hi].size(), 1.0)
 		head_c = e.global_position.y + rig.position.y + ((rig.body_xf * rig.xf[hi] * c) * rig.game_scale * absf(rig.scale.y)).y - ground
 		if i >= 60:
-			low_min = minf(low_min, -rig.lowest_y(vis.motion._lock_bones) * rig.game_scale * rig.scale.y)
+			low_min = minf(low_min, -rig.lowest_y(vis.motion.lock_bones()) * rig.game_scale * rig.scale.y)
 		if i % 14 == 13:
 			rows.append("%.2f초 몸통 %.2f 머리(가운데) 땅에서 %+.0f" % [(i + 1) * STEP, _pose(vis)["rot"], head_c])
 	var worst := 0.0
