@@ -543,6 +543,18 @@ func _probe_art() -> void:
 		var img := sp.texture.get_image()
 		_check(absf(turned - 0.10) < 0.03 and mat != null and is_equal_approx(float(mat.get_shader_parameter("blur")), 2.5) and img.has_mipmaps() and bw.modulate.is_equal_approx(Color(0.55, 0.62, 0.70, 0.55)),
 			"흐린 물레방아: 1초에 %.3f rad 돈다, 흐림 %.1f, 밉맵 %s, 색 %s" % [turned, float(mat.get_shader_parameter("blur")) if mat else -1.0, img.has_mipmaps(), bw.modulate])
+		# v1.1.0 검수: 잿빛 방에서는 무채색(ash 1), 정화되면 원래 색(ash 0) — Purity.level 을 따라간다
+		if mat:
+			var lv0 := Purity.level
+			var ash0 := float(mat.get_shader_parameter("ash"))
+			Purity.level = 1.0
+			await _wait(0.1)
+			var ash1 := float(mat.get_shader_parameter("ash"))
+			var br1 := float(mat.get_shader_parameter("bright"))
+			Purity.level = lv0
+			await _wait(0.1)
+			_check(absf(ash0 - (1.0 - lv0)) < 0.01 and ash1 < 0.01 and br1 > 1.5 and absf(float(mat.get_shader_parameter("ash")) - (1.0 - lv0)) < 0.01,
+				"흐린 물레방아가 정화 정도를 따른다: 지금(정화 %.2f) 잿빛 %.2f, 정화 1 → 잿빛 %.2f·밝기 %.2f" % [lv0, ash0, ash1, br1])
 	else:
 		_check(false, "배경 물레방아(BlurWheel)가 없다")
 	Progress.reset()

@@ -105,6 +105,10 @@ func _frame_intro() -> void:
 	cam.frame_with(boss, clampf(left - 0.6, 0.3, 2.4))
 
 
+## 보스 공격 이름 글자가 보이는 시간 (초, 마지막 0.3초 옅어짐)
+const TELEGRAPH_LABEL_TIME := 1.3
+
+
 func _on_boss_telegraph(kind: String) -> void:
 	var hud := get_node_or_null("CombatHUD")
 	if hud == null:
@@ -113,7 +117,8 @@ func _on_boss_telegraph(kind: String) -> void:
 	if is_instance_valid(boss) and boss.has_method("telegraph_label"):
 		var label: String = boss.telegraph_label(kind)
 		if label != "":
-			hud.flash(label)
+			# 예고(0.5~1.2초) 동안 다 보이게 조금 길게 (0.8초면 긴 예고의 끝 무렵엔 이미 옅어져 있었다 — v1.1.0 검수)
+			hud.flash(label, TELEGRAPH_LABEL_TIME)
 		if kind != "rise":
 			return
 	match kind:

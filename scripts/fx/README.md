@@ -145,8 +145,8 @@ Fx 밖의 노드(레이저, 초승달 검기 등)도 `Fx.make_material("light", 
 - 새 `plunge_dive`(내려꽂는 동안 발밑 판정을 덮는 아래로 향한 초승달), `plunge_impact` 는 착지 판정(±170) 가운데에서, 고리·먼지는 발밑. 수액의 맥동이면 둘 다 ×1.15.
   `seed_slash` scale_xy (1.43, 1.45).
 - **정화:** `purify` 기둥은 seed 팔레트(keep 0.6)·×1.15·색 곱 (0.72, 0.84, 0.70) + 잎 6장 `purify_leaf`·`purify_leaf_b`, `purify_flash`·`mote` 는 금빛 그대로.
-- **보스 근접 공격 = 판정 = 예고:** `scripts/fx/range_telegraph.gd`(RangeTelegraph — 채움은 보스 뒤, 테두리는 z 1 로 보스 앞; 막을 수 있음 주황 / 가드 불가 진한 붉은색,
-  움직이는 공격은 쓸고 갈 구간), `SkillFx.fit_fx(name, world_rect, facing, rot_deg, opts)`(follow, ground_y — 바닥 고리·먼지·김은 바닥 높이에서).
+- **보스 근접 공격 = 판정 = 예고:** `scripts/fx/range_telegraph.gd`(RangeTelegraph — 채움은 보스 뒤, 테두리는 z 1 로 보스 앞; 막을 수 있음 주황 / 가드 불가 진한 붉은색
+  + 붉은 테두리 바로 안쪽에 밝은 선 2px(붉게 빛나는 보스 몸 위에서도 읽히게 — 통합 검수), 움직이는 공격은 쓸고 갈 구간), `SkillFx.fit_fx(name, world_rect, facing, rot_deg, opts)`(follow, ground_y — 바닥 고리·먼지·김은 바닥 높이에서).
   새 항목 `peck_streak` `knight_spin` `charge_lance` `pump_vent` `vent_warn` `vent_leak`. `peck_burst`·`pump_bite` 는 무작위 회전 없음.
   `root_stomp`·`queen_land`·`pump_slam` 의 ground_ring 은 판정 폭에 맞춤.
 - **보스 투사체: 보이는 그림 = 판정** (`scripts/fx/fx_art.gd` 머리말). 그림 크기·발광은 2026-10-19 '탄을 크게' 그대로이고, 판정 원을 보이는 그림(알파 ≥ 0.25,

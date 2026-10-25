@@ -21,6 +21,10 @@ const COLOR_RED := Color(1.0, 0.15, 0.10, 0.38)
 const FADE_OUT := 0.1
 ## 테두리 굵기 (px)
 const LINE_W := 3.0
+## 가드 불가 예고의 안쪽 밝은 선 (붉게 빛나는 보스 몸 위에서도 붉은 테두리가 읽히게 — v1.1.0 검수: 뿌리지기 내려찍기는
+## 사각형이 몸 폭과 거의 같아 채움이 몸에 가려지고, 붉은 몸 위의 붉은 3px 테두리만 남아 잘 안 보였다)
+const RED_INNER_W := 2.0
+const RED_INNER_COLOR := Color(1.0, 0.86, 0.80)
 ## 처음부터 보이는 옅은 바탕 (채움 세기의 비율) — 사각형 전체가 어디까지인지 예고 첫 프레임부터 보이게
 const BASE_FILL := 0.3
 ## 가드 불가 예고의 맥동 (초당 횟수, 빛에 민감한 사람을 위해 3 이하)
@@ -194,6 +198,11 @@ func _draw_front() -> void:
 	var c := _rgb()
 	var ln := Rect2(rect.position + Vector2(LINE_W, LINE_W) * 0.5, rect.size - Vector2(LINE_W, LINE_W))
 	_front.draw_rect(ln, Color(c.lightened(0.15), (0.45 + 0.5 * e) * a), false, LINE_W)
+	if unguardable and rect.size.x > LINE_W * 4.0 and rect.size.y > LINE_W * 4.0:
+		# 붉은 테두리 바로 안쪽에 밝은 선 한 줄 (바깥 경계 = 판정 경계는 그대로 붉은 테두리)
+		var inset := LINE_W + RED_INNER_W * 0.5
+		var inner := Rect2(rect.position + Vector2(inset, inset), rect.size - Vector2(inset, inset) * 2.0)
+		_front.draw_rect(inner, Color(RED_INNER_COLOR, (0.35 + 0.5 * e) * a), false, RED_INNER_W)
 	if p > 0.7:
 		_front.draw_line(Vector2(rect.position.x, rect.end.y - 1.5), Vector2(rect.end.x, rect.end.y - 1.5), Color(1, 1, 1, 0.5 * (p - 0.7) / 0.3 * a), 3.0)
 

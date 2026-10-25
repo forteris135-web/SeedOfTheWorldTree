@@ -306,9 +306,10 @@ func show_message(text: String, seconds := 2.0) -> void:
 	_pending_flash = ""
 
 
-func flash(text: String) -> void:
+## seconds: 보이는 시간 (마지막 0.3초 동안 옅어진다). 보스 공격 이름은 BossRoom 이 길게(예고 동안 보이게) 준다.
+func flash(text: String, seconds := 0.8) -> void:
 	_flash_text = text
-	_flash_timer = 0.8
+	_flash_timer = seconds
 
 
 func _s(p: Vector2) -> Vector2:
@@ -965,6 +966,8 @@ func _on_draw() -> void:
 	var size := _canvas.size
 	if _message_timer > 0.0:
 		var a := clampf(_message_timer / 0.5, 0.0, 1.0)
+		# 어두운 테두리: 밝은 수관 하늘·정화 고리의 하얀 번쩍임 위에서도 읽히게 (v1.1.0 검수 — 보스 보상 안내 '새순 +1' 이 묻혔다)
+		_canvas.draw_string_outline(font, Vector2(size.x / 2.0 - 500, size.y * 0.3), _message, HORIZONTAL_ALIGNMENT_CENTER, 1000, 40, 7, Color(0.05, 0.04, 0.03, 0.85 * a))
 		_canvas.draw_string(font, Vector2(size.x / 2.0 - 500, size.y * 0.3), _message, HORIZONTAL_ALIGNMENT_CENTER, 1000, 40, Color(1, 1, 1, a))
 	if _flash_timer > 0.0:
 		var a2 := clampf(_flash_timer / 0.3, 0.0, 1.0)
