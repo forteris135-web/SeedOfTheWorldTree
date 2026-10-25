@@ -5,7 +5,7 @@ extends CanvasLayer
 ##
 ## 성장이 HUD 에 반영되는 규칙
 ## - 이슬: max_dews 만큼 겹치지 않게 늘어놓는다 (한 줄 7개, 넘으면 둘째 줄). 새로 늘어난 이슬은 0.6초 반짝이며 커졌다 작아진다.
-##   최대 8개 (Progress.MAX_DEWS, 2026-10-20 기획자 결정) → 가득하면 첫 줄 7 + 둘째 줄 1. 넘친 이슬은 회복량 성장(물방울 "+N")에 더해 보인다.
+##   최대 5개 (Progress.MAX_DEWS, v1.1.0 기획자 요청 16 — 기본 3 + 성장 메뉴 2) → 한 줄. 넘친 이슬(옛 경로 안전망)은 회복량 성장(물방울 "+N")에 더해 보인다.
 ## - 체력 막대: max_hp 에 비례해 길어진다 (100 기준 1.0, 최대 1.6배). 틀 그림은 세 조각(왼쪽 / 늘림 조각 / 오른쪽 끝)으로 그려
 ##   끝 장식이 깨지지 않는다. 늘어나는 순간 0.5초에 걸쳐 자라며 한 번 번쩍.
 ## - 공격 배수·회복량 성장: 이슬 오른쪽에 작은 검 / 물방울 아이콘 + "+10%" / "+15" (성장이 없으면 아무것도 없음).
@@ -253,7 +253,7 @@ func _on_upgraded(kind: String, amount: float) -> void:
 	var text := ""
 	match kind:
 		"dews":
-			# 이슬이 가득(8개)해 회복량으로 바뀐 몫은 그렇게 보인다 (Progress.dew_overflow_of — add_upgrade 뒤라 이미 더해졌다)
+			# 이슬이 가득(최대 5개)해 회복량으로 바뀐 몫은 그렇게 보인다 (Progress.dew_overflow_of — add_upgrade 뒤라 이미 더해졌다)
 			var over := Progress.dew_overflow_of(amount)
 			var added := roundi(amount) - over
 			if over <= 0:

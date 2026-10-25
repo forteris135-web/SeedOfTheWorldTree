@@ -138,7 +138,7 @@ func _process(delta: float) -> void:
 		var resting := _player_near.state == Player.State.REST
 		_prompt.visible = true
 		if resting:
-			_prompt.text = "%s  이동 · 성장" % InputDevice.prompt("interact")
+			_prompt.text = "%s  이동 · 성장 · 기술" % InputDevice.prompt("interact")
 		else:
 			_prompt.text = "%s  %s" % [InputDevice.prompt("interact"), "쉬기" if is_open else "손을 대기"]
 	else:

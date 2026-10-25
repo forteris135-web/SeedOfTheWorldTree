@@ -232,7 +232,11 @@ func _value_text(key: String) -> String:
 		"touch_scale":
 			return "◀ " + ["작게", "보통", "크게"][int(Settings.get_value(key))] + " ▶"
 		"save":
-			return SlotPicker.text("pause_save_value", {"n": SaveGame.slot, "where": str(Progress.last_grass.get("name", "지금 방의 처음"))})
+			# 이어질 곳 이름 = 그 달빛풀이 있는 방의 지도 이름 (옛 저장의 옛 달빛풀 이름도 바로 맞게)
+			var where := "지금 방의 처음"
+			if not Progress.last_grass.is_empty():
+				where = RoomIndex.grass_room_name(str(Progress.last_grass.get("id", "")), str(Progress.last_grass.get("name", where)))
+			return SlotPicker.text("pause_save_value", {"n": SaveGame.slot, "where": where})
 		"load":
 			var at := SaveGame.saved_at_text()
 			return SlotPicker.text("pause_load_value", {"n": SaveGame.slot, "at": at}) if at != "" else SlotPicker.text("pause_load_none", {"n": SaveGame.slot})

@@ -21,7 +21,8 @@ const END_TAIL := 7.0            # 크레딧이 끝난 뒤 '끝' 화면에서 �
 const HUM_BEAT := 60.0 / 124.5
 const HUM_DOWNBEAT := 0.122
 ## 마지막 달빛풀이 없을 때 '이어서 탐험하기'가 가는 곳
-const EXPLORE_FALLBACK := {"id": "moon_garden", "scene": "res://scenes/rooms/moon_garden.tscn", "name": "달빛 정원"}
+## (이름은 지도·이동 목록과 같은 방 이름 — v1.1.0 이름 통일; explore_target 이 RoomIndex 로 다시 맞춘다)
+const EXPLORE_FALLBACK := {"id": "moon_garden", "scene": "res://scenes/rooms/moon_garden.tscn", "name": "심연 · 달빛 정원"}
 
 ## 시험용 빠르기 (1 = 보통). probe_endings 가 크게 두어 엔딩을 몇 초 만에 돌린다.
 var time_scale := 1.0
@@ -1261,14 +1262,16 @@ func choose(kind: String) -> void:
 		Game.go_to(Game.TITLE_SCENE, 2.2 / time_scale, 2.0 / time_scale)
 
 
-## '이어서 탐험하기'가 가는 곳: 마지막으로 쉰 달빛풀 (없으면 달빛 정원). {"id", "scene", "name"}
+## '이어서 탐험하기'가 가는 곳: 마지막으로 쉰 달빛풀 (없으면 심연 · 달빛 정원). {"id", "scene", "name"}
 static func explore_target() -> Dictionary:
 	var g: Dictionary = Progress.last_grass
 	var scene := str(g.get("scene", ""))
 	var gid := str(g.get("id", ""))
 	if scene == "" or gid == "" or not ResourceLoader.exists(scene):
-		return EXPLORE_FALLBACK.duplicate()
-	return {"id": gid, "scene": scene, "name": str(g.get("name", gid))}
+		var fb: Dictionary = EXPLORE_FALLBACK.duplicate()
+		fb["name"] = RoomIndex.grass_room_name(str(fb["id"]), str(fb["name"]))
+		return fb
+	return {"id": gid, "scene": scene, "name": RoomIndex.grass_room_name(gid, str(g.get("name", gid)))}
 
 
 # ---------- 작은 도우미 ----------

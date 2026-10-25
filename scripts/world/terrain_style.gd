@@ -34,7 +34,7 @@ static var trace_points: Array = []
 static var trace_node: Node = null
 
 const DEFAULT_REGION := "canopy"
-## 겹 종류: 윗면 빛(테두리·빛 띠·one_way 점선) / 장식(이끼·잎·매달린 것)
+## 겹 종류: 윗면 빛(테두리·빛 띠 — one_way 점선은 v1.1.0 에 없앰) / 장식(이끼·잎·매달린 것)
 const LAYER_EDGE := 0
 const LAYER_DECOR := 1
 ## 어두운 방에서 실제로 빛을 내는 버섯 무리 수 (방 하나에 이만큼까지)

@@ -532,6 +532,16 @@ func _probe_migration() -> void:
 	_check(raw_ok and Progress.tokens == 0 and Progress.dust == 0, "F) migrate_data: 사전만 판 2 (새순 %s, 빛 가루 %s, 이슬 성장 %s, 맥동), Progress 는 그대로" % [raw.get("tokens"), raw.get("dust"), raw["upgrades"].get("dews")])
 	SaveMigrate.migrate_data(raw)
 	_check(int(raw["tokens"]) == 19 and int(raw["dust"]) == 380, "F) 두 번 불러도 더 주지 않는다")
+	# G) (통합) 옛 조건(네 능력)으로 선 five_souls 는 새 진엔딩 조건이 아니면 내린다 / 조건을 채운 옛 파일은 그대로
+	_write_save(_v1_save({"flags": {"five_souls": true, "boss_root_defeated": true, "read_scripture_1": true}}))
+	SaveGame.load_game()
+	var five_dropped := not Progress.has("five_souls")
+	var full_flags := {"five_souls": true, "boss_root_defeated": true}
+	for n in 4:
+		full_flags["read_scripture_%d" % (n + 1)] = true
+	_write_save(_v1_save({"flags": full_flags}))
+	SaveGame.load_game()
+	_check(five_dropped and Progress.has("five_souls") and EndingChoice.third_unlocked(), "G) 옛 five_souls: 경전 1/4 → 내림 %s, 뿌리지기 + 경전 4/4 → 그대로 %s" % [five_dropped, Progress.has("five_souls")])
 	Progress.reset()
 
 

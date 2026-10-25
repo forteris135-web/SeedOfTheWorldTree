@@ -11,6 +11,7 @@ extends RefCounted
 ##   2) 성장 메뉴 이슬 단계가 3 이면 2 로 낮추고 3단계 값(빛 가루 280)을 돌려준다. 이슬 성장 = 성장 메뉴 단계(최대 2)
 ##   3) 이미 정화한 보스의 첫 정화 새순 (Progress.BOSS_TOKENS, 깃발 tokens_<보스 깃발> 로 한 번만)
 ##   4) 수액의 여왕을 정화했으면 영구 패시브 '수액의 맥동'
+##   5) 옛 조건(네 능력)으로 선 five_souls 깃발은 새 진엔딩 조건이 아니면 내린다 (통합 때 추가)
 ## v2 이상 파일은 아무것도 하지 않는다. 이슬 상한은 Progress.dew_max() 가 늘 5 로 자른다.
 ## 진행을 불러오지 않고 저장 파일만 읽는 곳(보스 러시의 '저장된 성장', 저장 칸 요약 등)은 migrate_data(읽은 사전)로 같은 규칙을 쓸 수 있다.
 
@@ -78,7 +79,21 @@ static func _v1_to_v2(flags: Dictionary, abilities: Dictionary, upgrades: Dictio
 	# 4) 수액의 여왕 → 수액의 맥동
 	if flags.get("boss_queen_defeated", false):
 		abilities["sap_pulse"] = true
+	# 5) 옛 '다섯 영혼'(네 능력) 조건으로 선 five_souls 는 새 진엔딩 조건(뿌리지기 정화 + 경전 조각 네 장)이 아니면 내린다
+	#    (티아의 진엔딩 대사가 잠긴 장치와 어긋나지 않게; 조건이 차면 EndingChoice 가 다시 세운다)
+	if flags.get("five_souls", false) and not _third_unlocked_in(flags):
+		flags.erase("five_souls")
 	return {"tokens": tokens, "dust": dust}
+
+
+## EndingChoice.third_unlocked() 와 같은 조건을 깃발 사전으로 (뿌리지기 정화 + read_scripture_1~4)
+static func _third_unlocked_in(flags: Dictionary) -> bool:
+	if not flags.get("boss_root_defeated", false):
+		return false
+	for id in Progress.SCRIPTURES:
+		if not flags.get("read_" + str(id), false):
+			return false
+	return true
 
 
 ## ids 가운데 사전에 참으로 들어 있는 수

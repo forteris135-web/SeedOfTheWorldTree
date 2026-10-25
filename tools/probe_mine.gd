@@ -14,7 +14,7 @@ extends Node
 ##     다 모으면 열리며 five_souls 깃발 → 엔딩 씬 "제3의 길" 로드 → interact 로 ending "third"
 ## 10) 회상에서 돌아온 무쇠 펌프 방: 영혼이 깃들어 벽 부수기(wall_break)를 얻고, 멈춘 펌프 위의 싹(PumpRemains)이 보인다
 ## 11) 엔딩 뒤 이어서 탐험: 엔딩 씬이 저장 → 타이틀이 저장 파일로 클리어(제3의 길)를 알아봄 → 이어하기가 마지막 달빛풀로
-##     (기기의 진짜 저장 파일 user://save.json 은 시험 전에 떠 두었다가 끝나고 되돌린다)
+##     (지금 칸 저장 SaveGame.PATH 와 해금 기록 MetaSave.PATH 는 시험 전에 떠 두었다가 끝나고 되돌린다 — _ready)
 ## 12) 수액 방울 실제 비행: 무쇠 펌프·작은 펌프가 쏜 방울을 여러 거리에서 저스트 가드 → 되받은 방울이 쏜 쪽 몸통에 맞는다
 ##     (바닥에 떨어지지 않음), 작은 펌프는 사거리 끝에서도 방울이 소녀에게 닿는다
 ## 13) 피스톤 판정이 보이는 망치 자리(앞 150~370)에만: 300 에 서면 피스톤 28, 450 이면 피스톤 없음(충격파만)
@@ -35,7 +35,20 @@ var _bad_links: Array = []
 func _ready() -> void:
 	_linked = "--linked" in OS.get_cmdline_user_args()
 	print("[probe] 잠긴 채굴장 묶음 시험 시작%s" % (" (--linked 엄격 모드)" if _linked else ""))
+	# 엔딩 씬(제3의 길·이어서 탐험)이 지금 칸 저장과 칸과 상관없는 해금 기록(user://meta.json)을 적는다 →
+	# 시험 전 그대로 떠 두었다가 끝나고 되돌린다 (뒤 시험의 '클리어 전 타이틀' 확인이 흔들리지 않게)
+	var keep := {}
+	for path in [SaveGame.PATH, MetaSave.PATH]:
+		keep[path] = FileAccess.get_file_as_bytes(path) if FileAccess.file_exists(path) else null
 	await _run()
+	for path in keep:
+		if keep[path] == null:
+			if FileAccess.file_exists(path):
+				DirAccess.remove_absolute(path)
+		else:
+			var f := FileAccess.open(path, FileAccess.WRITE)
+			f.store_buffer(keep[path])
+			f.close()
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
 
@@ -308,7 +321,15 @@ func _probe_data() -> void:
 	add_child(npc)
 	await _frames(1)
 	var seq: Array = []
+	# v1.1.0: 옛 조건(네 능력)으로 선 five_souls 만으로는 진엔딩 대사가 나오지 않는다 (옛 저장 — 장치는 경전이 모자라 잠김)
 	Progress.set_flag("five_souls")
+	Progress.set_flag("has_tia_lantern")
+	var old_only := str(npc.pick_talk().get("when", ""))
+	_check(not old_only.begins_with("five_souls"), "티아: five_souls 깃발만 있고 진엔딩 조건(뿌리지기 정화 + 경전 네 장)이 아니면 진엔딩 대사 없음 (%s)" % old_only)
+	Progress.set_flag("has_tia_lantern", false)
+	Progress.set_flag("boss_root_defeated")
+	for n in 4:
+		Progress.set_flag("read_scripture_%d" % (n + 1))
 	seq.append(str(npc.pick_talk().get("when", "")))         # 등불을 아직 안 받음 → 등불 건네기
 	Progress.set_flag("has_tia_lantern")
 	seq.append(str(npc.pick_talk().get("when", "")))         # 오웬을 아직 못 구함 → five_souls (한 번)

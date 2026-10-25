@@ -201,6 +201,8 @@ static func growth_from_save() -> Dictionary:
 	var slot := SaveGame.latest_slot(RUSH_CLEARED_SLOT_ONLY)
 	if slot > 0:
 		var d := SaveGame.read_slot(slot)
+		# 옛 판(v1.0) 저장이면 불러올 때와 같은 규칙으로 판 2 로 읽는다 (이슬 보상 → 새순·이슬 성장 최대 2·여왕 → 맥동; Progress 는 그대로)
+		SaveMigrate.migrate_data(d)
 		# 능력이 하나도 없는 칸(막 새로 시작한 칸)은 쓰지 않고 다 자란 몸으로
 		if d.get("abilities") is Dictionary and not (d["abilities"] as Dictionary).is_empty() and d.get("upgrades") is Dictionary:
 			var diff := str(d.get("difficulty", "normal"))

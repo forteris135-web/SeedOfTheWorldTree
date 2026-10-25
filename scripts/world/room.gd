@@ -883,6 +883,7 @@ func _savetest() -> void:
 	_pause.close()
 	SaveGame.new_game()
 	print("[저장시험] 새로 시작 뒤 저장 파일 있음: %s" % SaveGame.has_save())
+	DirAccess.remove_absolute(SaveGame.PATH)   # 시험이 남긴 새 칸 파일을 치운다 (v1.1.0: new_game 이 곧바로 저장한다 — 뒤 시험이 '저장 없음'에서 시작하게)
 	tree.quit()
 
 
@@ -1133,6 +1134,7 @@ func _secrettest() -> void:
 		var sec: SecretWall = wall if wall else ceiling
 		print("[비밀시험·재입장] 비밀 %s: 부서짐 %s, 보임 %s, 충돌 레이어 %d | 아이템 모음 %s, 보임 %s, 감지 %s | 탐사 %d / %d" % [sec.secret_id if sec else "-", sec._broken if sec else "-", sec.visible if sec else "-", sec.collision_layer if sec else -1, pickup.collected if pickup else "-", pickup.visible if pickup else "-", pickup.monitoring if pickup else "-", entry.get("explore_found", -1), entry.get("explore_total", -1)])
 		SaveGame.new_game()
+		DirAccess.remove_absolute(SaveGame.PATH)   # 시험이 남긴 새 칸 파일을 치운다 (v1.1.0: new_game 이 곧바로 저장한다 — 뒤 시험이 '저장 없음'에서 시작하게)
 		tree.quit()
 		return
 	if pickup == null or (wall == null and ceiling == null):
@@ -1238,6 +1240,7 @@ func _secrettest() -> void:
 	await tree.create_timer(6.0).timeout
 	print("[비밀시험] 6초가 지나도 방이 다시 열리지 않았다")
 	SaveGame.new_game()
+	DirAccess.remove_absolute(SaveGame.PATH)   # 시험이 남긴 새 칸 파일을 치운다 (v1.1.0: new_game 이 곧바로 저장한다 — 뒤 시험이 '저장 없음'에서 시작하게)
 	tree.quit()
 
 

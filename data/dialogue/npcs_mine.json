@@ -22,7 +22,7 @@
  "tia": {
   "talks": [
    {
-    "when": "five_souls,has_tia_lantern,!owen_rescued,!tia_told_five_souls",
+    "when": "five_souls,boss_root_defeated,read_scripture_1,read_scripture_2,read_scripture_3,read_scripture_4,has_tia_lantern,!owen_rescued,!tia_told_five_souls",
     "priority": 5,
     "set": "tia_told_five_souls",
     "lines": [
@@ -30,7 +30,7 @@
     ]
    },
    {
-    "when": "five_souls,reunion_done,!tia_told_five_souls",
+    "when": "five_souls,boss_root_defeated,read_scripture_1,read_scripture_2,read_scripture_3,read_scripture_4,reunion_done,!tia_told_five_souls",
     "priority": 5,
     "set": "tia_told_five_souls",
     "lines": [
