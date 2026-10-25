@@ -7,7 +7,7 @@ extends Node
 ##     구르기: 능력 없으면 수액에서 짧아지고, 있으면 땅보다 길어진다 (EXPANSION 2장)
 ##  3) 수액 어부: 예고 길이 2박(0.87초 ±0.06), 채찍 판정 사거리 300, 가까우면 물러남, 줄 그림이 뒤로 흔들렸다 앞으로 뻗는지,
 ##     판정이 켜지는 첫 프레임에 줄이 이미 소녀 쪽을 가리키고 끝이 판정 끝(≈330)에 닿는지
-##  4) 구원 흐름: 구원 가능한 어부 → 무릎 → 손길 → 구원 깃발·사람(이름)·보상(이슬 +1)
+##  4) 구원 흐름: 구원 가능한 어부 → 무릎 → 손길 → 구원 깃발·사람(이름)·보상(새순 +1)
 ##  5) 수액의 여왕: 패턴이 마디 첫 박에서 시작, 예고 2박(0.87 ±0.05), 공격·내려앉기가 셋째 박(시계 기준), 가루·나비·물결 생성,
 ##     내려앉기 반격 창(≥2.5초, 땅 피해 온전·공중 절반), 싸움 내내 여왕 시계 ≈ 보스곡 재생 위치, 디딤돌·바위 5개 이상,
 ##     2페이즈(디딤돌 가라앉음·예고 길이 흔들림), 쓰러짐 → 섬으로 → 정화 → 깃발·회상 id·능력(sap_walk)·회상 데이터
@@ -163,7 +163,7 @@ func _probe_rooms_and_portals() -> void:
 			await _shot(rid)
 	# 대사 데이터 (깊은 합치기)
 	var npcs: Dictionary = DialogueData.load_dialogue("res://data/dialogue/npcs.json")
-	_check(npcs.has("fisher_lake") and npcs.has("owen") and npcs["fisher_lake"].get("reward", {}).get("type", "") == "dews", "npcs_lake.json 이 합쳐 읽힌다 (fisher_lake: %s)" % npcs.get("fisher_lake", {}).get("name", "-"))
+	_check(npcs.has("fisher_lake") and npcs.has("owen") and npcs["fisher_lake"].get("reward", {}).get("type", "") == "token", "npcs_lake.json 이 합쳐 읽힌다 (fisher_lake: %s)" % npcs.get("fisher_lake", {}).get("name", "-"))
 	var mems: Dictionary = DialogueData.load_dialogue("res://data/dialogue/memories.json")
 	var mq: Dictionary = mems.get("memory_queen", {})
 	var imgs_ok := true
@@ -359,7 +359,7 @@ func _probe_rescue() -> void:
 	_player.facing = 1
 	await _wait(0.4)
 	_check(_player.can_interact, "무릎 꿇은 어부 곁: 손길 가능 (거리 %.0f)" % _player.global_position.distance_to(savable.global_position))
-	var dews0 := _player.max_dews
+	var tokens0 := Progress.tokens   # v1.1.0: 어부 보상은 이슬 대신 새순 1
 	await _press("interact")
 	await _wait(0.2)
 	_check(_player.state == Player.State.PURIFY, "손길 → 소녀 정화 자세 (%s)" % _player.state_name())
@@ -371,7 +371,7 @@ func _probe_rescue() -> void:
 	_check(Progress.rescued.has("fisher_lake") and Progress.has("fisher_lake_rescued"), "구원 깃발 fisher_lake")
 	_check(npc != null and npc._data.get("name", "") == "어부 할란", "사람으로 돌아온 어부 (이름 '%s')" % (npc._data.get("name", "-") if npc else "-"))
 	await _wait(4.4)
-	_check(_player.max_dews == dews0 + 1, "보상: 이슬 %d → %d" % [dews0, _player.max_dews])
+	_check(Progress.tokens == tokens0 + 1, "보상: 새순 %d → %d" % [tokens0, Progress.tokens])
 	await _shot("rescue")
 	Progress.reset()
 

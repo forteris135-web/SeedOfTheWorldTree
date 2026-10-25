@@ -48,7 +48,7 @@ PLAN = {
                     + platform("BlockBottom", 4020, 2050, 780, 450)
                     + platform("BlockRightPart", 4320, 1850, 480, 200, decorate=False)
                     + wall("SecretWall1", 4020, 1850, 60, 200, "secret_canopy_01_1")),
-        "items": pickup("Pickup1", 4200, 2010, "pick_canopy_01_1", "dews", 1, "secret_canopy_01_1"),
+        "items": pickup("Pickup1", 4200, 2010, "pick_canopy_01_1", "token", 1, "secret_canopy_01_1"),
     },
     "canopy_03": {
         # 바닥 P1(윗면 1100) 위, 천장에서 내려온 가지 끝의 옹이 (아랫면 760). 점프하면 머리(966 → 695)가 닿는다.
@@ -71,7 +71,7 @@ PLAN = {
         "terrain": (platform("RightUpper", 2600, -100, 300, 500, decorate=False)
                     + platform("RightLower", 2600, 600, 300, 2700)
                     + wall("SecretWall1", 2600, 400, 60, 200, "secret_mine_01_1")),
-        "items": pickup("Pickup1", 2800, 560, "pick_mine_01_1", "dews", 1, "secret_mine_01_1"),
+        "items": pickup("Pickup1", 2800, 560, "pick_mine_01_1", "token", 1, "secret_mine_01_1"),
     },
     "village_01": {
         # 지붕 P2(700~1180, 윗면 1150) 위의 옹이 (아랫면 950). 지붕에서 점프하면 머리(1016 → 745)가 닿는다.

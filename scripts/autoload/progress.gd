@@ -16,7 +16,8 @@ var next_spawn := ""
 var pending_memory := ""
 var memory_return_scene := ""
 ## 성장 보상 누적: max_hp(+체력), attack(+배수, 0.1 = 10%), dews(+개수), heal(+회복량)
-## dews 는 상한 없이 받은 만큼 다 센다 (세이브 호환). 실제 이슬 개수는 dew_max() — 아래 '이슬 상한'.
+## dews 는 상한 없이 받은 만큼 다 센다. 실제 이슬 개수는 dew_max() — 아래 '이슬 상한'.
+## 단계 기록도 여기에 둔다: stat_<kind>_level (성장 메뉴, 빛 가루), tok_<줄> (기술 메뉴, 새순 — 아래 '새순').
 var upgrades := {}
 ## 피워 둔 달빛풀: id -> {"scene": 경로, "name": 표시 이름}
 var grasses := {}
@@ -86,11 +87,11 @@ func add_upgrade(kind: String, amount: float) -> void:
 
 # ---------- 이슬 상한 (v1.1.0 기획자 요청 16: 이슬 최대 8 → 5) ----------
 # 이슬 방울은 기본 BASE_DEWS 개 + 성장(upgrades["dews"])이지만 MAX_DEWS 개를 넘지 않는다.
-# 모을 수 있는 이슬 성장은 모두 12 (숨은 구슬 3 + 이슬잔 3 + 구원 보상 2 + 중간 보스 1 + 달빛풀 성장 3) → 기본과 합쳐 15.
-# 넘친 이슬은 버리지 않는다: 하나마다 회복량 +DEW_OVERFLOW_HEAL — 맑은 샘물 구슬·성장 메뉴 회복량 한 단계와 같은 값.
-# upgrades["dews"] 는 예전처럼 받은 만큼 다 세므로 옛 세이브(예: dews 12)도 그대로 읽혀 이슬 5 + 회복량 +100 이 된다
-# (v1.1.0: 옛 저장 파일의 이슬 보상 정리는 SaveMigrate.after_load 가 맡는다).
-# 성장 메뉴(StatMenu)는 이슬이 가득하면 이슬을 팔지 않는다 ('가득' 표시) — 빛 가루를 회복량으로 바꾸려면 회복량 줄을 사면 되므로.
+# v1.1.0 부터 이슬을 늘리는 길은 달빛풀 성장 메뉴의 이슬 2단계뿐이다 (기본 3 + 2 = 5). 예전의 이슬 최대치 보상 9곳
+# (숨은 구슬 3 · 이슬잔 3 · 구원 보상 2 · 중간 보스 1)은 모두 새순(토큰)을 준다 — 아래 '새순'.
+# 옛 저장 파일(v1, 예: dews 12)은 SaveMigrate.after_load 가 이슬 성장을 성장 메뉴 단계(최대 2)로 맞추고 나머지를 새순으로 돌려준다.
+# 넘침 규칙(넘친 이슬 하나 = 회복량 +DEW_OVERFLOW_HEAL)은 안전망으로 남긴다 — 정상 진행에서는 넘칠 일이 없다.
+# 성장 메뉴(StatMenu)는 이슬이 가득하면 이슬 줄에 '가득'을 보이고 팔지 않는다.
 const BASE_DEWS := 3
 const MAX_DEWS := 5
 const DEW_OVERFLOW_HEAL := 10.0
@@ -152,7 +153,9 @@ func gain_ability(ability: String) -> void:
 # (upgrades 는 통째로 저장되고 보스 러시의 몸에도 그대로 복사되므로 따로 저장할 것이 없다).
 const TOKEN_TRACKS := ["normal", "seed", "wind", "light", "stamina"]
 const TOKEN_MAX_LEVEL := 3
-## 다음 단계 비용 (Lv1, Lv2, Lv3). 합계 19 = 얻을 수 있는 새순 19 (§5.3)
+## 다음 단계 비용 (Lv1, Lv2, Lv3). 합계 19 = 얻을 수 있는 새순 19 — 모두 모으면 모든 기술이 최대.
+## 새순이 나오는 곳 (19): 숨은 구슬 3 × 1 (canopy_01 · canopy_07 · mine_01), 이슬잔 3 × 2 (숨겨진 방 셋),
+## 구원 보상 2 × 1 (정원사 루나 · 수액 어부), 정원사 장로(중간 보스) 2, 보스 첫 정화 6 (새 1 · 펌프 2 · 기사 1 · 여왕 1 · 뿌리지기 1).
 const TOKEN_COST := {"normal": [1, 1, 2], "seed": [1, 1, 2], "wind": [1, 1, 2], "light": [1, 1, 2], "stamina": [1, 1, 1]}
 ## 단계별 배율 [Lv0, Lv1, Lv2, Lv3]
 const SKILL_DAMAGE := {"normal": [1.0, 1.06, 1.12, 1.20], "seed": [1.0, 1.10, 1.20, 1.30], "wind": [1.0, 1.10, 1.20, 1.30], "light": [1.0, 1.08, 1.16, 1.25]}

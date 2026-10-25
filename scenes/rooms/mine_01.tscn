@@ -288,7 +288,7 @@ kind = "poster"
 [node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
 position = Vector2(2800, 560)
 pickup_id = "pick_mine_01_1"
-kind = "dews"
+kind = "token"
 amount = 1.0
 hidden_in = "secret_mine_01_1"
 

@@ -18,6 +18,8 @@ extends RefCounted
 ## 감사의 말이 끝나면(RescuedPerson.greet) 또는 그 전에 방을 떠나면(_exit_tree) 또는 다음 방이 열릴 때(spawn_into) 준 뒤
 ## 깃발 "rewarded_<id>"(받았음)로 바꾼다. 받을 보상 깃발은 진행 상태(세이브)와 함께 움직이므로, 불러오기로 구원 전 상태가 되면
 ## 보상도 함께 사라지고 다시 구원하면 한 번만 받는다.
+## 보상 종류: max_hp / attack / heal (성장, Progress.add_upgrade) · token (v1.1.0 새순, Progress.add_tokens) ·
+## dews (안전망 — v1.1.0 부터 이슬 보상이던 정원사 루나·수액 어부는 새순 1개를 준다, 기획자 요청 16)
 
 const DATA_PATH := "res://data/dialogue/relocations.json"
 const NPCS_PATH := "res://data/dialogue/npcs.json"
@@ -202,10 +204,11 @@ static func reward_of(id: String) -> Dictionary:
 	return r if r is Dictionary else {}
 
 
-## 보상 안내 글자.
+## 보상 안내 글자. (새순은 받은 뒤의 보유량을 함께 말하므로 Progress.add_tokens 뒤에 부른다)
 static func reward_text(reward: Dictionary) -> String:
 	var amount := float(reward.get("amount", 0))
 	match str(reward.get("type", "")):
+		"token": return SkillMenu.text_of("rescue", "새순이 {n}개 돋았다 (지금 {have})").format({"n": roundi(amount), "have": Progress.tokens})
 		"max_hp": return "최대 체력이 %d 늘었다" % int(amount)
 		"attack": return "공격력이 %d%% 올랐다" % int(round(amount * 100))
 		"dews": return "이슬 방울을 %d개 더 담을 수 있다" % int(amount)
@@ -235,11 +238,14 @@ static func settle_reward(id: String) -> String:
 	Progress.flags[GIVEN + id] = true
 	var kind := str(reward.get("type", ""))
 	var amount := float(reward.get("amount", 0))
-	if not kind in ["max_hp", "attack", "dews", "heal"] or amount == 0.0:
+	if not kind in ["max_hp", "attack", "dews", "heal", "token"] or amount == 0.0:
 		return ""
+	if kind == "token":
+		Progress.add_tokens(roundi(amount))   # 새순은 성장이 아니라 재화 (달빛풀 메뉴 '기술' 탭에서 쓴다)
+		return reward_text(reward)
 	Progress.add_upgrade(kind, amount)
 	if kind == "dews":
-		# 이슬이 가득(8개)하면 보상 이슬은 회복량이 된다 — 안내도 실제로 일어난 일을 말한다
+		# (안전망) 이슬이 가득(5개)하면 보상 이슬은 회복량이 된다 — 안내도 실제로 일어난 일을 말한다
 		return Pickup.dew_reward_text(amount, reward_text(reward))
 	return reward_text(reward)
 

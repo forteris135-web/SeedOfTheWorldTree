@@ -249,7 +249,7 @@ kind = "stone"
 [node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
 position = Vector2(300, 770)
 pickup_id = "pick_canopy_07_1"
-kind = "dews"
+kind = "token"
 amount = 1.0
 hidden_in = "secret_canopy_07_1"
 fall_to = Vector2(300, 1040)

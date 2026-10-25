@@ -1,8 +1,10 @@
 extends Area2D
 class_name Pickup
 ## 떠 있는 빛나는 구슬. 소녀가 닿으면 모아져 저절로 성장한다 (자동 스펙업).
-## 종류: max_hp(세계수의 수액, 최대 체력) / attack(바람의 결, 공격력) / dews(달빛 이슬, 이슬 개수) / heal(맑은 샘물, 회복량).
-## 이슬은 최대 8개 (Progress.MAX_DEWS): 가득할 때 모은 이슬은 회복량 +10 이 되고, 안내도 그렇게 말한다 (dew_reward_text).
+## 종류: max_hp(세계수의 수액, 최대 체력) / attack(바람의 결, 공격력) / dews(달빛 이슬, 이슬 개수) / heal(맑은 샘물, 회복량)
+##       / token(새순 — v1.1.0 기술을 다듬는 재화, 달빛풀 메뉴 '기술' 탭에서 쓴다).
+## v1.1.0 (기획자 요청 16): 이슬 최대 5 (Progress.MAX_DEWS). 지도의 이슬 최대치 보상(숨은 구슬 3)은 모두 새순으로 바뀌었다
+## (pickup_id 는 그대로라 이미 모은 것은 다시 생기지 않는다). dews 종류와 넘침 안내(dew_reward_text)는 안전망으로 남겨 둔다.
 ## 한 번 모은 것은 Progress.collected[pickup_id] 에 남아 다시 생기지 않는다.
 ## 비밀 벽·천장 안의 것(hidden_in)은 그 비밀이 부서질 때 나타난다 (천장이면 fall_to 로 떨어져 안착).
 
@@ -11,12 +13,13 @@ const COLORS := {
 	"attack": Color(0.93, 0.95, 1.0),   # 흰 은빛
 	"dews": Color(0.56, 0.83, 1.0),     # 은청색
 	"heal": Color(0.66, 0.95, 0.5),     # 초록 금빛
+	"token": Color(0.55, 1.0, 0.55),    # 새순 연둣빛 (구슬 위에 작은 새순을 그려 회복량 구슬과 구별)
 }
 
 ## 고유 이름: pick_<방>_<번호>
 @export var pickup_id := ""
-@export_enum("max_hp", "attack", "dews", "heal") var kind := "max_hp"
-## 늘어나는 양 (max_hp: 체력, attack: 배수 0.05 = 5%, dews: 개수, heal: 회복량)
+@export_enum("max_hp", "attack", "dews", "heal", "token") var kind := "max_hp"
+## 늘어나는 양 (max_hp: 체력, attack: 배수 0.05 = 5%, dews: 개수, heal: 회복량, token: 새순 개수)
 @export var amount := 10.0
 ## 이 비밀(secret_id)이 부서지기 전엔 숨어 있다
 @export var hidden_in := ""
@@ -156,6 +159,11 @@ static func dew_reward_text(amount: float, normal: String, label := "") -> Strin
 	return "%s · 넘친 이슬로 회복량 +%d" % [normal, heal]
 
 
+## 새순 줍기 안내 (skills.json "pickup": "새순 +{n} (지금 {have})"). Progress.add_tokens 뒤에 부른다.
+static func token_text(n: int) -> String:
+	return SkillMenu.text_of("pickup", "새순 +{n} (지금 {have})").format({"n": n, "have": Progress.tokens})
+
+
 ## 소녀가 닿았다: 성장을 적용하고 빛이 터진 뒤 사라진다.
 func _collect(player: Player) -> void:
 	_taken = true
@@ -163,9 +171,14 @@ func _collect(player: Player) -> void:
 	set_deferred("monitoring", false)
 	if pickup_id != "":
 		Progress.collect(pickup_id)
-	Progress.add_upgrade(kind, amount)   # → 소녀 _apply_abilities 가 저절로 다시 계산
+	if kind == "token":
+		Progress.add_tokens(roundi(amount))   # 새순은 성장이 아니라 재화 (기술 탭에서 쓴다)
+	else:
+		Progress.add_upgrade(kind, amount)   # → 소녀 _apply_abilities 가 저절로 다시 계산
 	var text := ""
 	match kind:
+		"token":
+			text = token_text(roundi(amount))
 		"dews":
 			# 늘어난 칸은 소녀 _apply_abilities 가 이미 채웠다 (여기서 또 더하면 하나가 아니라 둘이 찼다)
 			player.dews_changed.emit(player.dews)
@@ -216,5 +229,9 @@ func _draw() -> void:
 	var pulse := 0.9 + 0.1 * sin(_t * 3.1)
 	var a := 1.0 if not _taken else _glow.modulate.a
 	draw_circle(Vector2.ZERO, 13.0 * pulse, Color(col, 0.95 * a))
-	draw_circle(Vector2(-3, -4), 5.0, Color(1.0, 1.0, 1.0, 0.85 * a))
+	if kind == "token":
+		# 새순: 구슬 안에 작은 새순 (진한 초록) — 비슷한 색의 회복량 구슬과 한눈에 구별되게
+		SkillMenu.draw_sprout(self, Vector2(0, -1), 8.0 * pulse, Color(0.12, 0.42, 0.16, 0.9 * a))
+	else:
+		draw_circle(Vector2(-3, -4), 5.0, Color(1.0, 1.0, 1.0, 0.85 * a))
 	draw_arc(Vector2.ZERO, 19.0 + 2.0 * sin(_t * 2.0), 0.0, TAU, 28, Color(col, 0.35 * a), 1.5, true)

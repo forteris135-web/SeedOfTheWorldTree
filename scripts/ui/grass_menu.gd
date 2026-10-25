@@ -1,18 +1,24 @@
 extends TravelMenu
 class_name GrassMenu
-## 달빛풀 메뉴 (2026-10-19 기획자 요청 9번): 쉬는 중에 손길 버튼을 한 번 더 누르면 열린다. 탭 두 개 —
+## 달빛풀 메뉴 (2026-10-19 기획자 요청 9번): 쉬는 중에 손길 버튼을 한 번 더 누르면 열린다. 탭 세 개 —
 ##   [뿌리를 따라 이동]  이동 탭: TravelMenu 그대로 (피워 둔 달빛풀 목록)
 ##   [성장 ✦ N]          성장 탭: StatMenu 패널 (빛 가루로 최대 체력·공격력·회복량·이슬을 올린다)
-## 좌·우(스틱·십자키·A/D), ◁ ▷(영혼 전환 버튼), 탭 머리 누르기로 탭을 바꾼다.
+##   [기술 (새순) N]     기술 탭: SkillMenu 패널 (v1.1.0: 새순으로 일반 공격·영혼 기술·최대 스태미너를 다듬는다)
+## 좌·우(스틱·십자키·A/D), ◁ ▷(영혼 전환 버튼), 탭 머리 누르기로 탭을 바꾼다. 탭 이름은 stats.json / skills.json 의 title.
 ## 처음엔 이동 탭. 단, 갈 곳이 없으면(피운 달빛풀이 여기 하나뿐) 성장 탭으로 연다.
 ## 닫으면(회피 / 메뉴 / 바깥 누르기) 그대로 쉬기 계속: 닫은 버튼이 떨어질 때까지 소녀 입력을 잠가서
 ## 그 누름이 '쉬기 그만'(회피·점프)이나 '메뉴 다시 열기'(손길)로 읽히지 않게 한다.
-## 성장을 사면 바로 저장한다 (앱이 꺼져도 산 성장이 남게). 안내 글자는 메뉴 안에만.
+## 성장·기술을 사면 바로 저장한다 (앱이 꺼져도 산 성장이 남게). 안내 글자는 메뉴 안에만.
 ## TravelMenu 를 상속하므로 "is TravelMenu" 로 찾는 기존 시험(--grasstest)이 그대로 돈다.
 
 const STAT_SCENE := preload("res://scenes/ui/stat_menu.tscn")
 const GOLD := Color(1.0, 0.86, 0.5)
-const TAB_W := 340.0
+## 탭 번호 (이동 0 · 성장 1 · 기술 2)
+const TAB_TRAVEL := 0
+const TAB_STAT := 1
+const TAB_SKILL := 2
+const TRAVEL_BLUE := Color(0.56, 0.83, 1.0)
+const TAB_W := 330.0
 const TAB_H := 60.0
 const TAB_GAP := 18.0
 ## 탭 머리를 손가락으로 누르는 자리는 그림보다 위아래로 이만큼 넓다 (아이폰에서 누르기 쉽게)
@@ -24,8 +30,12 @@ const LOCK_ACTIONS := ["jump", "dodge", "interact"]
 
 var _tab := 0
 var _stat: StatMenu
+var _skill: SkillMenu
 var _player: Player
 var _stat_data := {}
+var _skill_data := {}
+## 탭 머리 글자 (열 때 데이터에서 읽는다): 이동 · 성장 · 기술
+var _labels: Array = ["뿌리를 따라 이동", "성장", "기술"]
 ## 스틱 좌·우(탭 바꾸기): 한 번 밀기 = 한 탭
 var _stick_h := StickLatch.new()
 ## 닫은 뒤 입력을 잠가 둔 소녀 (null = 잠금 없음)
@@ -40,7 +50,13 @@ func _ready() -> void:
 	_stat.top_ratio = 0.3
 	_panel.add_child(_stat)
 	_stat.purchased.connect(_on_purchased)
+	_skill = SkillMenu.new()
+	_skill.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_skill.top_ratio = 0.3
+	_panel.add_child(_skill)
+	_skill.purchased.connect(_on_purchased)
 	Progress.dust_changed.connect(func(_n): if _open: _panel.queue_redraw())
+	Progress.tokens_changed.connect(func(_n): if _open: _panel.queue_redraw())
 
 
 ## 달빛풀에서 연다 (쉬는 중). 이동 탭으로 시작한다 — 갈 다른 달빛풀이 없으면 성장 탭.
@@ -49,21 +65,24 @@ func open_grass(grass_id: String) -> void:
 	_player = get_tree().get_first_node_in_group("player") as Player
 	_release_lock()
 	_stat_data = StatMenu.load_data()
+	_skill_data = SkillMenu.load_skill_data()
+	_labels = ["뿌리를 따라 이동", str(_stat_data.get("title", "성장")), str(_skill_data.get("title", "기술"))]
 	_stick_h.reset()
 	open(grass_id)
-	_set_tab(1 if _items.size() <= 1 else 0)
+	_set_tab(TAB_STAT if _items.size() <= 1 else TAB_TRAVEL)
 	_show_touch(false)
 	_clear_hud_text()
 
 
 func close() -> void:
 	_stat.close()
+	_skill.close()
 	super.close()
 	_show_touch(true)
 	_lock_input()
 
 
-## 성장을 샀다: 다시 그리고 바로 저장한다 (쉬기 저장은 메뉴를 열기 전에 이미 끝났으므로).
+## 성장·기술을 샀다: 다시 그리고 바로 저장한다 (쉬기 저장은 메뉴를 열기 전에 이미 끝났으므로).
 func _on_purchased(_kind: String, _level: int, _cost: int) -> void:
 	_panel.queue_redraw()
 	if _current_id == "":
@@ -165,17 +184,39 @@ func stat_panel() -> StatMenu:
 	return _stat
 
 
+func skill_panel() -> SkillMenu:
+	return _skill
+
+
+func tab_count() -> int:
+	return _labels.size()
+
+
+## 지금 탭의 패널 (이동 탭이면 null)
+func _active_panel() -> StatMenu:
+	match _tab:
+		TAB_STAT:
+			return _stat
+		TAB_SKILL:
+			return _skill
+	return null
+
+
 func _set_tab(t: int) -> void:
-	_tab = clampi(t, 0, 1)
-	if _tab == 1:
+	_tab = clampi(t, 0, tab_count() - 1)
+	if _tab == TAB_STAT:
 		_stat.open(_player)
 	else:
 		_stat.close()
+	if _tab == TAB_SKILL:
+		_skill.open(_player)
+	else:
+		_skill.close()
 	_panel.queue_redraw()
 
 
 func _switch_tab(dir: int) -> void:
-	var t := clampi(_tab + dir, 0, 1)
+	var t := clampi(_tab + dir, 0, tab_count() - 1)
 	if t == _tab:
 		return
 	Sfx.play("select")
@@ -185,7 +226,7 @@ func _switch_tab(dir: int) -> void:
 func _handle_event(event: InputEvent) -> void:
 	# 탭 머리 누르기 (그림보다 위아래로 조금 넓게)
 	if event is InputEventScreenTouch and event.pressed:
-		for i in 2:
+		for i in tab_count():
 			if _tab_rect(i).grow_individual(0.0, TAB_TOUCH_PAD, 0.0, TAB_TOUCH_PAD * 0.5).has_point(event.position):
 				if i != _tab:
 					Sfx.play("select")
@@ -202,10 +243,11 @@ func _handle_event(event: InputEvent) -> void:
 	if event.is_action_pressed("move_left") or event.is_action_pressed("ui_left") or event.is_action_pressed("soul_prev"):
 		_switch_tab(-1)
 		return
-	if _tab == 1:
-		if _stat.handle(event):
+	var panel := _active_panel()
+	if panel != null:
+		if panel.handle(event):
 			return
-		# 성장 탭에서 줄 밖을 누르면 닫기 (이동 목록의 줄 자리로 넘어가 이동이 되지 않게 기본 처리를 거치지 않는다)
+		# 성장·기술 탭에서 줄 밖을 누르면 닫기 (이동 목록의 줄 자리로 넘어가 이동이 되지 않게 기본 처리를 거치지 않는다)
 		if event is InputEventScreenTouch and event.pressed:
 			close()
 			return
@@ -220,62 +262,90 @@ func _list_top() -> float:
 
 
 func _accent() -> Color:
-	return GOLD if _tab == 1 else super._accent()
+	match _tab:
+		TAB_STAT:
+			return GOLD
+		TAB_SKILL:
+			return SkillMenu.SPROUT
+	return super._accent()
+
+
+func _tab_accent(i: int) -> Color:
+	match i:
+		TAB_STAT:
+			return GOLD
+		TAB_SKILL:
+			return SkillMenu.SPROUT
+	return TRAVEL_BLUE
 
 
 func _tab_rect(i: int) -> Rect2:
 	var size := _panel.size
-	var total := TAB_W * 2.0 + TAB_GAP
+	var n := tab_count()
+	var total := TAB_W * n + TAB_GAP * (n - 1)
 	var x0 := (size.x - total) / 2.0
 	return Rect2(x0 + i * (TAB_W + TAB_GAP), size.y * 0.155, TAB_W, TAB_H)
 
 
 func _draw_title(font: Font) -> void:
 	var size := _panel.size
-	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.115), "달빛풀", HORIZONTAL_ALIGNMENT_CENTER, 800, 36, Color(0.56, 0.83, 1.0))
-	var labels := ["뿌리를 따라 이동", "성장"]
-	var accents := [Color(0.56, 0.83, 1.0), GOLD]
-	for i in 2:
+	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.115), "달빛풀", HORIZONTAL_ALIGNMENT_CENTER, 800, 36, TRAVEL_BLUE)
+	var n := tab_count()
+	for i in n:
 		var r := _tab_rect(i)
 		var sel := i == _tab
-		var ac: Color = accents[i]
+		var ac := _tab_accent(i)
 		_panel.draw_rect(r, Color(ac, 0.28) if sel else Color(1, 1, 1, 0.07))
 		if sel:
 			_panel.draw_rect(r, Color(ac, 0.8), false, 1.5)
-		var text: String = labels[i]
+		var text: String = _labels[i]
 		var fs := 26
 		var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		var col := ac if sel else Color(0.85, 0.85, 0.85)
-		if i == 1:
-			# "성장   ✦ 128" — 빛 가루 보유량을 함께
-			var have := "%d" % Progress.dust
+		if i == TAB_STAT or i == TAB_SKILL:
+			# "성장   ✦ 128" / "기술   (새순) 3" — 재화 보유량을 함께
+			var have := "%d" % (Progress.dust if i == TAB_STAT else Progress.tokens)
 			var hw := font.get_string_size(have, HORIZONTAL_ALIGNMENT_LEFT, -1, 22).x
 			var total_w := tw + 30.0 + 20.0 + hw
 			var x := r.position.x + (r.size.x - total_w) / 2.0
 			var base := r.position.y + r.size.y / 2.0 + fs * 0.36
 			_panel.draw_string(font, Vector2(x, base), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
-			StatMenu.draw_spark(_panel, Vector2(x + tw + 30.0 + 8.0, r.position.y + r.size.y / 2.0), 8.0, StatMenu.DUST_COLOR if sel else Color(0.8, 0.78, 0.65))
-			_panel.draw_string(font, Vector2(x + tw + 30.0 + 20.0, base - 1), have, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, StatMenu.DUST_COLOR if sel else Color(0.8, 0.78, 0.65))
+			var icon_pos := Vector2(x + tw + 30.0 + 8.0, r.position.y + r.size.y / 2.0)
+			var have_col: Color
+			if i == TAB_STAT:
+				have_col = StatMenu.DUST_COLOR if sel else Color(0.8, 0.78, 0.65)
+				StatMenu.draw_spark(_panel, icon_pos, 8.0, have_col)
+			else:
+				have_col = SkillMenu.SPROUT if sel else Color(0.68, 0.82, 0.66)
+				SkillMenu.draw_sprout(_panel, icon_pos + Vector2(0, -2), 9.0, have_col)
+			_panel.draw_string(font, Vector2(x + tw + 30.0 + 20.0, base - 1), have, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, have_col)
 		else:
 			_panel.draw_string(font, Vector2(r.position.x + (r.size.x - tw) / 2.0, r.position.y + r.size.y / 2.0 + fs * 0.36), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
-	# 좌·우 화살표 (탭이 하나 더 있다는 표시)
+	# 좌·우 화살표 (그쪽에 탭이 더 있다는 표시)
 	var left := _tab_rect(0)
-	var right := _tab_rect(1)
+	var right := _tab_rect(n - 1)
 	var cy := left.position.y + TAB_H / 2.0
 	var arrow_col := Color(1, 1, 1, 0.35)
-	_panel.draw_colored_polygon(PackedVector2Array([Vector2(left.position.x - 46, cy), Vector2(left.position.x - 28, cy - 11), Vector2(left.position.x - 28, cy + 11)]), arrow_col if _tab == 1 else Color(1, 1, 1, 0.12))
-	_panel.draw_colored_polygon(PackedVector2Array([Vector2(right.end.x + 46, cy), Vector2(right.end.x + 28, cy - 11), Vector2(right.end.x + 28, cy + 11)]), arrow_col if _tab == 0 else Color(1, 1, 1, 0.12))
-	var sub: String = _subtitle if _tab == 0 else str(_stat_data.get("subtitle", ""))
+	var dim := Color(1, 1, 1, 0.12)
+	_panel.draw_colored_polygon(PackedVector2Array([Vector2(left.position.x - 46, cy), Vector2(left.position.x - 28, cy - 11), Vector2(left.position.x - 28, cy + 11)]), arrow_col if _tab > 0 else dim)
+	_panel.draw_colored_polygon(PackedVector2Array([Vector2(right.end.x + 46, cy), Vector2(right.end.x + 28, cy - 11), Vector2(right.end.x + 28, cy + 11)]), arrow_col if _tab < n - 1 else dim)
+	var sub: String = _subtitle
+	if _tab == TAB_STAT:
+		sub = str(_stat_data.get("subtitle", ""))
+	elif _tab == TAB_SKILL:
+		sub = str(_skill_data.get("subtitle", ""))
 	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, left.end.y + 34), sub, HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.5))
 
 
 func _draw_list(font: Font) -> void:
-	if _tab == 0:
+	if _tab == TAB_TRAVEL:
 		super._draw_list(font)
-	# 성장 탭은 StatMenu(자식 Control)가 스스로 그린다
+	# 성장·기술 탭은 StatMenu·SkillMenu(자식 Control)가 스스로 그린다
 
 
 func _hint_text() -> String:
-	if _tab == 1:
-		return "위·아래로 고르고 결정: 한 단계 성장 (터치: 줄을 두 번)  ·  좌·우: 이동 탭  ·  회피 / 메뉴 / 바깥 누르기: 닫고 쉬기 계속"
-	return "위·아래로 고르고 결정: 이동 (터치: 줄 누르기)  ·  좌·우: 성장 탭  ·  회피 / 메뉴 / 바깥 누르기: 닫고 쉬기 계속"
+	if _tab == TAB_STAT:
+		return str(_stat_data.get("hint", "위·아래로 고르고 결정: 한 단계 성장 (터치: 줄을 두 번)  ·  좌·우: 탭 바꾸기  ·  회피 / 메뉴 / 바깥 누르기: 닫고 쉬기 계속"))
+	if _tab == TAB_SKILL:
+		return str(_skill_data.get("hint", "위·아래로 고르고 결정: 한 단계 다듬기 (터치: 줄을 두 번)  ·  좌·우: 탭 바꾸기  ·  회피 / 메뉴 / 바깥 누르기: 닫고 쉬기 계속"))
+	return "위·아래로 고르고 결정: 이동 (터치: 줄 누르기)  ·  좌·우: 성장 · 기술 탭  ·  회피 / 메뉴 / 바깥 누르기: 닫고 쉬기 계속"
