@@ -172,6 +172,15 @@ signal stamina_pulsed(amount: float)
 @export var plunge_relock := 0.25
 ## 바닥에 닿기 전에 두 번째부터 맞히는 낙하 공격의 피해 비율 (연속 튕김 약화)
 @export var plunge_repeat_ratio := 0.6
+## true = 튕길 때마다 피해가 plunge_repeat_ratio 배씩 **거듭** 줄어든다 (1 → 0.6 → 0.36 → 0.22 …, 바닥을 디디면 다시 1).
+## false = 두 번째부터 늘 0.6 (v1.1.0 전). v1.1.0 검수(맞딜 방지): 낙하 공격은 스태미너를 쓰지 않아서, 보스 위에서 튕기며
+## 낙하 공격만 거듭하면 보스의 땅 공격(내려찍기·휘두르기)이 위로 닿지 않는 채 초당 약 80 의 피해가 났다
+## (패턴을 무시한 봇이 30판 중 13판 이김 → 흐트러짐만 막으면 1판, 거듭 줄이면 0판·보스 체력 평균 64~87% 남음).
+@export var plunge_repeat_compound := true
+## 바닥에 닿기 전에 두 번째부터 맞히는 낙하 공격의 흐트러짐 비율 (v1.1.0 검수 — 맞딜 방지).
+## 튕기며 거듭 내려꽂을 때마다 흐트러짐 45 가 쌓여 보스(특히 무쇠 펌프)가 싸움의 절반을 무너진(피해 ×2) 채로 보냈다.
+## 0 = 첫 번째(바닥을 딛고 뛴 뒤 처음 맞힌 것)만 흐트러짐을 쌓는다. 튕김은 그대로. 착지 충격(plunge_land_poise)도 그대로.
+@export var plunge_repeat_poise_ratio := 0.0
 ## 바닥에 닿았을 때의 충격 판정 (넓고 낮게) 과 그 시간
 @export var plunge_land_time := 0.12
 @export var plunge_land_damage := 18.0
@@ -926,10 +935,11 @@ func _tick_plunge(delta: float, on_floor: bool) -> void:
 			if _attack_timer <= 0.0:
 				attack_phase = "dive"
 				velocity.y = plunge_speed
-				# 바닥에 닿기 전 두 번째부터는 피해가 줄어든다 (적 위에서 튕기며 반복하는 것을 약하게)
-				var ratio := 1.0 if _plunge_hits == 0 else plunge_repeat_ratio
+				# 바닥에 닿기 전 두 번째부터는 피해가 줄고 흐트러짐은 쌓이지 않는다 (적 위에서 튕기며 반복하는 것을 약하게)
+				var ratio := plunge_repeat_ratio_of(_plunge_hits)
+				var poise_ratio := 1.0 if _plunge_hits == 0 else plunge_repeat_poise_ratio
 				# 수액의 맥동: 피해 ×1.3, 판정 ×1.15 (가운데 그대로)
-				var hit := HitData.make(plunge_damage * plunge_damage_mult() * attack_multiplier * ratio, plunge_poise, self, plunge_knockback)
+				var hit := HitData.make(plunge_damage * plunge_damage_mult() * attack_multiplier * ratio, plunge_poise * poise_ratio, self, plunge_knockback)
 				hit.from_player = true
 				hit.hitstop = 0.06
 				hitbox.set_box(plunge_dive_box(), facing)
@@ -953,6 +963,13 @@ func _tick_plunge(delta: float, on_floor: bool) -> void:
 					stamina_refused.emit()
 			elif _attack_timer <= 0.0:
 				_set_state(State.IDLE)
+
+
+## 바닥에 닿기 전에 이미 n 번 맞히고 튕겼을 때, 다음 낙하 공격의 피해 비율 (0 번이면 1)
+func plunge_repeat_ratio_of(n: int) -> float:
+	if n <= 0:
+		return 1.0
+	return pow(plunge_repeat_ratio, n) if plunge_repeat_compound else plunge_repeat_ratio
 
 
 ## 바닥에 꽂혔다: 넓고 낮은 충격 판정 + 흔들림.

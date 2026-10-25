@@ -482,6 +482,8 @@ func _test_plunge_relock() -> void:
 	var state_after_retap := ""
 	var buffered := false
 	var second_dive_damage := -1.0
+	var first_dive_poise := -1.0
+	var second_dive_poise := -1.0
 	var bounce_frame := -1
 	var second_start_frame := -1
 	Input.action_press("move_down")
@@ -502,8 +504,11 @@ func _test_plunge_relock() -> void:
 				buffered = _player._plunge_buffered
 		if starts["n"] == 2 and second_start_frame < 0:
 			second_start_frame = i
+		if starts["n"] == 1 and _player.state == Player.State.PLUNGE and _player.attack_phase == "dive" and first_dive_poise < 0.0:
+			first_dive_poise = _player.hitbox.hit.poise
 		if starts["n"] == 2 and _player.state == Player.State.PLUNGE and _player.attack_phase == "dive" and second_dive_damage < 0.0:
 			second_dive_damage = _player.hitbox.hit.damage
+			second_dive_poise = _player.hitbox.hit.poise
 		if dmgs.size() >= 2 and second_start_frame >= 0 and i > second_start_frame + 5:
 			break
 	Input.action_release("move_down")
@@ -515,6 +520,32 @@ func _test_plunge_relock() -> void:
 	_check(starts["n"] >= 2 and second_start_frame - bounce_frame >= 13 and second_start_frame - bounce_frame <= 34, "잠금이 풀리면(약 0.25초) 기억한 낙하 공격이 저절로 나간다")
 	_check(absf(second_dive_damage - _player.plunge_damage * _player.plunge_repeat_ratio * mult) < 0.01, "바닥에 닿기 전 두 번째 낙하 공격 피해 ×%.1f" % _player.plunge_repeat_ratio)
 	_check(dmgs.size() >= 2 and absf(dmgs[0] - _player.plunge_damage * mult) < 0.01 and absf(dmgs[1] - _player.plunge_damage * _player.plunge_repeat_ratio * mult) < 0.01, "실제 피해도 26 → 15.6")
+	# v1.1.0 검수 (맞딜 방지): 바닥에 닿기 전 두 번째부터는 흐트러짐 0, 피해는 튕길 때마다 0.6 배씩 거듭 (1 → 0.6 → 0.36 → 0.216)
+	print("[probe] 낙하 공격 흐트러짐: 첫 번째 %.1f, 두 번째 %.1f / 피해 비율 %s" % [first_dive_poise, second_dive_poise, [_player.plunge_repeat_ratio_of(0), _player.plunge_repeat_ratio_of(1), _player.plunge_repeat_ratio_of(2), _player.plunge_repeat_ratio_of(3)]])
+	_check(absf(first_dive_poise - _player.plunge_poise) < 0.01 and absf(second_dive_poise - _player.plunge_poise * _player.plunge_repeat_poise_ratio) < 0.01 and _player.plunge_repeat_poise_ratio == 0.0,
+		"바닥에 닿기 전 두 번째 낙하 공격은 흐트러짐을 쌓지 않는다 (%.0f → %.0f)" % [first_dive_poise, second_dive_poise])
+	_check(_player.plunge_repeat_compound and absf(_player.plunge_repeat_ratio_of(0) - 1.0) < 0.001 and absf(_player.plunge_repeat_ratio_of(1) - 0.6) < 0.001 \
+		and absf(_player.plunge_repeat_ratio_of(2) - 0.36) < 0.001 and absf(_player.plunge_repeat_ratio_of(3) - 0.216) < 0.001,
+		"튕길 때마다 낙하 공격 피해가 0.6 배씩 거듭 줄어든다 (1 → 0.6 → 0.36 → 0.216)")
+	# 실제로: 이미 두 번 튕긴 셈(공중)에서 세 번째 낙하 공격 → 피해 26 × 0.36, 흐트러짐 0
+	await _frames(30)
+	_reset_enemy(wc)
+	_teleport(pin + Vector2(0, -320), 1)
+	await _frames(2)
+	_player._plunge_hits = 2
+	var hp3 := wc.hp
+	var poise3 := wc.poise
+	_player._start_plunge()
+	var third := -1.0
+	for i in 90:
+		await get_tree().physics_frame
+		wc.global_position = pin
+		wc.velocity = Vector2.ZERO
+		if wc.hp < hp3:
+			third = hp3 - wc.hp
+			break
+	_check(absf(third - _player.plunge_damage * 0.36 * mult) < 0.01 and absf(wc.poise - poise3) < 0.01,
+		"세 번째 낙하 공격: 실제 피해 %.2f (기대 %.2f), 흐트러짐 증가 %.1f (기대 0)" % [third, _player.plunge_damage * 0.36 * mult, wc.poise - poise3])
 	wc.max_hp = saved[0]
 	wc.max_poise = saved[1]
 	_reset_enemy(wc)

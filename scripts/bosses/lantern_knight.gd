@@ -12,7 +12,7 @@ class_name LanternKnight
 ##  - 돌진 찌르기 CHARGE: 뒤로 물러났다 아레나를 가로지른다(가드 가능). 끝에 닿으면 창이 박혀 STUCK 2.0초 무방비(피해 1.3배).
 ##    박힌 동안 무너지면 무너짐은 남은 박힘 시간만큼만(최소 1초) — 돌진 한 번에 공짜 시간이 5초 넘게 되지 않게
 ## 2페이즈(체력 절반): 갑옷 폭주 — 예고 0.75배, 쉬는 시간 0.3초, 불꽃 파도 두 줄, 검기 3갈래, 등불 던지기 THROW(떨어진 자리 불기둥),
-##  등불 회전 SPIN(불꽃 고리 3겹이 0.38초 간격으로 양쪽으로 퍼짐 — 차례로 점프해 넘긴다), 연계(찌르기→검기, 검기→돌진).
+##  등불 회전 SPIN(불꽃 고리 3겹이 0.6초 간격으로 양쪽으로 퍼짐 — 차례로 점프해 넘긴다), 연계(찌르기→검기, 검기→돌진).
 ## 패턴 고르기: 거리·페이즈별 가중치, 같은 패턴 연속 2회 금지.
 ## BossRoom 과 맞추는 약속: start_fight / reset_fight / arena / ground_y / fallen / purified / hp_changed / poise_changed / phase_changed / telegraph / telegraph_label
 
@@ -59,8 +59,12 @@ signal telegraph(kind: String)
 @export var spin_damage := 16.0
 @export var ring_damage := 14.0
 ## 등불 회전의 불꽃 고리: 속도(모두 같게 — 뒤 고리가 앞 고리를 따라잡아 한 겹으로 겹치지 않게)와 내보내는 간격(초)
+## 간격 0.38 → 0.6 (v1.1.0 검수): 고리 판정이 그림만큼 커지면서(반지름 약 25 → 64, 높이 약 130px) 고리 사이 땅 틈이 148 → 70px 로 줄어
+## 내려설 틈이 거의 없었다(한 번 점프로는 못 넘고 이단 점프를 짧은 순간에 맞춰야 했다). 520 × 0.6 = 312px 간격(땅 틈 약 184px):
+## 고리마다 한 번씩 뛰어 셋을 다 넘는 박자가 다시 된다 (시험 봇이 뛰는 때·높이를 50여 가지로 바꿔 보니 한 대도 안 맞은 것: 0.38 은 0, 0.53 은 1, 0.6 은 5가지).
+## 셋째 고리는 회전이 끝난 뒤(되돌림 0.4초째, 2페이즈 되돌림 0.525초 안)에 나온다 — 고리는 타격·되돌림 동안 내보낸다.
 @export var ring_speed := 520.0
-@export var ring_interval := 0.38
+@export var ring_interval := 0.6
 @export var spin_active := 0.8
 ## 높은 곳 견제: 소녀(몸 중심)가 바닥보다 이만큼 넘게 위에 이 시간 넘게 있으면 검기를 소녀 쪽으로 올려 쏜다
 @export var high_height := 280.0
@@ -363,9 +367,10 @@ func _physics_process(delta: float) -> void:
 				hitbox.activate(hit, spin_active)
 				rings_sent = 0
 				Sfx.play("spear_whoosh", -3.0, 0.1))
-			# 타격 시작부터 ring_interval 초마다 불꽃 고리 한 겹씩 (타이머 없이 상태 기계로 — 시험에서도 돈다)
-			if attack_phase == "active":
-				var elapsed := active_len - _timer
+			# 타격 시작부터 ring_interval 초마다 불꽃 고리 한 겹씩 (타이머 없이 상태 기계로 — 시험에서도 돈다).
+			# 간격이 타격 시간(0.8)보다 길어 셋째 고리는 되돌림 중에 나온다 (2페이즈 되돌림 0.525초 안)
+			if attack_phase == "active" or attack_phase == "recovery":
+				var elapsed := active_len - _timer if attack_phase == "active" else active_len + recovery_len - _timer
 				while rings_sent < 3 and elapsed >= rings_sent * ring_interval - 0.001:
 					_spawn_ring(rings_sent)
 					rings_sent += 1

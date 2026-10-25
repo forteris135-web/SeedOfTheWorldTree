@@ -1,13 +1,18 @@
 extends Node
 ## 맞딜 승인 시험 (v1.1.0 기획자 요청 8 마지막 문장: "보스의 공격 패턴을 무시하고 맞으면서 공격하는 방식으로 쉽게 승리할 수 없도록").
-## 실행: godot --headless --fixed-fps 60 --path . res://tools/probe_facetank.tscn -- [--quick] [--diff normal] [--only knight]
-## 봇: 가드·구르기·점프를 하지 않는다. 매 물리 틱:
-##   체력 40% 미만 + 이슬 있음 + 바닥 → 회복 / 아니면 영혼 기술(씨앗 베기) 쿨이 끝났으면 사용 / 아니면 공격 버튼(누름·뗌 반복).
-##   0.25초마다 목표 자리에서 (가로) 60px 넘게 떨어졌으면 목표 자리 바닥으로 옮기고 보스 쪽을 본다.
+## 실행: godot --headless --fixed-fps 60 --path . res://tools/probe_facetank.tscn -- [--quick] [--diff normal] [--only knight] [--mode ground,plunge]
+## 봇 방식 (--mode, 쉼표로 여럿; 기본 = 넷 다 — 전체 회귀(--quick)도 넷 다. 스태미너를 안 쓰는 길(낙하·바람·빛)도 지킨다):
+##   ground (땅 맞딜): 가드·구르기·점프를 하지 않는다. 매 물리 틱:
+##     체력 40% 미만 + 이슬 있음 + 바닥 → 회복 / 아니면 영혼 기술(씨앗 베기) 쿨이 끝났으면 사용 / 아니면 공격 버튼(누름·뗌 반복).
+##     0.25초마다 목표 자리에서 (가로) 60px 넘게 떨어졌으면 목표 자리 바닥으로 옮기고 보스 쪽을 본다.
+##   plunge (낙하 공격만, v1.1.0 검수): 가드·구르기·땅 공격 없이 바닥에 서면 점프 → 공중에서 낙하 공격 버튼만 거듭한다
+##     (보스를 맞히면 튕겨 올라 다시 낙하 공격). 회복 규칙은 같고, 자리 옮기기는 바닥에 서 있을 때만.
+##     낙하 공격은 스태미너를 쓰지 않아서 스태미너 제한이 닿지 않는 길 — 튕기며 거듭 내려꽂아 보스를 계속 무너뜨리던 것을 지킨다.
+##   wind / light: ground 와 같은데 영혼이 바람 / 빛 (그 능력이 있는 보스만 — 바람은 펌프부터, 빛은 여왕부터: 전체 24 / 12판).
 ##   목표 자리: front(보스 앞 140) / back(보스 뒤 140) / inside(보스 x). 공중 보스면 그 x 의 바닥.
 ## 성장: 그 보스를 만날 즈음의 예상치 (명세 3.8 표 — Progress.upgrades 를 직접 정한다, 영혼 '씨앗').
-## 통과: Normal 에서 5보스 × 3자리 × 씨드 2개 = 30판 모두 봇이 쓰러진다 (300초 안에). 이기거나 300초를 버티면 FAIL.
-##   --quick (전체 회귀용): front·inside × 씨드 1 = 10판. --diff easy 등: 결과만 출력 (합격 판정은 Normal 만).
+## 통과: Normal 에서 방식마다 5보스 × 3자리 × 씨드 2개 = 30판(바람 24·빛 12) 모두 봇이 쓰러진다 (300초 안에). 이기거나 300초를 버티면 FAIL.
+##   --quick (전체 회귀용): 방식마다 front·inside × 씨드 1 = 10판. --diff easy 등: 결과만 출력 (합격 판정은 Normal 만).
 ##   스태미너 흉내 (P 묶음 병합 전): 소녀에게 스태미너 규칙이 아직 없으면(Player.light_stamina_cost 없음) **저절로** 켜진다.
 ##   봇이 명세 2.1·2.2 의 규칙(1·2·3타 10/12/15, 공격 중 회복 없음, 벗어난 뒤 0.5초 지연, 28/초, 3타 뒤 0.35초 잠금)을 스스로 지키며
 ##   누르고, 소녀의 피해도 P 묶음 값으로 맞춘다(씨앗 베기 32 → 40, 일반·씨앗 새순 배율 Progress.skill_damage_mult) — 맞딜 승인 기준은
@@ -44,6 +49,9 @@ var _sim_mode := "auto"
 var _accel := 1
 var _diff := "normal"
 var _results: Array = []
+const MODES := ["ground", "plunge", "wind", "light"]
+const MODE_NAMES := {"ground": "땅 맞딜", "plunge": "낙하 공격만", "wind": "바람 영혼", "light": "빛 영혼"}
+var _jump_hold := 0
 
 
 func _ready() -> void:
@@ -72,17 +80,29 @@ func _ready() -> void:
 	var si := args.find("--spots")
 	if si >= 0 and si + 1 < args.size():
 		spots = Array(args[si + 1].split(","))
+	var modes := MODES.duplicate()
+	var mi := args.find("--mode")
+	if mi >= 0 and mi + 1 < args.size():
+		modes = Array(args[mi + 1].split(",")) if args[mi + 1] != "all" else MODES.duplicate()
+	for m in modes:
+		if not m in MODES:
+			_check(false, "모르는 방식 %s (%s)" % [m, MODES])
+			get_tree().quit(1)
+			return
 	Settings.data["screen_shake"] = false
-	print("[probe] 맞딜 시험 시작 (난이도 %s, %s, 물리 %d틱/초 × 시간 %d배, 스태미너 흉내 %s)" % [_diff, "빠른 판" if quick else "전체", Engine.physics_ticks_per_second, _accel, {"auto": "자동", "on": "켬", "off": "끔"}[_sim_mode]])
+	print("[probe] 맞딜 시험 시작 (난이도 %s, %s, 방식 %s, 물리 %d틱/초 × 시간 %d배, 스태미너 흉내 %s)" % [_diff, "빠른 판" if quick else "전체", ",".join(modes), Engine.physics_ticks_per_second, _accel, {"auto": "자동", "on": "켬", "off": "끔"}[_sim_mode]])
 	if _accel > 1:
 		print("[probe] (실시간 실행이라 빠른 판·%d배속 — 전체 30판은 --fixed-fps 60 으로)" % _accel)
 	var t_wall := Time.get_ticks_msec()
-	for prof in PROFILES:
-		if only != "" and prof["id"] != only:
-			continue
-		for spot in spots:
-			for sd in seeds:
-				await _run(prof, spot, sd)
+	for mode in modes:
+		for prof in PROFILES:
+			if only != "" and prof["id"] != only:
+				continue
+			if (mode == "wind" or mode == "light") and not mode in prof["ab"]:
+				continue   # 그 영혼을 아직 못 얻은 보스
+			for spot in spots:
+				for sd in seeds:
+					await _run(prof, spot, sd, mode)
 	_summary()
 	print("[probe] 걸린 시간 %.0f초 (벽시계)" % ((Time.get_ticks_msec() - t_wall) / 1000.0))
 	print("[probe] 끝: 실패 %d" % _fail)
@@ -100,7 +120,7 @@ func _frames(n: int) -> void:
 		await get_tree().physics_frame
 
 
-func _setup_progress(prof: Dictionary) -> void:
+func _setup_progress(prof: Dictionary, mode: String) -> void:
 	Progress.reset()
 	Progress.difficulty = _diff
 	Progress.upgrades = {"max_hp": prof["max_hp"], "attack": prof["attack"], "heal": prof["heal"], "dews": prof["dews"]}
@@ -109,21 +129,22 @@ func _setup_progress(prof: Dictionary) -> void:
 			Progress.upgrades["tok_" + TRACKS[i]] = float(prof["tok"][i])
 	for a in prof["ab"]:
 		Progress.abilities[a] = true
-	Progress.soul = "seed"
+	Progress.soul = mode if mode == "wind" or mode == "light" else "seed"
 	Progress.soul_cooldowns.clear()
 
 
 func _release_all() -> void:
-	for a in ["attack_light", "soul_ability", "heal", "guard", "dodge", "jump", "move_left", "move_right", "move_down", "move_up", "interact"]:
+	for a in ["attack_light", "soul_ability", "heal", "guard", "dodge", "jump", "move_left", "move_right", "move_down", "move_up", "interact", "plunge"]:
 		if InputMap.has_action(a):
 			Input.action_release(a)
 
 
 ## 한 판: 방을 읽고 싸움을 걸고, 봇이 쓰러지거나(통과) 보스가 쓰러지거나(실패) 300초가 지날 때(실패)까지.
-func _run(prof: Dictionary, spot: String, sd: int) -> void:
+func _run(prof: Dictionary, spot: String, sd: int, mode := "ground") -> void:
 	seed(9100 + sd * 7 + PROFILES.find(prof) * 31 + ["front", "back", "inside"].find(spot) * 3)
-	_setup_progress(prof)
+	_setup_progress(prof, mode)
 	_release_all()
+	_jump_hold = 0
 	Engine.time_scale = float(_accel)
 	var room: Node = load("res://scenes/rooms/%s.tscn" % prof["room"]).instantiate()
 	add_child(room)
@@ -203,7 +224,9 @@ func _run(prof: Dictionary, spot: String, sd: int) -> void:
 		if move_t >= MOVE_EVERY:
 			move_t = 0.0
 			var tx := _target_x(boss, spot, arena)
-			if absf(player.global_position.x - tx) > MOVE_TOL:
+			# 낙하 공격 봇은 바닥에 서 있을 때만 옮긴다 (튕겨 오르는 중에 끌어내리지 않게)
+			var can_move := mode != "plunge" or (player.is_on_floor() and player.state in Player.LOCOMOTION)
+			if absf(player.global_position.x - tx) > MOVE_TOL and can_move:
 				_teleport(player, tx, gy)
 			_face(player, boss, spot)
 		if tick % 30 == 0 and "--trace" in OS.get_cmdline_user_args():
@@ -227,6 +250,17 @@ func _run(prof: Dictionary, spot: String, sd: int) -> void:
 		if player.hp < player.max_hp * HEAL_BELOW and player.dews > 0 and on_floor:
 			# 회복: 공격을 멈추고(지금 동작이 끝나 서면 받아 준다) 회복 버튼
 			Input.action_press("heal")
+		elif mode == "plunge":
+			# 낙하 공격만: 바닥에 서면 점프(올라가는 동안 점프 버튼을 다시 눌러 높이) → 떨어지기 시작하면 낙하 공격 버튼
+			# (보스를 맞혀 튕겨 오르면 잠금 동안 누른 것은 기억됐다가 풀리는 순간 다시 내려꽂는다)
+			if on_floor and player.state in Player.LOCOMOTION:
+				Input.action_press("jump")
+				_jump_hold = 30
+			elif not on_floor and player.state in Player.LOCOMOTION and player.velocity.y > -150.0:
+				Input.action_press("plunge")
+			if _jump_hold > 0 and not on_floor and player.velocity.y < 0.0:
+				Input.action_press("jump")
+				_jump_hold -= 1
 		elif player.soul_cooldown_left() <= 0.0 and (player.state in Player.LOCOMOTION or (player.state == Player.State.ATTACK and player.attack_phase == "recovery")):
 			Input.action_press("soul_ability")
 		else:
@@ -235,15 +269,15 @@ func _run(prof: Dictionary, spot: String, sd: int) -> void:
 				Input.action_press("attack_light")
 	_release_all()
 	var boss_pct := 100.0 * float(boss.hp) / maxf(float(boss.max_hp), 1.0) if is_instance_valid(boss) else -1.0
-	var row := {"boss": prof["id"], "spot": spot, "seed": sd, "result": result, "t": t, "boss_pct": boss_pct, "dmg": dmg_taken[0], "hits": hits[0], "heals": heals[0], "tries": tries[0]}
+	var row := {"mode": mode, "boss": prof["id"], "spot": spot, "seed": sd, "result": result, "t": t, "boss_pct": boss_pct, "dmg": dmg_taken[0], "hits": hits[0], "heals": heals[0], "tries": tries[0]}
 	_results.append(row)
-	var line := "facetank %s %s seed %d: %s %.1f초 — 보스 체력 %.0f%% (%.0f/%.0f), 받은 피해 %.0f (%d대), 회복 %d번(시도 %d), 소녀 최대 체력 %.0f" % [
-		prof["id"], spot, sd, {"died": "봇이 쓰러짐", "won": "봇이 이김", "draw": "300초 무승부", "gone": "사라짐"}[result], t, boss_pct,
+	var line := "facetank %s%s %s seed %d: %s %.1f초 — 보스 체력 %.0f%% (%.0f/%.0f), 받은 피해 %.0f (%d대), 회복 %d번(시도 %d), 소녀 최대 체력 %.0f" % [
+		"" if mode == "ground" else mode + " ", prof["id"], spot, sd, {"died": "봇이 쓰러짐", "won": "봇이 이김", "draw": "300초 무승부", "gone": "사라짐"}[result], t, boss_pct,
 		float(boss.hp) if is_instance_valid(boss) else 0.0, float(boss.max_hp) if is_instance_valid(boss) else 0.0, dmg_taken[0], hits[0], heals[0], tries[0],
 		player.max_hp if is_instance_valid(player) else 0.0]
 	if _diff == "normal":
 		if result == "won":
-			_check(false, "facetank %s %s seed %d won %.1f초 hp %.0f" % [prof["id"], spot, sd, t, player.hp if is_instance_valid(player) else 0.0])
+			_check(false, "facetank %s%s %s seed %d won %.1f초 hp %.0f" % ["" if mode == "ground" else mode + " ", prof["id"], spot, sd, t, player.hp if is_instance_valid(player) else 0.0])
 			print("[probe]   " + line)
 		elif result != "died":
 			_check(false, line)
@@ -303,7 +337,7 @@ func _face(player: Player, boss: Node2D, spot: String) -> void:
 func _summary() -> void:
 	var by := {}
 	for r in _results:
-		var k: String = r["boss"]
+		var k: String = "%s|%s" % [r["mode"], r["boss"]]
 		if not by.has(k):
 			by[k] = {"n": 0, "died": 0, "t": 0.0, "dmg": 0.0, "boss_pct": 0.0}
 		by[k]["n"] += 1
@@ -313,5 +347,6 @@ func _summary() -> void:
 		by[k]["boss_pct"] += r["boss_pct"]
 	for k in by:
 		var b: Dictionary = by[k]
-		print("[probe] 요약 %s (%s): 봇 쓰러짐 %d/%d, 평균 버틴 시간 %.1f초, 평균 받은 피해 %.0f, 끝날 때 보스 체력 평균 %.0f%%" % [
-			k, _diff, b["died"], b["n"], b["t"] / b["n"], b["dmg"] / b["n"], b["boss_pct"] / b["n"]])
+		var mk: Array = k.split("|")
+		print("[probe] 요약 [%s] %s (%s): 봇 쓰러짐 %d/%d, 평균 버틴 시간 %.1f초, 평균 받은 피해 %.0f, 끝날 때 보스 체력 평균 %.0f%%" % [
+			MODE_NAMES.get(mk[0], mk[0]), mk[1], _diff, b["died"], b["n"], b["t"] / b["n"], b["dmg"] / b["n"], b["boss_pct"] / b["n"]])

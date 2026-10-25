@@ -464,7 +464,7 @@ func _knight_spin(boss: Node, vis: Node2D) -> void:
 		if p.global_position.y < 1000.0 - 60.0:
 			low = false
 	_report("기사 SPIN", r)
-	# 고리끼리 간격: 같은 속도라 내보낸 간격(0.38초)이 그대로 거리로 남는다 (뒤 고리가 앞 고리를 따라잡지 않는다)
+	# 고리끼리 간격: 같은 속도라 내보낸 간격(0.6초 — v1.1.0 검수, 셋째는 되돌림 중)이 그대로 거리로 남는다 (뒤 고리가 앞 고리를 따라잡지 않는다)
 	var speeds := {}
 	for p in get_tree().get_nodes_in_group("projectile"):
 		speeds[p.speed] = true
@@ -473,10 +473,10 @@ func _knight_spin(boss: Node, vis: Node2D) -> void:
 		gaps.append(snappedf(turns.times[i] - turns.times[i - 1], 0.01))
 	var gap_ok: bool = turns.times.size() == 3 and speeds.size() == 1
 	for g in gaps:
-		if g < 0.3:
-			gap_ok = false
+		if g < 0.5:
+			gap_ok = false   # 0.38 → 0.6 (v1.1.0 검수: 큰 고리 사이에 내려설 틈)
 	var ok: bool = n == 6 and low and turns.max > 2.5 * TAU and absf(bone.rotation) < PI and boss.rings_sent == 3 and gap_ok
-	print("[probe] 기사 등불 회전: 고리 %d개(6 기준), 모두 낮게(바닥 60px 안) %s, 창 누적 회전 %.1f바퀴(2.5 이상), 끝난 뒤 각도 %.2f(π 안), 고리 간격 %s초(0.3 이상)·속도 %d가지(1 기준) → %s" % [
+	print("[probe] 기사 등불 회전: 고리 %d개(6 기준), 모두 낮게(바닥 60px 안) %s, 창 누적 회전 %.1f바퀴(2.5 이상), 끝난 뒤 각도 %.2f(π 안), 고리 간격 %s초(0.5 이상)·속도 %d가지(1 기준) → %s" % [
 		n, low, turns.max / TAU, bone.rotation, gaps, speeds.size(), "OK" if ok else "틀림!"])
 	if not ok:
 		_fail += 1
