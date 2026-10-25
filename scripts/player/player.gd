@@ -263,6 +263,11 @@ const SOUL_INFO := {
 @export var hit_stun := 0.3
 ## 맞은 뒤 무적 시간.
 @export var invuln_time := 0.7
+## 보스전(BossRoom 이 싸움을 건 동안) 맞은 뒤 무적 시간 — v1.1.0 맞딜 방지 사다리 3단계(명세 3.7, 기획자 요청 8 마지막 문장):
+## 공격 패턴을 무시하고 맞으면서 때리면 겹친 공격이 더 자주 들어온다. 일반 몹·환경은 invuln_time 그대로.
+@export var invuln_time_boss := 0.5
+## BossRoom 이 싸움을 시작하면 true, 끝나거나(쓰러뜨림·부활·정화) 방을 나가면 false.
+var boss_fight := false
 
 var state: State = State.IDLE
 ## 바라보는 방향. 1 = 오른쪽, -1 = 왼쪽.
@@ -1476,7 +1481,7 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	hit_taken.emit(dmg)
 	velocity = Vector2(-from_dir * absf(hit.knockback.x), hit.knockback.y)
 	_hit_timer = hit_stun
-	_invuln_timer = invuln_time
+	_invuln_timer = invuln_time_boss if boss_fight else invuln_time
 	hitbox.deactivate()
 	Fx.spawn("hit_spark", _hurt_point(hit, from_dir), {"facing": -from_dir, "palette": "red", "scale": 0.85})   # 맞은 자리에 붉은 불꽃
 	Juice.hitstop(hit.hitstop, 0.05)

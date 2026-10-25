@@ -183,6 +183,8 @@ func _on_player_died() -> void:
 
 ## 싸움 중에는 조금 멀리서, 위쪽을 더 보여 준다.
 func _set_battle_camera(on: bool) -> void:
+	if player:
+		player.boss_fight = on   # 보스전 동안 맞은 뒤 무적이 짧다 (Player.invuln_time_boss — 맞딜 방지)
 	var cam := player.get_node_or_null("Camera2D") if player else null
 	if cam == null:
 		return

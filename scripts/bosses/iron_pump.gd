@@ -45,6 +45,9 @@ signal slammed
 ## 장갑이 깨졌다 다시 닫힌 뒤 이 시간(초) 동안은 장갑 게이지가 쌓이지 않는다 (v1.1.0 맞딜 방지 — 기사·뿌리지기와 같은 규칙.
 ## 되받은 분사는 기술의 보상이라 그대로)
 @export var poise_immune_after_broken := 2.5
+## 예비동작·타격 중에 받는 장갑 게이지 배수 (슈퍼아머 — 기사·뿌리지기와 같은 규칙). v1.1.0 통합 맞딜 방지: 씨앗 베기만 거듭해
+## 피스톤·빨아들이기 예비동작마다 장갑을 깨 싸움의 절반 가까이를 무너진(×2) 펌프로 보내던 것. 되받은 분사는 그대로.
+@export var attack_poise_multiplier := 0.5
 ## 약공격(흐트러짐 45 미만, 되받은 분사 아님)의 피해·장갑 비율
 @export var light_damage_ratio := 0.35
 @export var light_poise_ratio := 0.5
@@ -526,6 +529,8 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		# 저스트 가드 순간에 이미 +45 를 받았다 (on_just_guarded) → 방울 자체의 흐트러짐(28) 대신 reflect_poise 만
 		armor = reflect_poise
 		dmg *= reflect_damage_multiplier
+	elif state in ATTACK_STATES and attack_phase in ["startup", "active"]:
+		armor *= attack_poise_multiplier   # 공격 도중엔 두들겨 끊기 어렵게 (슈퍼아머)
 	if (state == State.VENT or _poise_immune > 0.0) and not reflected:
 		armor = 0.0   # 맞딜 응징(김 분출)은 끝날 때까지 장갑을 깰 수 없다 — 몸에서 떨어져야 한다 (되받은 방울은 기술의 보상이라 그대로)
 	hp = maxf(hp - dmg, 0.0)
