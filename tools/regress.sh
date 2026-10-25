@@ -38,4 +38,5 @@ for f in probe_selenia probe_texts; do
 done
 echo "== audit"; python3 -I tools/audit_rooms.py > $L/audit.log 2>&1; tail -1 $L/audit.log; python3 -I tools/audit_rooms.py --locked > $L/audit_locked.log 2>&1; tail -1 $L/audit_locked.log
 python3 -I tools/link_flooded_mine.py --check 2>&1 | tail -1
+python3 -I tools/make_rooms_index.py --check 2>&1 | tail -1
 echo "== 끝"

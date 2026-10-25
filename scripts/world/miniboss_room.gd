@@ -9,7 +9,7 @@ class_name MiniBossRoom
 @export var reward_type := "attack"
 @export var reward_amount := 0.1
 @export var reward_text := "거인의 힘이 검에 깃들었다 — 공격력 +10%"
-## 보상이 이슬(reward_type "dews")인데 이슬이 이미 가득(8개)해 회복량으로 바뀌었을 때 대신 띄울 글자. {heal} 은 늘어난 회복량.
+## 보상이 이슬(reward_type "dews")인데 이슬이 이미 가득(Progress.MAX_DEWS)해 회복량으로 바뀌었을 때 대신 띄울 글자. {heal} 은 늘어난 회복량.
 ## 비어 있으면 Pickup.dew_reward_text 의 기본 안내("<보스 이름> — 이슬이 가득해 회복량이 늘었다 (회복량 +10)").
 @export var reward_text_full := ""
 ## 쓰러뜨리면 떨어지는 재화 '빛 가루' (2026-10-19 기획자 요청 9번). 보스 자신의 dust_value 는 0 으로 두고 방이 이만큼 준다 (깃발로 한 번만).
@@ -40,6 +40,11 @@ func _ready() -> void:
 ## 지도 탐사 요소: 이 방의 중간 보스 (쓰러뜨려야 '모두 찾음'). Room._collect_explore_ids 가 부른다.
 func _miniboss_flags() -> Array:
 	return [defeat_flag] if defeat_flag != "" else []
+
+
+## 중간 보스는 쓰러뜨린 기록(Progress.killed)이 아니라 깃발이 맡는다 (쉬어도 다시 나타나지 않는다).
+func _tracks_kill(e: Node) -> bool:
+	return super._tracks_kill(e) and _rel_path(e) != "Enemies/MiniBoss"
 
 
 ## 보스 체력 바를 묶고, 쓰러짐·맞음을 듣고, 싸움 전에는 잠재운다.
@@ -121,11 +126,15 @@ func reward_message() -> String:
 	return Pickup.dew_reward_text(reward_amount, reward_text, boss_name)
 
 
+## 쓰러졌다: 마지막으로 쉰 달빛풀에서 깨어난다 (Room 과 같은 규칙, v1.1.0 D10). 쉰 적이 없으면 이 방에서 싸움을 되돌리고 일어난다.
 func _on_player_died() -> void:
 	await get_tree().create_timer(2.6).timeout
 	if player == null or not is_instance_valid(player):
 		return
+	if _respawn_at_last_grass():
+		return
 	_started = false
+	Progress.clear_killed()
 	respawn_enemies()   # 새 보스를 다시 묶는다 (위 respawn_enemies) — 싸움 전처럼 잠든 채로
 	$GateIn.open()
 	$BossHUD.hide_boss()
