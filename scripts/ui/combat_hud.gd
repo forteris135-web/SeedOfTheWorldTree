@@ -49,6 +49,15 @@ const GUARD_TRACK_POS := Vector2(540, 318)
 const GUARD_FILL := Rect2(560, 331, 1100, 70)
 const GUARD_GREEN_SLICE := Rect2(360, 13, 40, 70)
 const GUARD_DARK_SLICE := Rect2(910, 13, 40, 70)
+## v1.1.0: 가드 막대 = 스태미너 막대. 최대 스태미너(100/103/106/109)만큼 길이가 늘어난다 (체력 막대와 같은 방식, 숫자 없음).
+## 틀 그림(1616×185)을 가르는 자리 (그림 px): 막대 테두리만 있고 잎 장식이 없는 곳. 늘어난 만큼 민무늬 조각을 끼운다.
+const GUARD_BASE := 100.0
+const GUARD_SCALE_MAX := 1.09
+const GUARD_FRAME_SPLIT := 1000.0
+const GUARD_FRAME_STRETCH := Rect2(990, 0, 20, 185)
+## 스태미너가 모자라 공격을 못 했을 때 막대가 붉게 번쩍이는 시간 / 수액의 맥동으로 찼을 때 밝게 번쩍이는 시간 (초)
+const STAMINA_REFUSE_TIME := 0.35
+const STAMINA_PULSE_TIME := 0.4
 const DEW_POS := [Vector2(405, 445), Vector2(560, 445), Vector2(735, 445)]   # 시트에 그려진 세 자리 (첫 자리만 기준으로 쓴다)
 const DEW_STEP := 155.0         # 이슬 사이 간격 (시트 px; 성장 표시 자리 계산용)
 const DEW_STEP_EXTRA := 175.0   # 4번째부터의 간격 (시트의 둘째→셋째 간격과 같게; 처음 세 자리는 DEW_POS 그대로)
@@ -117,6 +126,10 @@ var _flash_timer := 0.0
 var _time := 0.0
 var _hp_shown := 1.0       # 체력 막대가 천천히 따라오게
 var _guard_flash := 0.0
+var _stamina_refuse := 0.0   # 남은 붉은 번쩍임 (초)
+var _stamina_pulse := 0.0    # 남은 맥동 번쩍임 (초)
+var _guard_pieces: Array = []      # 가드 막대 틀 조각 (길이 배수가 바뀔 때만 다시 만든다 — 매 프레임 배열을 새로 만들지 않게)
+var _guard_pieces_scale := -1.0
 ## 성장 연출
 var _last_max_dews := -1
 var _last_max_hp := -1.0
@@ -167,6 +180,8 @@ func _process(delta: float) -> void:
 			_hp_scale_shown = hp_bar_scale()
 			_player.just_guarded.connect(func(_s): flash("저스트 가드!"); _guard_flash = 1.0)
 			_player.guard_broken.connect(func(): flash("가드가 깨졌다"); _guard_flash = 1.0)
+			_player.stamina_refused.connect(func(): _stamina_refuse = STAMINA_REFUSE_TIME)
+			_player.stamina_pulsed.connect(func(_a): _stamina_pulse = STAMINA_PULSE_TIME)
 			_player.purify_started.connect(func(_t): flash("정화의 손길"))
 			_player.died.connect(func(): show_message("쓰러졌다…", 2.5))
 			_player.rest_started.connect(func(_g): show_message("달빛풀에서 쉰다. 적들이 다시 깨어난다.", 2.5))
@@ -178,6 +193,8 @@ func _process(delta: float) -> void:
 	_message_timer = maxf(_message_timer - delta, 0.0)
 	_flash_timer = maxf(_flash_timer - delta, 0.0)
 	_guard_flash = maxf(_guard_flash - delta * 2.0, 0.0)
+	_stamina_refuse = maxf(_stamina_refuse - delta, 0.0)
+	_stamina_pulse = maxf(_stamina_pulse - delta, 0.0)
 	_soul_flash = maxf(_soul_flash - delta / SOUL_FLASH_TIME, 0.0)
 	_hp_grow_flash = maxf(_hp_grow_flash - delta / HP_GROW_TIME, 0.0)
 	_soul_notice_timer = maxf(_soul_notice_timer - delta, 0.0)
@@ -337,6 +354,50 @@ func hp_frame_pieces(scale := -1.0) -> Array:
 	return out
 
 
+## 가드(스태미너) 막대 길이 배수 (100 → 1.0, 109 → 1.09)
+func guard_bar_scale(max_guard := -1.0) -> float:
+	if max_guard < 0.0:
+		max_guard = _player.max_guard if _player else GUARD_BASE
+	return clampf(max_guard / GUARD_BASE, 1.0, GUARD_SCALE_MAX)
+
+
+## 가드 막대 채움 구간 (화면 좌표)
+func guard_fill_rect(scale := -1.0) -> Rect2:
+	if scale < 0.0:
+		scale = guard_bar_scale()
+	return Rect2(_s(GUARD_FILL.position), Vector2(GUARD_FILL.size.x * scale, GUARD_FILL.size.y) * SHEET_SCALE)
+
+
+## 가드 막대 틀 조각 (체력 막대 hp_frame_pieces 와 같은 방식): 왼쪽 → (늘어난 만큼 끼운 조각) → 오른쪽 끝
+func guard_frame_pieces(scale := -1.0) -> Array:
+	if scale < 0.0:
+		scale = guard_bar_scale()
+	var tex_size := BAR_GUARD.get_size()
+	var extra := GUARD_FILL.size.x * (scale - 1.0)
+	var base := _s(GUARD_TRACK_POS)
+	var out := []
+	out.append({"dst": Rect2(base, Vector2(GUARD_FRAME_SPLIT, tex_size.y) * SHEET_SCALE), "src": Rect2(0, 0, GUARD_FRAME_SPLIT, tex_size.y)})
+	if extra > 0.5:
+		out.append({"dst": Rect2(base + Vector2(GUARD_FRAME_SPLIT, 0) * SHEET_SCALE, Vector2(extra, tex_size.y) * SHEET_SCALE), "src": GUARD_FRAME_STRETCH})
+	out.append({"dst": Rect2(base + Vector2(GUARD_FRAME_SPLIT + extra, 0) * SHEET_SCALE, Vector2(tex_size.x - GUARD_FRAME_SPLIT, tex_size.y) * SHEET_SCALE), "src": Rect2(GUARD_FRAME_SPLIT, 0, tex_size.x - GUARD_FRAME_SPLIT, tex_size.y)})
+	return out
+
+
+## 가드(스태미너) 막대: 틀 → 찬 부분 → 빈 부분 (길이 배수 scale)
+func _draw_guard_bar(ratio: float, scale: float) -> void:
+	if not is_equal_approx(scale, _guard_pieces_scale):
+		_guard_pieces = guard_frame_pieces(scale)
+		_guard_pieces_scale = scale
+	for piece in _guard_pieces:
+		_canvas.draw_texture_rect_region(BAR_GUARD, piece["dst"], piece["src"])
+	var fill := guard_fill_rect(scale)
+	var full_w := fill.size.x * clampf(ratio, 0.0, 1.0)
+	if full_w > 1.0:
+		_canvas.draw_texture_rect_region(BAR_GUARD, Rect2(fill.position, Vector2(full_w, fill.size.y)), GUARD_GREEN_SLICE)
+	if fill.size.x - full_w > 1.0:
+		_canvas.draw_texture_rect_region(BAR_GUARD, Rect2(fill.position + Vector2(full_w, 0), Vector2(fill.size.x - full_w, fill.size.y)), GUARD_DARK_SLICE)
+
+
 ## 그릴 이슬 수: 소녀의 최대 이슬 (상한 Progress.MAX_DEWS 를 넘지 않게 한 번 더 막는다)
 func dew_count() -> int:
 	return mini(_player.max_dews if _player else Progress.BASE_DEWS, Progress.MAX_DEWS)
@@ -486,8 +547,8 @@ func hud_right_x(y0 := -INF, y1 := INF) -> float:
 	var rects: Array[Rect2] = []
 	for piece in hp_frame_pieces(maxf(_hp_scale_shown, hp_bar_scale())):
 		rects.append(piece["dst"])
-	# 가드 막대 그림(185px)의 아래쪽은 투명이라 보이는 높이(약 120px)만 센다
-	rects.append(Rect2(_s(GUARD_TRACK_POS), Vector2(BAR_GUARD.get_width(), 120.0) * SHEET_SCALE))
+	# 가드 막대 그림(185px)의 아래쪽은 투명이라 보이는 높이(약 120px)만 센다 (최대 스태미너만큼 늘어난 길이 포함)
+	rects.append(Rect2(_s(GUARD_TRACK_POS), Vector2(BAR_GUARD.get_width() + GUARD_FILL.size.x * (guard_bar_scale() - 1.0), 120.0) * SHEET_SCALE))
 	var slots := dew_slots()
 	for i in slots.size():
 		rects.append(Rect2(slots[i], dew_size(i)))
@@ -647,15 +708,6 @@ func soul_dots() -> Array:
 
 
 # ───────── 그리기 ─────────
-
-func _draw_bar(tex: Texture2D, track_pos: Vector2, fill: Rect2, full_slice: Rect2, empty_slice: Rect2, ratio: float) -> void:
-	_canvas.draw_texture_rect(tex, Rect2(_s(track_pos), tex.get_size() * SHEET_SCALE), false)
-	var full_w := fill.size.x * clampf(ratio, 0.0, 1.0)
-	if full_w > 1.0:
-		_canvas.draw_texture_rect_region(tex, Rect2(_s(fill.position), Vector2(full_w, fill.size.y) * SHEET_SCALE), full_slice)
-	if fill.size.x - full_w > 1.0:
-		_canvas.draw_texture_rect_region(tex, Rect2(_s(fill.position + Vector2(full_w, 0)), Vector2(fill.size.x - full_w, fill.size.y) * SHEET_SCALE), empty_slice)
-
 
 ## 체력 막대: 틀 세 조각 → 찬 부분 → 빈 부분 (길이 배수 scale)
 func _draw_hp_bar(ratio: float, scale: float) -> void:
@@ -883,9 +935,19 @@ func _on_draw() -> void:
 		_canvas.draw_rect(lost, Color(1.0, 0.9, 0.7, 0.55))
 	if _hp_grow_flash > 0.0:
 		_canvas.draw_rect(fill, Color(1.0, 0.95, 0.8, 0.55 * _hp_grow_flash))
-	_draw_bar(BAR_GUARD, GUARD_TRACK_POS, GUARD_FILL, GUARD_GREEN_SLICE, GUARD_DARK_SLICE, _player.guard / _player.max_guard)
+	# 가드 막대 = 스태미너 막대 (v1.1.0): 최대 스태미너만큼 길어지고, 모자라 공격을 못 하면 붉게 / 수액의 맥동으로 차면 밝게 번쩍
+	var gfill := guard_fill_rect()
+	_draw_guard_bar(_player.guard / maxf(_player.max_guard, 1.0), guard_bar_scale())
 	if _guard_flash > 0.0:
-		_canvas.draw_rect(Rect2(_s(GUARD_FILL.position), GUARD_FILL.size * SHEET_SCALE), Color(0.56, 0.83, 1.0, 0.6 * _guard_flash))
+		_canvas.draw_rect(gfill, Color(0.56, 0.83, 1.0, 0.6 * _guard_flash))
+	if _stamina_refuse > 0.0:
+		# 남은 양은 보이게: 빈 부분은 진하게, 찬 부분은 옅게 붉힌다
+		var ra := _stamina_refuse / STAMINA_REFUSE_TIME
+		var cut := gfill.size.x * clampf(_player.guard / maxf(_player.max_guard, 1.0), 0.0, 1.0)
+		_canvas.draw_rect(Rect2(gfill.position, Vector2(cut, gfill.size.y)), Color(1.0, 0.3, 0.2, 0.3 * ra))
+		_canvas.draw_rect(Rect2(gfill.position + Vector2(cut, 0.0), Vector2(gfill.size.x - cut, gfill.size.y)), Color(1.0, 0.18, 0.12, 0.75 * ra))
+	if _stamina_pulse > 0.0:
+		_canvas.draw_rect(gfill, Color(0.75, 1.0, 0.85, 0.5 * _stamina_pulse / STAMINA_PULSE_TIME))
 	# 엠블럼과 씨앗의 빛
 	_canvas.draw_texture_rect(EMBLEM, Rect2(_s(EMBLEM_POS), EMBLEM.get_size() * SHEET_SCALE), false)
 	var low := hp_ratio < 0.3

@@ -8,6 +8,9 @@ extends Node
 ##   투사체가 등 뒤 적을 안 맞힘 / 벽에 붙어 쏘면 사이에 낀 적을 한 번만 맞힘.
 ## 2026-10-19 이펙트 리뉴얼 F1: 바람 = 초승달 검기(판정 = 초승달 머리), 빛 = 레이저(벽에서 멈춤, 여러 적 한 번씩) 로 시험을 바꿈.
 ##   보호막·씨앗 베기 초승달 크기는 이제 그림(보호막 dome, 큰 초승달 slash_big)의 실제 범위로 잰다.
+## v1.1.0 (명세 §2.8): 일반 공격 판정 앞끝 270 과 칼자국 그림 끝(±20, 세로 띠 ±40, 새순 0·3단계), 씨앗 앞끝 374, 바람 120·빛 95.2,
+##   낙하 공격 이펙트 범위 vs 판정(기본·수액의 맥동, 각 변 ±25), 일반 공격 불꽃·칼자국 청록,
+##   사거리 실측(옛 끝 225 로는 안 닿던 앞끝 ~255 의 적은 맞고, 270 너머는 안 맞음) (_test_v110_geometry).
 ## 실행: godot --headless --path . res://tools/probe_player.tscn
 ## 첫 방(canopy_01)을 통째로 띄워 진짜 소녀를 Input.action_press 로 조종한다. 마지막 줄 "[probe] 끝: 실패 N".
 
@@ -104,6 +107,7 @@ func _run() -> void:
 	await _test_keymap_old_file()
 	await _test_shield_and_crescent_geometry()
 	await _test_field_fixes()
+	await _test_v110_geometry()
 	await _test_guard()
 
 
@@ -172,11 +176,11 @@ func _test_seed_slash() -> void:
 	print("[probe] 씨앗 베기: 거친 상태 %s, 히트박스 켜진 시간 %.3f초 (설정 %.2f), 상자 크기 %s 중심 %s, 쿨다운 예비 중 %.2f / 타격 중 %.2f" % [states.keys(), active_time, _player.slash_active, box_size, box_pos, cd_startup, cd_active])
 	_check(got["started"] and states.has("씨앗 베기"), "soul_ability(seed) → SOUL_SLASH 상태로 들어간다")
 	_check(absf(active_time - _player.slash_active) < 0.04, "히트박스가 약 0.18초 켜진다")
-	_check(box_size == Vector2(400, 430) and box_pos == Vector2(140, -35), "히트박스가 앞·위·아래를 넓게 덮는다 (400×430, 중심 (140,-35): 앞 340, 위 250, 아래 180)")
+	_check(box_size == Vector2(434, 430) and box_pos == Vector2(157, -35), "히트박스가 앞·위·아래를 넓게 덮는다 (434×430, 중심 (157,-35): 앞 374, 위 250, 아래 180 — v1.1.0 앞 340 → 374)")
 	_check(cd_startup == 0.0 and cd_active > 1.0, "쿨다운 1.4초는 실제로 베는 순간(active)에 걸린다")
 	_check(wc.hp < hp0, "근처 나무꾼이 맞아 체력이 줄었다 (%.0f → %.0f, 기대 피해 %.0f)" % [hp0, wc.hp, _player.slash_damage * _player.attack_multiplier])
 	_check(_player.state == Player.State.IDLE or _player.state in Player.LOCOMOTION, "베기가 끝나면 대기로 돌아온다 (%s)" % _player.state_name())
-	# 앞 멀리 (+300) 에 선 적도 맞는다 (약공격은 255 까지)
+	# 앞 멀리 (+300) 에 선 적도 맞는다 (약공격 판정 끝은 270)
 	_reset_enemy(wc)
 	var far_pos := wc.global_position
 	_teleport(far_pos + Vector2(-300, -10), 1)
@@ -720,7 +724,7 @@ func _test_projectiles() -> void:
 		var expect: float = _player.gust_speed * _player.gust_range_time
 		print("[probe] wind 초승달: 판정 %s, 피해 %.0f, 사거리 %.0f px (%.2f초, 기대 %.0f)" % [rect_size, p.damage if is_instance_valid(p) else -1.0, far, frames / 60.0, expect])
 		_check(far > expect * 0.9 and far < expect * 1.1, "wind 사거리가 속도×수명(%.0f)에 맞는다" % expect)
-		_check(is_instance_valid(p) and p.size == Vector2(190, 230) and absf(p.damage - 96.0 * _player.attack_multiplier) < 0.01, "바람: 크기 190×230 (세로로 선 초승달), 피해 96 (24×4)")
+		_check(is_instance_valid(p) and p.size == Vector2(190, 230) and absf(p.damage - 120.0 * _player.attack_multiplier) < 0.01, "바람: 크기 190×230 (세로로 선 초승달), 피해 120 (v1.1.0: 96 × 1.25)")
 		_check(is_equal_approx(_player.gust_cooldown, 5.0) and is_equal_approx(_player.gust_range_time, 1.3) and rect_size == Vector2(190, 230) * 0.9, "바람: 쿨다운 5초, 사거리 1.3초, 판정 = 크기×0.9 (%s)" % rect_size)
 	await _frames(10)
 	# ---- 빛: 레이저 ----
@@ -742,7 +746,7 @@ func _test_projectiles() -> void:
 		print("[probe] 레이저: 발사 %s, 벽 %s, 길이 %.0f (사거리 %.0f), 판정 높이 %.0f, 피해 %.0f" % [fired["n"] >= 0, l.hit_wall, len, rng, l.width, l.damage])
 		_check(fired["n"] >= 0 and l.phase == "beam", "light: 모으기 0.12초 뒤 발사된다")
 		_check((l.hit_wall and len < rng) or (not l.hit_wall and absf(len - rng) < 2.0), "light: 빛줄기는 벽에서 멈추거나 사거리(%.0f)만큼 뻗는다" % rng)
-		_check(is_equal_approx(rng, 1540.0) and absf(l.width - 81.0) < 0.01 and absf(l.damage - 136.0 * _player.attack_multiplier) < 0.01, "빛: 사거리 1540 (예전 투사체 1100×1.4), 판정 높이 81, 피해 136 (34×4)")
+		_check(is_equal_approx(rng, 1540.0) and absf(l.width - 81.0) < 0.01 and absf(l.damage - 95.2 * _player.attack_multiplier) < 0.01, "빛: 사거리 1540 (예전 투사체 1100×1.4), 판정 높이 81, 피해 95.2 (v1.1.0: 136 × 0.7)")
 		_check(is_equal_approx(_player.light_shot_cooldown, 7.0), "빛: 쿨다운 7초")
 	_player.laser_fired.disconnect(on_fired)
 	await _frames(30)
@@ -1078,6 +1082,124 @@ func _test_shield_and_crescent_geometry() -> void:
 	_check(art.position.y >= box.position.y and art.end.y <= box.end.y and art.end.x <= box.end.x, "초승달이 판정 상자 밖으로 나가지 않는다")
 	_check(art.end.x > box.end.x - 60.0 and art.end.y > box.end.y - 40.0, "초승달이 판정 상자에 거의 꽉 찬다")
 	await _frames(10)
+
+
+# ---------- v1.1.0: 판정 = 이펙트 (일반 공격·씨앗·낙하 공격), 영혼 수치, 청록 ----------
+const TEAL_MID := Color(0.00, 0.69, 0.67)
+
+
+## 오른쪽을 볼 때의 사각형 a 의 각 변이 b 의 각 변에서 tol 안인가
+static func _sides_within(a: Rect2, b: Rect2, tol: float) -> bool:
+	return absf(a.position.x - b.position.x) <= tol and absf(a.end.x - b.end.x) <= tol \
+		and absf(a.position.y - b.position.y) <= tol and absf(a.end.y - b.end.y) <= tol
+
+
+func _test_v110_geometry() -> void:
+	var vis: Node2D = _player.get_node("Visual")
+	# (1) 일반 공격 판정: 앞 30 ~ 270, 위 90 ~ 아래 22 — 실제로 켜지는 상자도
+	_check(_player.light_box() == Rect2(30, -90, 240, 112), "일반 공격 판정 Rect2(30,-90,240,112) — 앞끝 225 → 270 (+20%%) (%s)" % _player.light_box())
+	_teleport(Vector2(400, FLOOR1_Y - 68.0), 1)
+	await _frames(3)
+	await _tap("attack_light")
+	var seen_size := Vector2.ZERO
+	var seen_pos := Vector2.ZERO
+	for i in 20:
+		await get_tree().physics_frame
+		if _player.state == Player.State.ATTACK and _player.attack_phase == "active":
+			seen_size = (_player.hitbox._shape.shape as RectangleShape2D).size
+			seen_pos = _player.hitbox._shape.position
+			break
+	_check(seen_size == Vector2(240, 112) and seen_pos == Vector2(150, -34), "약공격이 켜는 판정 상자 240×112, 중심 (150,-34) (%s / %s)" % [seen_size, seen_pos])
+	# 칼자국 그림이 청록으로 떴다
+	var teal_slash := false
+	for f in Fx._active:
+		if f.visible and f.fx_name == "slash1" and f.material is ShaderMaterial:
+			var m := f.material as ShaderMaterial
+			teal_slash = bool(m.get_shader_parameter("palette_on")) and (m.get_shader_parameter("pal_mid") as Color).is_equal_approx(TEAL_MID)
+	_check(teal_slash, "일반 공격 칼자국(slash1)이 청록 팔레트로 뜬다")
+	await _frames(40)
+	# (2) 칼자국 그림의 보이는 끝 vs 판정 끝 (새순 0단계·3단계), 세로 띠 ±40
+	for lv in [0, 3]:
+		var k: float = Progress.SKILL_RANGE["normal"][lv]
+		var front: float = _player.light_reach * k
+		var box := Rect2(30, -90, front - 30.0, 112)
+		for step in [1, 2, 3]:
+			var art: Rect2 = vis.light_slash_rect(step, k)
+			var d := art.end.x - box.end.x
+			print("[probe] 칼자국 %d타 새순 %d단계: 그림 x %.0f..%.0f y %.0f..%.0f / 판정 끝 %.1f (차이 %+.1f), 띠 위 %+.0f 아래 %+.0f" % [step, lv, art.position.x, art.end.x, art.position.y, art.end.y, box.end.x, d, box.position.y - art.position.y, art.end.y - box.end.y])
+			_check(absf(d) <= 20.0, "%d타 칼자국 끝이 판정 끝(%.1f) ±20px 안 (새순 %d단계, 차이 %+.1f)" % [step, box.end.x, lv, d])
+			_check(art.position.y >= box.position.y - 40.0 and art.end.y <= box.end.y + 40.0, "%d타 칼자국 세로가 판정 띠(-90..22) 위아래 40px 안 (새순 %d단계)" % [step, lv])
+	# (3) 씨앗 베기: 앞끝 374 (0단계), 그림 안
+	_check(_player.seed_slash_box() == Rect2(-60, -250, 434, 430) and is_equal_approx(_player.slash_damage, 40.0), "씨앗 베기 판정 앞끝 374 (Rect2(-60,-250,434,430)), 피해 40 (32 × 1.25)")
+	var sart3: Rect2 = vis.seed_slash_rect(1.15)
+	var sbox3 := Rect2(-60, -250, 374.0 * 1.15 + 60.0, 430)
+	_check(sart3.end.x <= sbox3.end.x and sart3.end.x > sbox3.end.x - 60.0, "새순 3단계 씨앗 베기 초승달도 판정 앞끝(%.1f) 안에 거의 꽉 찬다 (%.1f)" % [sbox3.end.x, sart3.end.x])
+	# (4) 영혼 수치
+	_check(is_equal_approx(_player.gust_damage, 120.0) and is_equal_approx(_player.light_shot_damage, 95.2), "바람 피해 120 (+25%%), 빛 피해 95.2 (-30%%)")
+	# (5) 낙하 공격 이펙트 범위 vs 판정 (기본·수액의 맥동), 각 변 ±25
+	for k in [1.0, 1.15]:
+		var dive_box := Player._scaled_about_center(_player.plunge_box, k)
+		var land_box := Player._scaled_about_center(_player.plunge_land_box, k)
+		var dart: Rect2 = vis.plunge_dive_rect(k)
+		var lart: Rect2 = vis.plunge_impact_rect(k)
+		print("[probe] 낙하 공격 ×%.2f: 내려꽂기 판정 %s / 그림 %s, 착지 판정 %s / 그림 %s" % [k, dive_box, dart, land_box, lart])
+		_check(_sides_within(dart, dive_box, 25.0), "내려꽂기 바람결이 판정과 각 변 ±25 안 (×%.2f)" % k)
+		_check(_sides_within(lart, land_box, 25.0), "착지 터짐이 착지 판정과 각 변 ±25 안 (×%.2f)" % k)
+	# 착지 고리는 장식: 최종 반지름 ±185 안 (맥동 1.15 배까지)
+	var ring: Rect2 = vis.fx_visible_rect("ground_ring", Vector2.ZERO, 1.3 * 1.15)
+	_check(ring.size.x * 0.5 <= 185.0, "착지 고리 최종 반지름 %.0f ≤ 185 (맥동 포함)" % (ring.size.x * 0.5))
+	# (6) 일반 공격 불꽃은 청록
+	var e := _spawn_dummy_enemy(560.0)
+	_teleport(Vector2(400, FLOOR1_Y - 68.0), 1)
+	await _frames(3)
+	var hp0 := e.hp
+	await _tap("attack_light")
+	var teal_spark := false
+	for i in 30:
+		await get_tree().physics_frame
+		for f in Fx._active:
+			if f.visible and f.fx_name == "hit_spark" and f.material is ShaderMaterial:
+				var m2 := f.material as ShaderMaterial
+				if bool(m2.get_shader_parameter("palette_on")) and (m2.get_shader_parameter("pal_mid") as Color).is_equal_approx(TEAL_MID):
+					teal_spark = true
+		if teal_spark:
+			break
+	_check(e.hp < hp0 and teal_spark, "일반 공격이 몸 앞(+160)의 적을 맞히고 불꽃이 청록이다 (%.0f → %.0f)" % [hp0, e.hp])
+	e.queue_free()
+	await _frames(40)
+	# (7) 사거리가 정말 +20%: 맞는 영역 앞끝이 옛 판정 끝(225)보다 멀고 새 끝(270) 안인 적은 맞고, 새 끝 너머의 적은 안 맞는다.
+	#     약공격은 바닥에서 앞으로 조금 나가므로(light_lunge) 거리는 '맞은 그 순간'의 소녀 자리에서 잰다.
+	var e_in := _spawn_dummy_enemy(400.0 + 258.0 + 34.0)    # 맞는 영역(반지름 34) 앞끝이 처음 자리에서 +258
+	var e_out := _spawn_dummy_enemy(400.0 + 311.0 + 34.0)   # 앞끝 +311 (앞으로 나가도 270 밖)
+	var r_in: float = e_in.hurt_radius
+	var r_out: float = e_out.hurt_radius
+	_teleport(Vector2(400, FLOOR1_Y - 68.0), 1)
+	await _frames(3)
+	var reach_log := {"in_gap": -1.0, "out_hit": false, "max_px": _player.global_position.x}
+	var on_reach := func(res: String, t: Node) -> void:
+		if t == e_in and float(reach_log["in_gap"]) < 0.0:
+			reach_log["in_gap"] = (e_in.global_position.x - r_in) - _player.global_position.x
+		if t == e_out:
+			reach_log["out_hit"] = true
+	_player.hitbox.landed.connect(on_reach)
+	var in_hp0 := e_in.hp
+	var out_hp0 := e_out.hp
+	await _tap("attack_light")
+	for i in 40:
+		await get_tree().physics_frame
+		if _player.state == Player.State.ATTACK and _player.attack_phase in ["startup", "active"]:
+			reach_log["max_px"] = maxf(float(reach_log["max_px"]), _player.global_position.x)
+		elif _player.state != Player.State.ATTACK:
+			break
+	_player.hitbox.landed.disconnect(on_reach)
+	var in_gap := float(reach_log["in_gap"])
+	var out_gap := (e_out.global_position.x - r_out) - float(reach_log["max_px"])
+	print("[probe] 사거리: 앞끝이 맞은 순간 소녀에게서 %.1f px 인 적 → 체력 %.0f → %.0f / 판정이 켜진 동안 가장 앞에서도 %.1f px 인 적 → %.0f → %.0f (맞음 %s)" % [in_gap, in_hp0, e_in.hp, out_gap, out_hp0, e_out.hp, reach_log["out_hit"]])
+	_check(e_in.hp < in_hp0 and in_gap > 225.0 + 5.0 and in_gap <= 270.0, "옛 판정 끝(225)으로는 닿지 않던 적(앞끝 %.1f px)을 새 판정(270)이 맞힌다" % in_gap)
+	_check(not bool(reach_log["out_hit"]) and is_equal_approx(e_out.hp, out_hp0) and out_gap > 270.0, "판정 끝(270) 너머(%.1f px)의 적은 맞지 않는다" % out_gap)
+	e_in.queue_free()
+	e_out.queue_free()
+	await _frames(40)
 
 
 # ---------- (d) 가드: 일반 막기 신호 ----------

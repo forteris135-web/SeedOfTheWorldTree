@@ -8,11 +8,25 @@ class_name Player
 ## 2026-10-19 이펙트 리뉴얼 F1: 바람 = 날아가는 초승달 검기(WindCrescent, 판정은 보이는 초승달 머리 = 세로로 긴 사각형),
 ##   빛 = 레이저(SoulLaser: 손에 0.12초 모았다가 벽까지 곧게, 빛줄기 안의 적을 한 번씩 모두 맞힌다).
 ##   피해·흐트러짐·쿨다운·사거리는 그대로. 맞힌 자리의 불꽃(hit_spark)은 여기서 띄운다 (Fx).
+## v1.1.0 (기획자 요청 2·3·6·7·10·11·12, 15·17·18 의 소녀 쪽):
+##   스태미너 = 가드 게이지(초록 막대 하나). 공격 1·2·3타가 10/12/15 를 쓰고, 모자라면 그 공격을 시작하지 않는다.
+##   공격·영혼 기술·낙하 공격·가드 중과 3타 후딜레이 동안은 자연 회복이 없고, 벗어난 뒤 0.5초(바람·빛은 쏜 뒤 0.7초) 기다렸다가 찬다.
+##   3타 뒤 0.35초 동안은 공격·영혼 기술·낙하 공격을 받지 않는다(가드·구르기로 끊는 것은 된다). 이 멈춤은 소녀만의 타이머다 (게임 전체 시간은 그대로).
+##   일반 공격 사거리 225 → 270 (판정 끝까지), 칼자국 이펙트도 판정 끝까지·청록. 씨앗 40·앞 374, 바람 120, 빛 95.2.
+##   새순 단계(Progress.skill_*_mult)가 피해·범위·쿨다운에 곱해지고, 수액의 맥동(여왕)이 3타 회복 +12·회복 ×1.1·낙하 공격 ×1.3/범위 ×1.15.
 
 enum State { IDLE, WALK, RUN, JUMP, FALL, ROLL, ATTACK, SOUL_SLASH, PLUNGE, GUARD, HIT, HEAL, PURIFY, REST, DEAD }
 const LOCOMOTION := [State.IDLE, State.WALK, State.RUN, State.JUMP, State.FALL]
 ## 히트박스를 쓰는 공격 상태들 (나가면 히트박스를 끈다)
 const ATTACK_STATES := [State.ATTACK, State.SOUL_SLASH, State.PLUNGE]
+## 이 상태들에 있는 동안은 스태미너가 저절로 차지 않는다 (v1.1.0 기획자 요청 12). 벗어나면 stamina_regen_delay_after_action 뒤부터.
+const NO_REGEN_STATES := [State.ATTACK, State.SOUL_SLASH, State.PLUNGE, State.GUARD]
+## 일반 공격 판정 상자: 앞 30 부터 light_reach 까지, 위 90 · 아래 22 (소녀 가운데 기준, 오른쪽을 볼 때)
+const LIGHT_BOX_BACK := 30.0
+const LIGHT_BOX_TOP := -90.0
+const LIGHT_BOX_H := 112.0
+## 휘두름 소리 음높이 (1·2·3타가 귀로도 구별되게)
+const SWING_PITCH := [1.0, 1.08, 0.92]
 ## 쿨다운이 이보다 적게 남으면 끝난 것으로 본다 (부동소수 찌꺼기)
 const COOLDOWN_EPS := 0.001
 ## 바람·빛 투사체 판정이 소녀 가운데보다 뒤로 나가는 최대 거리 (px). 이보다 뒤(등 뒤)의 적은 맞지 않는다.
@@ -55,6 +69,10 @@ signal soul_changed(soul: String)
 signal blocked
 ## 칼이 실제로 닿은 순간 (불꽃·히트스톱이 나는 때 — 판정보다 조금 늦을 수 있다. 아래 '타격 연출 미루기')
 signal hit_impact(result: String, target: Node)
+## 스태미너가 모자라 공격을 시작하지 못했다 (HUD 막대가 붉게 번쩍, 짧은 소리)
+signal stamina_refused
+## 수액의 맥동: 3타가 적에게 닿아 스태미너가 즉시 찼다 (찬 양)
+signal stamina_pulsed(amount: float)
 
 @export_group("걷기와 달리기")
 ## 걷는 속도 (픽셀/초). 화면 기준 1920×1080.
@@ -102,7 +120,7 @@ signal hit_impact(result: String, target: Node)
 
 @export_group("체력과 회복")
 @export var max_hp := 100.0
-## 이슬 방울 개수 (달빛풀에서 다시 채워진다). 실제 값은 _apply_abilities 가 Progress.dew_max() 로 정한다 (최대 Progress.MAX_DEWS = 8).
+## 이슬 방울 개수 (달빛풀에서 다시 채워진다). 실제 값은 _apply_abilities 가 Progress.dew_max() 로 정한다 (최대 Progress.MAX_DEWS = 5).
 @export var max_dews := 3
 @export var heal_amount := 45.0
 ## 회복 동작에 걸리는 시간. 그동안 움직일 수 없고 맞으면 끊긴다.
@@ -111,24 +129,31 @@ signal hit_impact(result: String, target: Node)
 @export_group("약공격 (3연타)")
 @export var light_damage := [12.0, 12.0, 18.0]
 @export var light_poise := [20.0, 20.0, 32.0]
-@export var light_startup := 0.07
-@export var light_active := 0.1
-@export var light_recovery := 0.2
+## 타마다의 예비동작 / 판정 / 되돌림 (초). 3타는 예비동작이 조금 길고, 되돌림 0.35초가 '후딜레이'다 (v1.1.0 기획자 요청 11).
+## 3타 되돌림이 시작되면 그 길이만큼 공격·영혼 기술·낙하 공격을 받지 않는다 (light_recovery_final, _combo_lock_timer).
+@export var light_startup := [0.07, 0.07, 0.09]
+@export var light_active := [0.10, 0.10, 0.12]
+@export var light_recovery := [0.20, 0.20, 0.35]
+## 사거리: 몸 가운데에서 칼끝 판정 끝까지 (px). 225 → 270 (+20%, v1.1.0 기획자 요청 3). 판정 상자는 앞 30 부터 여기까지, 위 90·아래 22.
+## 새순 '일반 공격' 단계가 오르면 Progress.skill_range_mult("normal") 만큼 더 길어진다 (칼자국 이펙트도 같이).
+@export var light_reach := 270.0
 ## 공격하며 앞으로 살짝 나아가는 속도.
 @export var light_lunge := 180.0
 
 @export_group("씨앗 베기 (처음부터 있는 영혼 기술)")
 ## 느리지만 앞·위·아래를 한꺼번에 베는 큰 호. 땅·공중 모두 쓸 수 있다.
-@export var slash_damage := 32.0
+## v1.1.0 (기획자 요청 6): 피해 32 → 40 (+25%), 앞 사거리 340 → 374 (+10%).
+@export var slash_damage := 40.0
 @export var slash_poise := 60.0
 ## 예비동작(칼을 머리 뒤로 크게 들어 올림) → 타격 → 되돌림 (초)
 @export var slash_startup := 0.28
 @export var slash_active := 0.18
 @export var slash_recovery := 0.32
 @export var slash_cooldown := 1.4
-## 판정 상자 (소녀 중심 기준, 오른쪽을 볼 때): 뒤로 60, 위로 250, 앞으로 340, 아래로 180
-## (앞 260 은 약공격(225)보다 35px 밖에 안 넓어 '상당히 넓은 전방'이 아니었다 — 2026-10-18 검토로 340 으로)
-@export var slash_box := Rect2(-60, -250, 400, 430)
+## 판정 상자 (소녀 중심 기준, 오른쪽을 볼 때): 뒤로 60, 위로 250, 앞으로 374, 아래로 180
+## (앞 260 은 약공격(225)보다 35px 밖에 안 넓어 '상당히 넓은 전방'이 아니었다 — 2026-10-18 검토로 340 으로, v1.1.0 에 374 로)
+## 새순 '씨앗' 단계가 오르면 앞쪽 끝만 Progress.skill_range_mult("seed") 배로 (seed_slash_box).
+@export var slash_box := Rect2(-60, -250, 434, 430)
 @export var slash_knockback := Vector2(420, -200)
 
 @export_group("낙하 공격 (공중에서 ↓ + 약공격)")
@@ -155,6 +180,26 @@ signal hit_impact(result: String, target: Node)
 ## 착지 뒤 일어서는 시간
 @export var plunge_recovery := 0.22
 
+@export_group("스태미너 (v1.1.0: 가드 게이지를 함께 쓴다)")
+## 스태미너는 가드 게이지 그대로다 (guard / max_guard, 읽기 별칭 stamina / max_stamina). 최대치는 Progress.max_stamina() (100/103/106/109).
+## 약공격 1·2·3타가 쓰는 스태미너 (3타 합 37). 모자라면 그 공격을 시작하지 않는다. 낙하 공격·영혼 기술은 쓰지 않는다.
+@export var light_stamina_cost := [10.0, 12.0, 15.0]
+## 구르기가 쓰는 스태미너. 지금까지도 구르기는 스태미너를 쓰지 않아서 0 그대로 둔다 (기획자 결정 D1; 쓰게 하려면 권장 15).
+@export var roll_stamina_cost := 0.0
+## 공격·영혼 기술·낙하 공격·가드에서 벗어난 뒤 자연 회복을 기다리는 시간 (초)
+@export var stamina_regen_delay_after_action := 0.5
+## 바람·빛(상태가 따로 없는 영혼 기술)은 쏜 순간부터 이만큼 기다린다 (쏘는 0.2초 + 0.5초)
+@export var stamina_regen_delay_after_shot := 0.7
+
+@export_group("수액의 맥동 (수액의 여왕을 정화하면 얻는 영구 패시브)")
+## 3타가 적에게 닿으면 즉시 차는 스태미너 (3타 한 번에 한 번만, 여러 적을 맞혀도)
+@export var sap_pulse_stamina := 12.0
+## 자연 회복 빠르기 배수 (28 → 30.8)
+@export var sap_pulse_regen_mult := 1.1
+## 낙하 공격(내려꽂기·착지 충격) 피해 배수와 판정 크기 배수 (상자 가운데는 그대로, 이펙트도 같이 커진다)
+@export var sap_pulse_plunge_damage_mult := 1.3
+@export var sap_pulse_plunge_box_mult := 1.15
+
 @export_group("가드와 저스트 가드")
 @export var max_guard := 100.0
 ## 가드 중 받는 피해 비율 (0.15 = 85% 줄임).
@@ -179,7 +224,8 @@ signal hit_impact(result: String, target: Node)
 ## 2026-10-18 강화: 피해 14→24, 크기 60×34→110×60, 사거리 0.5초→0.95초(약 720px)
 ## 2026-10-19 파격 상향 (기획자 요청): 피해 ×4 (24→96), 크기 240×130, 사거리 1.3초(약 990px), 쿨다운 5초.
 ##   '한 방이 크고 자주 못 쓰는' 기술로. 씨앗 베기(처음부터 있는 것)는 그대로.
-@export var gust_damage := 96.0
+## v1.1.0 (기획자 요청 6): 피해 96 → 120 (+25%). 쿨다운은 새순 '바람' 단계로 줄어든다 (Progress.skill_cooldown_mult("wind")).
+@export var gust_damage := 120.0
 @export var gust_poise := 24.0   # 흐트러짐은 그대로 (요청은 피해·크기·쿨만). 30 미만이라 침식된 기계에는 여전히 35%만 들어간다
 @export var gust_speed := 760.0
 @export var gust_range_time := 1.3
@@ -191,7 +237,8 @@ signal hit_impact(result: String, target: Node)
 @export_group("빛 공격 (등불 기사의 영혼)")
 ## 2026-10-18 강화: 피해 22→34, 크기 70×22→120×40, 사거리 0.7초→1.1초(약 1200px)
 ## 2026-10-19 파격 상향 (기획자 요청): 피해 ×4 (34→136), 크기 280×90, 사거리 1.4초(약 1540px), 쿨다운 7초.
-@export var light_shot_damage := 136.0
+## v1.1.0 (기획자 요청 7): 피해 136 → 95.2 (-30%, 광역 직선 공격이 너무 세서). 쿨다운은 새순 '빛' 단계로 줄어든다.
+@export var light_shot_damage := 95.2
 @export var light_shot_poise := 30.0   # 흐트러짐은 그대로 (요청은 피해·크기·쿨만)
 @export var light_shot_speed := 1100.0
 @export var light_shot_time := 1.4
@@ -227,6 +274,11 @@ var walk_locked := false
 var hp := 100.0
 var guard := 100.0
 var dews := 3
+## 스태미너 = 가드 게이지 (v1.1.0, 기획자 결정 D1). 이름은 guard / max_guard 그대로 두고 읽기 별칭만 둔다 (터치·시험 호환).
+var stamina: float:
+	get: return guard
+var max_stamina: float:
+	get: return max_guard
 ## 지금 상호작용(쉬기·정화)할 수 있는 대상들.
 var interactables: Array = []
 var can_interact: bool:
@@ -260,6 +312,13 @@ var _hit_timer := 0.0
 var _invuln_timer := 0.0
 var _heal_timer := 0.0
 var _guard_regen_delay := 0.0
+## 3타 후딜레이: 남아 있는 동안 공격·영혼 기술·낙하 공격을 받지 않고(누른 것도 기억하지 않는다), 스태미너도 차지 않는다.
+## 소녀만의 타이머다 — Juice.hitstop(Engine.time_scale) 을 쓰지 않으므로 게임 전체는 멈추지 않는다.
+var _combo_lock_timer := 0.0
+## 수액의 맥동: 이번 3타에서 이미 스태미너를 받았는가 (3타를 시작할 때 지운다)
+var _pulse_awarded := false
+## 콤보를 잇다가 스태미너가 모자라 끊겼다: 이번 되돌림 동안은 더 잇지 않는다 (다음 타를 시작할 때 지운다)
+var _chain_refused := false
 ## 영혼마다 남은 쿨다운 (초): {"seed": …, "wind": …, "light": …}. 2026-10-19 검토: 바람·빛 쿨이 5~7초가 되면서
 ## 하나를 같이 쓰면 빛을 쏜 뒤 씨앗 베기(1.4초)까지 7초 막혔다 → 영혼마다 따로 센다. 고른 영혼을 바꿔도 각자 줄어든다.
 ## 영혼별 남은 쿨다운. 방마다 소녀가 새로 만들어지므로 Progress 의 사전을 함께 쓴다 (포탈을 지나도 7초가 초기화되지 않게).
@@ -325,7 +384,8 @@ func _ready() -> void:
 	jumped.connect(func(_air): Sfx.play("jump"))
 	landed.connect(func(v): if v > 300.0: Sfx.play("land", -6.0 + clampf(v / 400.0, 0.0, 6.0)))
 	roll_started.connect(func(): Sfx.play("roll", -4.0))
-	attacked.connect(func(_s): Sfx.play("swing", -6.0, 0.1))
+	attacked.connect(func(s): _play_pitched("swing", -6.0, SWING_PITCH[clampi(s, 1, 3) - 1]))
+	stamina_refused.connect(func(): Sfx.play("select", -14.0, 0.0))
 	soul_slash_started.connect(func(): Sfx.play("slash_wide", -2.0, 0.04))
 	plunge_started.connect(func(): Sfx.play("plunge", -4.0, 0.04))
 	plunge_landed.connect(func(): Sfx.play("heavy_hit", -1.0, 0.05))
@@ -366,9 +426,15 @@ func _apply_abilities() -> void:
 	if max_hp != old_max:
 		hp = minf(hp + (max_hp - old_max), max_hp)
 	attack_multiplier = 1.0 + Progress.upgrades.get("attack", 0.0)
+	# 최대 스태미너 (= 가드 게이지 최대): 새순 '스태미너' 단계마다 +3 → 100/103/106/109. 늘면 늘어난 만큼 채운다 (체력과 같은 방식).
+	var old_max_guard := max_guard
+	max_guard = Progress.max_stamina()
+	if max_guard != old_max_guard:
+		guard = clampf(guard + maxf(max_guard - old_max_guard, 0.0), 0.0, max_guard)
+		guard_changed.emit(guard, max_guard)
 	# 이슬도 체력처럼 늘어난 만큼 채운다. 방에 들어오면 소녀가 새로 만들어져 _ready 가 기본값 3개만 채우므로,
 	# 여기서 더해 주지 않으면 산 이슬·주운 이슬이 방을 옮길 때마다 빈 칸이 됐다 (2026-10-19 검수).
-	# 이슬은 최대 8 (Progress.MAX_DEWS, 2026-10-20 기획자 결정). 넘친 이슬은 하나마다 회복량 +10 으로 바뀐다 (Progress.heal_bonus).
+	# 이슬은 최대 Progress.MAX_DEWS (v1.1.0 에 5). 넘친 이슬은 하나마다 회복량 +10 으로 바뀐다 (Progress.heal_bonus).
 	var old_max_dews := max_dews
 	max_dews = Progress.dew_max()
 	if max_dews > old_max_dews:
@@ -494,6 +560,7 @@ func _tick_timers(delta: float, on_floor: bool) -> void:
 	_invuln_timer = maxf(_invuln_timer - delta, 0.0)
 	_heal_timer = maxf(_heal_timer - delta, 0.0)
 	_guard_regen_delay = maxf(_guard_regen_delay - delta, 0.0)
+	_combo_lock_timer = maxf(_combo_lock_timer - delta, 0.0)
 	for k in _soul_cooldowns.keys():
 		var left: float = _soul_cooldowns[k] - delta
 		# 1/60 씩 빼다 남는 부동소수 찌꺼기(0.000…1)는 0 으로: 끝나기 직전 한 프레임 '0' 이 보이거나 버튼이 꺼진 채 남지 않게
@@ -503,8 +570,9 @@ func _tick_timers(delta: float, on_floor: bool) -> void:
 		_drop_timer -= delta
 		if _drop_timer <= 0.0:
 			_end_drop_through()
-	if state != State.GUARD and _guard_regen_delay <= 0.0 and guard < max_guard:
-		guard = minf(guard + guard_regen * delta, max_guard)
+	# 스태미너 자연 회복: 공격·영혼 기술·낙하 공격·가드 중과 3타 후딜레이 동안은 없고, 벗어난 뒤 잠깐 기다렸다가 (_set_state 가 지연을 건다)
+	if not (state in NO_REGEN_STATES) and _combo_lock_timer <= 0.0 and _guard_regen_delay <= 0.0 and guard < max_guard:
+		guard = minf(guard + stamina_regen_rate() * delta, max_guard)
 		guard_changed.emit(guard, max_guard)
 
 
@@ -567,6 +635,11 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 			_plunge_buffered = false
 			_plunge_btn_buffered = false
 			return
+		if _combo_lock_timer > 0.0:
+			# 3타 후딜레이: 공격·낙하 공격을 받지 않고 누른 것도 기억하지 않는다 (가드·구르기는 따로 된다)
+			_plunge_buffered = false
+			_plunge_btn_buffered = false
+			return
 		if not on_floor and Input.is_action_just_pressed("plunge"):
 			# 낙하 공격 버튼 (터치 전용 동작 'plunge', 2026-10-19 기획자 요청: 터치에서 ↓+공격이 잘 안 나가서).
 			# 공중에서만 듣는다. ↓를 누르고 있지 않아도 나간다. 땅에서는 그냥 지나가서, 같은 프레임의 공격이 씹히지 않는다.
@@ -581,8 +654,10 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 					_plunge_buffered = true   # 튕겨 오르는 중: 기억했다가 잠금이 풀리는 순간 나간다
 				else:
 					_start_plunge()
-			else:
+			elif _can_pay(1):
 				_start_light(1)
+			else:
+				stamina_refused.emit()   # 스태미너가 모자라 시작하지 않는다
 		elif (_plunge_buffered or _plunge_btn_buffered) and not on_floor and _plunge_lock <= 0.0:
 			var go := _plunge_btn_buffered or _down_held()
 			_plunge_buffered = false
@@ -593,9 +668,9 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 	if state == State.ATTACK or state == State.SOUL_SLASH:
 		# 공중 공격·공중 씨앗 베기 중에 누른 낙하 버튼은 기억했다가, 휘두름이 끝나는(되돌림) 순간 낙하 공격으로 잇는다.
 		# (터치에서 '점프 → 공격 → 낙하'를 조금 빨리 눌러도 씹히지 않게. 착지하면 _tick_timers 가 지운다.)
-		if input_enabled and not on_floor and Input.is_action_just_pressed("plunge"):
+		if input_enabled and not on_floor and Input.is_action_just_pressed("plunge") and _combo_lock_timer <= 0.0:
 			_plunge_btn_buffered = true
-		if _plunge_btn_buffered and not on_floor and _plunge_lock <= 0.0 and attack_phase == "recovery":
+		if _plunge_btn_buffered and not on_floor and _plunge_lock <= 0.0 and attack_phase == "recovery" and _combo_lock_timer <= 0.0:
 			_plunge_btn_buffered = false
 			_start_plunge()
 			return
@@ -607,21 +682,35 @@ func _handle_attacks(delta: float, on_floor: bool) -> void:
 			"startup":
 				if _attack_timer <= 0.0:
 					attack_phase = "active"
-					_attack_timer = light_active
-					var hit := HitData.make(light_damage[attack_step - 1] * attack_multiplier, light_poise[attack_step - 1], self, Vector2(260, -80) if attack_step < 3 else Vector2(520, -180))
+					_attack_timer = light_active_of(attack_step)
+					var dmg: float = light_damage[attack_step - 1] * attack_multiplier * Progress.skill_damage_mult("normal")
+					var hit := HitData.make(dmg, light_poise[attack_step - 1], self, Vector2(260, -80) if attack_step < 3 else Vector2(520, -180))
 					hit.from_player = true
-					# 범위: 앞으로 195 (기획자 요청으로 150 → 195, 2026-10-18)
-					hitbox.set_box(Rect2(30, -90, 195, 112), facing)
-					hitbox.activate(hit, light_active)
+					# 범위: 몸 가운데에서 판정 끝까지 light_reach (150 → 195 → v1.1.0 에 끝 225 → 270). 새순 단계로 더 길어진다.
+					hitbox.set_box(light_box(), facing)
+					hitbox.activate(hit, light_active_of(attack_step))
 					if on_floor:
 						velocity.x = facing * light_lunge
+					if attack_step == 3:
+						Sfx.play("heavy_hit", -6.0, 0.03)   # 3타는 휘두름에 묵직한 소리를 겹친다
 			"active":
 				if _attack_timer <= 0.0:
 					attack_phase = "recovery"
-					_attack_timer = light_recovery
+					_attack_timer = light_recovery_of(attack_step)
+					if attack_step >= 3:
+						# 3타 후딜레이 시작: 소녀만의 잠금 (가드·구르기로 동작을 끊어도 잠금 시간은 계속 흐른다)
+						_combo_lock_timer = light_recovery_final
+						_attack_buffered = false
+						_plunge_btn_buffered = false
 			"recovery":
-				if _attack_buffered and attack_step < 3:
-					_start_light(attack_step + 1)
+				if _attack_buffered and attack_step < 3 and not _chain_refused:
+					if _can_pay(attack_step + 1):
+						_start_light(attack_step + 1)
+					else:
+						# 스태미너가 모자라 다음 타를 시작하지 못한다: 콤보는 여기서 끝, 남은 되돌림 뒤 대기로
+						_attack_buffered = false
+						_chain_refused = true
+						stamina_refused.emit()
 				elif _attack_timer <= 0.0:
 					_set_state(State.IDLE)
 	elif state == State.SOUL_SLASH:
@@ -638,11 +727,132 @@ func _down_held() -> bool:
 	return Input.get_action_raw_strength("move_down") - Input.get_action_raw_strength("move_up") >= DOWN_HOLD_STRENGTH
 
 
+## 그 타의 스태미너가 있는가 (부동소수 찌꺼기 0.001 은 봐준다)
+func _can_pay(step: int) -> bool:
+	return guard + 0.001 >= light_cost_of(step)
+
+
+func light_cost_of(step: int) -> float:
+	return float(light_stamina_cost[clampi(step, 1, 3) - 1])
+
+
+func light_startup_of(step: int) -> float:
+	return float(light_startup[clampi(step, 1, 3) - 1])
+
+
+func light_active_of(step: int) -> float:
+	return float(light_active[clampi(step, 1, 3) - 1])
+
+
+func light_recovery_of(step: int) -> float:
+	return float(light_recovery[clampi(step, 1, 3) - 1])
+
+
+## 3타 후딜레이 길이 (= 3타 되돌림)
+var light_recovery_final: float:
+	get: return light_recovery_of(3)
+
+
+## 일반 공격 판정 상자 (소녀 가운데 기준, 오른쪽을 볼 때): 앞 30 부터 light_reach × 새순 '일반 공격' 범위 배율까지
+func light_box() -> Rect2:
+	var front := light_reach * Progress.skill_range_mult("normal")
+	return Rect2(LIGHT_BOX_BACK, LIGHT_BOX_TOP, front - LIGHT_BOX_BACK, LIGHT_BOX_H)
+
+
+## 씨앗 베기 판정 상자: 앞쪽 끝만 새순 '씨앗' 범위 배율로 (뒤·위·아래는 그대로)
+func seed_slash_box() -> Rect2:
+	var front := slash_box.end.x * Progress.skill_range_mult("seed")
+	return Rect2(slash_box.position, Vector2(front - slash_box.position.x, slash_box.size.y))
+
+
+## 수액의 맥동이 있으면 낙하 공격 판정 배율 (상자 가운데는 그대로)
+func plunge_box_mult() -> float:
+	return sap_pulse_plunge_box_mult if Progress.has_sap_pulse() else 1.0
+
+
+func plunge_damage_mult() -> float:
+	return sap_pulse_plunge_damage_mult if Progress.has_sap_pulse() else 1.0
+
+
+## 내려꽂는 동안의 판정 상자 / 착지 충격 판정 상자 (맥동이 있으면 가운데를 그대로 두고 1.15배)
+func plunge_dive_box() -> Rect2:
+	return _scaled_about_center(plunge_box, plunge_box_mult())
+
+
+func plunge_land_box_now() -> Rect2:
+	return _scaled_about_center(plunge_land_box, plunge_box_mult())
+
+
+static func _scaled_about_center(r: Rect2, k: float) -> Rect2:
+	if is_equal_approx(k, 1.0):
+		return r
+	var sz := r.size * k
+	return Rect2(r.get_center() - sz * 0.5, sz)
+
+
+## 자연 회복 빠르기 (초당): 28, 수액의 맥동이 있으면 ×1.1
+func stamina_regen_rate() -> float:
+	return guard_regen * (sap_pulse_regen_mult if Progress.has_sap_pulse() else 1.0)
+
+
+## 3타 후딜레이가 남은 시간 (초, 0 이면 없음)
+func combo_lock_left() -> float:
+	return _combo_lock_timer
+
+
+## 음높이를 정해 트는 소리 (1·2·3타 휘두름). Sfx.play 는 음높이를 받지 않으므로 소녀가 자기 플레이어 둘을 번갈아 쓴다.
+## Sfx 안쪽은 건드리지 않고, Sfx 주석의 약속대로 bus = Sfx.BUS 라서 설정의 효과음 음량을 그대로 따른다.
+## 플레이어는 처음 틀 때 한 번만 만들고 소리 파일은 한 번 읽어 둔다 (휘두를 때마다 새로 만들지 않는다).
+const PITCHED_PLAYERS := 2
+var _pitched_players: Array[AudioStreamPlayer] = []
+var _pitched_next := 0
+var _pitched_streams := {}
+
+
+func _play_pitched(sfx_name: String, volume_db: float, pitch: float) -> void:
+	var st: AudioStream = _pitched_streams.get(sfx_name)
+	if st == null:
+		var path: String = Sfx.DIR + sfx_name + ".wav"
+		if not ResourceLoader.exists(path):
+			return
+		st = load(path)
+		if st == null:
+			return
+		_pitched_streams[sfx_name] = st
+	if _pitched_players.is_empty():
+		for i in PITCHED_PLAYERS:
+			var p := AudioStreamPlayer.new()
+			p.name = "PitchedSfx%d" % i
+			p.bus = Sfx.BUS
+			p.process_mode = Node.PROCESS_MODE_ALWAYS   # Sfx 의 플레이어처럼 멈춤 화면이 떠도 끝까지 울린다
+			add_child(p)
+			_pitched_players.append(p)
+	var ap := _pitched_players[_pitched_next]
+	_pitched_next = (_pitched_next + 1) % _pitched_players.size()
+	ap.stream = st
+	ap.volume_db = volume_db
+	ap.pitch_scale = pitch * (1.0 + randf_range(-0.03, 0.03))
+	ap.play()
+
+
+## 시험용: 가장 최근에 음높이를 정해 튼 소리 플레이어 (아직 없으면 null)
+func last_pitched_player() -> AudioStreamPlayer:
+	if _pitched_players.is_empty():
+		return null
+	return _pitched_players[(_pitched_next - 1 + _pitched_players.size()) % _pitched_players.size()]
+
+
 func _start_light(step: int) -> void:
 	attack_step = step
 	attack_phase = "startup"
-	_attack_timer = light_startup
+	_attack_timer = light_startup_of(step)
 	_attack_buffered = false
+	_chain_refused = false
+	if step >= 3:
+		_pulse_awarded = false
+	# 스태미너는 시작하는 순간에 낸다 (부르는 쪽이 _can_pay 로 확인했다)
+	guard = maxf(guard - light_cost_of(step), 0.0)
+	guard_changed.emit(guard, max_guard)
 	if input_enabled:
 		var axis := Input.get_axis("move_left", "move_right")
 		if absf(axis) > 0.3:
@@ -675,10 +885,10 @@ func _tick_soul_slash(delta: float) -> void:
 				attack_phase = "active"
 				_attack_timer = slash_active
 				_soul_cooldowns["seed"] = slash_cooldown   # 예비동작 중에 영혼을 바꿔도 씨앗 쪽에 건다
-				var hit := HitData.make(slash_damage * attack_multiplier, slash_poise, self, slash_knockback)
+				var hit := HitData.make(slash_damage * attack_multiplier * Progress.skill_damage_mult("seed"), slash_poise, self, slash_knockback)
 				hit.from_player = true
 				hit.hitstop = 0.08
-				hitbox.set_box(slash_box, facing)
+				hitbox.set_box(seed_slash_box(), facing)
 				hitbox.activate(hit, slash_active)
 				Juice.shake(3.0)
 				Juice.rumble(0.3, 0.5, 0.1)
@@ -713,10 +923,11 @@ func _tick_plunge(delta: float, on_floor: bool) -> void:
 				velocity.y = plunge_speed
 				# 바닥에 닿기 전 두 번째부터는 피해가 줄어든다 (적 위에서 튕기며 반복하는 것을 약하게)
 				var ratio := 1.0 if _plunge_hits == 0 else plunge_repeat_ratio
-				var hit := HitData.make(plunge_damage * attack_multiplier * ratio, plunge_poise, self, plunge_knockback)
+				# 수액의 맥동: 피해 ×1.3, 판정 ×1.15 (가운데 그대로)
+				var hit := HitData.make(plunge_damage * plunge_damage_mult() * attack_multiplier * ratio, plunge_poise, self, plunge_knockback)
 				hit.from_player = true
 				hit.hitstop = 0.06
-				hitbox.set_box(plunge_box, facing)
+				hitbox.set_box(plunge_dive_box(), facing)
 				hitbox.activate(hit, 10.0)   # 떨어지는 내내 켜 둔다 (맞히거나 착지하면 끈다)
 		"dive":
 			if on_floor:
@@ -730,7 +941,11 @@ func _tick_plunge(delta: float, on_floor: bool) -> void:
 				_attack_timer = plunge_recovery
 		"recovery":
 			if _attack_buffered:
-				_start_light(1)
+				_attack_buffered = false
+				if _can_pay(1) and _combo_lock_timer <= 0.0:
+					_start_light(1)
+				else:
+					stamina_refused.emit()
 			elif _attack_timer <= 0.0:
 				_set_state(State.IDLE)
 
@@ -740,10 +955,10 @@ func _plunge_land() -> void:
 	attack_phase = "land"
 	_attack_timer = plunge_land_time
 	velocity = Vector2.ZERO
-	var hit := HitData.make(plunge_land_damage * attack_multiplier, plunge_land_poise, self, Vector2(380, -200))
+	var hit := HitData.make(plunge_land_damage * plunge_damage_mult() * attack_multiplier, plunge_land_poise, self, Vector2(380, -200))
 	hit.from_player = true
 	hit.hitstop = 0.04
-	hitbox.set_box(plunge_land_box, facing)
+	hitbox.set_box(plunge_land_box_now(), facing)
 	hitbox.activate(hit, plunge_land_time)
 	Juice.shake(6.0)
 	Juice.hitstop(0.04, 0.05)
@@ -861,14 +1076,14 @@ func soul_color(s := "") -> Color:
 	return soul_color_of(soul if s == "" else s)
 
 
-## 영혼 기술의 쿨다운 전체 길이 (초). 씨앗 1.4 / 바람 5 / 빛 7.
+## 영혼 기술의 쿨다운 전체 길이 (초). 씨앗 1.4 / 바람 5 / 빛 7 — 바람·빛은 새순 단계만큼 짧아진다 (Progress.skill_cooldown_mult).
 func soul_cooldown_total(s := "") -> float:
 	if s == "":
 		s = soul
 	match s:
 		"seed": return slash_cooldown
-		"wind": return gust_cooldown
-		"light": return light_shot_cooldown
+		"wind": return gust_cooldown * Progress.skill_cooldown_mult("wind")
+		"light": return light_shot_cooldown * Progress.skill_cooldown_mult("light")
 	return 0.0
 
 
@@ -926,8 +1141,8 @@ func _handle_soul(_on_floor: bool) -> void:
 		soul_changed.emit(soul)
 	if soul == "":
 		return
-	# 약공격 되돌림 중에도 이어 쓸 수 있다 (가드·구르기와 같은 허용: 3연타 → 영혼 기술 연계)
-	var can_cast := state in LOCOMOTION or state == State.GUARD or (state == State.ATTACK and attack_phase == "recovery")
+	# 약공격 되돌림 중에도 이어 쓸 수 있다 (가드·구르기와 같은 허용: 3연타 → 영혼 기술 연계). 단 3타 후딜레이 동안은 안 된다.
+	var can_cast := (state in LOCOMOTION or state == State.GUARD or (state == State.ATTACK and attack_phase == "recovery")) and _combo_lock_timer <= 0.0
 	if Input.is_action_just_pressed("soul_ability") and soul_cooldown_left() <= 0.0 and can_cast:
 		cast_soul_skill()
 
@@ -952,9 +1167,10 @@ func _cast_projectile() -> void:
 ## 바람의 영혼: 앞으로 날아가는 초승달 검기 (WindCrescent — 예전 바람 투사체와 같은 바탕, 그림·판정 모양만 새것)
 func _cast_wind() -> void:
 	var p: Projectile = WIND_CRESCENT.new()
-	_soul_cooldowns["wind"] = gust_cooldown
+	_soul_cooldowns["wind"] = soul_cooldown_total("wind")
+	_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_shot)   # 쏜 뒤 0.7초는 스태미너가 차지 않는다
 	p.speed = gust_speed
-	p.damage = gust_damage * attack_multiplier
+	p.damage = gust_damage * attack_multiplier * Progress.skill_damage_mult("wind")
 	p.poise = gust_poise
 	p.lifetime = gust_range_time
 	p.size = gust_size
@@ -994,11 +1210,12 @@ func _cast_wind() -> void:
 
 ## 빛의 영혼: 레이저 (SoulLaser). 쿨다운은 지금 건다 — 모으는 동안 끊기면 돌려준다.
 func _cast_laser() -> void:
-	_soul_cooldowns["light"] = light_shot_cooldown
+	_soul_cooldowns["light"] = soul_cooldown_total("light")
+	_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_shot)   # 쏜 뒤 0.7초는 스태미너가 차지 않는다
 	var l: SoulLaser = SOUL_LASER.new()
 	l.player = self
 	l.facing = facing
-	l.damage = light_shot_damage * attack_multiplier
+	l.damage = light_shot_damage * attack_multiplier * Progress.skill_damage_mult("light")
 	l.poise = light_shot_poise
 	l.beam_range = light_beam_range()
 	l.width = light_shot_size.y * 0.9
@@ -1170,6 +1387,13 @@ func _try_roll(on_floor: bool) -> void:
 		or ((state == State.ATTACK or state == State.SOUL_SLASH) and attack_phase == "recovery")
 	if not can or not (on_floor or _coyote_timer > 0.0):
 		return
+	# 구르기 스태미너 (지금은 0 — 기획자 결정 D1. 값을 주면 모자랄 때 구르지 않는다)
+	if roll_stamina_cost > 0.0:
+		if guard + 0.001 < roll_stamina_cost:
+			stamina_refused.emit()
+			return
+		guard = maxf(guard - roll_stamina_cost, 0.0)
+		guard_changed.emit(guard, max_guard)
 	hitbox.deactivate()
 	_roll_timer = roll_duration
 	velocity.y = 0.0
@@ -1187,6 +1411,9 @@ func _set_state(new_state: State) -> void:
 		return
 	if state in ATTACK_STATES:
 		hitbox.deactivate()
+	if state in NO_REGEN_STATES and not (new_state in NO_REGEN_STATES):
+		# 공격·영혼 기술·낙하 공격·가드에서 벗어났다: 짧게 기다린 뒤부터 스태미너가 찬다
+		_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_action)
 	state = new_state
 	if not (new_state in ATTACK_STATES):
 		attack_step = 0
@@ -1294,8 +1521,10 @@ func _on_hit_landed(result: String, target: Node) -> void:
 	if result != "hit" and result != "blocked":
 		hit_impact.emit(result, target)   # (막힘 "guard" 등 — 그림의 반동은 바로)
 		return
+	# 불꽃 색: 씨앗 베기 초록, 일반 공격 청록 (v1.1.0 칼자국과 같은 색), 낙하 공격은 그림 원래 색
+	var pal := "seed" if state == State.SOUL_SLASH else ("teal" if state == State.ATTACK else "")
 	var imp := {"result": result, "target": target, "at": _hit_fx_point(target),
-		"big": state == State.SOUL_SLASH or state == State.PLUNGE, "palette": "seed" if state == State.SOUL_SLASH else "",
+		"big": state == State.SOUL_SLASH or state == State.PLUNGE, "palette": pal,
 		"plunge_land": state == State.PLUNGE and attack_phase == "land", "dx": INF, "t": 0.0}
 	if target is Node2D and is_instance_valid(target):
 		imp["dx"] = ((target as Node2D).global_position.x - global_position.x) * facing
@@ -1304,6 +1533,7 @@ func _on_hit_landed(result: String, target: Node) -> void:
 	else:
 		_impact_feel(imp)
 	if result == "hit":
+		_try_sap_pulse(target)
 		# 낙하 공격으로 적을 맞혔다: 튕겨 오른다 (떨어지는 중에만. 착지 충격은 그대로)
 		if state == State.PLUNGE and attack_phase == "dive":
 			_plunge_bounce()
@@ -1313,6 +1543,26 @@ func _on_hit_landed(result: String, target: Node) -> void:
 		blocked.emit()
 		if state == State.PLUNGE and attack_phase == "dive":
 			_plunge_bounce()
+
+
+## 수액의 맥동 (수액의 여왕 패시브): 3타가 적·보스에게 닿으면 스태미너를 즉시 채운다. 3타 한 번에 한 번만 (여러 적을 맞혀도).
+## 자연 회복 막기(공격 중·후딜레이)와 상관없이 바로 더한다. 금 간 벽·비밀 벽·지형은 적이 아니므로 세지 않는다.
+func _try_sap_pulse(target: Node) -> void:
+	if _pulse_awarded or state != State.ATTACK or attack_step != 3 or not Progress.has_sap_pulse():
+		return
+	if not _is_foe(target):
+		return
+	_pulse_awarded = true
+	var before := guard
+	guard = minf(guard + sap_pulse_stamina, max_guard)
+	guard_changed.emit(guard, max_guard)
+	stamina_pulsed.emit(guard - before)
+
+
+static func _is_foe(target: Node) -> bool:
+	if target == null or not is_instance_valid(target):
+		return false
+	return target is EnemyBase or target.is_in_group("boss") or target.has_method("reset_fight")
 
 
 ## 칼끝(그림)이 이미 대상 쪽으로 지나갔는가 (그림이 없으면 늘 지나간 것으로)
@@ -1455,6 +1705,8 @@ func revive(at: Vector2) -> void:
 	guard = max_guard
 	dews = max_dews
 	_invuln_timer = 1.0
+	_combo_lock_timer = 0.0
+	_chain_refused = false
 	last_safe_position = at
 	_end_drop_through()
 	_plunge_lock = 0.0

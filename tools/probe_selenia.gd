@@ -91,11 +91,11 @@ func _run() -> void:
 			_player._attack_buffered = true
 		await _step(Callable())
 		if _player.attack_phase == "active" and (last_phase != "active" or last_step != _player.attack_step):
-			windows.append([_player.attack_step, _hit_on_time(_player.light_active)])
+			windows.append([_player.attack_step, _hit_on_time(_player.light_active_of(_player.attack_step)), _player.light_active_of(_player.attack_step)])
 		last_phase = _player.attack_phase
 		last_step = _player.attack_step
 	_end()
-	_report_peaks(windows, _player.light_active, "약공격")
+	_report_peaks(windows, _player.light_active_of(1), "약공격")
 
 	_begin("공격 뒤 대기")
 	await _steps(60, Callable())
@@ -342,10 +342,11 @@ func _step(before: Callable, dt: float = DT) -> void:
 
 ## 타격 정점: 히트박스가 켜진 구간(active 시작 ~ +길이) 안에서 칼팔이 가장 빨리 도는 순간과,
 ## 당긴 각도와 휘두른 각도의 가운데를 지나는 순간을 찾는다. 둘 다 구간 안에 있어야 한다.
-func _report_peaks(windows: Array, active_len: float, label: String) -> void:
+func _report_peaks(windows: Array, active_len0: float, label: String) -> void:
 	for w in windows:
 		var step: int = w[0]
 		var t0: float = w[1]
+		var active_len: float = w[2] if w.size() > 2 else active_len0   # v1.1.0: 약공격 판정 시간이 타마다 다르다 (3타 0.12)
 		var t1 := t0 + active_len
 		# 구간 앞뒤로 조금 넓혀 살핀다 (정점이 밖으로 샜는지 보려고)
 		var best_v := 0.0
@@ -419,10 +420,10 @@ func _check_60fps() -> void:
 		out_min = minf(out_min, _visual._out["arm_sword"])
 		tgt_min = minf(tgt_min, _visual._tgt["arm_sword"])
 		if _player.attack_phase == "active" and last_phase != "active":
-			windows.append([1, _hit_on_time(_player.light_active)])
+			windows.append([1, _hit_on_time(_player.light_active_of(1))])
 		last_phase = _player.attack_phase
 	_end()
-	_report_peaks(windows, _player.light_active, "60fps 약공격")
+	_report_peaks(windows, _player.light_active_of(1), "60fps 약공격")
 	var design_1: float = _visual.STRIKE_1["arm_sword"]
 	var design_1_world: float = design_1 + _visual.STRIKE_1["torso"]
 	print("[probe]   60fps 1타 칼팔 최소: 팔 %.2f (목표 %.2f, 설계 %.2f) | 화면(팔+몸통) %.2f (설계 %.2f) | 앞 지남 구간의 %.0f%%" % [out_min, tgt_min, design_1, arm_min, design_1_world, _cross_pct])
