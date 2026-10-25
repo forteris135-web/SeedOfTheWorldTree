@@ -34,6 +34,8 @@ const SPEED := 30.0
 var _fail := 0
 var _had_save := false
 var _save_backup := ""
+## 칸과 상관없는 해금 기록 (user://meta.json, v1.1.0): 엔딩을 보면 적힌다 → 시험 전에 떠 두고 치웠다가 끝나고 되돌린다
+var _meta_backup = null
 var _shots := false
 var _out := ""
 
@@ -47,6 +49,8 @@ func _ready() -> void:
 			_out = a.trim_prefix("--out=")
 	_had_save = SaveGame.has_save()
 	_save_backup = FileAccess.get_file_as_string(SaveGame.PATH) if _had_save else ""
+	_meta_backup = FileAccess.get_file_as_bytes(MetaSave.PATH) if MetaSave.exists() else null
+	_rm_meta()
 	Game._busy = true   # 장면 전환은 막는다 (choose 가 정한 다음 장면·등장 자리까지만 본다)
 	if _shots:
 		await _take_shots()
@@ -76,6 +80,16 @@ func _restore_save() -> void:
 		f.close()
 	elif SaveGame.has_save():
 		DirAccess.remove_absolute(SaveGame.PATH)
+	_rm_meta()
+	if _meta_backup != null:
+		var f := FileAccess.open(MetaSave.PATH, FileAccess.WRITE)
+		f.store_buffer(_meta_backup)
+		f.close()
+
+
+func _rm_meta() -> void:
+	if MetaSave.exists():
+		DirAccess.remove_absolute(MetaSave.PATH)
 
 
 func _run() -> void:
@@ -400,9 +414,10 @@ func _probe_sequence() -> void:
 	var st: Dictionary = load("res://scripts/ui/title_screen.gd").cleared_state()
 	var look: Dictionary = load("res://scripts/ui/title_screen.gd").title_look(st)
 	_check(st["ending"] == "return" and look["image"] == TITLE_IMAGES["return"], "저장 파일로 본 타이틀: 마지막 엔딩 %s → %s" % [st["ending"], str(look["image"]).get_file()])
-	# 클리어 전: 기본 그림·title 곡
+	# 클리어 전: 기본 그림·title 곡 (v1.1.0: 엔딩을 본 기록은 칸과 상관없는 메타에도 남으므로 메타도 치운다)
 	if SaveGame.has_save():
 		DirAccess.remove_absolute(SaveGame.PATH)
+	_rm_meta()
 	Progress.reset()
 	var st0: Dictionary = load("res://scripts/ui/title_screen.gd").cleared_state()
 	var look0: Dictionary = load("res://scripts/ui/title_screen.gd").title_look(st0)

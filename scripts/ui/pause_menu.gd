@@ -4,9 +4,11 @@ class_name PauseMenu
 ## 타이틀 화면의 '설정'도 이 화면을 쓴다: open(true) = 설정만 (계속하기·저장·불러오기·타이틀로 없이, 게임을 멈추지 않음).
 ## 음량 세 가지(음악·효과음·전체)는 각자 자기 소리 버스만 바꾼다 (Settings → AudioBuses). 0 은 끔.
 ## 보스 러시 중에는 저장·불러오기·타이틀로 대신 '포기하기' 하나 (BossRush.give_up → 결과 화면 → 타이틀).
+## v1.1.0: '난이도' 줄(좌우로 Easy · Normal · Hard · Nightmare — Progress.difficulty, 다음 방부터 적용, 저장은 다음 저장 때;
+## 보스 러시 중·타이틀 설정에선 없음). '지금 저장하기'·'불러오기'는 지금 저장 칸에 하고, 값 글자에 "칸 N" 을 보여 준다.
 
 ## 좌우로 값을 바꾸는 줄 (터치: 그려진 값 글자 '◀ … ▶' 의 왼쪽 반 = 줄이기, 오른쪽 반 = 키우기)
-const SLIDER_KEYS := ["music_volume", "sfx_volume", "master_volume", "touch_scale"]
+const SLIDER_KEYS := ["music_volume", "sfx_volume", "master_volume", "touch_scale", "difficulty"]
 ## 값 글자의 크기와, 줄 오른쪽 끝에서 글자 오른쪽 끝까지 비우는 거리 (그리기·누름 판정이 같은 값을 쓴다)
 const VALUE_FONT := 24
 const VALUE_RIGHT_PAD := 20.0
@@ -54,7 +56,7 @@ func open(settings_only := false) -> void:
 	elif BossRush.active:
 		_items = [{"key": "resume", "label": "계속하기"}] + settings + [{"key": "give_up", "label": BossRush.text("give_up")}]
 	else:
-		_items = [{"key": "resume", "label": "계속하기"}] + settings + [
+		_items = [{"key": "resume", "label": "계속하기"}, {"key": "difficulty", "label": SlotPicker.text("pause_difficulty")}] + settings + [
 			{"key": "save", "label": "지금 저장하기"},
 			{"key": "load", "label": "불러오기"},
 			{"key": "title", "label": "타이틀로"},
@@ -164,7 +166,7 @@ func _activate() -> void:
 			Sfx.play("select")
 			var hud := get_tree().current_scene.get_node_or_null("CombatHUD")
 			if hud:
-				hud.show_message("저장되었다 — 다음에는 '%s'에서 이어진다" % where, 3.0)
+				hud.show_message(SlotPicker.text("pause_saved", {"n": SaveGame.slot, "where": where}), 3.0)
 		"load":
 			if not SaveGame.has_save():
 				Sfx.play("blip")
@@ -188,6 +190,11 @@ func _activate() -> void:
 		"lenient_guard", "screen_shake", "debug_hud":
 			Settings.set_value(key, not Settings.get_value(key))
 			Sfx.play("select")
+		"difficulty":
+			# 결정(또는 줄 누르기)은 한 단계씩 돌아간다: Nightmare 다음은 Easy (좌우는 끝에서 멈춘다)
+			var i := (Balance.DIFFICULTIES.find(Balance.difficulty()) + 1) % Balance.DIFFICULTIES.size()
+			Progress.difficulty = Balance.DIFFICULTIES[i]
+			Sfx.play("select")
 		_:
 			_adjust(1)
 
@@ -204,6 +211,15 @@ func _adjust(dir: int) -> void:
 		"lenient_guard", "screen_shake", "debug_hud":
 			Settings.set_value(key, not Settings.get_value(key))
 			Sfx.play("select")
+		"difficulty":
+			# 끝에서 멈춘다 (Easy 에서 ◀, Nightmare 에서 ▶ 는 그대로) — 한 번에 가장 쉬움 ↔ 가장 어려움으로 넘어가지 않게
+			var n := Balance.DIFFICULTIES.size()
+			var i := clampi(Balance.DIFFICULTIES.find(Balance.difficulty()) + dir, 0, n - 1)
+			if Balance.DIFFICULTIES[i] != Progress.difficulty:
+				Progress.difficulty = Balance.DIFFICULTIES[i]
+				Sfx.play("select")
+			else:
+				Sfx.play("blip")
 
 
 func _value_text(key: String) -> String:
@@ -216,19 +232,37 @@ func _value_text(key: String) -> String:
 		"touch_scale":
 			return "◀ " + ["작게", "보통", "크게"][int(Settings.get_value(key))] + " ▶"
 		"save":
-			return "이어질 곳: " + str(Progress.last_grass.get("name", "지금 방의 처음"))
+			return SlotPicker.text("pause_save_value", {"n": SaveGame.slot, "where": str(Progress.last_grass.get("name", "지금 방의 처음"))})
 		"load":
 			var at := SaveGame.saved_at_text()
-			return ("저장: " + at) if at != "" else "저장 없음"
+			return SlotPicker.text("pause_load_value", {"n": SaveGame.slot, "at": at}) if at != "" else SlotPicker.text("pause_load_none", {"n": SaveGame.slot})
+		"difficulty":
+			var d := Balance.difficulty()
+			return ("◀ " if d != Balance.DIFFICULTIES[0] else "   ") + str(Balance.DIFF_NAME[d]) + (" ▶" if d != Balance.DIFFICULTIES[-1] else "   ")
 		"give_up":
 			return BossRush.text("give_up_value")
 	return ""
 
 
+## 줄의 세로 간격과 첫 줄 자리: 줄이 많아(일시정지 13줄) 화면 아래 안내 글자가 넘치면 위로 올리고, 그래도 넘치면 간격을 좁힌다.
+func _layout() -> Vector2:
+	var h := _panel.size.y
+	var n := _items.size()
+	var step := 58.0
+	var top := h * 0.26
+	var bottom := h - 24.0 - 52.0   # 안내 글자 한 줄 자리
+	if top + n * step > bottom:
+		top = maxf(h * 0.13, bottom - n * step)
+	if top + n * step > bottom:
+		step = maxf(44.0, (bottom - top) / maxf(n, 1))
+	return Vector2(top, step)
+
+
 func _row_rect(i: int) -> Rect2:
 	var size := _panel.size
 	var w := 820.0
-	return Rect2((size.x - w) / 2.0, size.y * 0.26 + i * 58.0, w, 52.0)
+	var l := _layout()
+	return Rect2((size.x - w) / 2.0, l.x + i * l.y, w, minf(52.0, l.y - 6.0))
 
 
 ## 줄 i 의 값 글자가 실제로 그려지는 자리 (오른쪽 끝을 줄 끝 − VALUE_RIGHT_PAD 에 맞춘다). 글자가 없으면 빈 사각형.
@@ -265,16 +299,24 @@ func _on_draw() -> void:
 	var size := _panel.size
 	# 타이틀의 설정 화면은 뒤의 제목·메뉴 글자가 비치지 않게 더 짙게
 	_panel.draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.03, 0.05, 0.92 if _settings_only else 0.78))
-	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.18), "설정" if _settings_only else "잠시 멈춤", HORIZONTAL_ALIGNMENT_CENTER, 800, 40, Color(1.0, 0.9, 0.72))
+	var l := _layout()
+	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, l.x - size.y * 0.08), "설정" if _settings_only else "잠시 멈춤", HORIZONTAL_ALIGNMENT_CENTER, 800, 40, Color(1.0, 0.9, 0.72))
 	for i in _items.size():
 		var r := _row_rect(i)
 		var sel := i == _index
 		_panel.draw_rect(r, Color(1.0, 0.86, 0.5, 0.16) if sel else Color(1, 1, 1, 0.05))
 		var it: Dictionary = _items[i]
-		_panel.draw_string(font, r.position + Vector2(20, 35), ("▸  " if sel else "    ") + it["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1.0, 0.86, 0.5) if sel else Color(0.9, 0.9, 0.9))
+		var ty := r.position.y + r.size.y / 2.0 + 9.0   # 글자 바닥선 (줄 높이가 좁아져도 가운데)
+		_panel.draw_string(font, Vector2(r.position.x + 20, ty), ("▸  " if sel else "    ") + it["label"], HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1.0, 0.86, 0.5) if sel else Color(0.9, 0.9, 0.9))
 		var vt := _value_text(it["key"])
 		if vt != "":
 			# 폭 제한 없이 왼쪽 정렬로, value_text_rect 가 잰 자리에 그린다 (누름 판정과 같은 자리)
 			var tr := value_text_rect(i)
-			_panel.draw_string(font, Vector2(tr.position.x, r.position.y + 35), vt, HORIZONTAL_ALIGNMENT_LEFT, -1, VALUE_FONT, Color(0.56, 0.83, 1.0) if sel else Color(0.75, 0.8, 0.85))
-	_panel.draw_string(font, Vector2(size.x / 2.0 - 400, size.y * 0.26 + _items.size() * 58.0 + 40.0), "위·아래로 고르고 좌·우로 바꾼다  ·  메뉴 / 회피: 닫기" if InputDevice.current != InputDevice.Kind.TOUCH else "줄을 눌러 고르고, 값의 ◀ ▶ 쪽을 눌러 바꾼다  ·  바깥을 누르면 닫기", HORIZONTAL_ALIGNMENT_CENTER, 800, 20, Color(1, 1, 1, 0.45))
+			_panel.draw_string(font, Vector2(tr.position.x, ty), vt, HORIZONTAL_ALIGNMENT_LEFT, -1, VALUE_FONT, Color(0.56, 0.83, 1.0) if sel else Color(0.75, 0.8, 0.85))
+	var foot := "위·아래로 고르고 좌·우로 바꾼다  ·  메뉴 / 회피: 닫기" if InputDevice.current != InputDevice.Kind.TOUCH else "줄을 눌러 고르고, 값의 ◀ ▶ 쪽을 눌러 바꾼다  ·  바깥을 누르면 닫기"
+	var foot_col := Color(1, 1, 1, 0.45)
+	if _index < _items.size() and _items[_index]["key"] == "difficulty":
+		# 난이도 줄을 고르면: 그 난이도의 뜻과 '다음 방부터 적용'
+		foot = SlotPicker.text("pause_difficulty_note", {"desc": str(Balance.DIFF_DESC[Balance.difficulty()])})
+		foot_col = Color(0.75, 0.88, 0.8, 0.8)
+	_panel.draw_string(font, Vector2(size.x / 2.0 - 500, l.x + _items.size() * l.y + 34.0), foot, HORIZONTAL_ALIGNMENT_CENTER, 1000, 20, foot_col)

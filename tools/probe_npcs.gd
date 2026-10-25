@@ -24,7 +24,7 @@ extends Node
 ## 마지막에 "[probe] 끝: 실패 N" 을 찍고 그 수로 종료한다.
 
 const IDS := ["woodcutter_canopy", "gardener_canopy", "guard_village", "owen", "herbalist_abyss", "fisher_lake", "miner_hidden"]
-const SAVE_PATH := "user://save.json"
+var SAVE_PATH: String = SaveGame.PATH   # v1.1.0 저장 칸: 지금 칸(칸 1)의 파일
 const TALK_BAND := 200.0     # 집 NPC 와 말하는 소녀가 설 수 있는 가로 범위 (± px)
 const SPACING := 250.0       # 같은 바닥의 다른 말 걸기 대상과 떨어져야 하는 거리
 const CAM_HALF_VIEW := 1920.0 / 1.15 / 2.0   # 카메라 기본 배율 1.15 (game_camera.gd base_zoom) 일 때 화면 가로 절반 (월드 px)

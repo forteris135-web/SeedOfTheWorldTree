@@ -4,6 +4,9 @@ class_name TitleScreen
 ## 음악: 클리어 전 title, 엔딩을 본 뒤 selenia_humming (Music.title_track). 클리어 후에는 그림·부제가 마지막으로 본 엔딩에 따라 바뀐다
 ## (ENDINGS.md 5장: 희생 → title_after_sacrifice, 되돌림 → title_after_return, 제3의 길 → title_after_true).
 ## 엔딩을 본 뒤에만 메뉴에 '보스 러시'(BossRush)와 '음악 감상'(MusicRoom)이 생긴다 (2026-10-20 기획자 요청).
+## v1.1.0 저장 칸: '이어하기' → 칸 고르기(SlotPicker, 찬 칸만) → 불러오기. '새로 시작' → 칸 고르기(세 칸, 찬 칸은 두 번 눌러 덮어쓰기)
+## → 난이도 고르기(DifficultyPicker) → 그 칸에 새로 시작. 엔딩을 본 기록은 칸과 상관없이 남는다(MetaSave) — 칸을 지우거나 덮어써도
+## 보스 러시·음악 감상·클리어 뒤 타이틀 그림이 사라지지 않는다. 오른쪽 아래에 버전 글자.
 
 ## 클리어 전 타이틀 그림
 const DEFAULT_ART := "res://art/characters/title_selenia.png"
@@ -23,10 +26,11 @@ var _settings: PauseMenu
 ## 음악 감상 (엔딩을 본 뒤)
 var _music_room: MusicRoom
 var _cleared := false
-## '새로 시작' 확인 중 (저장이 있을 때 한 번 더 눌러야 저장을 지우고 시작한다 — 2026-10-20 QA: 클리어 기록까지 확인 없이 지워졌다)
-var _confirm_new := false
-const START_TEXT := "새로 시작"
-const START_CONFIRM_TEXT := "새로 시작 — 한 번 더 누르면 저장이 지워집니다"
+## 저장 칸 고르기 · 난이도 고르기 (처음 열 때 만든다)
+var _slots: SlotPicker
+var _difficulty: DifficultyPicker
+## '새로 시작'에서 고른 칸 (난이도를 고르는 동안)
+var _new_slot := 0
 
 
 func _ready() -> void:
@@ -35,7 +39,7 @@ func _ready() -> void:
 	var seen := cleared_state()
 	_cleared = seen["cleared"]
 	var gone := false
-	if not SaveGame.has_save():
+	if not SaveGame.any_save():
 		menu.get_node("Continue").queue_free()
 		gone = true
 	if not _cleared:
@@ -61,6 +65,9 @@ func _ready() -> void:
 	_play_title_music(2.0)
 	InputDevice.device_changed.connect(func(_k): _refresh_hint())
 	_refresh_hint()
+	var ver := get_node_or_null("BuildVersion") as Label
+	if ver:
+		ver.text = "v" + str(ProjectSettings.get_setting("application/config/version", ""))
 	# 느리게 다가가는 카메라
 	art.pivot_offset = art.size / 2.0
 	art.resized.connect(func() -> void: art.pivot_offset = art.size / 2.0)
@@ -86,28 +93,45 @@ func _ready() -> void:
 		get_tree().quit()
 
 
-## 엔딩을 보았는가: 지금 진행(Progress) 또는 저장 파일의 깃발. 앱을 새로 켠 뒤에도 클리어한 타이틀이 보이게
-## 저장 파일을 **읽기만** 한다 (진행은 '이어하기'를 고를 때 SaveGame.load_game 이 되돌린다).
+## 엔딩을 보았는가: 지금 진행(Progress) 또는 칸과 상관없는 해금 기록(MetaSave) 또는 아무 저장 칸의 깃발.
+## 앱을 새로 켠 뒤에도 클리어한 타이틀이 보이게 파일을 **읽기만** 한다 (진행은 '이어하기'를 고를 때 SaveGame.load_game 이 되돌린다).
 ## {"cleared": 엔딩을 하나라도 봄, "third": 제3의 길을 봄, "ending": 마지막으로 본 엔딩 (sacrifice / return / third, 모르면 "")}
-## 마지막으로 본 엔딩: 지금 진행에 엔딩을 본 기록이 있으면 그것, 없으면 저장 파일 (깃발 last_ending_*, 옛 저장은 "ending" 값).
+## 마지막으로 본 엔딩: 지금 진행에 엔딩을 본 기록이 있으면 그것, 없으면 메타의 마지막 엔딩, 그것도 없으면 가장 늦게 저장한 클리어 칸
+## (깃발 last_ending_*, 옛 저장은 "ending" 값).
 static func cleared_state() -> Dictionary:
 	var out := {"cleared": Progress.has("cleared"), "third": Progress.has("cleared_third"), "ending": ""}
 	if out["cleared"]:
 		out["ending"] = PostEnding.last_ending()
 		if out["ending"] == "" and Progress.ending in EndingScene.ENDINGS:
 			out["ending"] = Progress.ending
-	if SaveGame.has_save():
-		var data = JSON.parse_string(FileAccess.get_file_as_string(SaveGame.PATH))
-		if typeof(data) == TYPE_DICTIONARY and typeof(data.get("flags", null)) == TYPE_DICTIONARY:
-			var f: Dictionary = data["flags"]
-			out["cleared"] = out["cleared"] or bool(f.get("cleared", false))
-			out["third"] = out["third"] or bool(f.get("cleared_third", false))
-			if out["ending"] == "" and bool(f.get("cleared", false)):
-				for n in EndingScene.ENDINGS:
-					if bool(f.get("last_ending_" + n, false)):
-						out["ending"] = n
-				if out["ending"] == "" and str(data.get("ending", "")) in EndingScene.ENDINGS:
-					out["ending"] = str(data.get("ending", ""))
+	var meta := MetaSave.read()
+	out["cleared"] = out["cleared"] or bool(meta["cleared"])
+	out["third"] = out["third"] or bool(meta["cleared_third"])
+	if out["ending"] == "" and str(meta["last_ending"]) in EndingScene.ENDINGS:
+		out["ending"] = str(meta["last_ending"])
+	var slot_end := ""
+	var slot_end_at := ""
+	for i in range(1, SaveGame.SLOT_COUNT + 1):
+		var data := SaveGame.read_slot(i)
+		if typeof(data.get("flags", null)) != TYPE_DICTIONARY:
+			continue
+		var f: Dictionary = data["flags"]
+		if not bool(f.get("cleared", false)):
+			continue
+		out["cleared"] = true
+		out["third"] = out["third"] or bool(f.get("cleared_third", false))
+		var e := ""
+		for n in EndingScene.ENDINGS:
+			if bool(f.get("last_ending_" + n, false)):
+				e = n
+		if e == "" and str(data.get("ending", "")) in EndingScene.ENDINGS:
+			e = str(data.get("ending", ""))
+		var at := str(data.get("saved_at", ""))
+		if e != "" and (slot_end == "" or at > slot_end_at):
+			slot_end = e
+			slot_end_at = at
+	if out["ending"] == "":
+		out["ending"] = slot_end
 	return out
 
 
@@ -144,7 +168,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _started or settings_open() or music_room_open():
+	if _started or settings_open() or music_room_open() or picker_open():
 		return
 	if event.is_action_pressed("move_down") or event.is_action_pressed("ui_down"):
 		_select((_index + 1) % _items.size())
@@ -157,24 +181,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _select(i: int) -> void:
-	var prev := _index
 	_index = clampi(i, 0, max(_items.size() - 1, 0))
-	if _confirm_new and _index != prev:
-		_cancel_new_confirm()
-
-
-## '새로 시작' 확인을 거둔다 (다른 항목으로 옮기면)
-func _cancel_new_confirm() -> void:
-	_confirm_new = false
-	for b in _items:
-		if is_instance_valid(b) and b.name == "Start":
-			b.text = ("▸  " if b.text.begins_with("▸  ") else "") + START_TEXT
-	_refresh_hint()
-
-
-## '새로 시작'을 확인 중인가 (시험용)
-func confirming_new_game() -> bool:
-	return _confirm_new
 
 
 func _on_item_pressed(b: Button) -> void:
@@ -184,7 +191,7 @@ func _on_item_pressed(b: Button) -> void:
 
 
 func _activate(i: int) -> void:
-	if _started or i < 0 or settings_open() or music_room_open():
+	if _started or i < 0 or i >= _items.size() or settings_open() or music_room_open() or picker_open():
 		return
 	var b := _items[i]
 	Sfx.play("select")
@@ -197,21 +204,10 @@ func _activate(i: int) -> void:
 		"MusicRoom":
 			open_music_room()
 		"Continue":
-			_started = true
-			var scene := SaveGame.load_game()
-			Game.go_to(scene if scene != "" else Game.FIRST_ROOM, 1.2, 1.4)
+			open_slot_picker("load")
 		"Start":
-			_select(i)
-			if SaveGame.has_save() and not _confirm_new:
-				# 저장이 있으면 한 번 더 확인한다 ('이어하기' 바로 아래라 잘못 누르기 쉽고, 엔딩 기록·클리어 후 타이틀도 함께 사라진다)
-				_confirm_new = true
-				b.text = "▸  " + START_CONFIRM_TEXT
-				hint.text = "다시 누르면 처음부터 시작합니다 · 다른 항목으로 옮기면 취소"
-				return
-			_started = true
-			_confirm_new = false
-			SaveGame.new_game()
-			Game.go_to(Game.FIRST_ROOM, 1.2, 1.4)
+			# 찬 칸을 덮어쓸 때는 칸 고르기에서 한 번 더 확인한다 (2026-10-20 QA: 클리어한 저장이 확인 없이 지워졌다)
+			open_slot_picker("new")
 		"InputTest":
 			_started = true
 			Game.go_to("res://scenes/debug/input_test.tscn", 0.5, 0.6)
@@ -244,6 +240,78 @@ func music_room_open() -> bool:
 	return _music_room != null and is_instance_valid(_music_room) and _music_room.is_open()
 
 
+## 저장 칸 고르기를 연다: how = "load"(이어하기) / "new"(새로 시작). 시험도 부른다.
+func open_slot_picker(how: String, start := 0) -> SlotPicker:
+	if _slots == null or not is_instance_valid(_slots):
+		_slots = SlotPicker.new()
+		add_child(_slots)
+		_slots.chosen.connect(_on_slot_chosen)
+		_slots.closed.connect(_refresh_continue)
+		_slots.deleted.connect(func(_i: int) -> void: _refresh_continue())
+	_slots.open(how, start)
+	return _slots
+
+
+func slot_picker() -> SlotPicker:
+	return _slots if _slots != null and is_instance_valid(_slots) else null
+
+
+func difficulty_picker() -> DifficultyPicker:
+	return _difficulty if _difficulty != null and is_instance_valid(_difficulty) else null
+
+
+## 칸 고르기나 난이도 고르기가 열려 있는가
+func picker_open() -> bool:
+	return (slot_picker() != null and _slots.is_open()) or (difficulty_picker() != null and _difficulty.is_open())
+
+
+func _on_slot_chosen(i: int) -> void:
+	if _started:
+		return
+	if _slots.mode == "load":
+		if SaveGame.read_slot(i).is_empty():
+			# 읽을 수 없는 저장 (깨진 파일): 다시 고르게 한다 (지우기는 칸 고르기에서)
+			Sfx.play("blip")
+			_slots.open("load", i)
+			return
+		_started = true
+		SaveGame.set_slot(i)
+		var scene := SaveGame.load_game()
+		Game.go_to(scene if scene != "" else Game.FIRST_ROOM, 1.2, 1.4)
+		return
+	# 새로 시작: 난이도를 고른다 (돌아가면 칸 고르기로)
+	_new_slot = i
+	_slots.hide_panel()
+	if _difficulty == null or not is_instance_valid(_difficulty):
+		_difficulty = DifficultyPicker.new()
+		add_child(_difficulty)
+		_difficulty.chosen.connect(_on_difficulty_chosen)
+		_difficulty.canceled.connect(func() -> void: _slots.open("new", _new_slot))
+	_difficulty.open(i, "normal")
+
+
+func _on_difficulty_chosen(diff: String) -> void:
+	if _started or _new_slot <= 0:
+		return
+	_started = true
+	SaveGame.set_slot(_new_slot)
+	SaveGame.new_game(diff)
+	Game.go_to(Game.FIRST_ROOM, 1.2, 1.4)
+
+
+## 칸을 지워 저장이 하나도 남지 않으면 '이어하기'를 치운다
+func _refresh_continue() -> void:
+	if SaveGame.any_save():
+		return
+	for k in _items.size():
+		var b := _items[k]
+		if is_instance_valid(b) and b.name == "Continue":
+			_items.remove_at(k)
+			b.queue_free()
+			_select(maxi(_index - (1 if k < _index else 0), 0))
+			return
+
+
 ## 메뉴에 그 항목이 있는가 (시험용: "BossRush", "MusicRoom" …)
 func has_item(item_name: String) -> bool:
 	for b in _items:
@@ -261,8 +329,6 @@ func activate_item(item_name: String) -> void:
 
 
 func _refresh_hint() -> void:
-	if _confirm_new:
-		return
 	match InputDevice.current:
 		InputDevice.Kind.TOUCH:
 			hint.text = "항목을 누르세요"

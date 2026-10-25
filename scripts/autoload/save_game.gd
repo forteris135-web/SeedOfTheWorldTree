@@ -1,13 +1,160 @@
 extends Node
-## 세이브. 달빛풀에서 쉴 때 기기 안(user://save.json)에 저장한다. 타이틀의 "이어하기"가 읽는다.
+## 세이브. 달빛풀에서 쉴 때 기기 안에 저장한다. 타이틀의 "이어하기"가 읽는다.
+## v1.1.0: 저장 칸 3개 (user://save_1.json … save_3.json). 지금 칸(slot)은 타이틀의 칸 고르기가 정한다 (set_slot).
+## 저장·불러오기·'지금 저장하기'·'새로 시작'은 모두 지금 칸에만 한다. 처음 켤 때 옛 단일 파일 user://save.json 은 칸 1 로 옮긴다
+## (원본은 save.json.bak 으로 이름만 바꿔 남긴다). 칸과 상관없는 해금(엔딩을 봄)은 MetaSave(user://meta.json).
 ## 보스 러시 중(BossRush.active)에는 저장 파일에 아무것도 쓰지도 지우지도 않는다 (러시는 떼어 둔 진행을 끝나고 되돌린다).
 
-## 저장 파일 경로. v1.1.0: 저장 칸(S)이 바꿀 수 있게 var (시험들이 SaveGame.PATH 를 식으로 쓰므로 이름은 그대로).
-var PATH := "user://save.json"
+const SLOT_COUNT := 3
+## v1.1.0 이전의 단일 저장 파일 (처음 켤 때 칸 1 로 옮긴다)
+const OLD_PATH := "user://save.json"
+## 지금 칸 (1 ~ SLOT_COUNT)
+var slot := 1
+## 지금 칸의 저장 파일 경로. set_slot 이 바꾼다 (시험들이 SaveGame.PATH 를 식으로 쓰므로 이름은 그대로).
+var PATH := "user://save_1.json"
 
 
+static func path_of(i: int) -> String:
+	return "user://save_%d.json" % i
+
+
+func _ready() -> void:
+	migrate_old_file()
+	# 메타 파일이 아직 없고 칸에 클리어 기록이 보이면 메타를 만든다 (옛 저장으로 클리어한 사람의 보스 러시·음악 감상이 칸을 지워도 남게)
+	# 메타가 이미 있으면 칸 파일을 읽지 않는다 (켤 때마다 저장 파일 셋을 읽지 않게)
+	if MetaSave.exists():
+		return
+	var datas := []
+	for i in range(1, SLOT_COUNT + 1):
+		datas.append(read_slot(i))
+	MetaSave.sync_from_slots(datas)
+
+
+## 옛 단일 파일(save.json)이 있고 칸 1 이 비어 있으면 칸 1 로 복사하고, 원본은 save.json.bak 으로 이름을 바꾼다 (지우지 않는다).
+## 옮겼으면 true. (시험도 부른다)
+func migrate_old_file() -> bool:
+	if not FileAccess.file_exists(OLD_PATH) or FileAccess.file_exists(path_of(1)):
+		return false
+	var text := FileAccess.get_file_as_string(OLD_PATH)
+	var f := FileAccess.open(path_of(1), FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(text)
+	f.close()
+	var bak := OLD_PATH + ".bak"
+	var n := 2
+	while FileAccess.file_exists(bak):   # 앞선 이주의 .bak 이 있으면 지우지 않고 다른 이름으로 (save.json.bak2 …)
+		bak = OLD_PATH + ".bak%d" % n
+		n += 1
+	if DirAccess.rename_absolute(OLD_PATH, bak) != OK:
+		push_warning("save.json 을 save.json.bak 으로 바꾸지 못했다 (칸 1 에는 복사됨)")
+	return true
+
+
+## 지금 칸을 바꾼다 (1 ~ SLOT_COUNT)
+func set_slot(i: int) -> void:
+	slot = clampi(i, 1, SLOT_COUNT)
+	PATH = path_of(slot)
+
+
+## 지금 칸에 저장이 있는가
 func has_save() -> bool:
 	return FileAccess.file_exists(PATH)
+
+
+func has_save_in(i: int) -> bool:
+	return FileAccess.file_exists(path_of(i))
+
+
+## 어느 칸이든 저장이 있는가 (타이틀의 '이어하기')
+func any_save() -> bool:
+	for i in range(1, SLOT_COUNT + 1):
+		if has_save_in(i):
+			return true
+	return false
+
+
+## 칸 i 의 저장 내용 (읽기만; 없거나 깨졌으면 빈 사전 — 깨진 파일도 오류 글을 쏟지 않는다)
+func read_slot(i: int) -> Dictionary:
+	if not has_save_in(i):
+		return {}
+	return parse_quiet(FileAccess.get_file_as_string(path_of(i)))
+
+
+## JSON 글을 사전으로 (깨졌으면 빈 사전, 오류 글 없이)
+static func parse_quiet(text: String) -> Dictionary:
+	var j := JSON.new()
+	if j.parse(text) != OK:
+		return {}
+	return j.data if j.data is Dictionary else {}
+
+
+## 칸 고르기 화면에 보여 줄 칸 i 의 요약.
+## {exists, saved_at, saved_at_text, place, difficulty, cleared, version}
+## place = 이어질 곳의 이름 (달빛풀이 있는 방 이름 — RoomIndex; 아직 쉰 적이 없으면 저장한 방 이름, 그것도 모르면 "")
+func summary_of(i: int) -> Dictionary:
+	var out := {"exists": false, "saved_at": "", "saved_at_text": "", "place": "", "difficulty": "normal", "cleared": false, "version": 0}
+	if not has_save_in(i):
+		return out
+	var d := read_slot(i)
+	out["exists"] = true
+	if d.is_empty():
+		out["place"] = "?"   # 깨진 파일: 칸은 차 있다고 보여 주고(지울 수 있게) 이름만 모른다
+		return out
+	out["saved_at"] = str(d.get("saved_at", ""))
+	out["saved_at_text"] = _short_time(out["saved_at"])
+	out["difficulty"] = str(d.get("difficulty", "normal")) if Balance.DIFF_MULT.has(str(d.get("difficulty", "normal"))) else "normal"
+	var f = d.get("flags", {})
+	out["cleared"] = f is Dictionary and bool(f.get("cleared", false))
+	out["version"] = int(d.get("version", 1))
+	out["place"] = place_of(d)
+	return out
+
+
+## 저장 내용의 '이어질 곳' 이름
+static func place_of(d: Dictionary) -> String:
+	var gid := str(d.get("grass", ""))
+	if gid != "":
+		var gs = d.get("grasses", {})
+		var gname := gid
+		if gs is Dictionary and gs.get(gid) is Dictionary:
+			gname = str(gs[gid].get("name", gid))
+		return RoomIndex.grass_room_name(gid, gname)
+	var scene := str(d.get("scene", ""))
+	var room_id := scene.get_file().get_basename()
+	var fallback := ""
+	var vr = d.get("visited_rooms", {})
+	if vr is Dictionary and vr.get(room_id) is Dictionary:
+		fallback = str(vr[room_id].get("name", ""))
+	return RoomIndex.room_name(room_id, fallback)   # 모르면 "" (칸 고르기가 '여정의 시작'으로 보여 준다)
+
+
+## 칸 i 를 지운다 (보스 러시 중엔 거절). 그 칸에 클리어 기록이 있으면 먼저 메타에 옮겨 적는다.
+func delete_slot(i: int) -> void:
+	if BossRush.active or not has_save_in(i):
+		return
+	MetaSave.remember_slot(read_slot(i))
+	DirAccess.remove_absolute(path_of(i))
+
+
+## 가장 늦게 저장한 칸 (없으면 0). 같으면 지금 칸, 그다음 번호가 작은 칸.
+## cleared_only = 엔딩을 본(flags.cleared) 칸 가운데서만 (보스 러시의 몸)
+func latest_slot(cleared_only := false) -> int:
+	var best := 0
+	var best_at := ""
+	for i in range(1, SLOT_COUNT + 1):
+		if not has_save_in(i):
+			continue
+		var d := read_slot(i)
+		if cleared_only:
+			var f = d.get("flags", {})
+			if not (f is Dictionary and bool(f.get("cleared", false))):
+				continue
+		var at := str(d.get("saved_at", ""))
+		if best == 0 or at > best_at or (at == best_at and i == slot):
+			best = i
+			best_at = at
+	return best
 
 
 func save(grass_id: String, scene_path: String) -> void:
@@ -51,14 +198,15 @@ func save_now() -> String:
 	return str(g.get("name", "지금 방의 처음"))
 
 
-## 저장한 때 (메뉴 표시용). 없으면 "".
+## 저장한 때 (메뉴 표시용, 지금 칸). 없으면 "".
 func saved_at_text() -> String:
 	if not has_save():
 		return ""
-	var data = JSON.parse_string(FileAccess.get_file_as_string(PATH))
-	if typeof(data) != TYPE_DICTIONARY:
-		return ""
-	var s := str(data.get("saved_at", ""))   # 2026-10-18T09:12:33
+	return _short_time(str(read_slot(slot).get("saved_at", "")))
+
+
+## "2026-10-18T09:12:33" → "10/18 09:12"
+static func _short_time(s: String) -> String:
 	if s.length() >= 16:
 		return s.substr(5, 5).replace("-", "/") + " " + s.substr(11, 5)
 	return s
@@ -87,6 +235,8 @@ func load_game() -> String:
 	Progress.dust_changed.emit(Progress.dust)
 	Progress.tokens = int(data.get("tokens", 0))   # 옛 저장 파일에는 없다 → 0 (이주가 채운다)
 	Progress.difficulty = str(data.get("difficulty", "normal"))   # 옛 저장 파일에는 없다 → Normal
+	if not Balance.DIFF_MULT.has(Progress.difficulty):
+		Progress.difficulty = "normal"   # 모르는 값 (손으로 고친 파일 등)
 	var pur: Dictionary = data.get("purity", {})
 	# 먼저 모두 잿빛으로 (저장 파일에 없는 지역 — 예: 나중에 정화한 확장 지역 — 의 정화가 남지 않게)
 	for k in Purity.regions:
@@ -124,14 +274,19 @@ static func _fill_last_ending() -> void:
 	Progress.flags["last_ending_" + which] = true
 
 
-func new_game() -> void:
+## 지금 칸에 새로 시작한다: 진행을 비우고(잿빛 세계), 고른 난이도를 정하고, 칸의 옛 저장을 지운 뒤 곧바로 첫 저장을 한다
+## (칸 고르기에서 이 칸이 '차 있음'으로 보이게; 이어지는 곳은 첫 방의 처음 자리). 지우는 칸에 클리어 기록이 있으면 먼저 메타에 옮긴다.
+func new_game(difficulty := "normal") -> void:
 	if BossRush.active:
 		return
 	Progress.reset()
 	for k in Purity.regions:
 		Purity.regions[k] = false
+	Progress.difficulty = difficulty if Balance.DIFF_MULT.has(difficulty) else "normal"
 	if has_save():
+		MetaSave.remember_slot(read_slot(slot))
 		DirAccess.remove_absolute(PATH)
+	save("", Game.FIRST_ROOM)
 
 
 func _rooms_to_json(rooms: Dictionary) -> Dictionary:
