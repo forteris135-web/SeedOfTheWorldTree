@@ -176,7 +176,7 @@
    ]
   },
   "abyss_boss": {
-   "name": "뿌리의 심연 · 정원의 끝",
+   "name": "심연 · 정원의 끝",
    "region": "abyss",
    "offset": [
     51900,
@@ -198,7 +198,7 @@
      1800,
      1432
     ],
-    "FromVillage": [
+    "FromEnding": [
      3460,
      1432
     ],
@@ -230,6 +230,17 @@
      "spawn": "FromBoss",
      "requires": "",
      "hidden": false
+    },
+    {
+     "node": "Exits/ToEnding",
+     "pos": [
+      3610,
+      1500
+     ],
+     "to": "abyss_ending",
+     "spawn": "FromBoss",
+     "requires": "",
+     "hidden": false
     }
    ],
    "grasses": [
@@ -243,6 +254,43 @@
      "decor": false
     }
    ],
+   "cracked": [],
+   "records": []
+  },
+  "abyss_ending": {
+   "name": "심연 · 두 갈래 길",
+   "region": "abyss",
+   "offset": [
+    55600,
+    -200
+   ],
+   "bounds": [
+    0,
+    0,
+    2400,
+    1800
+   ],
+   "boss": false,
+   "markers": {
+    "FromBoss": [
+     340,
+     1432
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToBoss",
+     "pos": [
+      190,
+      1500
+     ],
+     "to": "abyss_boss",
+     "spawn": "FromEnding",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
    "cracked": [],
    "records": []
   },
@@ -1150,11 +1198,15 @@
    "boss": false,
    "markers": {
     "FromMineDeep": [
-     120,
+     800,
      1032
     ],
     "FromFlooded02": [
      3880,
+     1032
+    ],
+    "FromMine02": [
+     120,
      1032
     ]
    },
@@ -1165,7 +1217,7 @@
       190,
       1100
      ],
-     "to": "mine_deep",
+     "to": "mine_02",
      "spawn": "FromFlooded",
      "requires": "",
      "hidden": false
@@ -1179,6 +1231,17 @@
      "to": "flooded_mine_02",
      "spawn": "FromFlooded01",
      "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToMineDeep",
+     "pos": [
+      720,
+      1100
+     ],
+     "to": "mine_deep",
+     "spawn": "FromFlooded",
+     "requires": "lantern",
      "hidden": false
     }
    ],
@@ -1521,6 +1584,10 @@
     "FromHidden1": [
      170,
      802
+    ],
+    "FromFlooded": [
+     3820,
+     1132
     ]
    },
    "portals": [
@@ -1578,6 +1645,17 @@
      "spawn": "FromMain",
      "requires": "",
      "hidden": false
+    },
+    {
+     "node": "Exits/ToFlooded",
+     "pos": [
+      3950,
+      1200
+     ],
+     "to": "flooded_mine_01",
+     "spawn": "FromMine02",
+     "requires": "",
+     "hidden": false
     }
    ],
    "grasses": [
@@ -1595,7 +1673,8 @@
     "cracked_mine_02_1"
    ],
    "records": [
-    "scripture_mine"
+    "scripture_mine",
+    "pump_way_sign"
    ]
   },
   "mine_boss": {
@@ -1732,7 +1811,7 @@
      ],
      "to": "flooded_mine_01",
      "spawn": "FromMineDeep",
-     "requires": "sap_walk",
+     "requires": "",
      "hidden": false
     },
     {
@@ -1879,7 +1958,7 @@
    "records": []
   },
   "moon_garden": {
-   "name": "달빛 정원",
+   "name": "심연 · 달빛 정원",
    "region": "abyss",
    "offset": [
     48900,
@@ -1983,7 +2062,7 @@
     },
     {
      "id": "moon_garden",
-     "name": "달빛 정원",
+     "name": "심연 · 달빛 정원",
      "pos": [
       1500,
       1100
@@ -1992,7 +2071,9 @@
     }
    ],
    "cracked": [],
-   "records": []
+   "records": [
+    "root_gate_stone"
+   ]
   },
   "sap_lake_01": {
    "name": "수액의 호수 · 호숫가의 뿌리",
