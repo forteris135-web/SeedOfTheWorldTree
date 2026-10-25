@@ -122,7 +122,9 @@ func _ready() -> void:
 
 
 ## 엔딩을 보았다는 표시 (깃발). 마지막으로 본 엔딩 깃발(last_ending_*)은 하나만 남긴다. 시험도 부른다.
+## v1.1.0: 칸과 상관없는 해금 기록(MetaSave, user://meta.json)에도 적는다 — 칸을 지워도 보스 러시·음악 감상이 남는다.
 static func mark_seen(name: String) -> void:
+	MetaSave.mark_ending(name)
 	Progress.set_flag("cleared")
 	Progress.set_flag("ending_" + name)
 	if name == "third":

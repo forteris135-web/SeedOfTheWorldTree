@@ -2,6 +2,7 @@ extends Control
 class_name BossRushResult
 ## 보스 러시 결과 화면. 열리자마자 러시가 떼어 둔 진행을 되돌린다 (BossRush.restore) — 그 뒤로는 평소 게임 그대로.
 ## 완주: 전체 시간 + 보스별 기록 (+ 보스별 최고), 최고 기록·새 기록. 쓰러짐/포기: 어디까지 왔는지와 그때까지의 시간.
+## 맨 위 줄에 러시 난이도 (v1.1.0 — 최고 기록은 난이도별).
 ## 배경은 클리어 후 타이틀 그림을 어둡게. 아무 버튼(또는 화면 누르기)으로 타이틀로 — 1.2초 동안은 받지 않는다(연타로 넘어가지 않게).
 ## 글자는 data/dialogue/boss_rush.json.
 
@@ -58,6 +59,11 @@ func result() -> Dictionary:
 	return _r
 
 
+## 이번 러시의 난이도 이름 (Easy / Normal / Hard / Nightmare). 최고 기록도 이 난이도의 것.
+func difficulty_name() -> String:
+	return str(Balance.DIFF_NAME.get(str(_r.get("difficulty", "normal")), "Normal"))
+
+
 func can_leave() -> bool:
 	return _t >= ACCEPT_AFTER and not _leaving
 
@@ -91,7 +97,7 @@ func _on_draw() -> void:
 	var oc := outcome()
 	var head := BossRush.text("result_clear" if oc == "clear" else ("result_dead" if oc == "dead" else "result_quit"))
 	var y := size.y * 0.15
-	_str(font, Vector2(x0, y), BossRush.text("title"), 28, Color(gold, 0.75), w, ol)
+	_str(font, Vector2(x0, y), "%s  ·  %s" % [BossRush.text("title"), difficulty_name()], 28, Color(gold, 0.75), w, ol)
 	_str(font, Vector2(x0, y + 74), head, 64, gold if oc == "clear" else Color(0.92, 0.9, 0.95), w, ol)
 	var reached := int(_r.get("reached", 0))
 	if oc != "clear":

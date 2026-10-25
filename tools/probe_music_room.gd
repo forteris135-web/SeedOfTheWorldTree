@@ -15,9 +15,21 @@ var _shots := false
 var _out := ""
 
 
+## 칸과 상관없는 해금 기록(user://meta.json, v1.1.0) — 시험 동안 치워 두었다 되돌린다 (클리어 전 타이틀을 보려고)
+var _meta_backup = null
+
+
 func _ready() -> void:
 	print("[probe] 시작: 음악 감상")
+	_meta_backup = FileAccess.get_file_as_bytes(MetaSave.PATH) if FileAccess.file_exists(MetaSave.PATH) else null
+	_rm(MetaSave.PATH)
 	await _run()
+	if _meta_backup != null:
+		var f := FileAccess.open(MetaSave.PATH, FileAccess.WRITE)
+		f.store_buffer(_meta_backup)
+		f.close()
+	else:
+		_rm(MetaSave.PATH)
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
 

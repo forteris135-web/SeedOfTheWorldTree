@@ -2,15 +2,18 @@ extends Node
 ## 보스 러시 시험 (엔딩 뒤 타이틀의 '보스 러시', 2026-10-20). 화면 없이 돈다 — 진짜 장면 바꾸기(Game.go_to)로 끝까지.
 ## 실행: godot --headless --path . res://tools/probe_bossrush.tscn
 ##  1) 클리어 전 타이틀에는 '보스 러시'·'음악 감상'이 없고, 클리어한 세이브가 있으면 생긴다.
+##     '새로 시작'은 칸 고르기를 열 뿐 저장은 그대로 (찬 칸은 한 번 더 눌러야 — v1.1.0 저장 칸).
 ##  2) 타이틀 메뉴로 러시 시작 → 보스 방 다섯이 이야기 순서(새 → 기사 → 여왕 → 펌프 → 뿌리지기)로 열린다. 방마다:
 ##     러시 모드 · 싸움터 안에서 곧바로 싸움 · 자기 보스곡 · 러시 시계(HUD) · 저장 파일의 성장(체력·공격·이슬·영혼) · 수액 위 걷기 ·
+##     러시 난이도 = 저장 칸의 난이도 (Hard) ·
 ##     깃발 없음. 시험 훅(BossRoom.debug_force_defeat)으로 쓰러뜨리면 기록이 남고 다음 방으로 저절로 넘어간다.
 ##     러시 중: SaveGame.save/save_now 가 아무것도 쓰지 않음, 일시정지 메뉴에 '포기하기'(저장·불러오기·타이틀로 없음),
 ##     지도가 열리지 않음, 일시정지 동안 시계가 멈춤, 정화의 손길을 얹어도 깃발·회상 없음, 등장 연출이 짧아짐(새).
-##  3) 완주 → 결과 화면: 다섯 기록, 전체 = 합, 최고 기록 파일(user://boss_rush.json), 진행·정화 상태가 러시 전과 똑같이 되돌아옴,
+##  3) 완주 → 결과 화면: 다섯 기록, 전체 = 합, 최고 기록 파일(user://boss_rush.json, 난이도별 — Hard 칸), 진행·정화 상태가 러시 전과 똑같이 되돌아옴,
 ##     save.json 이 한 바이트도 바뀌지 않음 → 타이틀로.
 ##  4) 둘째 보스에서 쓰러짐 → 결과(쓰러짐, 2번째, 시간) → 최고 기록은 그대로. 5) 들어서자마자 포기 → 결과(포기).
-##  6) 저장 파일이 없으면 다 자란 몸 (이슬 8개 등), 그래도 save.json 을 만들지 않는다.
+##  6) 저장 파일이 없으면 다 자란 몸 (이슬 5개 등, 난이도 Normal), 그래도 save.json 을 만들지 않는다.
+## v1.1.0: 저장 칸 세 개와 칸과 상관없는 해금 기록(user://meta.json)도 시험 앞뒤로 비운다.
 ## 마지막 줄 "[probe] 끝: 실패 N".
 
 const EXPECT := ["canopy_boss", "mine_boss", "sap_lake_boss", "flooded_mine_boss", "abyss_boss"]
@@ -59,6 +62,14 @@ func _wait(sec: float) -> void:
 func _rm(path: String) -> void:
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(path)
+
+
+## 저장 칸 셋과 메타(엔딩을 본 기록)를 모두 지운다 (v1.1.0)
+func _rm_saves() -> void:
+	for i in range(1, SaveGame.SLOT_COUNT + 1):
+		_rm(SaveGame.path_of(i))
+	_rm(MetaSave.PATH)
+	SaveGame.set_slot(1)
 
 
 ## 지금 장면의 파일 이름에 name 이 들어갈 때까지 기다린다 (없으면 null).
@@ -121,6 +132,7 @@ func _make_cleared_save() -> void:
 	Progress.ending = "return"
 	Progress.collected = {"pick_canopy_01_1": true}
 	Progress.dust = 321
+	Progress.difficulty = "hard"   # 러시 난이도 = 이 칸의 난이도 (v1.1.0)
 	for k in Purity.regions:
 		Purity.regions[k] = true
 	SaveGame.save("abyss_boss_gate", "res://scenes/rooms/abyss_boss.tscn")
@@ -139,7 +151,7 @@ func _run() -> void:
 	for a in args:
 		if a.begins_with("--out="):
 			_out = a.trim_prefix("--out=")
-	_rm(SaveGame.PATH)
+	_rm_saves()
 	_rm(BossRush.BEST_PATH)
 	Progress.reset()
 	_probe_format()
@@ -153,21 +165,29 @@ func _run() -> void:
 	_check(title != null and title.has_item("BossRush") and title.has_item("MusicRoom"), "엔딩을 본 세이브: 타이틀에 '보스 러시'·'음악 감상'이 생긴다")
 	if title == null:
 		return
-	# '새로 시작'은 저장이 있으면 한 번 더 눌러야 한다 (2026-10-20 QA: 클리어한 저장·엔딩 기록이 확인 없이 지워졌다)
+	# '새로 시작'은 칸 고르기를 열 뿐이고, 찬 칸은 한 번 더 눌러야 한다 (2026-10-20 QA: 클리어한 저장·엔딩 기록이 확인 없이 지워졌다;
+	# v1.1.0 저장 칸 — 자세한 것은 probe_slots)
 	title.activate_item("Start")
 	await _frames(2)
-	var confirming: bool = title.confirming_new_game()
-	var kept := FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes and not title._started
-	title._select((title._index + 1) % title._items.size())
+	var sp: SlotPicker = title.slot_picker()
+	var opened: bool = sp != null and sp.is_open() and sp.mode == "new"
+	if opened:
+		sp.activate(0)   # 칸 1 = 클리어한 저장
 	await _frames(2)
-	_check(confirming and kept and not title.confirming_new_game() and FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes,
-		"저장이 있을 때 '새로 시작' 한 번 → 확인만 (저장 그대로), 다른 항목으로 옮기면 확인 취소")
+	var confirming: bool = opened and sp.confirming() == 0
+	var kept := FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes and not title._started
+	if opened:
+		sp.close()
+	await _frames(2)
+	_check(opened and confirming and kept and not title.picker_open() and FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes,
+		"저장이 있을 때 '새로 시작' → 칸 고르기, 찬 칸 한 번 → 확인만 (저장 그대로), 돌아가면 타이틀")
 	if _shots:
 		await _wait(3.5)
 		await _shot("rush_title_menu")
 	# 2) 완주
 	title.activate_item("BossRush")
-	_check(BossRush.active and BossRush.growth_source == "save", "타이틀 메뉴로 러시 시작 (몸 = 저장 파일의 성장: %s)" % BossRush.growth_source)
+	_check(BossRush.active and BossRush.growth_source == "save" and BossRush.difficulty == "hard" and Progress.difficulty == "hard",
+		"타이틀 메뉴로 러시 시작 (몸 = 저장 파일의 성장: %s, 러시 난이도 = 칸의 난이도 %s)" % [BossRush.growth_source, BossRush.difficulty])
 	var order := []
 	for i in EXPECT.size():
 		var room := await _wait_scene(EXPECT[i], 20.0) as BossRoom
@@ -216,6 +236,10 @@ func _run() -> void:
 	_check(FileAccess.file_exists(BossRush.BEST_PATH) and absf(float(best["best_total"]) - sum) < 0.001 and int(best["clears"]) == 1 and int(best["attempts"]) == 1
 		and r.get("new_best", false) and (best["split_bests"] as Dictionary).size() == 5,
 		"최고 기록 파일: %s (완주 %d, 도전 %d, 새 기록 %s)" % [BossRush.format_time(float(best["best_total"])), int(best["clears"]), int(best["attempts"]), r.get("new_best", false)])
+	var best_file = JSON.parse_string(FileAccess.get_file_as_string(BossRush.BEST_PATH))
+	_check(str(r.get("difficulty", "")) == "hard" and res.difficulty_name() == "Hard" and best_file is Dictionary and best_file.has("hard") and not best_file.has("normal")
+		and float(BossRush.load_best("normal")["best_total"]) < 0.0,
+		"러시 난이도 Hard: 결과 화면 '%s', 최고 기록은 hard 칸에만 (파일 열쇠 %s)" % [res.difficulty_name(), best_file.keys() if best_file is Dictionary else "-"])
 	_check(Music.current() == Music.REST, "결과 화면 곡: %s" % Music.current())
 	if _shots:
 		await _wait(1.6)
@@ -292,7 +316,7 @@ func _run() -> void:
 		BossRush.format_time(float(r.get("current", -1.0))), BossRush.format_time(float(r.get("total", 0.0))), BossRush.format_time(split5)])
 	_check(FileAccess.get_file_as_bytes(SaveGame.PATH) == save_bytes and _progress_json() == before, "쓰러뜨린 직후 포기한 뒤에도 save.json·진행 그대로")
 	# 6) 저장 파일이 없을 때: 다 자란 몸, save.json 을 만들지 않는다
-	_rm(SaveGame.PATH)
+	_rm_saves()
 	Progress.reset()
 	Progress.flags["cleared"] = true
 	var before2 := _progress_json()
@@ -306,8 +330,8 @@ func _run() -> void:
 	var p4: Player = get_tree().get_first_node_in_group("player")
 	var full: Dictionary = BossRush.data()["full_power"]
 	_check(BossRush.growth_source == "full" and p4.max_dews == 5 and is_equal_approx(p4.max_hp, 100.0 + float(full["upgrades"]["max_hp"]))
-		and p4.max_jumps == 2 and Progress.has_ability("light") and Progress.has_ability("wind"),
-		"저장 파일이 없으면 다 자란 몸: 체력 %.0f, 이슬 %d, 점프 %d" % [p4.max_hp, p4.max_dews, p4.max_jumps])
+		and p4.max_jumps == 2 and Progress.has_ability("light") and Progress.has_ability("wind") and BossRush.difficulty == "normal" and Progress.difficulty == "normal",
+		"저장 파일이 없으면 다 자란 몸: 체력 %.0f, 이슬 %d, 점프 %d, 난이도 %s" % [p4.max_hp, p4.max_dews, p4.max_jumps, BossRush.difficulty])
 	# 다섯째(마지막) 보스를 쓰러뜨린 직후에 포기해도 완주로 남는다 (QA: 'quit' 로 남아 최고 기록·완주 수에 들지 않았다).
 	# 다섯 방을 다 돌지 않고, 첫 보스를 쓰러뜨린 뒤 기록 수만 다섯으로 채워 끝 처리를 본다.
 	await room4.debug_force_defeat()
@@ -323,13 +347,14 @@ func _run() -> void:
 	_check(res != null and res.outcome() == "clear" and is_zero_approx(float(r.get("current", -1.0))) and absf(float(r.get("total", 0.0)) - sum6) < 0.001
 		and int(BossRush.load_best()["clears"]) == clears_before + 1,
 		"다섯째를 쓰러뜨린 직후 포기 → 완주로 기록 (결과 %s, 전체 %s, 완주 수 %d → %d)" % [res.outcome() if res else "-", BossRush.format_time(float(r.get("total", 0.0))), clears_before, int(BossRush.load_best()["clears"])])
-	_check(res != null and not SaveGame.has_save() and _progress_json() == before2, "다 자란 몸으로 끝냄 → save.json 을 만들지 않고 진행 그대로")
+	_check(res != null and not SaveGame.any_save() and _progress_json() == before2, "다 자란 몸으로 끝냄 → 저장 파일(어느 칸도)을 만들지 않고 진행 그대로")
 	# 정리
 	_goto(Game.TITLE_SCENE)
 	await _frames(10)
 	Music.stop(0.0)
-	_rm(SaveGame.PATH)
+	_rm_saves()
 	_rm(BossRush.BEST_PATH)
+	BossRush.difficulty = "normal"
 
 
 ## 2026-10-20 통합(빛 가루 칸 U1 · 러시 시계 M3 · 영혼 알림): 러시에서는 빛 가루 칸을 숨기고(러시엔 빛 가루가 없다),

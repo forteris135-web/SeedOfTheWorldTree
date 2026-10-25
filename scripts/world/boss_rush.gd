@@ -4,13 +4,15 @@ extends RefCounted
 ## 잿빛 잎새의 새 → 등불 기사 → 수액의 여왕 → 무쇠 펌프 → 뿌리지기. 싸움은 각자의 보스 방에서, 보스곡도 각자 자기 곡.
 ##
 ## 규칙 (GAME_DESIGN.md 7장 '엔딩 뒤 타이틀: 보스 러시 · 음악 감상'):
-## - 몸은 저장 파일의 성장 그대로 (최대 체력·공격력·회복량·이슬·영혼·능력). 저장 파일에 성장 기록이 없으면 '다 자란 몸'
+## - 몸은 저장 파일의 성장 그대로 (최대 체력·공격력·회복량·이슬·영혼·능력·새순 기술 단계). 저장 파일에 성장 기록이 없으면 '다 자란 몸'
 ##   (data/dialogue/boss_rush.json 의 full_power). 바닥이 수액인 펌프 방 때문에 '수액 위 걷기'는 늘 준다.
+##   v1.1.0 저장 칸: 저장 파일 = 가장 늦게 저장한 칸 (SaveGame.latest_slot). 러시 난이도 = 그 칸의 난이도, 다 자란 몸이면 Normal (명세 D25).
 ## - 보스마다 체력·이슬이 가득 찬 채로 시작한다 (소녀는 방마다 새로 만들어진다).
 ## - 러시 동안에는 회상·보상·깃발·빛 가루가 없고, **저장 파일에 아무것도 쓰지 않는다**: 시작할 때 진행(Progress)과 정화 상태(Purity)를
 ##   통째로 떼어 두고 러시용 빈 진행으로 바꿨다가, 끝나면(결과 화면) 그대로 되돌린다. SaveGame 은 러시 중 쓰기를 거절한다.
 ## - 시간: 보스마다 싸움이 시작된 때부터 쓰러질 때까지 (방을 옮기는 시간·일시정지는 세지 않는다). 전체 시간 = 다섯 싸움의 합.
-## - 쓰러지면 결과 화면 (어디까지 왔는지, 시간) → 타이틀. 다 이기면 전체 시간과 보스별 기록. 최고 기록은 user://boss_rush.json 따로.
+## - 쓰러지면 결과 화면 (어디까지 왔는지, 시간) → 타이틀. 다 이기면 전체 시간과 보스별 기록. 최고 기록은 user://boss_rush.json 따로,
+##   v1.1.0 부터 난이도별로 ({"normal": {...}, "hard": {...}}; 옛 한 덩어리 기록은 Normal 로 읽는다).
 ## - 일시정지 메뉴에 '포기하기' (저장·불러오기·타이틀로 대신).
 ## - 보스가 쓰러지면 짧게 숨을 고른 뒤 다음 보스 방으로 저절로 넘어간다.
 ## 정적 함수·정적 변수만 있다 (자동 로드를 늘리지 않으려고). BossRoom 이 active 를 보고 러시 모드로 돈다.
@@ -51,6 +53,8 @@ static var running := false
 static var advancing := false
 ## 몸의 출처: "save" (저장 파일의 성장) / "full" (다 자란 몸)
 static var growth_source := ""
+## 이번 러시의 난이도 (Balance.DIFFICULTIES). 최고 기록도 이 난이도 칸에 남는다.
+static var difficulty := "normal"
 ## 끝난 러시의 결과 (결과 화면이 읽는다): {outcome, reached, splits, current, total, best_total, new_best, split_bests, growth}
 static var result := {}
 static var _snapshot := {}
@@ -73,6 +77,7 @@ static func start() -> void:
 	advancing = false
 	result = {}
 	growth_source = str(growth["source"])
+	difficulty = str(growth.get("difficulty", "normal"))
 	_setup_progress(growth)
 	Music.stop(1.0)
 	_go(scene_of(0), 1.0, 1.0)
@@ -144,7 +149,7 @@ static func finish(outcome: String) -> void:
 		if splits.size() >= BOSSES.size():
 			outcome = "clear"
 	result = {"outcome": outcome, "reached": reached, "splits": splits.duplicate(), "current": current,
-		"total": total + current, "growth": growth_source}
+		"total": total + current, "growth": growth_source, "difficulty": difficulty}
 	_record_best(result)
 	_go(RESULT_SCENE, 0.8, 0.8)
 
@@ -185,14 +190,18 @@ static func _go(path: String, fade_out: float, fade_in: float) -> void:
 
 # ---------- 몸 (성장) ----------
 
-## 러시에서 쓸 몸: 저장 파일의 성장 (읽기만 한다), 성장 기록이 없으면 다 자란 몸.
-## {"source": "save"/"full", "abilities": {이름: true}, "upgrades": {종류: 값}, "soul": 고른 영혼}
+## 러시에서 쓸 몸: 가장 늦게 저장한 칸의 성장 (읽기만 한다), 성장 기록이 없으면 다 자란 몸.
+## {"source": "save"/"full", "abilities": {이름: true}, "upgrades": {종류: 값 — 새순 기술 단계 tok_* 도 함께}, "soul": 고른 영혼,
+##  "difficulty": 그 칸의 난이도 (다 자란 몸은 normal), "tokens": 그 칸의 새순 (쓰지 않는다), "slot": 칸 번호 (다 자란 몸은 0)}
 static func growth_from_save() -> Dictionary:
-	if SaveGame.has_save():
-		var d = JSON.parse_string(FileAccess.get_file_as_string(SaveGame.PATH))
-		if typeof(d) == TYPE_DICTIONARY and d.get("abilities") is Dictionary and d.get("upgrades") is Dictionary:
+	var slot := SaveGame.latest_slot()
+	if slot > 0:
+		var d := SaveGame.read_slot(slot)
+		if d.get("abilities") is Dictionary and d.get("upgrades") is Dictionary:
+			var diff := str(d.get("difficulty", "normal"))
 			return {"source": "save", "abilities": (d["abilities"] as Dictionary).duplicate(true),
-				"upgrades": (d["upgrades"] as Dictionary).duplicate(true), "soul": str(d.get("soul", "seed"))}
+				"upgrades": (d["upgrades"] as Dictionary).duplicate(true), "soul": str(d.get("soul", "seed")),
+				"difficulty": diff if Balance.DIFF_MULT.has(diff) else "normal", "tokens": int(d.get("tokens", 0)), "slot": slot}
 	var full: Dictionary = data().get("full_power", {})
 	var ab := {}
 	for a in full.get("abilities", []):
@@ -201,7 +210,7 @@ static func growth_from_save() -> Dictionary:
 	var fu: Dictionary = full.get("upgrades", {})
 	for k in fu:
 		up[k] = float(fu[k])
-	return {"source": "full", "abilities": ab, "upgrades": up, "soul": str(full.get("soul", "seed"))}
+	return {"source": "full", "abilities": ab, "upgrades": up, "soul": str(full.get("soul", "seed")), "difficulty": "normal", "tokens": 0, "slot": 0}
 
 
 static func _setup_progress(growth: Dictionary) -> void:
@@ -222,7 +231,11 @@ static func _setup_progress(growth: Dictionary) -> void:
 	Progress.collected = {}
 	Progress.dust = 0
 	Progress.soul_cooldowns = {}
-	# v1.1.0: 러시용 새 사전 (떼어 둔 '쓰러뜨린 적' 사전에 러시가 쓰지 않게), 방 사이 체력·이슬 이어가기 없음
+	# v1.1.0: 난이도 = 몸을 가져온 칸의 난이도 (다 자란 몸은 Normal), 새순은 그 칸의 값 그대로 (러시에선 쓰지 않는다),
+	# 러시용 새 사전 (떼어 둔 '쓰러뜨린 적' 사전에 러시가 쓰지 않게), 방 사이 체력·이슬 이어가기 없음
+	var diff := str(growth.get("difficulty", "normal"))
+	Progress.difficulty = diff if Balance.DIFF_MULT.has(diff) else "normal"
+	Progress.tokens = int(growth.get("tokens", 0))
 	Progress.killed = {}
 	Progress.carry_hp = -1.0
 	Progress.carry_dews = -1
@@ -314,12 +327,32 @@ static func format_time(sec: float) -> String:
 
 # ---------- 최고 기록 (user://boss_rush.json) ----------
 
-## {"best_total": 초 또는 -1, "best_splits": [...], "best_at": 때, "split_bests": {보스 id: 초}, "clears": 완주 수, "attempts": 도전 수}
-static func load_best() -> Dictionary:
-	var out := {"best_total": -1.0, "best_splits": [], "best_at": "", "split_bests": {}, "clears": 0, "attempts": 0}
+## 한 난이도의 기록: {"best_total": 초 또는 -1, "best_splits": [...], "best_at": 때, "split_bests": {보스 id: 초}, "clears": 완주 수, "attempts": 도전 수}
+## diff 가 ""이면 이번(또는 마지막) 러시의 난이도.
+static func load_best(diff := "") -> Dictionary:
+	if diff == "":
+		diff = difficulty
+	return _parse_record(_load_all().get(diff, {}))
+
+
+## 파일 전체: {난이도: 기록}. v1.1.0 전의 한 덩어리 기록(맨 위에 best_total 이 있는 꼴)은 Normal 의 기록으로 읽는다.
+static func _load_all() -> Dictionary:
 	if not FileAccess.file_exists(BEST_PATH):
-		return out
+		return {}
 	var d = JSON.parse_string(FileAccess.get_file_as_string(BEST_PATH))
+	if typeof(d) != TYPE_DICTIONARY:
+		return {}
+	if d.has("best_total") or d.has("attempts"):
+		return {"normal": d}
+	var out := {}
+	for k in d:
+		if Balance.DIFF_MULT.has(str(k)) and d[k] is Dictionary:
+			out[str(k)] = d[k]
+	return out
+
+
+static func _parse_record(d) -> Dictionary:
+	var out := {"best_total": -1.0, "best_splits": [], "best_at": "", "split_bests": {}, "clears": 0, "attempts": 0}
 	if typeof(d) != TYPE_DICTIONARY:
 		return out
 	out["best_total"] = float(d.get("best_total", -1.0))
@@ -332,7 +365,9 @@ static func load_best() -> Dictionary:
 
 
 static func _record_best(r: Dictionary) -> void:
-	var b := load_best()
+	var diff := str(r.get("difficulty", difficulty))
+	var all := _load_all()
+	var b := _parse_record(all.get(diff, {}))
 	b["attempts"] = int(b["attempts"]) + 1
 	var sb: Dictionary = b["split_bests"]
 	var sp: Array = r["splits"]
@@ -352,7 +387,8 @@ static func _record_best(r: Dictionary) -> void:
 	r["best_total"] = float(b["best_total"])
 	r["best_splits"] = b["best_splits"]
 	r["split_bests"] = sb
+	all[diff] = b
 	var f := FileAccess.open(BEST_PATH, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify(b, "  "))
+		f.store_string(JSON.stringify(all, "  "))
 		f.close()
