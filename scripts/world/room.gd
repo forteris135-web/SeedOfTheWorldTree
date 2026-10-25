@@ -86,7 +86,9 @@ func _ready() -> void:
 		player.state_changed.connect(_on_player_state_for_music)
 		# 방을 옮겨도 체력·이슬은 이어진다 (v1.1.0 기획자 요청 13 — Game.go_to 가 앞 방에서 적어 둔 값).
 		# 달빛풀로 도착하면 쉬기(가득)라서 이어 받지 않는다. 기력(가드 게이지)은 이어 가지 않는다 (가득).
-		if not arrived_resting and arrived_spawn != "" and Progress.carry_hp >= 0.0:
+		# "Grass:" 로 오는 길(달빛풀 이동·부활·불러오기·엔딩 뒤 탐험)은 그 달빛풀을 못 찾아도 늘 가득이다 — 쉰 적 없는 저장을
+		# 일시정지 '불러오기'로 읽으면 "Grass:" 만 오는데, 그때 앞 게임 소녀의 체력·이슬이 읽은 게임에 넘어오던 것 (v1.1.0 검수).
+		if not arrived_resting and arrived_spawn != "" and not arrived_spawn.begins_with("Grass:") and Progress.carry_hp >= 0.0:
 			player.set_vitals(Progress.carry_hp, Progress.carry_dews if Progress.carry_dews >= 0 else player.dews)
 	# 한 번 이어 받은 값은 지운다 (다음 방에서 다시 쓰이지 않게)
 	Progress.carry_hp = -1.0

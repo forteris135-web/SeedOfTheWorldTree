@@ -21,6 +21,7 @@
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
 [ext_resource type="PackedScene" uid="uid://c1seedcrackedwall" path="res://scenes/world/cracked_wall.tscn" id="50_cracked_wall"]
 [ext_resource type="Script" path="res://scripts/world/terrain_prop.gd" id="61_prop"]
+[ext_resource type="Script" path="res://scripts/world/lamp_glow.gd" id="62_lamp_glow"]
 
 [sub_resource type="Environment" id="Environment_glow"]
 background_mode = 3
@@ -157,6 +158,16 @@ script = ExtResource("61_prop")
 piece = "gallows_a"
 shade = Color(0.8, 0.78, 0.78, 1)
 flip_h = true
+
+[node name="GlowHigh" type="Node2D" parent="Props/PumpLamp"]
+position = Vector2(-1, -147)
+script = ExtResource("62_lamp_glow")
+radius = 70.0
+
+[node name="GlowLow" type="Node2D" parent="Props/PumpLamp"]
+position = Vector2(53, -57)
+script = ExtResource("62_lamp_glow")
+radius = 86.0
 
 [node name="Terrain" type="Node2D" parent="."]
 

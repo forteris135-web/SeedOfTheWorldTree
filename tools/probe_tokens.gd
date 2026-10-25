@@ -561,9 +561,13 @@ func _probe_queen_reward() -> void:
 	Progress.set_flag("boss_queen_defeated")
 	await _open("sap_lake_boss")
 	var took := await _until(func(): return Progress.has_sap_pulse() and Progress.tokens > 0, 6.0)
-	await _frames(2)
+	# 능력·새순은 회상에서 돌아오자마자 들어온다 (연출 도중 저장해도 빠지지 않게 — v1.1.0 검수). 안내 글은 빛 구슬이 깃든 뒤.
+	_check(took >= 0.0 and took < 0.5, "회상 뒤 능력·새순은 연출 전에 바로 (%.2f초)" % took)
 	var hud := _room.get_node_or_null("CombatHUD") if _room else null
+	var shown := await _until(func(): return hud != null and str(hud.get("_message")) != "", 6.0)
+	await _frames(2)
 	var text := str(hud.get("_message")) if hud else ""
+	print("[probe] 보상 안내가 뜬 때: %.2f초 뒤" % shown)
 	print("[probe] 여왕 보상 (%.2f초): 능력 %s, 새순 %d, 안내 '%s'" % [took, str(Progress.abilities.keys()), Progress.tokens, text])
 	_check(took >= 0.0 and Progress.has_ability("sap_walk") and Progress.has_sap_pulse() and Progress.tokens == 1 and Progress.has("tokens_boss_queen_defeated"), "회상 뒤: 수액 위 걷기 + 수액의 맥동, 새순 +1")
 	_check(text.contains("수액의 맥동") and text.ends_with("·  새순 +1"), "보상 안내에 맥동과 새순 +1 ('%s')" % text)

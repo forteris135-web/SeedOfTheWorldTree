@@ -8,6 +8,8 @@ extends Node
 ## (d) 보스 방(그 방 달빛풀이 마지막)에서 쓰러지면 방을 다시 읽어 보스·잎 더미·투사체가 처음 상태 / 보스를 쓰러뜨린 뒤 쓰러지면 승리 유지
 ##     + 정화 → 회상 → 보스 방으로 돌아오면(AfterBoss) 보스 방을 나갈 때의 체력·이슬이 이어진다
 ##     + 쉰 달빛풀이 없을 때 보스 방에서 쓰러지면 그 방을 다시 읽어 들어온 자리에서 (싸움이 처음 상태로)
+##     + 회상 뒤 영혼이 깃드는 연출 도중 '지금 저장하기'를 해도 능력·새순·정화가 저장에 들어 있다 (v1.1.0 검수)
+## (g) 불러오기는 늘 가득: 일시정지 '불러오기'(쉰 달빛풀 없는 저장 / 달빛풀 저장)·타이틀 이어하기 (v1.1.0 검수)
 ## (e) 보스 러시: 방마다 가득 (앞 보스 방의 체력을 이어 받지 않는다)
 ## (f) 방이 '지금 장면'이 아닐 때(시험이 방을 자식으로 놓음)는 장면을 바꾸지 않고 그 자리에서 일어난다
 ## 저장 파일·보스 러시 기록은 시험 전 상태로 되돌린다. 마지막 줄 "[probe] 끝: 실패 N".
@@ -45,6 +47,8 @@ func _ready() -> void:
 	await _test_death_other_room()
 	await _test_boss_room()
 	await _test_boss_room_no_grass()
+	await _test_after_memory_save()
+	await _test_load()
 	await _test_rush()
 	await _test_not_current_scene()
 	_restore_files()
@@ -462,6 +466,110 @@ func _test_boss_room_no_grass() -> void:
 	var dist := b2.player.global_position.distance_to(marker)
 	_check(_full(b2.player) and b2.player.state != Player.State.DEAD and b2.player.state != Player.State.REST and dist < 60.0 and not b2.gate_in.closed,
 		"(d2) 들어온 자리(FromCanopy04, 거리 %.0f)에서 가득 (체력 %.0f/%.0f, 이슬 %d, %s), 문 열림" % [dist, b2.player.hp, b2.player.max_hp, b2.player.dews, b2.player.state_name()])
+
+
+# ---------- (d3) 회상 뒤 연출 도중 저장: 능력·새순·정화가 빠지지 않는다 ----------
+## BossRoom._ready 가 after_ 깃발을 곧바로 세우므로, 능력·새순·정화도 연출(구슬 약 3초)보다 먼저 들어와 있어야 한다.
+## 화면은 정화 물결이 올 때까지 잿빛 그대로 (연출은 바뀌지 않는다).
+func _test_after_memory_save() -> void:
+	Progress.reset()
+	Progress.set_flag("boss_bird_defeated")   # _on_boss_purified 가 세운 상태로 회상에서 돌아온다
+	Purity.regions["canopy"] = true
+	Progress.grasses["canopy_boss_gate"] = {"scene": "res://scenes/rooms/canopy_boss.tscn", "name": "수관 · 싸움터 앞"}
+	Progress.last_grass = {"id": "canopy_boss_gate", "scene": "res://scenes/rooms/canopy_boss.tscn", "name": "수관 · 싸움터 앞"}
+	var r1 := await _goto("canopy_boss", "AfterBoss")
+	if r1 == null:
+		return
+	await _wait(0.3)
+	var early := Purity.bloom_decor()
+	_check(Progress.has("after_boss_bird_defeated") and Progress.has_ability("double_jump") and Progress.has_ability("wind") and Progress.tokens == 1 and Purity.is_purified("canopy"),
+		"(d3) 연출 도중(구슬 전): after 깃발 %s, 이단 점프 %s, 바람 %s, 새순 %d, 수관 정화 상태 %s" % [Progress.has("after_boss_bird_defeated"), Progress.has_ability("double_jump"), Progress.has_ability("wind"), Progress.tokens, Purity.is_purified("canopy")])
+	var early_bloomed := early.bloomed_count() if early else 0
+	_check(Purity.level < 0.05 and not Purity.wave_active and early_bloomed == 0,
+		"(d3) 화면은 아직 잿빛 (정화 정도 %.2f, 물결 %s, 핀 풀포기 %d)" % [Purity.level, Purity.wave_active, early_bloomed])
+	SaveGame.save_now()   # 일시정지 메뉴 '지금 저장하기'와 같은 함수
+	var d := SaveGame.parse_quiet(FileAccess.get_file_as_string(SaveGame.PATH))
+	var ab = d.get("abilities", {})
+	var pur = d.get("purity", {})
+	var fl = d.get("flags", {})
+	_check(ab is Dictionary and bool(ab.get("double_jump", false)) and bool(ab.get("wind", false)) and int(d.get("tokens", 0)) == 1
+			and pur is Dictionary and bool(pur.get("canopy", false)) and fl is Dictionary and bool(fl.get("tokens_boss_bird_defeated", false)),
+		"(d3) 그때 저장한 파일: 능력 %s, 새순 %d, 정화 %s, tokens_ 깃발 %s" % [ab, int(d.get("tokens", 0)), pur.get("canopy", false) if pur is Dictionary else "-", fl.get("tokens_boss_bird_defeated", false) if fl is Dictionary else "-"])
+	# 연출이 끝날 때까지: 정화 물결이 번지고, 새순은 한 번만
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 12000 and not (Time.get_ticks_msec() - t0 > 6000 and r1.player.input_enabled):
+		await get_tree().process_frame
+	await _wait(1.0)
+	_check(Progress.tokens == 1 and Purity.is_purified("canopy") and Purity.level > 0.95 and r1.player.input_enabled,
+		"(d3) 연출 끝: 새순 %d (한 번만), 정화 정도 %.2f, 조작 %s" % [Progress.tokens, Purity.level, r1.player.input_enabled])
+	# 그 저장을 다시 읽으면 그대로
+	Progress.reset()
+	Purity.regions["canopy"] = false
+	SaveGame.load_game()
+	_check(Progress.has_ability("double_jump") and Progress.has_ability("wind") and Progress.tokens == 1 and Purity.is_purified("canopy"),
+		"(d3) 그 저장을 불러옴: 이단 점프 %s, 바람 %s, 새순 %d, 수관 정화 %s" % [Progress.has_ability("double_jump"), Progress.has_ability("wind"), Progress.tokens, Purity.is_purified("canopy")])
+	Progress.reset()
+	Purity.regions["canopy"] = false
+
+
+# ---------- (g) 불러오기는 늘 가득 ----------
+## 일시정지 '불러오기' = SaveGame.load_game() 뒤 Game.go_to (pause_menu.gd). go_to 는 지금 소녀의 체력·이슬을 적어 두지만,
+## 불러오기는 늘 "Grass:<id>" 로 도착하므로(쉰 적 없는 저장은 "Grass:") 새 방이 그 값을 이어 받지 않는다.
+func _load_like_pause_menu(from: Room, room_id: String) -> Room:
+	var scene := SaveGame.load_game()
+	Game.go_to(scene if scene != "" else Game.FIRST_ROOM, 0.2, 0.2)
+	return await _wait_room(room_id, from)
+
+
+func _test_load() -> void:
+	# 1) 쉰 달빛풀이 없는 저장 (새 게임의 첫 저장 save("", FIRST_ROOM) / 쉬기 전 '지금 저장하기')
+	Progress.reset()
+	var r1 := await _goto("canopy_01", "")
+	if r1 == null:
+		return
+	SaveGame.save("", Game.FIRST_ROOM)
+	r1.player.set_vitals(30.0, 1)
+	var r2 := await _load_like_pause_menu(r1, "canopy_01")
+	if r2 == null:
+		_check(false, "(g) 쉰 달빛풀 없는 저장을 불러왔는데 첫 방이 읽히지 않았다")
+		return
+	_check(_full(r2.player) and Progress.carry_hp < 0.0,
+		"(g) 일시정지 불러오기 — 쉰 달빛풀 없는 저장: 가득 (체력 %.0f/%.0f, 이슬 %d/%d, %s)" % [r2.player.hp, r2.player.max_hp, r2.player.dews, r2.player.max_dews, r2.player.state_name()])
+	# 2) 달빛풀 저장: 쉰 달빛풀 곁에서 쉬는 자세로 가득
+	var r3 := await _through(r2, "canopy_02")
+	if r3 == null:
+		_check(false, "(g) 불러온 첫 방에서 canopy_02 로 건너가지 못했다")
+		return
+	var g := await _rest_at(r3)   # 쉬면 저장된다
+	var gid := g.grass_id if g else ""   # 방을 떠나면 달빛풀 노드는 지워진다 — 이름만 적어 둔다
+	r3.player._set_state(Player.State.IDLE)
+	var r4 := await _through(r3, "canopy_01")
+	if r4 == null or gid == "":
+		_check(false, "(g) canopy_02 달빛풀에서 쉬고 돌아오지 못했다 (달빛풀 '%s', 방 %s)" % [gid, r4 != null])
+		return
+	r4.player.set_vitals(30.0, 0)
+	var r5 := await _load_like_pause_menu(r4, "canopy_02")
+	if r5 == null:
+		_check(false, "(g) 달빛풀 저장을 불러왔는데 canopy_02 가 읽히지 않았다")
+		return
+	await _physics(3)
+	_check(_full(r5.player) and r5.player.state == Player.State.REST,
+		"(g) 일시정지 불러오기 — 달빛풀(%s) 저장: 쉬는 자세로 가득 (체력 %.0f/%.0f, 이슬 %d/%d, %s)" % [gid, r5.player.hp, r5.player.max_hp, r5.player.dews, r5.player.max_dews, r5.player.state_name()])
+	# 3) 타이틀 이어하기: 소녀가 없는 장면에서 읽는다 (쉰 달빛풀 없는 저장도)
+	SaveGame.save("", Game.FIRST_ROOM)
+	var prev := get_tree().current_scene
+	var dummy := Node.new()
+	get_tree().root.add_child(dummy)
+	get_tree().current_scene = dummy
+	_drop(prev)
+	Game._busy = false
+	Progress.carry_hp = 20.0   # 남은 값이 있어도 불러오기가 지운다
+	Progress.carry_dews = 0
+	var r6 := await _load_like_pause_menu(null, "canopy_01")
+	if r6:
+		_check(_full(r6.player), "(g) 타이틀 이어하기 — 쉰 달빛풀 없는 저장: 가득 (체력 %.0f/%.0f, 이슬 %d/%d)" % [r6.player.hp, r6.player.max_hp, r6.player.dews, r6.player.max_dews])
+	else:
+		_check(false, "(g) 타이틀 이어하기: 첫 방이 읽히지 않았다")
 
 
 # ---------- (e) 보스 러시: 방마다 가득 ----------

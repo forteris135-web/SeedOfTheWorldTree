@@ -1,8 +1,8 @@
 extends Node
 ## 세이브. 달빛풀에서 쉴 때 기기 안에 저장한다. 타이틀의 "이어하기"가 읽는다.
 ## v1.1.0: 저장 칸 3개 (user://save_1.json … save_3.json). 지금 칸(slot)은 타이틀의 칸 고르기가 정한다 (set_slot).
-## 저장·불러오기·'지금 저장하기'·'새로 시작'은 모두 지금 칸에만 한다. 처음 켤 때 옛 단일 파일 user://save.json 은 칸 1 로 옮긴다
-## (원본은 save.json.bak 으로 이름만 바꿔 남긴다). 칸과 상관없는 해금(엔딩을 봄)은 MetaSave(user://meta.json).
+## 저장·불러오기·'지금 저장하기'·'새로 시작'은 모두 지금 칸에만 한다. 처음 켤 때 옛 단일 파일 user://save.json 은 빈 칸(보통 칸 1)으로
+## 옮긴다 (원본은 save.json.bak 으로 이름만 바꿔 남긴다). 칸과 상관없는 해금(엔딩을 봄)은 MetaSave(user://meta.json).
 ## 보스 러시 중(BossRush.active)에는 저장 파일에 아무것도 쓰지도 지우지도 않는다 (러시는 떼어 둔 진행을 끝나고 되돌린다).
 
 const SLOT_COUNT := 3
@@ -30,13 +30,25 @@ func _ready() -> void:
 	MetaSave.sync_from_slots(datas)
 
 
-## 옛 단일 파일(save.json)이 있고 칸 1 이 비어 있으면 칸 1 로 복사하고, 원본은 save.json.bak 으로 이름을 바꾼다 (지우지 않는다).
-## 옮겼으면 true. (시험도 부른다)
+## 옛 단일 파일(save.json)이 있으면 비어 있는 첫 칸(1 → 2 → 3)으로 복사하고, 원본은 save.json.bak 으로 이름을 바꾼다 (지우지 않는다).
+## 칸 1 이 이미 차 있으면 다음 빈 칸으로 (v1.1.0 검수: 예 — v1.1 로 칸 1 을 만든 뒤 v1.0 을 다시 깔아 더 한 저장. 예전엔 그대로 남아
+## 다시는 읽히지 않았다). 칸이 모두 차 있으면 옮기지 않고 save.json 을 그대로 둔다 (칸을 비우면 다음에 켤 때 옮긴다).
+## 같은 내용이 이미 어느 칸에 있으면(이름 바꾸기에 실패했던 앞선 이주) 다시 옮기지 않는다. 옮겼으면 true. (시험도 부른다)
 func migrate_old_file() -> bool:
-	if not FileAccess.file_exists(OLD_PATH) or FileAccess.file_exists(path_of(1)):
+	if not FileAccess.file_exists(OLD_PATH):
 		return false
 	var text := FileAccess.get_file_as_string(OLD_PATH)
-	var f := FileAccess.open(path_of(1), FileAccess.WRITE)
+	var target := 0
+	for i in range(1, SLOT_COUNT + 1):
+		if not FileAccess.file_exists(path_of(i)):
+			if target == 0:
+				target = i
+		elif FileAccess.get_file_as_string(path_of(i)) == text:
+			return false
+	if target == 0:
+		push_warning("옛 save.json 이 있지만 저장 칸 셋이 모두 차 있어 옮기지 않았다 (칸 하나를 비우면 다음에 켤 때 옮긴다)")
+		return false
+	var f := FileAccess.open(path_of(target), FileAccess.WRITE)
 	if f == null:
 		return false
 	f.store_string(text)
@@ -47,7 +59,7 @@ func migrate_old_file() -> bool:
 		bak = OLD_PATH + ".bak%d" % n
 		n += 1
 	if DirAccess.rename_absolute(OLD_PATH, bak) != OK:
-		push_warning("save.json 을 save.json.bak 으로 바꾸지 못했다 (칸 1 에는 복사됨)")
+		push_warning("save.json 을 save.json.bak 으로 바꾸지 못했다 (칸 %d 에는 복사됨)" % target)
 	return true
 
 

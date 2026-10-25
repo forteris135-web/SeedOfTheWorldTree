@@ -2,7 +2,8 @@ extends Node
 ## 저장 칸·난이도·타이틀 시험 (v1.1.0 묶음 S). 화면 없이 돈다.
 ## 실행: godot --headless --path . res://tools/probe_slots.tscn
 ##       그림 확인용(화면 있게): godot --path . res://tools/probe_slots.tscn -- --shots --out=/절대/경로 [--size=1280x960] [--device=ds|xb|kb|touch]
-##  1) 옛 단일 저장 save.json → 칸 1 로 옮김 (+ save.json.bak, 이미 있는 .bak 은 지우지 않음), 칸 1 이 차 있으면 옮기지 않음, 켤 때(SaveGame._ready) 옮김.
+##  1) 옛 단일 저장 save.json → 칸 1 로 옮김 (+ save.json.bak, 이미 있는 .bak 은 지우지 않음), 칸 1 이 차 있으면 다음 빈 칸으로,
+##     칸이 모두 차 있으면 옮기지 않음(save.json 그대로), 같은 내용이 이미 칸에 있으면 다시 옮기지 않음, 켤 때(SaveGame._ready) 옮김.
 ##  2) 칸 세 개가 따로 저장·불러오기 (깃발·빛 가루·새순·난이도·성장), 저장 판 2 와 새순·난이도 필드.
 ##  3) 새로 시작은 지금 칸만 지우고 곧바로 첫 저장 (다른 칸 한 바이트도 안 바뀜), 고른 난이도, 러시 중엔 거절.
 ##  4) 난이도 저장·불러오기, 옛 파일·모르는 값은 Normal.
@@ -160,17 +161,37 @@ func _probe_migration() -> void:
 	var scene := SaveGame.load_game()
 	_check(scene == FIRST and Progress.dust == 55 and Progress.has("met_tia") and Progress.difficulty == "normal" and Progress.last_grass.get("id", "") == "canopy_start",
 		"옮긴 칸 1 이어하기: 빛 가루 %d, 깃발 met_tia %s, 난이도 %s (옛 파일 → Normal)" % [Progress.dust, Progress.has("met_tia"), Progress.difficulty])
-	# 칸 1 이 차 있으면 옮기지 않는다
+	# 칸 1 이 차 있으면 다음 빈 칸(칸 2)으로 — 앞선 .bak 은 지우지 않고 .bak2 로 (v1.1.0 검수: 예전엔 그대로 남아 다시는 읽히지 않았다)
 	var old2 := _write(SaveGame.OLD_PATH, {"version": 1, "saved_at": "2026-10-02T10:00:00", "flags": {"second": true}, "dust": 7})
 	var moved2 := SaveGame.migrate_old_file()
-	_check(not moved2 and FileAccess.get_file_as_string(SaveGame.path_of(1)) == old and FileAccess.file_exists(SaveGame.OLD_PATH),
-		"칸 1 이 차 있으면 save.json 을 옮기지 않는다 (칸 1 그대로)")
-	# 칸 1 을 비운 뒤 다시: 앞선 .bak 은 지우지 않고 .bak2 로
-	_rm(SaveGame.path_of(1))
-	var moved3 := SaveGame.migrate_old_file()
-	_check(moved3 and FileAccess.get_file_as_string(SaveGame.path_of(1)) == old2 and FileAccess.get_file_as_string(SaveGame.OLD_PATH + ".bak") == old
+	_check(moved2 and FileAccess.get_file_as_string(SaveGame.path_of(1)) == old and FileAccess.get_file_as_string(SaveGame.path_of(2)) == old2
+		and not FileAccess.file_exists(SaveGame.OLD_PATH) and FileAccess.get_file_as_string(SaveGame.OLD_PATH + ".bak") == old
 		and FileAccess.get_file_as_string(SaveGame.OLD_PATH + ".bak2") == old2,
-		"다시 옮길 때 앞선 save.json.bak 은 남기고 save.json.bak2 로")
+		"칸 1 이 차 있으면 save.json 을 칸 2 로 (칸 1 그대로, 앞선 .bak 은 남기고 .bak2 로; 옮김 %s)" % moved2)
+	# 같은 내용이 이미 어느 칸에 있으면(이름 바꾸기에 실패했던 앞선 이주) 다시 옮기지 않는다
+	var fs := FileAccess.open(SaveGame.OLD_PATH, FileAccess.WRITE)
+	fs.store_string(old2)
+	fs.close()
+	var same_text := FileAccess.get_file_as_string(SaveGame.OLD_PATH) == old2
+	var moved_same := SaveGame.migrate_old_file()
+	_check(same_text and not moved_same and not SaveGame.has_save_in(3) and FileAccess.file_exists(SaveGame.OLD_PATH),
+		"이미 칸에 있는 내용이면 다시 옮기지 않는다 (칸 3 비어 있음)")
+	_rm(SaveGame.OLD_PATH)
+	# 칸 셋이 모두 차 있으면 옮기지 않고 save.json 을 그대로 둔다
+	SaveGame.set_slot(3)
+	Progress.reset()
+	SaveGame.save("", FIRST)
+	var old3 := _write(SaveGame.OLD_PATH, {"version": 1, "saved_at": "2026-10-04T10:00:00", "flags": {"third": true}, "dust": 9})
+	var moved3 := SaveGame.migrate_old_file()
+	_check(not moved3 and FileAccess.get_file_as_string(SaveGame.OLD_PATH) == old3 and FileAccess.get_file_as_string(SaveGame.path_of(1)) == old
+		and FileAccess.get_file_as_string(SaveGame.path_of(2)) == old2,
+		"칸 셋이 모두 차 있으면 옮기지 않는다 (save.json·칸 1·칸 2 그대로)")
+	# 칸 하나를 비우면 그 칸으로
+	_rm(SaveGame.path_of(1))
+	var moved4 := SaveGame.migrate_old_file()
+	_check(moved4 and FileAccess.get_file_as_string(SaveGame.path_of(1)) == old3 and FileAccess.get_file_as_string(SaveGame.OLD_PATH + ".bak3") == old3,
+		"칸 1 을 비운 뒤 다시: 칸 1 로, 원본은 save.json.bak3 로")
+	SaveGame.set_slot(1)
 	# 켤 때 (SaveGame._ready): 옮기고, 그 파일이 클리어한 저장이면 메타도 만든다
 	_clear_all()
 	_write(SaveGame.OLD_PATH, {"version": 1, "saved_at": "2026-10-03T10:00:00", "flags": {"cleared": true, "ending_return": true, "last_ending_return": true}, "ending": "return", "scene": FIRST})

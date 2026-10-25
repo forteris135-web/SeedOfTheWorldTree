@@ -80,7 +80,9 @@ func _input(event: InputEvent) -> void:
 		_move(1)
 	elif event.is_action_pressed("move_up") or event.is_action_pressed("ui_up"):
 		_move(-1)
-	elif event.is_action_pressed("jump") or event.is_action_pressed("interact") or event.is_action_pressed("ui_accept"):
+	elif event.is_action_pressed("jump") or event.is_action_pressed("ui_accept"):
+		# '손길'(패드 △/Y)로는 고르지 않는다: 바로 앞 칸 고르기에서 △/Y 는 '칸 지우기'라, 여기서 같은 버튼이 확인 없이 게임을
+		# 시작하면 헷갈린다 (v1.1.0 검수). 안내 글자도 점프(결정)만 알려 준다.
 		activate(_index)
 	elif event.device != InputEvent.DEVICE_ID_EMULATION:
 		_pointer(event)

@@ -268,8 +268,18 @@ func _on_boss_purified() -> void:
 func _after_memory() -> void:
 	gate_in.open()
 	gate_out.open()
+	# 능력·새순·정화(상태)는 연출보다 먼저 준다 (v1.1.0 검수). after_ 깃발은 _ready 가 이미 세웠는데, 능력·새순을 구슬이 깃든 뒤(약 3초)에
+	# 주면 그 사이 일시정지 '지금 저장하기'로 깃발만 저장되고 능력·새순·정화는 빠진 채 남았다 — 다시 불러와도 이 연출은 다시 돌지 않는다
+	# (기사의 등불을 잃으면 채굴장 깊은 곳·심연으로 못 간다, 새순 19 = 19 도 깨진다). 연출 도중 방을 떠나도 마찬가지였다.
+	# 구슬·안내 글·정화 물결은 그대로 연출로만 남는다.
+	for a in abilities:
+		Progress.gain_ability(a)
+	var tk := Progress.grant_boss_tokens(defeat_flag)   # v1.1.0: 보스 첫 정화의 새순 (한 번만, 러시 제외)
+	# 화면만 잠깐 잿빛으로 돌려 둔다 (영혼이 깃드는 순간 purify_from 의 물결이 다시 번진다). 지역의 정화 상태(저장되는 값)는
+	# apply_region 이 미뤄 부른 정리(풀포기 떼기 — 잿빛 기준)가 끝난 뒤, 같은 프레임에 정화로 되돌린다.
 	Purity.regions[region] = false
 	Purity.apply_region(region)
+	_keep_region_purified.call_deferred()
 	await get_tree().create_timer(1.4).timeout
 	if player == null:
 		return
@@ -298,9 +308,6 @@ func _after_memory() -> void:
 	Juice.shake(6.0)
 	Sfx.play("soul", 0.0, 0.0)
 	orb.queue_free()
-	for a in abilities:
-		Progress.gain_ability(a)
-	var tk := Progress.grant_boss_tokens(defeat_flag)   # v1.1.0: 보스 첫 정화의 새순 (한 번만, 러시 제외)
 	purify_from(player.global_position)
 	var hud := get_node_or_null("CombatHUD")
 	if hud:
@@ -314,6 +321,13 @@ func _after_memory() -> void:
 			c.process_mode = Node.PROCESS_MODE_INHERIT
 	await get_tree().create_timer(3.6).timeout
 	player.input_enabled = true
+
+
+## _after_memory 가 미뤄 부른다: 화면을 잿빛으로 돌린 정리(Purity._attach_room_effects)가 끝난 뒤 지역의 정화 상태를 정화로 둔다.
+## 화면은 purify_from 의 물결이 올 때까지 잿빛 그대로 (상태만 — 연출 도중 저장·방 떠나기에도 정화가 남게).
+func _keep_region_purified() -> void:
+	if Progress.has(defeat_flag):
+		Purity.regions[region] = true
 
 
 # ---------- 보스 러시 모드 ----------

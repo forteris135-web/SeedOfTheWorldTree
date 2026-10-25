@@ -9,7 +9,7 @@ extends Node
 ##  4) 진엔딩 조건 (요청 27): 경전 조각이 모자라면 보이되 꺼짐(잿빛·회전 멈춤·손길 거절·안내 n/4), 네 장 읽으면 그 자리에서 깨어남
 ##  5) 정원 끝의 비석 (요청 26): 달빛 정원 x 2180, 글·네 조각을 다 읽으면 더해지는 줄, 탐사 수에 들어감
 ##  6) 입구 찾기 (요청 19): 마을 틈이 크고 진하다, 등불 없이도 700 안 청록 맥동·400 안 '본 것'(깃발·지도 ◆·잠긴 포탈), 들어가기는 등불,
-##     관의 복도 펌프실 표지·등불 기둥, 티아·오웬의 힌트 대사
+##     관의 복도 펌프실 표지·등불 기둥(등 두 개에 따뜻한 빛), 티아·오웬의 힌트 대사
 ##  7) 그림: 장치 세 개의 새 그림 조각, 제3의 길 물레방아가 진짜로 돈다, 뿌리지기 방 배경의 흐린 물레방아(Far 와 Shafts 사이, 돈다, 밉맵 흐림)
 ## 진짜 장면 바꾸기는 막아 둔다(Game._busy) — 포탈은 '어디로 가려 하는지'(Progress.next_spawn)만 보고, 그 방을 그 등장 자리로 다시 띄운다.
 
@@ -451,6 +451,19 @@ func _probe_hidden_portal() -> void:
 	_check(sign != null and sign.kind == "note" and sign.global_position.distance_to(to_f.global_position) < 300.0 and sign._data.get("title", "") == "배수 갱도 표지" and sign._data.get("lines", []).size() == 2,
 		"관의 복도: 펌프실 입구 옆 표지 '%s'" % (sign._data.get("title", "") if sign else "-"))
 	_check(lamp != null and lamp.piece == "gallows_a" and absf(lamp.global_position.x - to_f.global_position.x) < 400.0, "관의 복도: 입구 옆 등불 기둥 (Prop gallows_a)")
+	# 등불 기둥의 등 두 개에 따뜻한 빛 (더하기 혼합·글로우 — 배경 아지랑이에 묻히지 않게, v1.1.0 검수)
+	var glows := []
+	if lamp:
+		for c in lamp.get_children():
+			if c.get_script() and str(c.get_script().resource_path).ends_with("lamp_glow.gd"):
+				glows.append(c)
+	var lit := glows.size() == 2
+	for gl in glows:
+		var halo: Sprite2D = gl.get("_halo")
+		var core: Sprite2D = gl.get("_core")
+		lit = lit and halo != null and core != null and halo.material is CanvasItemMaterial and (halo.material as CanvasItemMaterial).blend_mode == CanvasItemMaterial.BLEND_MODE_ADD \
+			and halo.modulate.r > 0.6 and core.modulate.r > 1.0 and gl.show_behind_parent and float(gl.get("radius")) >= 60.0
+	_check(lit, "관의 복도: 등불 기둥의 등 %d개에 따뜻한 빛 (더하기 혼합, 등 그림 뒤, 심은 밝기 1 넘음 — 글로우)" % glows.size())
 	Progress.reset()
 
 
