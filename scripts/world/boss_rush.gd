@@ -6,7 +6,9 @@ extends RefCounted
 ## 규칙 (GAME_DESIGN.md 7장 '엔딩 뒤 타이틀: 보스 러시 · 음악 감상'):
 ## - 몸은 저장 파일의 성장 그대로 (최대 체력·공격력·회복량·이슬·영혼·능력·새순 기술 단계). 저장 파일에 성장 기록이 없으면 '다 자란 몸'
 ##   (data/dialogue/boss_rush.json 의 full_power). 바닥이 수액인 펌프 방 때문에 '수액 위 걷기'는 늘 준다.
-##   v1.1.0 저장 칸: 저장 파일 = 가장 늦게 저장한 칸 (SaveGame.latest_slot). 러시 난이도 = 그 칸의 난이도, 다 자란 몸이면 Normal (명세 D25).
+##   v1.1.0 저장 칸: 저장 파일 = 엔딩을 본 칸 가운데 가장 늦게 저장한 칸 (SaveGame.latest_slot(true)). 러시 난이도 = 그 칸의 난이도,
+##   다 자란 몸이면 Normal (명세 D25). 엔딩을 본 칸이 없으면(메타로만 열림) 다 자란 몸 — '새로 시작'은 곧바로 첫 저장을 하므로,
+##   그냥 '가장 늦은 칸'이면 다른 칸에서 막 새로 시작한 빈 몸(능력 없음)으로 러시가 열린다. RUSH_CLEARED_SLOT_ONLY 로 바꿀 수 있다.
 ## - 보스마다 체력·이슬이 가득 찬 채로 시작한다 (소녀는 방마다 새로 만들어진다).
 ## - 러시 동안에는 회상·보상·깃발·빛 가루가 없고, **저장 파일에 아무것도 쓰지 않는다**: 시작할 때 진행(Progress)과 정화 상태(Purity)를
 ##   통째로 떼어 두고 러시용 빈 진행으로 바꿨다가, 끝나면(결과 화면) 그대로 되돌린다. SaveGame 은 러시 중 쓰기를 거절한다.
@@ -55,6 +57,8 @@ static var advancing := false
 static var growth_source := ""
 ## 이번 러시의 난이도 (Balance.DIFFICULTIES). 최고 기록도 이 난이도 칸에 남는다.
 static var difficulty := "normal"
+## 러시의 몸을 엔딩을 본 칸에서만 가져온다 (false = 명세 D25 글자 그대로 '가장 늦게 저장한 칸')
+const RUSH_CLEARED_SLOT_ONLY := true
 ## 끝난 러시의 결과 (결과 화면이 읽는다): {outcome, reached, splits, current, total, best_total, new_best, split_bests, growth}
 static var result := {}
 static var _snapshot := {}
@@ -190,14 +194,15 @@ static func _go(path: String, fade_out: float, fade_in: float) -> void:
 
 # ---------- 몸 (성장) ----------
 
-## 러시에서 쓸 몸: 가장 늦게 저장한 칸의 성장 (읽기만 한다), 성장 기록이 없으면 다 자란 몸.
+## 러시에서 쓸 몸: 엔딩을 본 칸 가운데 가장 늦게 저장한 칸의 성장 (읽기만 한다). 그런 칸이 없거나 능력·성장 기록이 없으면 다 자란 몸.
 ## {"source": "save"/"full", "abilities": {이름: true}, "upgrades": {종류: 값 — 새순 기술 단계 tok_* 도 함께}, "soul": 고른 영혼,
 ##  "difficulty": 그 칸의 난이도 (다 자란 몸은 normal), "tokens": 그 칸의 새순 (쓰지 않는다), "slot": 칸 번호 (다 자란 몸은 0)}
 static func growth_from_save() -> Dictionary:
-	var slot := SaveGame.latest_slot()
+	var slot := SaveGame.latest_slot(RUSH_CLEARED_SLOT_ONLY)
 	if slot > 0:
 		var d := SaveGame.read_slot(slot)
-		if d.get("abilities") is Dictionary and d.get("upgrades") is Dictionary:
+		# 능력이 하나도 없는 칸(막 새로 시작한 칸)은 쓰지 않고 다 자란 몸으로
+		if d.get("abilities") is Dictionary and not (d["abilities"] as Dictionary).is_empty() and d.get("upgrades") is Dictionary:
 			var diff := str(d.get("difficulty", "normal"))
 			return {"source": "save", "abilities": (d["abilities"] as Dictionary).duplicate(true),
 				"upgrades": (d["upgrades"] as Dictionary).duplicate(true), "soul": str(d.get("soul", "seed")),

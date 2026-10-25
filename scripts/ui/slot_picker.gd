@@ -23,6 +23,8 @@ const BACK_H := 58.0
 const LONG_PRESS := 0.6
 ## 지우기 확인을 건 뒤 이 시간 안의 두 번째 누름은 받지 않는다 (△ 를 결정 버튼처럼 연타해 저장을 지우는 일이 없게)
 const DELETE_CONFIRM_DELAY := 0.45
+## 칸 지우기 버튼(X·Delete·Backspace·△/Y)이 이 동작들에 묶여 있으면 지우기가 아니라 그 동작으로 받는다 (키·버튼 바꾸기)
+const NAV_ACTIONS := ["jump", "dodge", "pause", "move_up", "move_down", "ui_accept", "ui_cancel", "ui_up", "ui_down"]
 ## 난이도별 글자 색 (카드의 난이도 이름)
 const DIFF_COLOR := {"easy": Color(0.62, 0.9, 0.62), "normal": Color(0.82, 0.86, 0.92), "hard": Color(1.0, 0.72, 0.42), "nightmare": Color(1.0, 0.5, 0.6)}
 
@@ -194,9 +196,11 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
-	# 칸 지우기: 패드 △/Y 는 '손길'(결정)과 같은 버튼이라 먼저 본다
-	if (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_Y) \
-			or (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode in [KEY_X, KEY_DELETE, KEY_BACKSPACE]):
+	# 칸 지우기: 패드 △/Y 는 '손길'(결정)과 같은 버튼이라 먼저 본다.
+	# 단, 키·버튼 바꾸기로 점프(결정)·회피(돌아가기)·위아래·메뉴에 옮겨 단 버튼이면 지우기가 아니라 그 동작 (_is_nav_action)
+	if ((event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_Y) \
+			or (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode in [KEY_X, KEY_DELETE, KEY_BACKSPACE])) \
+			and not _is_nav_action(event):
 		delete_request(_index)
 	elif event.is_action_pressed("pause") or event.is_action_pressed("ui_cancel") or event.is_action_pressed("dodge"):
 		cancel()
@@ -209,6 +213,14 @@ func _input(event: InputEvent) -> void:
 	elif event.device != InputEvent.DEVICE_ID_EMULATION:
 		_pointer(event)
 	get_viewport().set_input_as_handled()
+
+
+## 칸 고르기의 결정·돌아가기·위아래 동작에 묶인 입력인가 ('손길'은 빼고 — 패드 △/Y 는 기본으로 손길이자 칸 지우기)
+func _is_nav_action(event: InputEvent) -> bool:
+	for a in NAV_ACTIONS:
+		if event.is_action(a):
+			return true
+	return false
 
 
 ## 터치·마우스 (흉내 낸 사건은 건너뛴다 — 누름 한 번이 두 번 처리되지 않게, MusicRoom 과 같은 규칙)

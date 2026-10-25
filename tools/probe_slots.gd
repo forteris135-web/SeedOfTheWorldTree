@@ -8,7 +8,8 @@ extends Node
 ##  4) 난이도 저장·불러오기, 옛 파일·모르는 값은 Normal.
 ##  5) 메타 해금: 칸을 지우거나 덮어써도 클리어 기록이 남는다, 엔딩을 보면 메타에 적힌다, 켤 때 칸에서 메타 만들기, 타이틀 판단(cleared_state).
 ##  6) 가장 늦게 저장한 칸 (latest_slot), 칸 요약(이어질 곳·난이도·저장한 때·클리어), 깨진 파일.
-##  7) 보스 러시: 몸 = 가장 늦게 저장한 칸 (새순 단계 포함), 러시 난이도 = 그 칸의 난이도 (다 자란 몸 Normal), 최고 기록 난이도별(옛 한 덩어리 = Normal), 결과 화면 난이도 이름.
+##  7) 보스 러시: 몸 = 엔딩을 본 칸 가운데 가장 늦게 저장한 칸 (새순 단계 포함; 막 새로 시작한 칸·능력 없는 칸은 건너뜀, 없으면 다 자란 몸),
+##     러시 난이도 = 그 칸의 난이도 (다 자란 몸 Normal), 최고 기록 난이도별(옛 한 덩어리 = Normal), 결과 화면 난이도 이름.
 ##  8) 타이틀: 저장 없으면 '이어하기' 없음, 버전 글자, 이어하기 → 칸 고르기(찬 칸만) → 불러오기, 새로 시작 → 칸 고르기(덮어쓰기 두 번) → 난이도 고르기
 ##     (돌아가기 → 칸 고르기) → 그 칸에 새로 시작. 칸 지우기: 키보드 X · 패드 △/Y · 터치 길게 누르기 · 마우스 오른쪽, 두 번 확인. 터치 누르기, 바깥 누르기 = 돌아가기.
 ##  9) 일시정지 메뉴: '난이도' 줄 (좌우 4단계 · 결정은 돌아감 · 러시·타이틀 설정에선 없음), 저장·불러오기 값에 "칸 N", 줄이 많아도 화면 안.
@@ -342,11 +343,27 @@ func _probe_rush() -> void:
 	_check(g0["source"] == "full" and g0["difficulty"] == "normal" and int(g0["slot"]) == 0, "저장이 없으면 러시 몸 = 다 자란 몸, 난이도 Normal")
 	_slot_file(1, "2026-10-20T10:00:00", {"difficulty": "hard", "upgrades": {"max_hp": 30.0, "tok_seed": 2.0}, "abilities": {"double_jump": true}})
 	_slot_file(2, "2026-10-23T10:00:00", {"difficulty": "easy", "upgrades": {"max_hp": 50.0, "tok_wind": 3.0}, "abilities": {"wind": true}, "tokens": 4, "soul": "wind"})
-	SaveGame.set_slot(1)   # 지금 칸이 아니라 '가장 늦게 저장한 칸'이 기준
+	var gn := BossRush.growth_from_save()
+	_check(gn["source"] == "full" and gn["difficulty"] == "normal", "엔딩을 본 칸이 없으면(메타로만 열림) 러시 몸 = 다 자란 몸, Normal (%s)" % gn["source"])
+	_slot_file(1, "2026-10-20T10:00:00", {"difficulty": "hard", "upgrades": {"max_hp": 30.0, "tok_seed": 2.0}, "abilities": {"double_jump": true}, "flags": {"cleared": true}})
+	_slot_file(2, "2026-10-23T10:00:00", {"difficulty": "easy", "upgrades": {"max_hp": 50.0, "tok_wind": 3.0}, "abilities": {"wind": true}, "tokens": 4, "soul": "wind", "flags": {"cleared": true}})
+	SaveGame.set_slot(1)   # 지금 칸이 아니라 '엔딩을 본 칸 가운데 가장 늦게 저장한 칸'이 기준
 	var g := BossRush.growth_from_save()
 	_check(g["source"] == "save" and int(g["slot"]) == 2 and g["difficulty"] == "easy" and int(g["upgrades"].get("tok_wind", 0)) == 3 and int(g["tokens"]) == 4
 		and g["abilities"].has("wind") and g["soul"] == "wind",
-		"러시 몸 = 가장 늦게 저장한 칸 2 (난이도 %s, 새순 단계 tok_wind %s, 새순 %s)" % [g["difficulty"], g["upgrades"].get("tok_wind", "-"), g["tokens"]])
+		"러시 몸 = 엔딩을 본 칸 중 가장 늦게 저장한 칸 2 (난이도 %s, 새순 단계 tok_wind %s, 새순 %s)" % [g["difficulty"], g["upgrades"].get("tok_wind", "-"), g["tokens"]])
+	# 칸 3 에서 막 새로 시작(곧바로 첫 저장 → 가장 늦은 칸)해도 러시는 그 빈 몸을 쓰지 않는다
+	SaveGame.set_slot(3)
+	SaveGame.new_game("nightmare")
+	var g3 := BossRush.growth_from_save()
+	_check(SaveGame.latest_slot() == 3 and g3["source"] == "save" and int(g3["slot"]) == 2 and g3["difficulty"] == "easy" and g3["abilities"].has("wind"),
+		"다른 칸에서 막 새로 시작해도(가장 늦은 칸 %d) 러시 몸 = 엔딩을 본 칸 %d, 난이도 %s" % [SaveGame.latest_slot(), int(g3["slot"]), g3["difficulty"]])
+	_slot_file(3, "2026-10-25T10:00:00", {"difficulty": "hard", "flags": {"cleared": true}})
+	var ge := BossRush.growth_from_save()
+	_check(ge["source"] == "full" and ge["difficulty"] == "normal" and ge["abilities"].has("double_jump"), "엔딩을 본 칸이라도 능력 기록이 비어 있으면 다 자란 몸 (%s)" % ge["source"])
+	DirAccess.remove_absolute(SaveGame.path_of(3))
+	SaveGame.set_slot(1)
+	Progress.reset()
 	var snap := BossRush._take_snapshot()
 	var keep_dust := Progress.dust
 	BossRush._setup_progress(g)
@@ -558,6 +575,30 @@ func _probe_title_ui() -> void:
 	await _frames(3)
 	_check(not SaveGame.any_save() and not sp.is_open() and not t.has_item("Continue"), "패드 Y 두 번으로 마지막 칸을 지우면 칸 고르기가 닫히고 '이어하기'가 사라진다")
 	await _drop(t)
+	# 키·버튼 바꾸기: 점프(결정)를 패드 Y 에, 회피(돌아가기)를 키보드 X 에 달면 그 버튼은 칸 지우기가 아니라 결정·돌아가기
+	_slot_file(3, "2026-10-22T10:00:00", {"flags": {"slot3_flag": true}})
+	var ey := InputEventJoypadButton.new()
+	ey.button_index = JOY_BUTTON_Y
+	InputMap.action_add_event("jump", ey)
+	var ex := InputEventKey.new()
+	ex.physical_keycode = KEY_X
+	InputMap.action_add_event("dodge", ex)
+	t = await _title()
+	t.activate_item("Continue")
+	await _frames(2)
+	sp = t.slot_picker()
+	await _key(KEY_X)
+	var x_closed := not sp.is_open() and sp.delete_armed() == -1 and SaveGame.has_save_in(3)
+	t.activate_item("Continue")
+	await _frames(2)
+	Progress.reset()
+	await _pad_y()
+	_check(x_closed and sp.delete_armed() == -1 and t._started and SaveGame.slot == 3 and SaveGame.has_save_in(3) and Progress.has("slot3_flag"),
+		"회피를 X 키로 바꾸면 X 는 돌아가기, 점프를 패드 Y 로 바꾸면 Y 는 결정 (칸 3 불러옴, 지우지 않음)")
+	InputMap.action_erase_event("jump", ey)
+	InputMap.action_erase_event("dodge", ex)
+	await _drop(t)
+	DirAccess.remove_absolute(SaveGame.path_of(3))
 	# 터치: 카드 누르기 = 불러오기, 길게 누르기 = 지우기, 바깥 누르기 = 돌아가기, 마우스 오른쪽 = 지우기
 	_slot_file(1, "2026-10-20T10:00:00", {"flags": {"slot1_flag": true}})
 	_slot_file(3, "2026-10-22T10:00:00", {"flags": {"slot3_flag": true}})

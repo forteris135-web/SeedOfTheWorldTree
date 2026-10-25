@@ -21,6 +21,9 @@ static func path_of(i: int) -> String:
 func _ready() -> void:
 	migrate_old_file()
 	# 메타 파일이 아직 없고 칸에 클리어 기록이 보이면 메타를 만든다 (옛 저장으로 클리어한 사람의 보스 러시·음악 감상이 칸을 지워도 남게)
+	# 메타가 이미 있으면 칸 파일을 읽지 않는다 (켤 때마다 저장 파일 셋을 읽지 않게)
+	if MetaSave.exists():
+		return
 	var datas := []
 	for i in range(1, SLOT_COUNT + 1):
 		datas.append(read_slot(i))
@@ -135,13 +138,19 @@ func delete_slot(i: int) -> void:
 
 
 ## 가장 늦게 저장한 칸 (없으면 0). 같으면 지금 칸, 그다음 번호가 작은 칸.
-func latest_slot() -> int:
+## cleared_only = 엔딩을 본(flags.cleared) 칸 가운데서만 (보스 러시의 몸)
+func latest_slot(cleared_only := false) -> int:
 	var best := 0
 	var best_at := ""
 	for i in range(1, SLOT_COUNT + 1):
 		if not has_save_in(i):
 			continue
-		var at := str(read_slot(i).get("saved_at", ""))
+		var d := read_slot(i)
+		if cleared_only:
+			var f = d.get("flags", {})
+			if not (f is Dictionary and bool(f.get("cleared", false))):
+				continue
+		var at := str(d.get("saved_at", ""))
 		if best == 0 or at > best_at or (at == best_at and i == slot):
 			best = i
 			best_at = at
