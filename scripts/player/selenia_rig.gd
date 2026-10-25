@@ -18,6 +18,9 @@ extends Node2D
 ##   칼질·씨앗 베기·낙하 공격 꼬리·착지·구르기·이단 점프·막기·저스트 가드·회복·정화·영혼 전환·쓰러짐은 Fx 자동 로드로 띄우고
 ##   (모양은 scripts/fx/fx_table.gd), 보호막(가드 중 계속 보이는 유리 구)과 칼끝·손에 모이는 빛은 이 노드의 자식 그림이다.
 ##   칼질은 휘두르기 진행(_strike_t → _strike_curve)대로 호의 머리를 끌고 가므로 칼과 칼자국이 같이 간다.
+## v1.1.0 (기획자 요청 2·3·17): 일반 공격 칼자국은 청록(teal)이고 판정 상자 끝(270)까지 닿는다. 3타는 예비동작이 길다(타마다 다른 시간).
+##   낙하 공격은 내려꽂는 동안 발밑 판정을 덮는 바람결(plunge_dive), 착지 충격은 착지 판정 폭(±170)에 맞춘 땅 터짐(plunge_impact).
+##   새순 단계·수액의 맥동으로 판정이 커지면 이펙트도 같은 배율로 커진다. 크기는 light_slash_rect / plunge_*_rect 로 시험한다.
 
 const PART_SCALE := 0.25        # 그림을 1/4로 줄여 두었다
 const RIG_SCALE := 0.135        # 원본 px → 게임 px (키 약 132). 바꾸면 발 위치·등장 자리가 틀어진다
@@ -35,10 +38,16 @@ const GUARD_BLUE := Color("8fd3ff")
 const GUARD_CENTER := Vector2(24, 12)
 const GUARD_RY := 80.0
 const GUARD_SPAN := 1.25
-## 씨앗 베기 흔적: 큰 초승달 그림(fx_table 의 seed_slash)이 판정 상자(slash_box: 앞 340, 위 250, 아래 180) 안을 거의 채우도록
+## 씨앗 베기 흔적: 큰 초승달 그림(fx_table 의 seed_slash)이 판정 상자(slash_box: 앞 374, 위 250, 아래 180) 안을 거의 채우도록
 ## SLASH_FX_OFFSET["seed_slash"] 와 표의 scale_xy 를 맞췄다 (seed_slash_rect, probe_player 가 확인).
 ## 칼질 이펙트가 소녀 몸 가운데에서 떨어진 자리 (오른쪽을 볼 때, 게임 px). 그림의 호 중심(표의 pivot)이 여기 온다.
-const SLASH_FX_OFFSET := {"slash1": Vector2(30, -30), "slash2": Vector2(18, -20), "slash3": Vector2(12, -40), "seed_slash": Vector2(-10, -27)}
+## v1.1.0: 일반 공격 판정이 앞 30~270 · 위 90 ~ 아래 22 가 되어, 칼자국의 보이는 끝(알파 0.25 이상)이 판정 끝 ±20px 에,
+##   세로는 판정 띠에서 위아래 40px 안에 들도록 표(fx_table 의 slash1~3 scale_xy·rot)와 함께 다시 맞췄다 (probe_player 가 잰다).
+const SLASH_FX_OFFSET := {"slash1": Vector2(42, -56), "slash2": Vector2(22, -39), "slash3": Vector2(60, -30), "seed_slash": Vector2(-10, -27)}
+## 낙하 공격 이펙트 자리 (소녀 가운데 기준): 내려꽂기 바람결 = 내려꽂기 판정의 가운데, 착지 터짐 = 착지 판정의 가운데.
+## 그림의 기준점(표의 pivot)이 보이는 그림의 가운데라서, 수액의 맥동으로 1.15배 커져도 가운데가 판정과 함께 그대로다.
+const PLUNGE_DIVE_OFFSET := Vector2(0, 40)
+const PLUNGE_IMPACT_OFFSET := Vector2(0, -10)
 ## 칼끝·손에 모이는 빛 (art/fx/orb_glow.png) 의 크기
 const TIP_GLOW_SCALE := 0.45
 
@@ -71,7 +80,8 @@ const ATTACK_FOLLOW_MUL := 3.0
 ## 타격 곡선이 도는 시간 창: 예비동작(startup) 진행도 x 부터 히트박스 구간(active) 진행도 y 까지 한 번에 이어진다.
 ## 히트박스가 켜지는 순간엔 칼이 아직 거의 당긴 자리(swing 의 6%)에 있고, 몸 앞을 지나는 순간이 active 의 35~55% 에 온다.
 ## active 만으로는 0.06초(60fps 세 프레임 반)라 '휘두른 자세'에 닿기도 전에 끝나 버려서 조금 앞당겨 시작한다.
-const STRIKE_WINDOW_LIGHT := Vector2(0.85, 0.95)
+## v1.1.0: 타마다 따로 (1·2타 예비 0.07초, 3타 0.09초 — 3타는 길어진 예비동작의 끝 18% 에서 출발해 크게 내려찍는다).
+const STRIKE_WINDOW_LIGHT := [Vector2(0.85, 0.95), Vector2(0.85, 0.95), Vector2(0.82, 0.95)]
 ## 씨앗 베기는 예비동작이 길어(0.28초) 그 끝 8% 만 당겨 쓰고, 긴 히트박스 구간(0.18초)의 95% 에서 끝난다.
 const STRIKE_WINDOW_SLASH := Vector2(0.92, 0.95)
 
@@ -112,6 +122,8 @@ var _slash_gen := 0
 var _slash_over := 2.0    # 지금 칼질의 지나침 크기 (_strike_curve 에 같이 넣는다)
 var _plunge_fx: FxSprite
 var _plunge_gen := 0
+var _dive_fx: FxSprite     # 내려꽂는 동안 발밑 판정을 덮는 바람결 (plunge_dive)
+var _dive_gen := 0
 var _down_fx_done := false
 ## 보호막 그림과 칼끝·손에 모이는 빛 (이 노드의 자식이라 소녀와 함께 뒤집히고 기운다)
 var _shield: Sprite2D
@@ -603,11 +615,17 @@ func _apply_pose(delta: float, st: Player.State) -> void:
 	_guard_a = Motion.damp(_guard_a, 1.0 if st == Player.State.GUARD else 0.0, 16.0 if st == Player.State.GUARD else 9.0, delta)
 
 
-## 지금 공격의 국면 길이 [startup, active, recovery] (초). 씨앗 베기는 약공격보다 느리다.
+## 지금 공격의 국면 길이 [startup, active, recovery] (초). 씨앗 베기는 약공격보다 느리고, 약공격은 타마다 다르다 (3타가 길다).
 func _phase_lens() -> Vector3:
 	if _player.state == Player.State.SOUL_SLASH:
 		return Vector3(_player.slash_startup, _player.slash_active, _player.slash_recovery)
-	return Vector3(_player.light_startup, _player.light_active, _player.light_recovery)
+	var step := _player.attack_step
+	return Vector3(_player.light_startup_of(step), _player.light_active_of(step), _player.light_recovery_of(step))
+
+
+## 약공격 타의 타격 창 (STRIKE_WINDOW_LIGHT)
+func _light_window() -> Vector2:
+	return STRIKE_WINDOW_LIGHT[clampi(_player.attack_step, 1, 3) - 1]
 
 
 ## 지금 국면의 진행도 (0 → 1). player 의 남은 시간으로 계산하므로 국면 길이가 달라도 모양이 같다.
@@ -626,7 +644,7 @@ func _phase_progress() -> float:
 ## 타격 곡선의 진행도 (0 → 1). 예비동작 끝자락(STRIKE_WINDOW.x)에서 0, 히트박스 구간의 STRIKE_WINDOW.y 에서 1.
 ## 두 국면을 '시간'으로 이어 붙여 하나의 창으로 보므로, 국면 길이가 바뀌어도(2페이즈 배속 등) 모양은 같다. 0 이면 아직 당기는 중.
 func _strike_t() -> float:
-	var win := STRIKE_WINDOW_SLASH if _player.state == Player.State.SOUL_SLASH else STRIKE_WINDOW_LIGHT
+	var win := STRIKE_WINDOW_SLASH if _player.state == Player.State.SOUL_SLASH else _light_window()
 	var lens := _phase_lens()
 	var s_len: float = lens.x
 	var a_len: float = lens.y
@@ -647,7 +665,7 @@ func _attack_pose() -> Dictionary:
 	var strike: Dictionary
 	var over := 2.0          # 지나침의 크기 (ease_out_back 의 s)
 	var bounces := 1.5
-	var win := STRIKE_WINDOW_LIGHT
+	var win := _light_window()
 	if _player.state == Player.State.SOUL_SLASH:
 		windup = WINDUP_S
 		strike = STRIKE_S
@@ -776,8 +794,10 @@ func _update_slash_fx(st: Player.State, in_attack: bool, ph: String) -> void:
 		var name := "seed_slash" if st == Player.State.SOUL_SLASH else "slash%d" % clampi(_player.attack_step, 1, 3)
 		_slash_over = 2.6 if st == Player.State.SOUL_SLASH else 2.0
 		Fx.release(_slash_fx, _slash_gen)
+		# 새순 단계로 판정이 앞으로 길어지면 칼자국도 가로로 같은 배율 (일반 공격 / 씨앗)
+		var reach_k := Progress.skill_range_mult("seed" if st == Player.State.SOUL_SLASH else "normal")
 		_slash_fx = Fx.spawn(name, _player.global_position, {"facing": _player.facing, "follow": _player,
-			"offset": SLASH_FX_OFFSET.get(name, Vector2.ZERO), "driven": true})
+			"offset": SLASH_FX_OFFSET.get(name, Vector2.ZERO), "driven": true, "scale_xy": Vector2(reach_k, 1.0)})
 		_slash_gen = _slash_fx.gen if _slash_fx else 0
 	if striking:
 		Fx.set_reveal(_slash_fx, _slash_gen, clampf(_strike_curve(_strike_t(), _slash_over), 0.0, 1.0))
@@ -786,12 +806,19 @@ func _update_slash_fx(st: Player.State, in_attack: bool, ph: String) -> void:
 		Fx.release(_slash_fx, _slash_gen)
 	_striking = striking
 	# 낙하 공격 꼬리: 급강하하는 동안 머리 위로 빛줄기가 남는다 (바닥에 꽂히거나 적에 튕기면 놓는다)
+	# + 발밑 판정(내려꽂기 상자)을 덮는 아래로 향한 바람결 (v1.1.0: 판정 = 이펙트, 맥동이면 같이 1.15배)
 	var diving := st == Player.State.PLUNGE and ph == "dive"
 	if diving and not Fx.alive(_plunge_fx, _plunge_gen):
 		_plunge_fx = Fx.spawn("plunge_trail", _player.global_position, {"follow": _player, "offset": Vector2(0, -20), "driven": true})
 		_plunge_gen = _plunge_fx.gen if _plunge_fx else 0
 	elif not diving and Fx.alive(_plunge_fx, _plunge_gen) and _plunge_fx.driven:
 		Fx.release(_plunge_fx, _plunge_gen)
+	if diving and not Fx.alive(_dive_fx, _dive_gen):
+		_dive_fx = Fx.spawn("plunge_dive", _player.global_position, {"follow": _player, "offset": PLUNGE_DIVE_OFFSET,
+			"driven": true, "scale": _player.plunge_box_mult(), "facing": _player.facing})
+		_dive_gen = _dive_fx.gen if _dive_fx else 0
+	elif not diving and Fx.alive(_dive_fx, _dive_gen) and _dive_fx.driven:
+		Fx.release(_dive_fx, _dive_gen)
 
 
 ## 칼날 위의 한 점 (Visual 좌표): 어깨에서 칼끝 쪽으로 dist px (칼끝 ≈ 112)
@@ -829,14 +856,112 @@ func _make_shield() -> void:
 
 
 ## 씨앗 베기 초승달 그림이 가장 커졌을 때 차지하는 사각형 (소녀 가운데 기준, 오른쪽을 볼 때. 시험용)
-func seed_slash_rect() -> Rect2:
+## reach_k: 새순 단계의 앞 사거리 배율 (그림을 가로로 늘리는 배율과 같다). 기본은 지금 단계.
+func seed_slash_rect(reach_k := -1.0) -> Rect2:
+	if reach_k < 0.0:
+		reach_k = Progress.skill_range_mult("seed")
 	var def: Dictionary = Fx.Table.EFFECTS["seed_slash"]
 	var tex := Fx.texture(def["tex"])
 	var sc: Array = def.get("scale", [1.0, 1.0])
 	var k := maxf(float(sc[0]), float(sc[1]))
-	var size: Vector2 = tex.get_size() * (def.get("scale_xy", Vector2.ONE) as Vector2) * k
+	var size: Vector2 = tex.get_size() * (def.get("scale_xy", Vector2.ONE) as Vector2) * Vector2(reach_k, 1.0) * k
 	var pivot: Vector2 = def.get("pivot", Vector2(0.5, 0.5))
 	return Rect2(SLASH_FX_OFFSET["seed_slash"] - pivot * size, size)
+
+
+## ---- 시험용: 이펙트 그림이 '보이는' 범위 재기 (게임 중에는 부르지 않는다) ----
+## 그림 픽셀 가운데 알파가 thr 이상이고(호 드러내기가 있으면 끝까지 드러났을 때 보이는 것만) 가장 커진 배율일 때,
+## 소녀 가운데 기준(오른쪽을 볼 때) 차지하는 사각형. 그림의 볼록 껍질을 표의 기준점·배율·뒤집기·회전·자리로 옮겨 잰다.
+static var _hull_cache := {}
+
+func fx_visible_rect(fx_name: String, offset: Vector2, mult := 1.0, sxy_mult := Vector2.ONE, thr := 0.25) -> Rect2:
+	var def: Dictionary = Fx.Table.EFFECTS[fx_name]
+	var tex_key = def["tex"]
+	var tex_name: String = tex_key[0] if tex_key is Array else tex_key
+	var tex := Fx.texture(tex_name)
+	var hull := _visible_hull(tex_name, def.get("wipe", {}), thr)
+	var ts := tex.get_size()
+	var sc: Array = def.get("scale", [1.0, 1.0])
+	var k := maxf(float(sc[0]), float(sc[1])) * mult
+	var sxy: Vector2 = (def.get("scale_xy", Vector2.ONE) as Vector2) * sxy_mult
+	var flip := -1.0 if bool(def.get("flip_v", false)) else 1.0
+	var s := Vector2(sxy.x * k, sxy.y * k * flip)
+	var rot := deg_to_rad(float(def.get("rot", 0.0)))
+	var pivot: Vector2 = def.get("pivot", Vector2(0.5, 0.5))
+	var r := Rect2()
+	var first := true
+	for uv in hull:
+		var p := (Vector2((uv.x - pivot.x) * ts.x * s.x, (uv.y - pivot.y) * ts.y * s.y)).rotated(rot) + offset
+		if first:
+			r = Rect2(p, Vector2.ZERO)
+			first = false
+		else:
+			r = r.expand(p)
+	return r
+
+
+## 그림에서 보이는 픽셀(UV)의 볼록 껍질. 호 드러내기(wipe)가 있으면 셰이더와 같은 계산으로 '끝까지 드러난' 모습만 (꽃잎 숨김 포함).
+func _visible_hull(tex_name: String, wipe: Dictionary, thr: float) -> PackedVector2Array:
+	var key := "%s|%s|%.2f" % [tex_name, str(wipe), thr]
+	if _hull_cache.has(key):
+		return _hull_cache[key]
+	var img := Fx.texture(tex_name).get_image()
+	if img.is_compressed():
+		img.decompress()
+	var w := img.get_width()
+	var h := img.get_height()
+	var pts := PackedVector2Array()
+	var on := not wipe.is_empty()
+	var center: Vector2 = wipe.get("center", Vector2(0.5, 0.5))
+	var aspect := float(w) / float(h)
+	var a0 := deg_to_rad(float(wipe.get("a0", 0.0)))
+	var span := deg_to_rad(float(wipe.get("span", 180.0)))
+	var soft := float(wipe.get("soft", 0.12))
+	var gap_hide := float(wipe.get("gap_hide", 0.0))
+	var head := 1.05   # FxSprite.set_reveal(1.0)
+	for y in h:
+		for x in w:
+			var a := img.get_pixel(x, y).a
+			if a < thr:
+				continue
+			var u := (x + 0.5) / w
+			var v := (y + 0.5) / h
+			if on:
+				var ang := atan2(v - center.y, (u - center.x) * aspect)
+				var mid := a0 + span * 0.5
+				var rel := fposmod(ang - mid + PI, TAU) - PI
+				var t := rel * signf(span) / maxf(absf(span), 0.001) + 0.5
+				var gap := (1.0 - smoothstep(-0.07, -0.01, t)) + smoothstep(1.01, 1.07, t)
+				var vis := 1.0 - smoothstep(head - soft, head, t)
+				vis *= 1.0 - gap_hide * clampf(gap, 0.0, 1.0)
+				a *= vis
+				if a < thr:
+					continue
+			pts.append(Vector2(u, v))
+	var hull := Geometry2D.convex_hull(pts)
+	_hull_cache[key] = hull
+	return hull
+
+
+## 일반 공격 칼자국(slash1~3)이 가장 커졌을 때 보이는 범위 (소녀 가운데 기준, 오른쪽을 볼 때). reach_k 는 새순 범위 배율 (기본 지금 단계).
+func light_slash_rect(step: int, reach_k := -1.0) -> Rect2:
+	if reach_k < 0.0:
+		reach_k = Progress.skill_range_mult("normal")
+	var name := "slash%d" % clampi(step, 1, 3)
+	return fx_visible_rect(name, SLASH_FX_OFFSET[name], 1.0, Vector2(reach_k, 1.0))
+
+
+## 내려꽂기 바람결 / 착지 터짐이 가장 커졌을 때 보이는 범위 (box_k: 수액의 맥동 판정 배율, 기본 지금 상태)
+func plunge_dive_rect(box_k := -1.0) -> Rect2:
+	if box_k < 0.0:
+		box_k = _player.plunge_box_mult()
+	return fx_visible_rect("plunge_dive", PLUNGE_DIVE_OFFSET, box_k)
+
+
+func plunge_impact_rect(box_k := -1.0) -> Rect2:
+	if box_k < 0.0:
+		box_k = _player.plunge_box_mult()
+	return fx_visible_rect("plunge_impact", PLUNGE_IMPACT_OFFSET, box_k)
 
 
 ## 보호막이 덮는 범위 (Visual 좌표, 시험용)
@@ -929,7 +1054,9 @@ func _on_plunge_landed() -> void:
 	_kick("squash", 7.0)
 	_kick("crouch", 12.0)
 	Fx.release(_plunge_fx, _plunge_gen)
-	Fx.spawn("plunge_impact", _feet(), {"facing": _player.facing})
+	Fx.release(_dive_fx, _dive_gen)
+	# 착지 판정의 가운데에 (그림 가운데 = 기준점). 맥동이면 판정과 같이 1.15배. 고리·먼지는 표에서 발밑으로 내려 둔다.
+	Fx.spawn("plunge_impact", _player.global_position + PLUNGE_IMPACT_OFFSET, {"facing": _player.facing, "scale": _player.plunge_box_mult()})
 
 
 func _on_roll_started() -> void:

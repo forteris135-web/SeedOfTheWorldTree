@@ -58,21 +58,24 @@ const PALETTES := {
 
 const EFFECTS := {
 	# ===================== 셀레니아: 약공격 3연타 (뼈대가 끌고 간다) =====================
-	# 1타 가로 베기: 칼이 뒤에서 아래를 지나 앞으로 (화면에서 반시계)
-	"slash1": {"tex": "slash_crescent", "blend": "mix", "life": 0.3, "scale": [0.95, 1.0], "ease": 2.0, "fade_out": 0.55,
-		"flip_v": true, "rot": 30.0, "pivot": Vector2(0.3, 0.55), "energy": 1.08, "hold": 0.4, "priority": 2,
+	# v1.1.0 (기획자 요청 2·3): 청록(teal) + 판정 끝까지. 판정 상자 앞 30~270 · 위 90 ~ 아래 22 (소녀 가운데 기준)에 맞춰
+	#   보이는 끝(알파 0.25 이상)이 판정 끝 ±20px, 세로는 판정 띠 위아래 40px 안 (자리는 selenia_rig.gd SLASH_FX_OFFSET, 시험 probe_player).
+	#   새순 단계로 판정이 길어지면 뼈대가 scale_xy 의 가로를 같은 배율로 곱해 띄운다.
+	# 1타 가로 베기: 칼이 뒤에서 아래를 지나 앞으로 (화면에서 반시계) — 납작하고 길게
+	"slash1": {"tex": "slash_crescent", "blend": "mix", "life": 0.3, "scale": [0.97, 1.0], "scale_xy": Vector2(1.75, 1.15), "ease": 2.0, "fade_out": 0.55,
+		"flip_v": true, "rot": 10.0, "pivot": Vector2(0.3, 0.55), "palette": "teal", "keep": 0.15, "energy": 1.08, "hold": 0.4, "priority": 2,
 		"wipe": ARC_CRESCENT},
-	# 2타 올려 베기: 앞 아래에서 머리 위로 (반시계)
-	"slash2": {"tex": "slash_crescent", "blend": "mix", "life": 0.3, "scale": [0.9, 0.95], "ease": 2.0, "fade_out": 0.55,
-		"flip_v": true, "rot": -15.0, "pivot": Vector2(0.3, 0.55), "energy": 1.08, "hold": 0.4, "priority": 2,
+	# 2타 올려 베기: 앞 아래에서 머리 위로 (반시계) — 끝이 위로 들린다
+	"slash2": {"tex": "slash_crescent", "blend": "mix", "life": 0.3, "scale": [0.97, 1.0], "scale_xy": Vector2(1.9, 0.95), "ease": 2.0, "fade_out": 0.55,
+		"flip_v": true, "rot": -10.0, "pivot": Vector2(0.3, 0.55), "palette": "teal", "keep": 0.15, "energy": 1.08, "hold": 0.4, "priority": 2,
 		"wipe": ARC_CRESCENT},
 	# 3타 내려 찍기: 머리 뒤에서 위를 넘어 앞 아래로 (시계) — 가장 크고 밝다
-	"slash3": {"tex": "slash_big", "blend": "mix", "life": 0.36, "scale": [0.45, 0.48], "ease": 2.0, "fade_out": 0.5,
-		"rot": -5.0, "pivot": Vector2(0.42, 0.52), "energy": 1.1, "hold": 0.4, "priority": 2,
+	"slash3": {"tex": "slash_big", "blend": "mix", "life": 0.36, "scale": [0.465, 0.48], "scale_xy": Vector2(1.7, 1.4), "ease": 2.0, "fade_out": 0.5,
+		"rot": 0.0, "pivot": Vector2(0.42, 0.52), "palette": "teal", "keep": 0.15, "energy": 1.1, "hold": 0.4, "priority": 2,
 		"wipe": ARC_BIG},
 	# ===================== 셀레니아: 영혼 기술 =====================
-	# 씨앗 '넓은 베기': 큰 초승달 (초록 팔레트). 판정 상자(앞 340, 위 250, 아래 180)를 거의 채운다
-	"seed_slash": {"tex": "slash_big", "blend": "mix", "life": 0.5, "scale": [1.0, 1.03], "scale_xy": Vector2(1.3, 1.45), "ease": 2.0,
+	# 씨앗 '넓은 베기': 큰 초승달 (초록 팔레트). 판정 상자(앞 374, 위 250, 아래 180)를 거의 채운다 (v1.1.0: 앞 340 → 374 에 맞춰 가로 ×1.1)
+	"seed_slash": {"tex": "slash_big", "blend": "mix", "life": 0.5, "scale": [1.0, 1.03], "scale_xy": Vector2(1.43, 1.45), "ease": 2.0,
 		"fade_out": 0.45, "pivot": Vector2(0.42, 0.52), "palette": "seed", "keep": 0.3, "color": Color(1, 1, 1, 0.85),
 		"energy": 1.08, "hold": 0.4, "priority": 2,
 		"wipe": ARC_BIG},
@@ -99,11 +102,19 @@ const EFFECTS := {
 	# 낙하 공격: 내리꽂는 동안 머리 위로 남는 빛줄기 (소녀를 따라간다, 착지하면 놓는다)
 	"plunge_trail": {"tex": "wisp_beam2", "life": 0.42, "scale": [0.5, 0.55], "scale_xy": Vector2(1.0, 0.8), "rot": 90.0,
 		"pivot": Vector2(0.97, 0.5), "fade_in": 0.05, "fade_out": 0.35, "color": Color(1, 1, 1, 0.8), "hold": 0.3, "priority": 1},
-	# 낙하 공격 착지: 땅에서 터지는 빛 + 납작한 고리 + 양옆 먼지
-	"plunge_impact": {"tex": "ground_burst", "blend": "mix", "life": 0.42, "scale": [0.36, 0.52], "ease": 3.0, "fade_out": 0.3,
-		"pivot": Vector2(0.5, 0.78), "energy": 1.05, "priority": 2,
-		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 1.3}], ["dust_puff", 1, Vector2(6, 0), {"vel": Vector2(-150, -30), "offset": Vector2(-30, -10)}],
-			["dust_puff", 1, Vector2(6, 0), {"vel": Vector2(150, -30), "offset": Vector2(30, -10)}]]},
+	# 낙하 공격 내려꽂기 (v1.1.0 새것): 발밑 판정(소녀 가운데 기준 x ±110, y -40 ~ +120)을 덮는 아래로 향한 초승달 바람결.
+	#   뼈대가 소녀를 따라 판정 가운데(0, 40)에 띄우고(driven), 바닥에 꽂히거나 적에 튕기면 놓는다. 기준점 = 보이는 그림의 가운데라
+	#   수액의 맥동(판정 ×1.15)의 opts.scale 로 커져도 판정과 가운데가 같다. 그림 원래 색(푸른 흰빛).
+	"plunge_dive": {"tex": "slash_crescent", "blend": "mix", "life": 0.36, "scale": [1.0, 1.0], "scale_xy": Vector2(0.865, 1.53), "rot": 90.0,
+		"pivot": Vector2(0.493, 0.5), "fade_in": 0.12, "fade_out": 0.4, "color": Color(1, 1, 1, 0.85), "energy": 1.05, "flicker": 0.15,
+		"hold": 0.3, "priority": 2},
+	# 낙하 공격 착지: 땅에서 터지는 빛 + 납작한 고리 + 양옆 먼지.
+	#   v1.1.0: 터짐은 착지 판정(x ±170, y -60 ~ +40)에 맞춰 넓고 납작하게 — 판정 가운데(0, -10)에 기준점(그림 가운데)을 두고 띄운다.
+	#   고리·먼지는 장식이라 발밑(+77)에 남긴다 (고리 최종 반지름 ±147, 맥동이면 ±169 — ±185 안).
+	"plunge_impact": {"tex": "ground_burst", "blend": "mix", "life": 0.42, "scale": [0.55, 0.769], "scale_xy": Vector2(1.0, 0.8414), "ease": 3.0, "fade_out": 0.3,
+		"pivot": Vector2(0.494, 0.493), "energy": 1.05, "priority": 2,
+		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 1.3, "offset": Vector2(0, 77)}], ["dust_puff", 1, Vector2(6, 0), {"vel": Vector2(-150, -30), "offset": Vector2(-30, 67)}],
+			["dust_puff", 1, Vector2(6, 0), {"vel": Vector2(150, -30), "offset": Vector2(30, 67)}]]},
 	# 땅 위 납작한 빛 고리 (착지·충격)
 	"ground_ring": {"tex": "ripple", "life": 0.4, "scale": [0.3, 0.75], "ease": 3.0, "fade_out": 0.3, "scale_xy": Vector2(1.0, 0.7),
 		"pivot": Vector2(0.5, 0.6), "color": Color(1, 1, 1, 0.8), "priority": 1},
