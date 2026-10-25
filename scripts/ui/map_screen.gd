@@ -44,7 +44,15 @@ const LINK_WIDTH := 2.0
 ## 포탈 화살표: 화면 크기(px, 확대와 무관)와 ◆ 에서 떨어진 거리
 const ARROW_LEN := 14.0
 const ARROW_GAP := 12.0
+## 짝 ◆ 가 가까워 마주 보는 두 화살표가 겹칠 때(방 경계를 사이에 둔 짝 — 기본 배율에서 약 35px): 두 화살표를 짝을 잇는 선에
+## 수직으로 이만큼(화면 px) 서로 반대쪽으로 비켜 '⇄' 처럼 갈라 그린다. RAMP = 겹치기 시작하는 거리에서 다 비킬 때까지의 폭(px).
+const ARROW_SPLIT := 10.0
+const ARROW_SPLIT_RAMP := 12.0
 const ARROW_LOCKED := Color(0.62, 0.62, 0.66)
+## 찾은 수 글자 자리 후보: 오른쪽 아래(0,0)에서 (x 칸, y 칸) 만큼. x 한 칸 = 글자 폭 + COUNT_STEP_X(왼쪽), y 한 칸 = COUNT_STEP_Y(위)
+const COUNT_SLOTS: Array[Vector2] = [Vector2(0, 0), Vector2(0, -1), Vector2(0, -2), Vector2(-1, 0), Vector2(-1, -1), Vector2(-2, 0), Vector2(-2, -1)]
+const COUNT_STEP_X := 34.0
+const COUNT_STEP_Y := 20.0
 ## 경전 조각 별 (금빛)
 const SCRIPTURE_COLOR := Color(1.0, 0.84, 0.36)
 ## 화살표 상태
@@ -112,11 +120,14 @@ var _last_tap_pos := Vector2.ZERO
 ## 글자 폭 캐시 (그릴 때마다 재지 않게): "글자|크기" -> 폭
 var _text_w := {}
 ## 열 때 한 번 만드는 그리기 자료 (지도가 열린 동안 게임이 멈추므로 바뀌지 않는다) — 매 프레임 사전·배열을 새로 만들지 않게
-## _cards: [{id, rect(세계), origin(세계, 방 원점), name, region, grasses:[세계 점], portals:[{pos, dir, state}], found, total, done,
+## _cards: [{id, rect(세계), origin(세계, 방 원점), name, region, grasses:[세계 점], portals:[{pos, dir, state, to, pair?}], found, total, done,
 ##           boss(""/깃발), boss_down, mini_live, scriptures:[번호], count_text}]
+## (포탈의 pair = 지도에 보이는 짝 ◆ 의 세계 점 — 가까우면 화살표를 비켜 그린다)
 var _cards: Array = []
 ## 포탈 짝 실선: [[세계 점 a, 세계 점 b]]
 var _links: Array = []
+## 찾은 수 글자가 피할 표식 자리 (그릴 때마다 비워 다시 쓴다 — 새 배열을 만들지 않게)
+var _marks: Array[Vector2] = []
 
 
 ## 방의 탐사 수치를 읽는다 → [찾은 수, 전체 수].
@@ -328,7 +339,7 @@ func build_cards() -> void:
 	_cards.clear()
 	_links.clear()
 	var rooms: Dictionary = Progress.visited_rooms
-	var shown := {}   # 방 id -> {포탈 노드 이름: 세계 점} (짝 실선용)
+	var shown := {}   # 방 id -> {포탈 노드 이름: 화살표 자료(pos = 세계 점)} (짝 실선·짝 화살표 비키기용)
 	for id in rooms:
 		var r: Dictionary = rooms[id]
 		var origin := room_origin(id, r)
@@ -361,9 +372,9 @@ func build_cards() -> void:
 				var local := Vector2(float(p["pos"][0]), float(p["pos"][1]))
 				if bool(p.get("hidden", false)) and not _near_any(local, snap):
 					continue
-				var at := origin + local
-				shown[id][str(p.get("node", ""))] = at
-				card["portals"].append(_portal_mark(at, p))
+				var mark := _portal_mark(origin + local, p)
+				shown[id][str(p.get("node", ""))] = mark
+				card["portals"].append(mark)
 		else:
 			for pp in snap:
 				card["portals"].append({"pos": origin + Vector2(pp), "dir": Vector2.ZERO, "state": Link.UNVISITED, "to": ""})
@@ -383,7 +394,11 @@ func build_cards() -> void:
 			if done.has(key):
 				continue
 			done[key] = true
-			_links.append([shown[id][node], shown[to][pair]])
+			var ma: Dictionary = shown[id][node]
+			var mb: Dictionary = shown[to][pair]
+			ma["pair"] = mb["pos"]
+			mb["pair"] = ma["pos"]
+			_links.append([ma["pos"], mb["pos"]])
 
 
 static func _near_any(p: Vector2, pts: Array, tol := 40.0) -> bool:
@@ -436,6 +451,49 @@ static func _portal_mark(at: Vector2, p: Dictionary) -> Dictionary:
 	elif Progress.visited_rooms.has(to):
 		state = Link.VISITED
 	return {"pos": at, "dir": dir, "state": state, "to": to}
+
+
+## 화살표 가운데 (지도 칸 좌표). c = ◆ 가운데, d = ◆ 반지름, pm = 화살표 자료(pair 가 있으면 짝 ◆ 의 세계 점).
+## 보통은 ◆ 에서 목적지 쪽으로 d + ARROW_GAP. 짝 ◆ 가 가까워 마주 보는 두 화살표가 겹칠 거리면(방 경계를 사이에 둔 짝),
+## 짝을 잇는 선에 수직으로 ARROW_SPLIT 만큼 비킨다 — 짝도 같은 규칙이라 반대쪽으로 갈라져 '⇄' 처럼 보인다 (v1.1.0 검토).
+## 화살표가 가리키는 방향(pm.dir)은 그대로다. 그리기와 tools/probe_map.gd 가 같이 쓴다.
+func arrow_center(c: Vector2, d: float, pm: Dictionary) -> Vector2:
+	var dir: Vector2 = pm["dir"]
+	var along := d + ARROW_GAP
+	if pm.has("pair"):
+		var pc := world_to_view(pm["pair"])
+		var dist := c.distance_to(pc)
+		var need := 2.0 * (d + ARROW_GAP + ARROW_LEN * 0.55) + 4.0   # 이보다 가까우면 두 화살표가 짝을 잇는 선 위에서 겹친다
+		if dist < need and dist > 0.5:
+			var axis := (pc - c) / dist
+			var t := clampf((need - dist) / ARROW_SPLIT_RAMP, 0.0, 1.0)
+			return c + axis * minf(along, dist * 0.5) + Vector2(axis.y, -axis.x) * (ARROW_SPLIT * t)
+	return c + dir * along
+
+
+## 찾은 수 글자의 바탕 네모 (지도 칸 좌표): 방 칸 rect 의 오른쪽 아래에서 시작해, 표식 자리(_marks)와 16px 안으로 가까우면
+## COUNT_SLOTS 차례로 비킨다 (방 칸 안에서만). 겹치는 표식이 없는 첫 자리, 모두 겹치면 가장 적게 겹치는 자리.
+## 글자 기준점 = 네모 위치 + (3, 13). 그리기와 tools/probe_map.gd 가 같이 쓴다.
+func count_box_at(rect: Rect2, count_w: float) -> Rect2:
+	var base := Rect2(rect.end - Vector2(count_w + 11, 20), Vector2(count_w + 6, 17))
+	var best := base
+	var best_hits := 9999
+	for slot in COUNT_SLOTS:
+		var box := base
+		box.position += Vector2(slot.x * (count_w + COUNT_STEP_X), slot.y * COUNT_STEP_Y)
+		if slot != Vector2.ZERO and not rect.encloses(box):
+			continue
+		var hits := 0
+		var near := box.grow(16.0)
+		for m in _marks:
+			if near.has_point(m):
+				hits += 1
+		if hits < best_hits:
+			best_hits = hits
+			best = box
+			if hits == 0:
+				break
+	return best
 
 
 ## 시험용: 그리기 자료에서 방 하나 (없으면 빈 사전)
@@ -855,22 +913,24 @@ func _on_draw_view() -> void:
 		var rect := Rect2(world_to_view(card["rect"].position), card["rect"].size * _zoom)
 		if not screen.intersects(rect):
 			continue
-		var marks: Array[Vector2] = []  # 표식(달빛풀·포탈) 자리 — 숫자가 겹치지 않게 피하려고 모아 둔다
+		_marks.clear()  # 표식(달빛풀·포탈·화살표) 자리 — 숫자가 겹치지 않게 피하려고 모아 둔다
 		for g in card["grasses"]:
 			var gp: Vector2 = world_to_view(g)
-			marks.append(gp)
+			_marks.append(gp)
 			_view.draw_circle(gp, 12.0 * mk, Color(GRASS_DOT, 0.22 + 0.14 * sin(_t * 3.0)))
 			_view.draw_circle(gp, 8.6 * mk, Color(OUTLINE, 0.9))
 			_view.draw_circle(gp, 6.6 * mk, GRASS_DOT)
 		for pm in card["portals"]:
 			var c: Vector2 = world_to_view(pm["pos"])
-			marks.append(c)
+			_marks.append(c)
 			var d := 9.0 * mk
 			_view.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -d), c + Vector2(d, 0), c + Vector2(0, d), c + Vector2(-d, 0)]), GOLD)
 			_view.draw_polyline(PackedVector2Array([c + Vector2(0, -d - 4), c + Vector2(d + 4, 0), c + Vector2(0, d + 4), c + Vector2(-d - 4, 0), c + Vector2(0, -d - 4)]), Color(GOLD, 0.3 + 0.2 * sin(_t * 3.0 + 1.0)), 2.0)
 			var dir: Vector2 = pm["dir"]
 			if dir != Vector2.ZERO:
-				draw_arrow(_view, c + dir * (d + ARROW_GAP), dir, pm["state"])
+				var ac := arrow_center(c, d, pm)
+				_marks.append(ac)
+				draw_arrow(_view, ac, dir, pm["state"])
 		if card["boss"] != "":
 			# 지역 보스: 정화하면 옅게 + 작은 ✓
 			var sc := rect.get_center()
@@ -891,23 +951,14 @@ func _on_draw_view() -> void:
 			draw_star(_view, Vector2(sx - 12.0, rect.position.y + 17.0), 9.5, SCRIPTURE_COLOR)
 			sx -= 30.0
 		# 찾은 수 / 전체 수 (찾을 것이 있는 방만), 오른쪽 아래 작은 글씨. 표식 뒤에 그려 맨 위에 올리고,
-		# 포탈·달빛풀 표식과 가까우면 20px 위로 올려 피한다. 글자 뒤에는 작은 어두운 바탕. 방이 너무 작으면 숨긴다.
+		# 포탈·달빛풀·화살표 표식과 가까우면 비킨다: 위로 20·40px → 왼쪽으로 (방 칸 안에서, 겹치는 표식이 가장 적은 자리).
+		# 글자 뒤에는 작은 어두운 바탕. 방이 너무 작으면 숨긴다.
 		if card["total"] > 0:
 			var count_text: String = card["count_text"]
 			var count_w := _tw(font, count_text, 14)
 			if rect.size.x >= count_w + 22.0 and rect.size.y >= 24.0:
-				var count_pos := rect.end - Vector2(count_w + 8, 7)
-				var count_box := Rect2(count_pos + Vector2(-3, -13), Vector2(count_w + 6, 17))
-				for _try in 3:
-					var hit := false
-					for m in marks:
-						if count_box.grow(16.0).has_point(m):
-							hit = true
-							break
-					if not hit:
-						break
-					count_pos.y -= 20.0
-					count_box.position.y -= 20.0
+				var count_box := count_box_at(rect, count_w)
+				var count_pos := count_box.position + Vector2(3, 13)
 				_view.draw_rect(count_box, Color(OUTLINE, 0.7))
 				_outlined(_view, font, count_pos, count_text, 14, Color(0.82, 1.0, 0.72) if card["done"] else Color(0.78, 0.93, 1.0))
 	# 이름이 방 안에 안 들어가는 지금 방: 방 위에 이름

@@ -524,6 +524,16 @@ func _v110_arrows() -> void:
 	_check(not flooded.is_empty() and not str(flooded).contains("✗"), "잠긴 채굴장으로 가는 ◆ 의 화살표: %s" % [flooded])
 	# 짝 실선: 숨은 포탈 짝을 뺀 나머지 모두 (포탈 두 개가 한 쌍)
 	_check(map.link_count() * 2 >= want - hidden * 2 and map.link_count() > 30, "두 방을 다 가 봤으면 짝 ◆ 사이 실선 (%d개)" % map.link_count())
+	# 붙어 있는 짝 ◆ (방 경계를 사이에 둔 짝): 마주 보는 두 화살표가 포개지지 않는다 — 열 때 배율(×100%)과 가장 크게(×300%)
+	for z in [MapScreen.ZOOM_OPEN, MapScreen.ZOOM_MAX]:
+		map._zoom = z
+		var sep := _arrow_separation(map, ids)
+		_check(sep["pairs"] > 30 and sep["bad"].is_empty() and (z != MapScreen.ZOOM_OPEN or sep["close"] > 0),
+			"배율 %.2f: 짝 화살표 %d쌍(가까워 비킨 짝 %d) 모두 화면 거리 ≥ %.0fpx, 짝 ◆ 와도 떨어짐 (가장 가까운 화살표 사이 %.1fpx, 화살표↔짝 ◆ %.1fpx, 어긋남 %s)" % [z, sep["pairs"], sep["close"], MapScreen.ARROW_LEN, sep["min_sep"], sep["min_diamond"], sep["bad"]])
+	map.reset_view()
+	# 찾은 수 글자는 포탈·화살표 표식을 피한다 (예: 관의 복도 오른쪽 아래 ◆ 와 등불 잠긴 길 ◆ 가 세로로 붙어 있다)
+	var overlap := _count_overlaps(map, ids)
+	_check(overlap.is_empty(), "찾은 수 글자가 달빛풀·포탈·화살표를 덮지 않는다 (겹친 방 %s)" % [overlap])
 	map.close()
 	# 숨은 포탈: 스냅숏에 들어가야(드러나야) 보인다
 	var hp: Dictionary = {}
@@ -553,6 +563,71 @@ func _v110_arrows() -> void:
 		"두 방만 가 봄: 실선 %d, 수관 시작의 가지 ◆→바람의 틈 금빛 %s, ◆→잿가지의 둥지 테두리 %s" % [links, st.get("canopy_02", -1) == MapScreen.Link.VISITED, st.get("canopy_hidden", -1) == MapScreen.Link.UNVISITED])
 	map.queue_free()
 	await _frames(1)
+
+
+## 지금 배율에서 짝 ◆ 두 화살표의 화면 거리: {pairs, close(비킨 짝 수), bad:[...], min_sep, min_diamond}
+func _arrow_separation(map: MapScreen, ids: Array) -> Dictionary:
+	var mk := clampf(map._zoom / MapScreen.ZOOM_OPEN, 0.55, 1.2)
+	var d := 9.0 * mk
+	var marks := {}   # 세계 점(글자) -> 화살표 자료
+	for rid in ids:
+		for pm in map.card_of(rid).get("portals", []):
+			marks[str(pm["pos"])] = pm
+	var out := {"pairs": 0, "close": 0, "bad": [], "min_sep": INF, "min_diamond": INF}
+	for key in marks:
+		var a: Dictionary = marks[key]
+		if not a.has("pair") or a["dir"] == Vector2.ZERO:
+			continue
+		var b = marks.get(str(a["pair"]))
+		if b == null or b["dir"] == Vector2.ZERO or str(a["pos"]) > str(b["pos"]):
+			continue   # 한 쌍은 한 번만
+		out["pairs"] += 1
+		var ca := map.world_to_view(a["pos"])
+		var cb := map.world_to_view(b["pos"])
+		var need := 2.0 * (d + MapScreen.ARROW_GAP + MapScreen.ARROW_LEN * 0.55) + 4.0
+		if ca.distance_to(cb) < need:
+			out["close"] += 1
+		var aa := map.arrow_center(ca, d, a)
+		var ab := map.arrow_center(cb, d, b)
+		var sep := aa.distance_to(ab)
+		var dia := minf(aa.distance_to(cb), ab.distance_to(ca))
+		out["min_sep"] = minf(out["min_sep"], sep)
+		out["min_diamond"] = minf(out["min_diamond"], dia)
+		# 화살표 사이가 화살표 길이보다 가깝거나, 화살표 가운데가 짝 ◆(반지름 d, 빛 테 +4) 안이면 어긋남
+		if sep < MapScreen.ARROW_LEN or dia < d + 4.0:
+			out["bad"].append("%s (%.0fpx, ◆ %.0fpx)" % [key, sep, dia])
+	return out
+
+
+## 지금 배율에서 찾은 수 글자 네모가 그 방의 표식(달빛풀·포탈·화살표)과 겹치는 방 (그리기와 같은 자리 규칙: count_box_at)
+func _count_overlaps(map: MapScreen, ids: Array) -> Array:
+	var mk := clampf(map._zoom / MapScreen.ZOOM_OPEN, 0.55, 1.2)
+	var d := 9.0 * mk
+	var font := ThemeDB.fallback_font
+	var out: Array = []
+	for rid in ids:
+		var card: Dictionary = map.card_of(rid)
+		if card.is_empty() or int(card["total"]) <= 0:
+			continue
+		var rect := Rect2(map.world_to_view(card["rect"].position), card["rect"].size * map._zoom)
+		var cw := font.get_string_size(card["count_text"], HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		if rect.size.x < cw + 22.0 or rect.size.y < 24.0:
+			continue
+		map._marks.clear()
+		for g in card["grasses"]:
+			map._marks.append(map.world_to_view(g))
+		for pm in card["portals"]:
+			var c := map.world_to_view(pm["pos"])
+			map._marks.append(c)
+			if pm["dir"] != Vector2.ZERO:
+				map._marks.append(map.arrow_center(c, d, pm))
+		var box := map.count_box_at(rect, cw)
+		for m in map._marks:
+			if box.grow(10.0).has_point(m):
+				out.append("%s %s" % [rid, card["count_text"]])
+				break
+	map._marks.clear()
+	return out
 
 
 ## 달빛풀 이동 목록 이름 = 그 달빛풀이 있는 방의 지도 이름 (달빛풀 전부, 옛 저장 이름은 무시)

@@ -137,7 +137,8 @@ func _boss_flags() -> Array:
 ## 1) 보스가 이미 쓰러져 정화를 기다리면 승리를 지킨다 — 문만 열고 이 방의 마지막 자리에서 일어나 다시 손을 얹으러 온다.
 ## 2) 그 밖에는 마지막으로 쉰 달빛풀의 방을 다시 읽는다 (Room._respawn_at_last_grass) — 이 방이면 보스가 완전히 새로 만들어져
 ##    싸움이 처음 상태로 돌아간다 (잎 더미·연속 공격 단계·투사체까지).
-## 3) 쉰 달빛풀이 없으면 예전처럼 이 방에서 싸움을 되돌리고 일어난다.
+## 3) 쉰 달빛풀이 없으면 이 방을 다시 읽어 들어온 자리에서 일어난다 (Room._reload_here — 역시 싸움이 처음 상태로).
+##    다시 읽을 수 없을 때(시험이 방을 자식으로 놓았을 때 등)만 예전처럼 이 자리에서 싸움을 되돌린다.
 func _on_player_died() -> void:
 	if _rush:
 		_rush_player_died()
@@ -157,6 +158,8 @@ func _on_player_died() -> void:
 			cam0.reset_smoothing()
 		return
 	if _respawn_at_last_grass():
+		return
+	if not Progress.has(defeat_flag) and is_instance_valid(boss) and _reload_here():
 		return
 	Progress.clear_killed()
 	respawn_enemies()

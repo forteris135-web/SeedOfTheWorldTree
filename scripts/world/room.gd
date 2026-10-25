@@ -28,6 +28,8 @@ var _map: MapScreen
 var player: Player
 var rest_point := Vector2.ZERO
 var _spawn := Vector2.ZERO
+## 이 방에 들어온 자리 (Progress.next_spawn 값: 표식 이름 / "Grass:<id>" / "" = 새로 시작·이어하기·시험). _reload_here 가 같은 자리로 다시 읽는다.
+var _arrival_spawn := ""
 ## 처음 놓인 적들: [{scene, position, parent, props, key: 순번 글자, track: 쓰러뜨림을 기억하는가}]
 ## key = 방에 놓인 순서(트리 순서)의 번호. 쓰러뜨린 일반 적은 Progress.killed[room_id][key] 에 남아 달빛풀에서 쉬기 전까지 다시 나타나지 않는다
 ## (v1.1.0 기획자 요청 13). 구원할 수 있는 자·깃발이 있는 적(중간 보스·거대화 적)·중간 보스 방의 보스는 기억하지 않는다 —
@@ -47,6 +49,7 @@ func _ready() -> void:
 	EnemyBase.arrival_grace_until = 0.0
 	var arrived_resting := false   # 달빛풀로 이동해 와서 쉬는 자세로 도착 (음악: 쉼터 곡을 이어 간다)
 	var arrived_spawn := Progress.next_spawn   # 다른 방에서 넘어왔는가 (비어 있으면 새로 시작·이어하기·시험)
+	_arrival_spawn = arrived_spawn
 	if player:
 		# 다른 방에서 넘어왔다면 그 출구에 맞는 자리에 선다
 		if Progress.next_spawn != "":
@@ -489,9 +492,10 @@ func _on_player_died() -> void:
 	_revive_here()
 
 
-## 마지막으로 쉰 달빛풀의 방으로 (그 달빛풀에서 쉬는 자세로 도착). 갈 수 없으면 false (보스 러시·쉰 적 없음·장면 전환 중).
+## 마지막으로 쉰 달빛풀의 방으로 (그 달빛풀에서 쉬는 자세로 도착). 갈 수 없으면 false (보스 러시·쉰 적 없음·장면 전환 중·
+## 이 방이 '지금 장면'이 아님 — 시험이 방을 자기 자식으로 놓았을 때 장면 바꾸기가 시험 자체를 지우지 않게, 그 자리에서 일어난다).
 func _respawn_at_last_grass() -> bool:
-	if BossRush.active or Game.is_busy():
+	if BossRush.active or Game.is_busy() or not is_inside_tree() or get_tree().current_scene != self:
 		return false
 	var gid := str(Progress.last_grass.get("id", ""))
 	# 달빛풀이 있는 방은 방 목록(RoomIndex)에서 찾는다 (없으면 저장된 경로). 방 파일이 아니면 가지 않는다.
@@ -505,6 +509,22 @@ func _respawn_at_last_grass() -> bool:
 	Progress.carry_dews = -1
 	Progress.next_spawn = "Grass:" + gid
 	Game.go_to(scene, 0.8, 1.0)
+	return true
+
+
+## 쉰 달빛풀이 없을 때 이 방을 다시 읽어 들어온 자리(_arrival_spawn)에서 일어난다 — 보스 방 재도전을 처음 상태로
+## (v1.1.0 기획자 요청 13: 보스 잎 더미·연속 공격 단계까지 새로). 체력·이슬은 가득(쓰러진 소녀는 Game.go_to 가 적지 않는다).
+## 갈 수 없으면 false (보스 러시·장면 전환 중·이 방이 '지금 장면'이 아님·방 파일 없음).
+func _reload_here() -> bool:
+	if BossRush.active or Game.is_busy() or not is_inside_tree() or get_tree().current_scene != self:
+		return false
+	if not scene_file_path.begins_with("res://scenes/rooms/"):
+		return false
+	Progress.clear_killed()
+	Progress.carry_hp = -1.0
+	Progress.carry_dews = -1
+	Progress.next_spawn = _arrival_spawn if not _arrival_spawn.begins_with("Grass:") else ""
+	Game.go_to(scene_file_path, 0.8, 1.0)
 	return true
 
 

@@ -6,7 +6,10 @@ extends Node
 ## (b) 쓰러뜨린 일반 적은 방을 나갔다 와도 없다 → 다른 방 달빛풀에서 쉬면 돌아온다. 구원할 수 있는 자·중간 보스는 기억하지 않는다.
 ## (c) 다른 방에서 쓰러지면 마지막으로 쉰 달빛풀의 방에서 쉬는 자세로, 가득, 쓰러뜨린 기록 비움
 ## (d) 보스 방(그 방 달빛풀이 마지막)에서 쓰러지면 방을 다시 읽어 보스·잎 더미·투사체가 처음 상태 / 보스를 쓰러뜨린 뒤 쓰러지면 승리 유지
+##     + 정화 → 회상 → 보스 방으로 돌아오면(AfterBoss) 보스 방을 나갈 때의 체력·이슬이 이어진다
+##     + 쉰 달빛풀이 없을 때 보스 방에서 쓰러지면 그 방을 다시 읽어 들어온 자리에서 (싸움이 처음 상태로)
 ## (e) 보스 러시: 방마다 가득 (앞 보스 방의 체력을 이어 받지 않는다)
+## (f) 방이 '지금 장면'이 아닐 때(시험이 방을 자식으로 놓음)는 장면을 바꾸지 않고 그 자리에서 일어난다
 ## 저장 파일·보스 러시 기록은 시험 전 상태로 되돌린다. 마지막 줄 "[probe] 끝: 실패 N".
 
 var _fail := 0
@@ -41,7 +44,9 @@ func _ready() -> void:
 	await _test_kills()
 	await _test_death_other_room()
 	await _test_boss_room()
+	await _test_boss_room_no_grass()
 	await _test_rush()
+	await _test_not_current_scene()
 	_restore_files()
 	Progress.reset()
 	print("[probe] 끝: 실패 %d" % _fail)
@@ -69,14 +74,23 @@ func _restore_files() -> void:
 				f.close()
 
 
+## 앞 장면을 트리에서 바로 떼고 지운다 (이 시험 노드는 남긴다). 트리에 남겨 둔 채 queue_free 만 하면, 다음 방의 _ready 가
+## 같은 프레임에 아직 남은 앞 방의 소녀를 'player' 그룹에서 먼저 집을 수 있다 (process_frame 뒤에 장면을 바꿀 때).
+func _drop(prev: Node) -> void:
+	if prev == null or prev == self or not is_instance_valid(prev):
+		return
+	if prev.get_parent():
+		prev.get_parent().remove_child(prev)
+	prev.queue_free()
+
+
 ## 빈 노드를 '지금 장면'으로 세우고 그 자리를 방으로 바꾼다 (이 시험 노드는 남는다).
 func _goto(room_id: String, spawn: String) -> Room:
 	var prev := get_tree().current_scene
 	var dummy := Node.new()
 	get_tree().root.add_child(dummy)
 	get_tree().current_scene = dummy
-	if prev and prev != self:
-		prev.queue_free()
+	_drop(prev)
 	Game._busy = false
 	Progress.next_spawn = spawn
 	get_tree().change_scene_to_file("res://scenes/rooms/%s.tscn" % room_id)
@@ -374,6 +388,80 @@ func _test_boss_room() -> void:
 	var same := get_tree().current_scene == b2
 	_check(same and is_instance_valid(b2.boss) and b2.boss.state_name() == "FALLEN" and p2.state != Player.State.DEAD and not b2.gate_in.closed and not Progress.has(b2.defeat_flag),
 		"(d) 쓰러뜨린 뒤 쓰러지면 승리 유지: 같은 방 %s, 보스 %s, 소녀 %s, 문 열림 %s" % [same, b2.boss.state_name() if is_instance_valid(b2.boss) else "-", p2.state_name(), not b2.gate_in.closed])
+	if not same:
+		return
+	# 정화 → 회상 → 보스 방으로 돌아옴(AfterBoss): 보스 방을 나갈 때의 체력·이슬이 이어진다 (명세 §4.1 끝줄)
+	p2._invuln_timer = 9999.0
+	p2.set_vitals(70.0, 1)
+	b2._on_boss_purified()
+	var mem := await _wait_scene(Game.MEMORY_SCENE, 10.0)
+	_check(mem != null and is_equal_approx(Progress.carry_hp, 70.0) and Progress.carry_dews == 1,
+		"(d) 회상으로 넘어갈 때 체력·이슬을 적어 둠 (carry %.0f / %d)" % [Progress.carry_hp, Progress.carry_dews])
+	if mem == null:
+		return
+	await _wait(3.6)   # 제목이 사라지고 첫 줄이 나올 때까지
+	var guard := 0
+	while not bool(mem.get("_done")) and guard < 40:
+		mem.call("_next_line")
+		guard += 1
+	var b3 := await _wait_room("canopy_boss", null, 15.0)   # 앞 보스 방(b2)은 회상으로 넘어가며 이미 지워졌다
+	if b3 == null:
+		_check(false, "(d) 회상 뒤 보스 방으로 돌아오지 않았다")
+		return
+	_check(is_equal_approx(b3.player.hp, 70.0) and b3.player.dews == 1 and Progress.carry_hp < 0.0,
+		"(d) 회상 뒤 보스 방(AfterBoss): 체력·이슬 그대로 (체력 %.0f/%.0f, 이슬 %d), carry 지움" % [b3.player.hp, b3.player.max_hp, b3.player.dews])
+	# 영혼이 깃드는 연출(_after_memory, 약 6.6초)이 끝날 때까지 기다린다 — 다음 시험이 방을 지우기 전에
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 12000 and not (Time.get_ticks_msec() - t0 > 7000 and b3.player.input_enabled):
+		await get_tree().process_frame
+	_check(Progress.has_ability("double_jump") and b3.player.input_enabled, "(d) 영혼이 깃듦 (이단 점프 %s)" % Progress.has_ability("double_jump"))
+
+
+## 지금 장면이 path 가 될 때까지 기다린다 (그 장면, 시간이 넘으면 null)
+func _wait_scene(path: String, limit: float) -> Node:
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < limit * 1000.0:
+		await get_tree().process_frame
+		var cs := get_tree().current_scene
+		if cs and is_instance_valid(cs) and cs.scene_file_path == path and cs.is_node_ready():
+			return cs
+	return null
+
+
+# ---------- (d) 쉰 달빛풀이 없을 때 보스 방에서 쓰러지면: 방을 다시 읽어 들어온 자리에서 ----------
+func _test_boss_room_no_grass() -> void:
+	Progress.reset()
+	var r1 := await _goto("canopy_boss", "FromCanopy04")
+	if r1 == null:
+		return
+	var br := r1 as BossRoom
+	var marker: Vector2 = br.get_node("Markers/FromCanopy04").position
+	_check(Progress.last_grass.is_empty(), "(d2) 아직 어느 달빛풀에서도 쉬지 않음")
+	var p := br.player
+	p.global_position = Vector2(br.trigger.position.x + 240.0, br.get_node("Markers/GroundLine").position.y - 70.0)
+	await _physics(6)
+	_check(br.fight_started, "(d2) 싸움 시작")
+	await _wait(2.0)
+	var boss = br.boss
+	boss.hp = boss.max_hp - 300.0
+	var piles: Array = boss.get("piles") if "piles" in boss else []
+	if not piles.is_empty():
+		piles[0].consume()
+	p.set_vitals(30.0, 0)
+	p._invuln_timer = 0.0
+	p._die()
+	var r2 := await _wait_room("canopy_boss", r1, 10.0)
+	if r2 == null:
+		_check(false, "(d2) 쉰 달빛풀 없이 쓰러졌을 때 보스 방이 다시 읽히지 않았다")
+		return
+	await _physics(4)
+	var b2 := r2 as BossRoom
+	var piles2: Array = b2.boss.get("piles") if "piles" in b2.boss else []
+	_check(r2 != r1 and is_equal_approx(b2.boss.hp, b2.boss.max_hp) and not b2.fight_started and b2.boss.state_name() == "WAIT" and piles2.all(func(x): return x.available),
+		"(d2) 방을 다시 읽음: 보스 체력 %.0f/%.0f, 싸움 %s, 상태 %s, 잎 더미 모두 있음 %s" % [b2.boss.hp, b2.boss.max_hp, b2.fight_started, b2.boss.state_name(), piles2.all(func(x): return x.available)])
+	var dist := b2.player.global_position.distance_to(marker)
+	_check(_full(b2.player) and b2.player.state != Player.State.DEAD and b2.player.state != Player.State.REST and dist < 60.0 and not b2.gate_in.closed,
+		"(d2) 들어온 자리(FromCanopy04, 거리 %.0f)에서 가득 (체력 %.0f/%.0f, 이슬 %d, %s), 문 열림" % [dist, b2.player.hp, b2.player.max_hp, b2.player.dews, b2.player.state_name()])
 
 
 # ---------- (e) 보스 러시: 방마다 가득 ----------
@@ -383,8 +471,7 @@ func _test_rush() -> void:
 	var dummy := Node.new()
 	get_tree().root.add_child(dummy)
 	get_tree().current_scene = dummy
-	if prev and prev != self:
-		prev.queue_free()
+	_drop(prev)
 	Game._busy = false
 	BossRush.start()
 	var r1 := await _wait_room("canopy_boss", null, 15.0)
@@ -408,3 +495,46 @@ func _test_rush() -> void:
 	if BossRush.active:
 		BossRush.restore()
 	_check(not BossRush.active, "(e) 러시를 끝내고 진행을 되돌림")
+
+
+# ---------- (f) 방이 '지금 장면'이 아니면 장면을 바꾸지 않는다 ----------
+## 시험(probe)이 방을 자기 자식으로 놓은 채 소녀가 쓰러지면, 마지막 달빛풀이 있어도 장면을 바꾸지 않고(시험이 지워지지 않게)
+## 그 자리에서 일어난다. 보스 방도 (쉰 달빛풀이 없을 때) 다시 읽지 않고 그 자리에서 싸움을 되돌린다.
+func _test_not_current_scene() -> void:
+	Progress.reset()
+	var prev := get_tree().current_scene
+	var dummy := Node.new()
+	get_tree().root.add_child(dummy)
+	get_tree().current_scene = dummy
+	_drop(prev)
+	Game._busy = false
+	await _frames(2)
+	Progress.last_grass = {"id": "canopy_wind", "scene": "res://scenes/rooms/canopy_02.tscn", "name": "옛 이름"}
+	var room: Room = load("res://scenes/rooms/canopy_01.tscn").instantiate()
+	add_child(room)
+	await _physics(4)
+	room.player._invuln_timer = 0.0
+	room.player._die()
+	await _wait(3.4)
+	_check(get_tree().current_scene == dummy and is_instance_valid(room) and room.is_inside_tree() and room.player.state != Player.State.DEAD and not Game.is_busy(),
+		"(f) 자식으로 놓인 방: 장면을 바꾸지 않고 그 자리에서 일어남 (소녀 %s, 장면 그대로 %s)" % [room.player.state_name(), get_tree().current_scene == dummy])
+	room.queue_free()
+	await _frames(2)
+	Progress.reset()
+	var br: BossRoom = load("res://scenes/rooms/canopy_boss.tscn").instantiate()
+	add_child(br)
+	await _physics(4)
+	br.player._invuln_timer = 9999.0
+	br.player.global_position = Vector2(br.trigger.position.x + 240.0, br.get_node("Markers/GroundLine").position.y - 70.0)
+	await _physics(6)
+	await _wait(1.0)
+	br.player._invuln_timer = 0.0
+	br.player._die()
+	await _wait(3.4)
+	_check(get_tree().current_scene == dummy and is_instance_valid(br) and br.player.state != Player.State.DEAD and not br.fight_started and not Game.is_busy(),
+		"(f) 자식으로 놓인 보스 방: 다시 읽지 않고 그 자리에서 싸움을 되돌림 (싸움 %s, 소녀 %s)" % [br.fight_started, br.player.state_name()])
+	br.queue_free()
+	await _frames(2)
+	dummy.queue_free()
+	get_tree().current_scene = self
+	await _frames(1)
