@@ -49,6 +49,11 @@ const LANDED_BEATS := 6.0
 const REFLECT_POISE := 0.0
 ## 공중에서 받는 피해 배수
 const AIR_DAMAGE_RATIO := 0.5
+## 공중에서 받는 흐트러짐 배수 (되받은 나비는 온전히). v1.1.0 최종 검수(맞딜 방지): 땅에서 씨앗 베기만 쿨마다 쓰며 점프로 물결을 흘리는 봇이
+## 물결을 띄우려 내려온(WAVE_DIP)·날아오르는 여왕을 베어 공중에서도 흐트러짐 60 씩 쌓아 싸움의 4분의 1 을 무너진(피해 ×2) 여왕으로 보냈다
+## (18판 중 3판 봇 승). 공중의 여왕을 무너뜨리는 길은 나비 되받기(EXPANSION 3장) — 그 길은 그대로 두고 다른 공격만 0.7배
+## (0.5 면 봇 18판 모두 지지만 무적 '잘하는 봇'의 잡는 시간이 약 +20%, 0.7 이면 봇 18판 모두 지고(가장 아슬한 판 여왕 체력 18%) 약 +13%).
+const AIR_POISE_RATIO := 0.7
 ## 하늘에 머무는 높이 (디딤돌 윗면에서 위로). 몸 중심은 그림 위치(-120)만큼 더 위.
 ## 2026-10-19 검토: 640 이면 싸움 카메라 화면 맨 위(왼쪽 위 체력 HUD 뒤)에 들어가 가려졌다 → 400 (몸 중심이 바닥 위 520, 새와 비슷).
 const HOVER_HEIGHT := 400.0
@@ -152,6 +157,8 @@ var debug_log := false
 ## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
 var _tel: RangeTelegraph
 var crowd := CrowdMeter.new(CROWD_RANGE, CROWD_TRIGGER)
+## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 앞 낙하 공격 뒤 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n; scripts/combat/plunge_decay.gd)
+var plunge_decay := PlungeDecay.new()
 ## 지금 공격이 맞딜 응징인가 (응징 공격 동안은 흐트러짐이 쌓이지 않는다 — 되받은 나비는 그대로)
 var punishing := false
 var _poise_immune := 0.0
@@ -233,6 +240,7 @@ func reset_fight() -> void:
 	set_collision_mask_value(1, false)
 	hitbox.deactivate()
 	crowd.reset()
+	plunge_decay.reset()
 	_tel.clear()
 	_poise_immune = 0.0
 	_raise_stones()
@@ -344,6 +352,7 @@ func _physics_process(delta: float) -> void:
 		_last_beat = b
 		beat.emit(b)
 	_flash = maxf(_flash - delta * 6.0, 0.0)
+	plunge_decay.tick(delta)
 	_poise_hold = maxf(_poise_hold - delta, 0.0)
 	if _poise_hold <= 0.0 and poise > 0.0 and state not in [State.BROKEN, State.FALLEN, State.CRACK]:
 		poise = maxf(poise - poise_decay * delta, 0.0)
@@ -782,6 +791,8 @@ func _raise_stones() -> void:
 func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 	if state in [State.WAIT, State.INTRO, State.FALLEN, State.PURIFIED, State.CRACK]:
 		return "ignored"
+	# 낙하 공격 감쇠 (4초 창 — PlungeDecay)
+	hit = plunge_decay.apply(hit)
 	_flash = 1.0
 	var dmg := hit.damage
 	var gained := hit.poise
@@ -794,6 +805,7 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		dmg *= broken_damage_multiplier
 	elif not is_ground():
 		dmg *= AIR_DAMAGE_RATIO
+		gained *= AIR_POISE_RATIO
 	if (punishing or _poise_immune > 0.0) and not reflected:
 		gained = 0.0   # 맞딜 응징 중·무너졌다 날아오른 직후에는 무너뜨릴 수 없다
 	hp = maxf(hp - dmg, 0.0)

@@ -24,6 +24,11 @@ var hitstop := 0.05
 ## 적·보스 능력치 배율(Balance: 기본 +45% × 던전 단계 × 난이도)을 받는가. false = Balance 배율 제외 — 몸통 부딪힘·환경.
 ## (copy() 는 스크립트 변수를 모두 복사하므로 이 값도 함께 복사된다)
 var scaled := true
+## 소녀의 낙하 공격(내려꽂기·착지 충격)인가. 보스·중간 보스는 PlungeDecay 로 4초 창 안의 거듭된 낙하 공격을 줄인다.
+var plunge := false
+## 소녀 쪽 공중 연속 감쇠가 이미 곱한 비율 (피해 0.6^k, 흐트러짐 0 또는 1). PlungeDecay 가 두 규칙을 곱하지 않고 센 쪽 하나만 쓰려고 읽는다.
+var plunge_chain_damage := 1.0
+var plunge_chain_poise := 1.0
 
 
 static func make(p_damage: float, p_poise: float, p_source: Node2D, p_knockback := Vector2(300, -120)) -> HitData:

@@ -78,11 +78,22 @@ const HEAVY_POISE := 45.0
 ## 피스톤: 보이는 망치 머리 자리(앞 약 220~340px). 그 너머는 양쪽으로 달리는 충격파(점프로 넘김)가 맡는다.
 const PISTON_BOX := Rect2(150, -190, 220, 220)
 const BITE_BOX := Rect2(40, -230, 320, 250)
-## 김 분출: 몸 가운데 둘레 (발밑 기준 x -260..260, y -300..0) — 몸 안쪽(앞 40 안)이 피스톤·물기의 사각이던 안전지대를 없앤다
-const VENT_BOX := Rect2(-260, -240, 520, 300)
+## 김 분출: 몸 둘레와 몸 위로 솟는 김 기둥 (발밑 기준 x -330..330, y -760..0) — 몸 안쪽(앞 40 안)이 피스톤·물기의 사각이던 안전지대와,
+## 몸 위(공중)·펌프 방 가운데 가지(Branch3, 발밑 위 380) 위에서 뛰며 낙하 공격·씨앗 베기만 거듭하면 어느 공격도 닿지 않던 안전지대를
+## 함께 없앤다 (v1.1.0 최종 검수: 예전 ±260 × 높이 300 → 높이 760 = 가지 위에서 뛴 소녀 맞는 영역 아래끝까지, 가로는 계량기 범위 320 +
+## 소녀 몸 절반 — 계량기가 찬 자리(가지 끝 305 등)에 김이 닿지 않던 것). 피하려면 몸에서 옆으로 떨어진다(±330 밖).
+## 예고(범위 사각형)·김 이펙트는 이 사각형을 그대로 쓴다.
+const VENT_BOX := Rect2(-330, -700, 660, 760)
 const VENT_DAMAGE := 20.0
 ## 맞딜 방지 계량기 (v1.1.0): 이 거리 안에 붙어 있으면 쌓이고, 다 차면 김 분출
 const CROWD_RANGE := 320.0
+## 계량기의 위쪽 세로 한도 (발밑 기준 px): 몸 위 공중·가운데 가지 위에서 뛰는 소녀도 '붙어 있다'로 센다
+## (가지 위 소녀 가운데 ≈ 450, 거기서 뛰면 ≈ 750~830)
+const CROWD_MAX_UP := 900.0
+## 소녀 가운데가 발밑 위 이만큼보다 높으면(발이 피스톤·물기 판정 위끝 약 250 보다 위) 계량기가 CROWD_ABOVE_MULT 배로 쌓인다
+## — 피스톤·물기가 닿지 않는 자리에 머무는 소녀에게는 김 분출이 거의 매번 (등 뒤 1.5배와 겹치면 큰 쪽)
+const CROWD_ABOVE_PX := 320.0
+const CROWD_ABOVE_MULT := 2.0
 ## 2페이즈 쉬는 시간 배수 (v1.1.0 맞딜 방지 사다리 4단계: 2페이즈 공격 사이 쉬는 시간 −15%)
 const P2_REST_MULT := 0.85
 const PROJECTILE := preload("res://scenes/combat/projectile.tscn")
@@ -128,6 +139,8 @@ var _idle_gap := 2.0 * BEAT
 ## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
 var _tel: RangeTelegraph
 var crowd := CrowdMeter.new(CROWD_RANGE)
+## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 앞 낙하 공격 뒤 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n; scripts/combat/plunge_decay.gd)
+var plunge_decay := PlungeDecay.new()
 var _poise_immune := 0.0
 
 @onready var hitbox: Hitbox = $Hitbox
@@ -138,6 +151,9 @@ func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/iron_pump_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	_tel = RangeTelegraph.attach(self)
+	crowd.max_up = CROWD_MAX_UP
+	crowd.above_px = CROWD_ABOVE_PX
+	crowd.above_mult = CROWD_ABOVE_MULT
 	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
 	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
@@ -173,6 +189,7 @@ func reset_fight() -> void:
 	_bit = false
 	_poise_immune = 0.0
 	crowd.reset()
+	plunge_decay.reset()
 	_tel.clear()
 	_set_state(State.WAIT)
 	hp_changed.emit(hp, max_hp)
@@ -183,6 +200,7 @@ func _physics_process(delta: float) -> void:
 	if state == State.WAIT or state == State.PURIFIED:
 		return
 	_flash = maxf(_flash - delta * 6.0, 0.0)
+	plunge_decay.tick(delta)
 	_poise_hold = maxf(_poise_hold - delta, 0.0)
 	if _poise_hold <= 0.0 and poise > 0.0 and state != State.BROKEN and state != State.FALLEN:
 		poise = maxf(poise - poise_decay * delta, 0.0)
@@ -514,10 +532,13 @@ func _leak() -> void:
 func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 	if state in [State.WAIT, State.INTRO, State.FALLEN, State.PURIFIED]:
 		return "ignored"
+	# 낙하 공격 감쇠 (4초 창 — PlungeDecay). 무거운 공격인지는 줄이기 전 공격(raw)으로 가른다 (줄어든 낙하가 장갑 ×0.35 까지 겹쳐 받지 않게)
+	var raw := hit
+	hit = plunge_decay.apply(hit)
 	_flash = 1.0
 	# 되받은 분사(출처가 나 자신)는 피해 ×1.5 에 장갑 reflect_poise. 무거운 공격(씨앗 베기·낙하 공격)은 온전히, 약공격은 장갑에 막혀 조금만.
 	var reflected := hit.source == self
-	var heavy := reflected or hit.poise >= HEAVY_POISE
+	var heavy := reflected or raw.poise >= HEAVY_POISE
 	var dmg := hit.damage
 	var armor := hit.poise
 	if state == State.BROKEN:

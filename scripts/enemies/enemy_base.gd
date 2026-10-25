@@ -73,6 +73,9 @@ const DUST_PURIFY_BONUS := 20
 @export var contact_damage := 8.0
 ## 같은 적에게 다시 부딪혀 맞기까지의 간격(초)
 @export var contact_interval := 1.0
+## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 맞딜 방지). 중간 보스(거대화 EliteTraits.apply, 잿가지 거인)만 가진다: 앞 낙하 공격이 맞은 뒤
+## 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n (scripts/combat/plunge_decay.gd). null = 일반 몹 — 소녀 쪽 공중 연속 감쇠만 (지금 규칙 그대로).
+var plunge_decay: PlungeDecay = null
 @export var hurt_radius := 30.0
 @export var hurt_height := 120.0
 
@@ -215,6 +218,8 @@ func _tick_common(delta: float) -> void:
 	if player == null or not is_instance_valid(player):
 		player = get_tree().get_first_node_in_group("player") as Player
 	_tick_contact(delta)
+	if plunge_decay != null:
+		plunge_decay.tick(delta)
 	_flash = maxf(_flash - delta * 8.0, 0.0)
 	_poise_hold_timer = maxf(_poise_hold_timer - delta, 0.0)
 	if state != State.BROKEN and state != State.DEAD and _poise_hold_timer <= 0.0 and poise > 0.0:
@@ -464,6 +469,10 @@ func _strike() -> void:
 func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	if state == State.DEAD:
 		return "ignored"
+	# 중간 보스만: 낙하 공격 감쇠 (4초 창). 멈칫 여부(_is_armored)는 줄이기 전 공격(raw)으로 가른다.
+	var raw := hit
+	if plunge_decay != null:
+		hit = plunge_decay.apply(hit)
 	_flash = 1.0
 	hp = maxf(hp - hit.damage, 0.0)
 	hp_changed.emit(hp, max_hp)
@@ -486,7 +495,7 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	if poise >= max_poise:
 		_break(false)
 		return "hit"
-	if not _is_armored(hit):
+	if not _is_armored(raw):
 		hitbox.deactivate()
 		_set_state(State.HIT)
 		_timer = hit_stun

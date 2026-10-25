@@ -43,7 +43,7 @@ func _on_state(_old: int, _new: int) -> void:
 
 func _on_phase(_st: int, _old: String, new: String) -> void:
 	if state_name() == "VENT" and new == "active":
-		# 김 분출: 판정 사각형(몸 둘레 ±260, 높이 300) 그대로 김이 터진다
+		# 김 분출: 판정 사각형(몸 둘레 ±330, 높이 760 — 몸 위 김 기둥까지) 그대로 김이 터진다
 		var reach: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
 		if reach.size != Vector2.ZERO:
 			fit_fx("pump_vent", reach, facing())
@@ -55,7 +55,7 @@ func _tick(delta: float) -> void:
 		# 김 분출 예고: 김 구멍과 몸 둘레에서 주황 김이 새어 나온다 (막을 수 있는 공격 → 주황, 붉은빛은 가드 불가만)
 		var v := _vent()
 		Fx.spawn("vent_warn", v + Vector2(randf_range(-30.0, 30.0), 0.0))
-		Fx.spawn("vent_leak", boss.global_position + Vector2(randf_range(-230.0, 230.0), randf_range(-260.0, -40.0)))
+		Fx.spawn("vent_leak", boss.global_position + Vector2(randf_range(-300.0, 300.0), randf_range(-700.0, -40.0)))
 	if red():
 		if every("red", 0.1, delta):
 			var v := _vent()

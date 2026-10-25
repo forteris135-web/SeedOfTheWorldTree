@@ -13,6 +13,13 @@ const MAX_DY := 300.0
 
 ## 이 거리(px, 가로) 안이면 '붙어 있다'
 var range_px := 280.0
+## 소녀가 보스 발밑보다 **위**에 있을 때의 세로 한도 (px). 기본은 MAX_DY 와 같다.
+## 무쇠 펌프는 몸 위(공중)에서 뛰며 낙하 공격만 거듭하는 소녀도 '붙어 있다'로 센다 (v1.1.0 최종 검수 — 몸 위가 안전지대였다).
+var max_up := MAX_DY
+## 소녀가 이만큼(px, 보스 발밑에서 소녀 가운데까지) 넘게 위에 있으면 above_mult 배로 쌓인다. 기본 above_mult 1 = 꺼짐.
+## 무쇠 펌프: 피스톤·물기가 닿지 않는 몸 위(가지 위·공중)에 머무는 소녀에게 김 분출을 더 빨리 (v1.1.0 최종 검수).
+var above_px := INF
+var above_mult := 1.0
 var trigger := TRIGGER
 ## 쌓인 시간 (초)
 var t := 0.0
@@ -30,8 +37,12 @@ const BEHIND_MULT := 1.5
 ## facing: 보스가 보는 쪽(±1, 0 이면 앞뒤를 가리지 않는다) — 소녀가 등 뒤면 BEHIND_MULT 배로 쌓인다.
 func tick(delta: float, boss_pos: Vector2, player_pos: Vector2, grounded_boss: bool, facing := 0) -> void:
 	var dx := player_pos.x - boss_pos.x
-	if grounded_boss and absf(dx) <= range_px and absf(player_pos.y - boss_pos.y) < MAX_DY:
-		t += delta * (BEHIND_MULT if facing != 0 and dx * float(facing) < -20.0 else 1.0)
+	var dy := player_pos.y - boss_pos.y
+	if grounded_boss and absf(dx) <= range_px and dy < MAX_DY and -dy < max_up:
+		var mult := BEHIND_MULT if facing != 0 and dx * float(facing) < -20.0 else 1.0
+		if -dy > above_px:
+			mult = maxf(mult, above_mult)
+		t += delta * mult
 	else:
 		t = maxf(t - 0.5 * delta, 0.0)
 

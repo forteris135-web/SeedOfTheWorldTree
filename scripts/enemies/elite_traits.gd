@@ -54,6 +54,7 @@ const RAGE_SOUND := "res://audio/sfx/boss_fall.wav"
 static func apply(e: EnemyBase, hp_mult := HP_MULT, size_mult := SIZE_MULT, dmg_mult := DAMAGE_MULT) -> void:
 	e.max_hp *= hp_mult
 	e.max_poise *= POISE_MULT
+	e.plunge_decay = PlungeDecay.new()   # 중간 보스: 낙하 공격 감쇠 4초 창 (보스와 같은 규칙, v1.1.0 최종 검수)
 	e.damage *= dmg_mult
 	e.set("elite_damage_mult", dmg_mult)
 	e.walk_speed *= SPEED_MULT

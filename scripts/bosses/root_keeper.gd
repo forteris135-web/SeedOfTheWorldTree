@@ -122,6 +122,8 @@ var debug_log := false
 ## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
 var _tel: RangeTelegraph
 var crowd := CrowdMeter.new(CROWD_RANGE)
+## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 앞 낙하 공격 뒤 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n; scripts/combat/plunge_decay.gd)
+var plunge_decay := PlungeDecay.new()
 ## 지금 공격이 맞딜 응징인가 (응징 공격이 끝날 때까지 흐트러짐이 쌓이지 않는다 — 두들겨 끊거나 되돌림에 무너뜨릴 수 없다)
 var punishing := false
 ## 뿌리 벽: 판정이 켜진 자리와 벽까지 갈 수 있는 거리 (예고·이펙트가 쓴다)
@@ -178,6 +180,7 @@ func reset_fight() -> void:
 	_red = false
 	_spike_wave = false
 	crowd.reset()
+	plunge_decay.reset()
 	_tel.clear()
 	global_position = _home
 	_set_state(State.WAIT)
@@ -189,6 +192,7 @@ func _physics_process(delta: float) -> void:
 	if state == State.WAIT or state == State.PURIFIED:
 		return
 	_flash = maxf(_flash - delta * 6.0, 0.0)
+	plunge_decay.tick(delta)
 	_poise_hold = maxf(_poise_hold - delta, 0.0)
 	_poise_immune = maxf(_poise_immune - delta, 0.0)
 	if _poise_hold <= 0.0 and poise > 0.0 and state not in [State.BROKEN, State.FALLEN, State.RISE]:
@@ -774,6 +778,8 @@ func _clear_effects() -> void:
 func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 	if state in [State.WAIT, State.INTRO, State.FALLEN, State.PURIFIED, State.RISE]:
 		return "ignored"
+	# 낙하 공격 감쇠 (4초 창 — PlungeDecay)
+	hit = plunge_decay.apply(hit)
 	_flash = 1.0
 	var dmg := hit.damage * (broken_damage_multiplier if state == State.BROKEN else 1.0)
 	hp = maxf(hp - dmg, 0.0)

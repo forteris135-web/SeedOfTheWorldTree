@@ -10,6 +10,11 @@ var _slamming := false
 var _airborne := false
 
 
+func _ready() -> void:
+	plunge_decay = PlungeDecay.new()   # 중간 보스: 낙하 공격 감쇠 4초 창 (보스와 같은 규칙, v1.1.0 최종 검수)
+	super._ready()
+
+
 func _strike() -> void:
 	if randf() < 0.45 and player and absf(player.global_position.x - global_position.x) > 120.0:
 		# 내려찍기: 소녀 쪽으로 뛰어올라 떨어진다. 그림은 도약(leap) → 낙하(fall) → 착지(land) 세 박자.

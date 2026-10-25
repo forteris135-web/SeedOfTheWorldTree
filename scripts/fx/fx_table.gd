@@ -364,10 +364,10 @@ const EFFECTS := {
 	# v1.1.0: 물기 판정(앞 40~360, 높이 250)에 맞춰 띄운다 (무작위 회전 없음 — 돌리면 바깥 사각형이 커진다)
 	"pump_bite": {"tex": "star_burst", "life": 0.3, "scale": [0.5, 0.55], "ease": 3.0, "fade_out": 0.35, "palette": "sap",
 		"energy": 1.1, "priority": 1, "children": [["sap_droplet", 4, Vector2(20, 20)]]},
-	# 김 분출 (v1.1.0 맞딜 응징): 몸 둘레 판정(±260, 높이 300)을 덮는 김 덩이 — 판정 사각형에 맞춰 띄운다
+	# 김 분출 (v1.1.0 맞딜 응징): 몸 둘레·몸 위 판정(±330, 높이 760)을 덮는 김 덩이 — 판정 사각형에 맞춰 띄운다
 	"pump_vent": {"tex": "dome", "blend": "mix", "life": 0.42, "scale": [0.85, 1.0], "ease": 3.0, "fade_out": 0.45, "pivot": Vector2(0.5, 0.95),
 		"palette": "steam", "keep": 0.25, "color": Color(1.0, 0.92, 0.85, 0.85), "priority": 2,
-		"children": [["steam_puff", 6, Vector2(200, 60), {"offset": Vector2(0, -120), "scale": 1.6}], ["ground_ring", 1, Vector2.ZERO, {"scale": 1.4}]]},
+		"children": [["steam_puff", 10, Vector2(260, 300), {"offset": Vector2(0, -380), "scale": 1.6}], ["ground_ring", 1, Vector2.ZERO, {"scale": 1.4}]]},
 	# 김 분출 예고: 김 구멍에서 새는 주황 김 (막을 수 있는 공격 → 주황) / 몸 둘레에서 새는 김
 	"vent_warn": {"tex": "steam_column", "blend": "mix", "life": 0.5, "scale": [0.4, 0.75], "ease": 2.0, "fade_out": 0.45, "pivot": Vector2(0.5, 0.95),
 		"vel": Vector2(0, -60), "palette": "fire", "keep": 0.3, "color": Color(1, 1, 1, 0.7), "priority": 1},

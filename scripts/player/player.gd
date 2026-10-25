@@ -172,6 +172,9 @@ signal stamina_pulsed(amount: float)
 @export var plunge_relock := 0.25
 ## 바닥에 닿기 전에 두 번째부터 맞히는 낙하 공격의 피해 비율 (연속 튕김 약화)
 @export var plunge_repeat_ratio := 0.6
+## (이 공중 연속 감쇠는 바닥을 디디면 처음으로 돌아간다 — 일반 몹에게는 이 규칙만. 보스·중간 보스는 따로 **시간 창**으로 센다:
+##  앞 낙하 공격이 맞은 뒤 4초 안이면 피해 ×0.6^n·흐트러짐 ×0.5^n, 착지와 상관없이 — scripts/combat/plunge_decay.gd.
+##  두 규칙은 곱하지 않고 더 많이 줄이는 쪽 하나만 쓴다.)
 ## true = 튕길 때마다 피해가 plunge_repeat_ratio 배씩 **거듭** 줄어든다 (1 → 0.6 → 0.36 → 0.22 …, 바닥을 디디면 다시 1).
 ## false = 두 번째부터 늘 0.6 (v1.1.0 전). v1.1.0 검수(맞딜 방지): 낙하 공격은 스태미너를 쓰지 않아서, 보스 위에서 튕기며
 ## 낙하 공격만 거듭하면 보스의 땅 공격(내려찍기·휘두르기)이 위로 닿지 않는 채 초당 약 80 의 피해가 났다
@@ -942,6 +945,10 @@ func _tick_plunge(delta: float, on_floor: bool) -> void:
 				var hit := HitData.make(plunge_damage * plunge_damage_mult() * attack_multiplier * ratio, plunge_poise * poise_ratio, self, plunge_knockback)
 				hit.from_player = true
 				hit.hitstop = 0.06
+				# 보스·중간 보스는 시간 창으로 거듭된 낙하 공격을 센다 (PlungeDecay) — 이 공중 연속 비율과 곱하지 않고 센 쪽 하나만 쓰게 알려 준다
+				hit.plunge = true
+				hit.plunge_chain_damage = ratio
+				hit.plunge_chain_poise = poise_ratio
 				hitbox.set_box(plunge_dive_box(), facing)
 				hitbox.activate(hit, 10.0)   # 떨어지는 내내 켜 둔다 (맞히거나 착지하면 끈다)
 		"dive":
@@ -980,6 +987,7 @@ func _plunge_land() -> void:
 	var hit := HitData.make(plunge_land_damage * plunge_damage_mult() * attack_multiplier, plunge_land_poise, self, Vector2(380, -200))
 	hit.from_player = true
 	hit.hitstop = 0.04
+	hit.plunge = true   # 착지 충격도 보스의 낙하 감쇠 창에서 센다 (PlungeDecay)
 	hitbox.set_box(plunge_land_box_now(), facing)
 	hitbox.activate(hit, plunge_land_time)
 	Juice.shake(6.0)
