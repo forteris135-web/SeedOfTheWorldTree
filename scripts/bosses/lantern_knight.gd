@@ -221,6 +221,7 @@ func _physics_process(delta: float) -> void:
 		_high_time = 0.0
 	if player:
 		# 맞딜 방지: 공격할 수 있는 동안 몸 가까이 붙어 있으면 쌓인다 (박힘·휘청·무너짐 = 빈틈에는 쌓이지 않는다)
+		# (응징 공격 동안에도 쌓인다 — 내려찍기를 맞고도 계속 붙어 있으면 또 내려찍는다. 구르기로 빠지면 식는다)
 		crowd.tick(delta, global_position, player.global_position, state in [State.MARCH] or state in ATTACK_STATES, facing)
 	var fast := 0.75 if phase == 2 else 1.0
 	match state:

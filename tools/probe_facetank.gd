@@ -46,7 +46,11 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var quick := "--quick" in args
 	_sim = "--sim-stamina" in args
-	if not ("--fixed-fps" in OS.get_cmdline_args()):
+	# --fixed-fps 로 도는가: 물리 30틱이 실제 시간 0.25초보다 빨리 지나가면 그렇다 (엔진 인자는 get_cmdline_args 에 남지 않는다)
+	var t_us := Time.get_ticks_usec()
+	await _frames(30)
+	var fast := (Time.get_ticks_usec() - t_us) < 250000
+	if not fast:
 		# 실시간 실행: 빠른 판으로 줄이고 물리를 ACCEL 배로 돌린다
 		quick = quick or not ("--full" in args)
 		_accel = ACCEL

@@ -193,7 +193,8 @@ func _physics_process(delta: float) -> void:
 	_poise_immune = maxf(_poise_immune - delta, 0.0)
 	if player:
 		# 맞딜 방지: 공격할 수 있는 동안 몸 가까이 붙어 있으면 쌓인다 (휘청·장갑 깨짐 = 빈틈에는 쌓이지 않는다)
-		crowd.tick(delta, global_position, player.global_position, state == State.IDLE or state in ATTACK_STATES, facing)
+		# 빨아들이기(소녀를 끌어당김 — 스스로 붙은 것이 아니다)와 김 분출(응징 자체) 동안은 쌓지 않는다
+		crowd.tick(delta, global_position, player.global_position, state in [State.IDLE, State.PISTON, State.SPRAY], facing)
 	match state:
 		State.INTRO:
 			velocity.x = 0.0

@@ -242,7 +242,7 @@ const EFFECTS := {
 		"energy": 1.1, "priority": 1, "children": [["gust_leaf", 2, Vector2(20, 20)]]},
 	# 부리 찍기: 앞으로 튀어 나가며 쓸고 가는 구간의 잿빛 바람 줄기 (v1.1.0 — 판정이 쓸고 가는 사각형에 맞춰 띄운다)
 	"peck_streak": {"tex": "wisp_beam", "blend": "mix", "life": 0.32, "scale": [0.9, 1.0], "ease": 3.0, "fade_in": 0.05, "fade_out": 0.5,
-		"palette": "ash", "keep": 0.5, "color": Color(1, 1, 1, 0.9), "energy": 1.05, "priority": 2},
+		"palette": "ash", "keep": 0.2, "color": Color(1, 1, 1, 0.9), "energy": 1.05, "priority": 2},
 	# 잎 삼키기를 끊었을 때 / 잎 더미가 먹혀 흩어질 때
 	"pile_burst": {"tex": "leaf_burst", "blend": "mix", "life": 0.55, "scale": [0.4, 0.6], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.86),
 		"palette": "ash", "keep": 0.5, "priority": 1, "children": [["gust_leaf", 4, Vector2(60, 20)]]},

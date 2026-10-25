@@ -67,6 +67,9 @@ const LAND_BOX := Rect2(-170, -70, 340, 90)
 ## 맞딜 방지 계량기 (v1.1.0): 내려앉은 동안 이 거리 안에 붙어 있으면 쌓이고, 다 차면 곧바로 날아올라 수액 물결.
 ## 다 찬 채 하늘에 있으면 다음 패턴은 소녀에게 가장 가까운 돌로 내려앉기.
 const CROWD_RANGE := 280.0
+## 여왕만 쌓임 한도 2.5초 (명세 3.7 기본값): 내려앉은 동안(6박 = 2.6초)이 소녀의 반격 기회라, 1.8초면 붙어 때리는 소녀의 반격 창이
+## 늘 1.8초로 잘렸다 (EXPANSION 3장 '반격의 기회' ≥ 2.5초). 여왕은 2.5초로도 맞딜 시험을 통과한다.
+const CROWD_TRIGGER := 2.5
 
 @export_group("능력치")
 @export var max_hp := 1300.0
@@ -146,7 +149,7 @@ var _rng := RandomNumberGenerator.new()
 var debug_log := false
 ## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
 var _tel: RangeTelegraph
-var crowd := CrowdMeter.new(CROWD_RANGE)
+var crowd := CrowdMeter.new(CROWD_RANGE, CROWD_TRIGGER)
 ## 지금 공격이 맞딜 응징인가 (응징 공격 동안은 흐트러짐이 쌓이지 않는다 — 되받은 나비는 그대로)
 var punishing := false
 var _poise_immune := 0.0
@@ -391,10 +394,12 @@ func _physics_process(delta: float) -> void:
 		State.LANDED:
 			_ground(delta)
 			velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
-			if crowd.ready():
-				# 맞딜 방지 (v1.1.0): 내려앉은 몸에 붙어 버티는 소녀에게 — 곧바로 날아올라 수액 물결 (점프로 넘긴다)
+			# 맞딜 방지 (v1.1.0): 내려앉은 몸에 붙어 버티는 소녀에게 — 다음 마디 첫 박에 날아올라 수액 물결 (점프로 넘긴다).
+			# 박자 규칙(패턴은 마디 첫 박에서)을 지킨다: 내려앉음이 그 마디 전에 끝나면 물결 대신 계량기를 하늘로 가져가 '소녀 쪽 돌로 내려앉기'로 응징.
+			var bar := _next_bar_after(_clock)
+			if crowd.ready() and bar < _phase_end - 0.01 and _clock + delta >= bar:
 				crowd.consume()
-				_punish_wave()
+				_punish_wave(bar)
 				punishing = true
 			elif _left() <= 0.0:
 				_begin_takeoff()
@@ -623,15 +628,15 @@ func melee_reach() -> Rect2:
 	return Rect2()
 
 
-## 맞딜 응징: 내려앉은 채로 곧바로 수면 가까이 떠올라 셋째 박에 물결 (가드·점프로 피한다)
-func _punish_wave() -> void:
+## 맞딜 응징: 내려앉은 채로 (마디 첫 박 t0 에) 수면 가까이 떠올라 셋째 박에 물결 (가드·점프로 피한다)
+func _punish_wave(t0: float) -> void:
 	hitbox.deactivate()
 	set_collision_mask_value(1, false)
 	_landed_touch = false
 	_hover_target = _random_hover()
 	_spawned = 0
 	telegraph.emit("wave")
-	_begin(State.WAVE, _clock, BEAT * 2.0, BEAT, BEAT * 2.0)
+	_begin(State.WAVE, t0, BEAT * 2.0, BEAT, BEAT * 2.0)
 
 
 func _begin_takeoff() -> void:

@@ -383,7 +383,9 @@ func _probe_queen() -> void:
 	Game._busy = true   # 회상 장면 전환은 막는다 (next_spawn·pending_memory 까지만 본다)
 	await _open("sap_lake_boss", "FromLake02")
 	var boss: SapQueen = _room.get_node("Boss")
-	_check(boss != null and boss.max_hp == 1300.0 and boss.max_poise == 170.0, "여왕 체력 1300, 흐트러짐 170")
+	# v1.1.0: 체력은 던전 단계 배율(수액의 호수 단계 3 → ×1.331 × 난이도)을 받는다 (Balance.hp_mult)
+	var queen_hp := 1300.0 * Balance.hp_mult("sap_lake")
+	_check(boss != null and is_equal_approx(boss.max_hp, queen_hp) and boss.max_poise == 170.0, "여왕 체력 1300 × 단계 배율 = %.1f (지금 %.1f), 흐트러짐 170" % [queen_hp, boss.max_hp if boss else 0.0])
 	_player._invuln_timer = 9999.0
 	_player.global_position = Vector2(1850, 1433)   # 섬 위
 	_player.velocity = Vector2.ZERO

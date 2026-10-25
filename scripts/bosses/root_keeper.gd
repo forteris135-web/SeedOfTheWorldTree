@@ -201,6 +201,7 @@ func _physics_process(delta: float) -> void:
 	stagger = maxf(stagger - delta / stagger_len, 0.0)
 	if player:
 		# 맞딜 방지: 공격할 수 있는 동안 몸 가까이 붙어 있으면 쌓인다 (무너짐·일어서기 = 빈틈에는 쌓이지 않는다)
+		# (응징 공격 동안에도 쌓인다 — 내려찍기를 맞고도 계속 붙어 있으면 또 내려찍는다. 구르기로 빠지면 식는다)
 		crowd.tick(delta, global_position, player.global_position, state == State.STANCE or state in ATTACK_STATES, facing)
 	if _hint_timer > 0.0:
 		_hint_timer -= delta
