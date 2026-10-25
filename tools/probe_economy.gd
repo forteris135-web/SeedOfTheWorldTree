@@ -927,6 +927,14 @@ func _probe_dew_cap() -> void:
 	# 정상 진행: 성장 메뉴 2단계 = 이슬 5 (넘침 없음). 단계를 다 채우면 '최대'가 먼저
 	Progress.upgrades = {"dews": 2.0, StatMenu.level_key("dews"): 2}
 	_check(StatMenu.can_buy(dew_item) == "maxed" and Progress.dew_max() == 5 and Progress.dew_overflow() == 0, "성장 메뉴 2단계: 이슬 5, 넘침 0, 다시 사면 'maxed' (%s)" % StatMenu.can_buy(dew_item))
+	var menu2 := StatMenu.new()
+	var layer2 := CanvasLayer.new()
+	_room.add_child(layer2)
+	layer2.add_child(menu2)
+	menu2.open(_player)
+	var why2: String = menu2.try_buy(dew_index)
+	_check(why2 == "maxed" and str(menu2.get("_msg")) == StatMenu.full_text(StatMenu.load_data()), "다 채운 이슬 줄을 누르면 '가득' 안내 ('%s')" % menu2.get("_msg"))
+	layer2.queue_free()
 	# 소녀 없이 셈하는 글자 (회복량 = 45 + 성장 + 넘침; 넘침은 안전망)
 	Progress.upgrades = {"dews": 12.0, "heal": 10.0}
 	_check(StatMenu.current_value_text("dews") == "5개" and StatMenu.current_value_text("heal") == "155", "소녀 없이: 이슬 '%s', 회복량 '%s' (45 + 10 + 100)" % [StatMenu.current_value_text("dews"), StatMenu.current_value_text("heal")])

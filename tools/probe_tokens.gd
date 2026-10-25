@@ -10,7 +10,7 @@ extends Node
 ##  3) 보스 러시 중에는 보스 새순 0 (깃발도 안 섬)
 ##  4) 구매: 비용 1·1·2 (스태미너 1·1·1), 단계 상한, 모자람 거절, 바람·빛은 그 영혼을 얻어야 (잠김 거절), 19개로 모두 최대 → 0 남음
 ##  5) 저장 → 초기화 → 불러오기: 새순·단계·최대 스태미너 그대로
-##  6) 옛 세이브(v1) 이주 4경우 + 판 2 파일은 그대로
+##  6) 옛 세이브(v1) 이주 4경우 + 판 2 파일은 그대로 + 파일 사전만 고치는 SaveMigrate.migrate_data
 ##  7) 여왕 보상: 회상에서 돌아오면 수액 위 걷기 + 수액의 맥동, 새순 +1, 안내 / 회상 글자
 ##  8) 달빛풀 메뉴: 탭 셋(이동·성장·기술), 기술 탭 결정·터치 두 번 구매 → 바로 저장, 모자람·잠김 안내, 탭 머리 터치
 ##  9) 보스 러시 '다 자란 몸': 이슬 5 · 넘침 0 · 수액의 맥동 · 기술 다섯 줄 3단계
@@ -522,6 +522,16 @@ func _probe_migration() -> void:
 	_write_save(d)
 	SaveGame.load_game()
 	_check(Progress.tokens == 1, "판 표시 없는 파일도 판 1 로 보고 이주 (새순 %d)" % Progress.tokens)
+	# F) 진행을 불러오지 않고 파일만 읽는 곳(보스 러시의 저장된 성장 등)용: 읽은 사전을 그 자리에서 판 2 로
+	var raw := _v1_save({"flags": flags.duplicate(), "upgrades": {"dews": 12.0, "stat_dews_level": 3}, "collected": all_ids.duplicate()})
+	Progress.reset()
+	SaveMigrate.migrate_data(raw)
+	var raw_ok: bool = int(raw["version"]) == 2 and int(raw["tokens"]) == 19 and int(raw["dust"]) == 380 \
+		and is_equal_approx(float(raw["upgrades"]["dews"]), 2.0) and int(raw["upgrades"]["stat_dews_level"]) == 2 \
+		and raw["abilities"].get("sap_pulse", false) and raw["flags"].get("tokens_boss_pump_defeated", false)
+	_check(raw_ok and Progress.tokens == 0 and Progress.dust == 0, "F) migrate_data: 사전만 판 2 (새순 %s, 빛 가루 %s, 이슬 성장 %s, 맥동), Progress 는 그대로" % [raw.get("tokens"), raw.get("dust"), raw["upgrades"].get("dews")])
+	SaveMigrate.migrate_data(raw)
+	_check(int(raw["tokens"]) == 19 and int(raw["dust"]) == 380, "F) 두 번 불러도 더 주지 않는다")
 	Progress.reset()
 
 

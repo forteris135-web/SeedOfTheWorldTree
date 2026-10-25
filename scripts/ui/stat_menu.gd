@@ -235,7 +235,10 @@ func try_buy(i: int) -> String:
 		"maxed":
 			_shake = 0.6
 			Sfx.play("blip", -6.0)
-			_say(_data.get("maxed", "더는 자랄 수 없다"), Color(0.8, 0.8, 0.8))
+			if is_full(kind):
+				_say(full_text(_data), FULL_COLOR)   # 이슬 줄은 다 채우면 '가득' 표시와 같은 말로
+			else:
+				_say(_data.get("maxed", "더는 자랄 수 없다"), Color(0.8, 0.8, 0.8))
 			rejected.emit(kind, why)
 		"full":
 			_shake = 0.6
