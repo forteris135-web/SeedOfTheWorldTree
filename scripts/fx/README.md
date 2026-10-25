@@ -70,7 +70,7 @@ Fx 밖의 노드(레이저, 초승달 검기 등)도 `Fx.make_material("light", 
 
 ## 지금 있는 이펙트 (F1)
 
-셀레니아: `slash1~3`(3연타, 뼈대가 끌고 감) `seed_slash` `plunge_trail` `plunge_impact` `ground_ring` `land_dust` `dust_puff`
+셀레니아: `slash1~3`(3연타, 뼈대가 끌고 감) `seed_slash` `plunge_trail` `plunge_dive` `plunge_impact` `ground_ring` `land_dust` `dust_puff`
 `dodge_trail` `air_ring` `guard_hit` `just_guard` `heal` `purify` `purify_flash` `mote` `selenia_down` `soul_switch`
 영혼 기술: `wind_wisp` `wind_fade` `wind_hit` `laser_flash` `laser_wall` `laser_hit` (그림 노드: `WindCrescent`, `SoulLaser`)
 공용: `hit_spark` `hit_spark_big` `hit_glint` `ring_pop` `break_burst`(적 무너짐) `death_dust`(적 쓰러짐) `pickup_sparkle` `pickup_big`
@@ -138,3 +138,18 @@ Fx 밖의 노드(레이저, 초승달 검기 등)도 `Fx.make_material("light", 
 ### 메모리
 
 그림은 F1 30장 + F2 34장 = 64장, 디스크 약 7MB, 밉맵 포함 VRAM 약 17MB (Fx 가 처음에 모두 읽어 둔다 — 싸움 중 처음 쓰는 순간의 끊김 없음).
+
+## v1.1.0 (2026-10-25 통합)
+- **팔레트 `teal`** (중간색 #00B0AB): 셀레니아 일반 공격 `slash1~3`(keep 0.15, 칼자국 끝 = 판정 끝 ±20px — 새순 범위 배율만큼 scale_xy 도 커진다,
+  자리는 `selenia_rig.gd` SLASH_FX_OFFSET)과 일반 공격 타격 불꽃. 바람(민트)·수액(청록)과 구별되게 더 진하다.
+- 새 `plunge_dive`(내려꽂는 동안 발밑 판정을 덮는 아래로 향한 초승달), `plunge_impact` 는 착지 판정(±170) 가운데에서, 고리·먼지는 발밑. 수액의 맥동이면 둘 다 ×1.15.
+  `seed_slash` scale_xy (1.43, 1.45).
+- **정화:** `purify` 기둥은 seed 팔레트(keep 0.6)·×1.15·색 곱 (0.72, 0.84, 0.70) + 잎 6장 `purify_leaf`·`purify_leaf_b`, `purify_flash`·`mote` 는 금빛 그대로.
+- **보스 근접 공격 = 판정 = 예고:** `scripts/fx/range_telegraph.gd`(RangeTelegraph — 채움은 보스 뒤, 테두리는 z 1 로 보스 앞; 막을 수 있음 주황 / 가드 불가 진한 붉은색,
+  움직이는 공격은 쓸고 갈 구간), `SkillFx.fit_fx(name, world_rect, facing, rot_deg, opts)`(follow, ground_y — 바닥 고리·먼지·김은 바닥 높이에서).
+  새 항목 `peck_streak` `knight_spin` `charge_lance` `pump_vent` `vent_warn` `vent_leak`. `peck_burst`·`pump_bite` 는 무작위 회전 없음.
+  `root_stomp`·`queen_land`·`pump_slam` 의 ground_ring 은 판정 폭에 맞춤.
+- **보스 투사체: 보이는 그림 = 판정** (`scripts/fx/fx_art.gd` 머리말). 그림 크기·발광은 2026-10-19 '탄을 크게' 그대로이고, 판정 원을 보이는 그림(알파 ≥ 0.25,
+  뒤로 끌리는 꼬리·발광·잔상 제외)에 맞췄다 — 그림 묶음의 `hit_r` 를 보스의 `_pierce` 가 `Projectile.use_art_hit_radius()` 로 넣는다(몹은 같은 그림이어도 그대로).
+  뿌리지기 달빛 구슬 `RootOrb.HIT_PER_R`, 씨앗 비 `RootSeed.HIT_R`, 기사 검기 `SwordWave.HIT_BOX_K`. 그림 배율을 바꾸면 이 값도 함께 고친다 —
+  `tools/probe_boss_melee.tscn -- --only shots` 가 그림 픽셀을 재어(`tools/shot_art_measure.gd`) ±20% 를 확인한다. 그림 묶음 칸 `wobble`(잎 흔들림), flip_x 그림의 head 는 뒤집은 그림 기준.
