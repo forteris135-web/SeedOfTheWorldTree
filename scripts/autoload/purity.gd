@@ -55,6 +55,11 @@ const HUE_NAMES := ["red", "yellow", "green", "cyan", "blue", "magenta"]
 var _luts := {}
 
 
+## 게임이 끝날 때: 풀포기의 나눠 쓰는 그림을 놓는다 (static 이라 그대로 두면 끝날 때 '남은 그림' 경고)
+func _exit_tree() -> void:
+	BloomDecor.release()
+
+
 ## 방이 시작될 때: 그 지역의 상태(와 잿빛 팔레트)를 바로 적용한다.
 ## 정화된 지역이면 방에 풀포기(BloomDecor)를 다 핀 채로 붙이고, 어두운 방이면 조금 밝힌다 — 방이 다 준비된 뒤(call_deferred)에.
 func apply_region(region: String) -> void:
@@ -170,7 +175,10 @@ func _emit(v: float) -> void:
 
 ## apply_region 뒤 (방이 다 준비된 다음 — Room._ready 가 CanvasModulate 를 apply_region 뒤에 만든다):
 ## 정화된 지역이면 풀포기를 다 핀 채로 붙이고, 아니면 뗀다. 어두운 방이면 CanvasModulate 를 찾아 지금 정화 정도대로 밝힌다.
+## 풀포기·묘목 모양 그림(BloomDecor 지역별 5개)은 지역이 잿빛이어도 여기서 미리 만든다.
 func _attach_room_effects(region: String) -> void:
+	# 풀포기·묘목 모양 그림은 잿빛 방에서도 미리 (방 들어오는 프레임에 — 첫 묘목이 돋는 순간 끊기지 않게)
+	BloomDecor.warm(region)
 	if wave_active:
 		return   # 물결 중에는 play_purify 가 맡는다
 	var room := _room_for(region)

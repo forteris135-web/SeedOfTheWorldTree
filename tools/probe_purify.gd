@@ -12,6 +12,8 @@ extends Node
 ##  h) 점선 없음: 모든 방의 발판 그림에 색만 있는 사각형(옛 한쪽 방향 점선)이 없다
 ##  i) 되돌리기(reset_region) → 풀포기 사라짐
 ##  j) 방 첫 프레임 시간: 정화된 방(풀포기 만들기 포함, 모양 그림을 처음 만드는 경우까지)이 잿빛 방보다 10ms 넘게 늘지 않는다
+##  k) 잿빛 방에 들어오면 풀포기·묘목 모양 그림을 미리 만든다 → 처음 쓰러진 적의 묘목이 그림을 새로 만들지 않는다
+##  (g 에는 시험이 따로 하는 확인도 있다: 물리 판정으로 포기 밑동 바로 아래는 지형, 바로 위는 빈 곳 — BloomDecor 의 규칙을 베끼지 않은 확인)
 
 const FOG := preload("res://scripts/world/fog_layer.gd")
 const SHAFTS := preload("res://scripts/world/light_shafts.gd")
@@ -130,6 +132,7 @@ func _ready() -> void:
 	await _probe_all_rooms()
 	await _probe_reset()
 	await _probe_first_frame()
+	await _probe_warm()
 	for k in Purity.regions.keys():
 		Purity.regions[k] = keep.get(k, false)
 	print("[probe] 끝: 실패 %d" % _fail)
@@ -260,6 +263,10 @@ func _probe_shaders_and_depth() -> void:
 		var code := (load(path) as Shader).code
 		_check(code.contains("vec3(0.75, 1.0, 0.55)") and code.contains("RING_STRENGTH = 0.7") and code.contains("col += RING_COLOR * edge * RING_STRENGTH"),
 			"f) %s: 초록빛 금색 테두리 ×0.7" % path.get_file())
+		var wi := code.find("const float RING_WIDTH = ")
+		var ring_w := float(code.substr(wi + 25, code.find(";", wi) - wi - 25)) if wi >= 0 else -1.0
+		_check(ring_w > 0.0 and ring_w < 0.3 and code.contains("smoothstep(0.0, RING_WIDTH, abs(d - radius))"),
+			"f) %s: 고리 너비 %.2f — 색이 번지는 경계(softness 0.3)보다 좁아 넓은 빛 물결이 아니라 고리로 보인다" % [path.get_file(), ring_w])
 	var cj = JSON.parse_string(FileAccess.get_file_as_string("res://data/terrain/canopy.json"))
 	var ca: Dictionary = cj["depth"]["ash"]
 	_check(is_equal_approx(float(ca["haze"]), 0.34) and is_equal_approx(float(ca["contrast"]), 0.60), "f) 수관 잿빛 아지랑이 0.34 · 대비 0.60 (%s / %s)" % [ca["haze"], ca["contrast"]])
@@ -290,6 +297,8 @@ func _probe_all_rooms() -> void:
 	var worst_us := 0
 	var worst_room := ""
 	var dashes := []
+	var floating := []
+	var buried := []
 	for id in ids:
 		var region := _region_of(id)
 		var pure := region in PURE_REGIONS
@@ -323,19 +332,42 @@ func _probe_all_rooms() -> void:
 			keep_out.append(Rect2(th.global_position, th.size))
 		for sp in room.find_children("*", "SapPool", true, false):
 			keep_out.append(Rect2(sp.global_position, sp.size))
+		await get_tree().physics_frame
 		for p in d.global_spots():
 			if not _on_top(tops, p, 6.0):
 				off.append("%s %s" % [id, p])
+			# 시험이 따로 하는 확인 (BloomDecor 규칙과 무관): 밑동 바로 아래는 지형 충돌, 그 위(윗면 10px 위)는 비어 있다
+			if not _solid_at(room, p + Vector2(0, 8)):
+				floating.append("%s %s" % [id, p])
+			if _solid_at(room, p + Vector2(0, -BloomDecor.SINK - 10.0)):
+				buried.append("%s %s" % [id, p])
 			for r in keep_out:
 				if (r as Rect2).grow(20.0).has_point(p):
 					hazard.append("%s %s" % [id, p])
 					break
 		await _free_room(room)
 	_check(rooms >= 30 and off.is_empty(), "g) 정화되는 지역 방 %d곳 풀포기 %d개: 모두 걷는 윗면 위 ±6px %s" % [rooms, total, off.slice(0, 6)])
+	_check(floating.is_empty(), "g) (물리 판정) 포기 밑동 바로 아래가 지형이다 — 공중에 뜬 것 %s" % [floating.slice(0, 6)])
+	_check(buried.is_empty(), "g) (물리 판정) 포기 바로 위는 빈 곳이다 — 다른 지형에 묻힌 것 %s" % [buried.slice(0, 6)])
 	_check(over.is_empty(), "g) 방마다 %d 이하 %s" % [BloomDecor.MAX_TUFTS, over])
 	_check(hazard.is_empty(), "g) 가시·수액 웅덩이 둘레(20px)에는 없다 %s" % [hazard.slice(0, 6)])
 	_check(slow.is_empty(), "g) 풀포기 만들기 방마다 10ms 안 (가장 오래 %s %.2fms) %s" % [worst_room, worst_us / 1000.0, slow])
 	_check(dashes.is_empty(), "h) 방 %d곳: 발판 그림에 옛 한쪽 방향 점선(색만 있는 사각형)이 없다 %s" % [ids.size(), dashes.slice(0, 6)])
+
+
+## 그 자리에 지형(발판·경사 — 부서지는 벽·비밀 벽 포함)의 충돌이 있는가 (물리 서버에 묻는다)
+func _solid_at(room: Node, gp: Vector2) -> bool:
+	var q := PhysicsPointQueryParameters2D.new()
+	q.position = gp
+	q.collision_mask = 1
+	q.collide_with_bodies = true
+	q.collide_with_areas = false
+	var space := (room as Node2D).get_world_2d().direct_space_state
+	for hit in space.intersect_point(q, 16):
+		var c = hit.get("collider")
+		if (c is Platform or c is TerrainPolygon) and room.is_ancestor_of(c):
+			return true
+	return false
 
 
 # ---------- i) 되돌리기 ----------
@@ -373,3 +405,16 @@ func _probe_first_frame() -> void:
 		var warm := await _first_frame_ms(id, true, false)
 		var cold := await _first_frame_ms(id, true, true)
 		_check(warm - ash < 10.0 and cold - ash < 10.0, "j) %s 첫 프레임: 잿빛 %.1fms / 정화 %.1fms / 정화(모양 그림 처음) %.1fms — 늘어난 것 10ms 안" % [id, ash, warm, cold])
+
+
+# ---------- k) 모양 그림 미리 만들기 ----------
+func _probe_warm() -> void:
+	BloomDecor._mesh_cache.clear()
+	var room := await _load_room("canopy_01", false)
+	_check(_decor(room) == null and BloomDecor.is_warm("canopy"), "k) 잿빛 canopy_01: 풀포기는 없어도 모양 그림은 방에 들어올 때 미리 만든다")
+	var before: Mesh = BloomDecor.kind_mesh("canopy", 4)
+	var sp: Node2D = load("res://scenes/world/sprout.tscn").instantiate()
+	room.add_child(sp)
+	var mesh: Mesh = sp.get("_mesh")
+	_check(mesh != null and mesh == before, "k) 쓰러진 적의 묘목은 미리 만든 어린 나무 그림을 그대로 쓴다 (새로 만들지 않음)")
+	await _free_room(room)

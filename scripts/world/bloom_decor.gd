@@ -429,6 +429,23 @@ static func kind_mesh(reg: String, kind: int) -> Mesh:
 	return _meshes(reg)[clampi(kind, 0, KIND_COUNT - 1)]
 
 
+## 지역의 모양 그림을 미리 만들어 둔다 (한 번만). Purity 가 방에 들어올 때 부른다 —
+## 잿빛 방에서 처음 쓰러진 적의 묘목(sprout.gd)이 쓰러지는 순간(히트스톱 프레임)에 그림을 만드느라 끊기지 않게.
+static func warm(reg: String) -> void:
+	_meshes(reg)
+
+
+## 그 지역의 모양 그림이 이미 있는가 (시험용)
+static func is_warm(reg: String) -> bool:
+	return _mesh_cache.has(reg)
+
+
+## 나눠 쓰는 모양 그림·재질을 놓는다 (게임이 끝날 때 Purity 가 부른다 — 끝날 때 '남은 그림' 경고가 나지 않게)
+static func release() -> void:
+	_mesh_cache.clear()
+	_material = null
+
+
 ## 지역의 모양 그림 5개 (한 번 만들고 나눠 쓴다). 크기는 소녀(키 약 132)의 무릎 높이 안팎.
 static func _meshes(reg: String) -> Array:
 	if _mesh_cache.has(reg):
