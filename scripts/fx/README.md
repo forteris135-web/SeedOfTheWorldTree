@@ -71,7 +71,8 @@ Fx 밖의 노드(레이저, 초승달 검기 등)도 `Fx.make_material("light", 
 ## 지금 있는 이펙트 (F1)
 
 셀레니아: `slash1~3`(3연타, 뼈대가 끌고 감) `seed_slash` `plunge_trail` `plunge_dive` `plunge_impact` `ground_ring` `land_dust` `dust_puff`
-`dodge_trail` `air_ring` `guard_hit` `just_guard` `heal` `purify` `purify_flash` `mote` `selenia_down` `soul_switch`
+`dodge_trail` `air_ring` `guard_hit` `just_guard` `heal` `purify` `purify_flash` `purify_leaf` `purify_leaf_b` `mote` `selenia_down` `soul_switch`
+(v1.1.0: `slash1~3` 과 일반 공격 타격 불꽃은 `teal` 팔레트, `purify` 는 seed 팔레트 + 잎 — 아래 'v1.1.0')
 영혼 기술: `wind_wisp` `wind_fade` `wind_hit` `laser_flash` `laser_wall` `laser_hit` (그림 노드: `WindCrescent`, `SoulLaser`)
 공용: `hit_spark` `hit_spark_big` `hit_glint` `ring_pop` `break_burst`(적 무너짐) `death_dust`(적 쓰러짐) `pickup_sparkle` `pickup_big`
 보호막(가드 중 유리 구)과 칼끝·손에 모이는 빛은 `selenia_rig.gd` 의 자식 그림이다 (`_make_shield`, `_make_tip_glow`).
@@ -149,6 +150,8 @@ Fx 밖의 노드(레이저, 초승달 검기 등)도 `Fx.make_material("light", 
   + 붉은 테두리 바로 안쪽에 밝은 선 2px(붉게 빛나는 보스 몸 위에서도 읽히게 — 통합 검수), 움직이는 공격은 쓸고 갈 구간), `SkillFx.fit_fx(name, world_rect, facing, rot_deg, opts)`(follow, ground_y — 바닥 고리·먼지·김은 바닥 높이에서).
   새 항목 `peck_streak` `knight_spin` `charge_lance` `pump_vent` `vent_warn` `vent_leak`. `peck_burst`·`pump_bite` 는 무작위 회전 없음.
   `root_stomp`·`queen_land`·`pump_slam` 의 ground_ring 은 판정 폭에 맞춤.
+- 김 분출 예고 `vent_warn` 은 막을 수 있는 공격이라 `fire`(주황) 팔레트(분출 `pump_vent`·새는 김 `vent_leak` 은 `steam`) — 명세의 '붉은 김' 대신 '진한 붉은빛 = 가드 불가' 규칙을 지킴(붉게 하려면 `fx_table.gd` 의 vent_warn 팔레트를 `danger` 로). 보스 공격 이름 글자는 `CombatHUD.flash(text, 1.3)` — 예고 끝 무렵에도 보이게.
+- **정화 고리·풀**(이펙트 표 밖): 두 `ash_purify` 셰이더의 RING_COLOR / RING_STRENGTH 0.7 / RING_WIDTH 0.12, 풀포기는 `scripts/world/bloom_decor.gd` (`TERRAIN.md` 5장).
 - **보스 투사체: 보이는 그림 = 판정** (`scripts/fx/fx_art.gd` 머리말). 그림 크기·발광은 2026-10-19 '탄을 크게' 그대로이고, 판정 원을 보이는 그림(알파 ≥ 0.25,
   뒤로 끌리는 꼬리·발광·잔상 제외)에 맞췄다 — 그림 묶음의 `hit_r` 를 보스의 `_pierce` 가 `Projectile.use_art_hit_radius()` 로 넣는다(몹은 같은 그림이어도 그대로).
   뿌리지기 달빛 구슬 `RootOrb.HIT_PER_R`, 씨앗 비 `RootSeed.HIT_R`, 기사 검기 `SwordWave.HIT_BOX_K`. 그림 배율을 바꾸면 이 값도 함께 고친다 —

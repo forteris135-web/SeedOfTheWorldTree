@@ -2,7 +2,7 @@
 
 기획자가 준 **투명 배경 지형 그림 시트**에서 조각을 잘라, 방의 발판·바닥·경사·벽·가시·웅덩이에 입히는 방식이다.
 **충돌(발판 사각형·경사 다각형·가시 판정·웅덩이 판정)은 그대로**고, 겉모습만 바뀐다.
-그림 옷이 없는 지역은 옛 방식(`TerrainStyle`, 코드로 이끼·덩굴을 그림)으로 그린다 — 지금은 **방 41곳 모두 그림 옷**이 있다.
+그림 옷이 없는 지역은 옛 방식(`TerrainStyle`, 코드로 이끼·덩굴을 그림)으로 그린다 — 지금은 **방 41곳 모두 그림 옷**이 있다 (v1.1.0: 42곳 — 새 방 `abyss_ending` '심연 · 두 갈래 길'도).
 
 | 그림 옷 (`data/terrain/`) | 시트 | 쓰는 방 |
 |---|---|---|
@@ -11,7 +11,7 @@
 | `mine` 채굴장 | 34A0BBE7 (나무 비계·붉은 수정·등불) + 물 지형 | mine 7방 |
 | `flooded_mine` 잠긴 채굴장 | 061964E6 (구리 수로·관) + 물레방아 11A4E5F6·9C5C9D16 + 물 지형 | flooded_mine 4방 |
 | `abyss` 심연 | F5B35BAD (금빛 뿌리·등나무·수정) | abyss_01·02·hidden_1·hidden_2·mini_1 |
-| `abyss_garden` 달빛 정원 | 4B817802 (푸른 버섯·등불 정원) | moon_garden, abyss_boss (심연의 `room_skins`) |
+| `abyss_garden` 달빛 정원 | 4B817802 (푸른 버섯·등불 정원) | moon_garden, abyss_boss, abyss_ending(v1.1.0) (심연의 `room_skins`) |
 | `sap_lake` 수액의 호수 | 78493128 (금빛 뿌리 발판·폭포 덩굴) + 물 지형 | sap_lake_01·02·boss |
 | `sap_descent` 숨은 내리막 | C082DF1A (어두운 뿌리·폭포) | hidden_descent (수액의 호수의 `room_skins`) |
 
@@ -35,7 +35,9 @@
 | `shaders/terrain_shadow.gdshader` (`.tres`) | 지형 조각의 흐린 뒤 그림자 (5장) |
 | `tools/terrain_cut.gd` | 자르기 도구: 시트 → `art/terrain/<그림 옷>/` + 미리보기 (8장) |
 | `tools/room_shots.gd` | 방 스크린샷 — 한 방 바둑판·가까이, 또는 여러 방 정화 전·후 한꺼번에 (8장) |
-| `tools/probe_terrain.gd` (`.tscn`) | 시험 — 41방 모두 같은 기준 (9장) |
+| `tools/probe_terrain.gd` (`.tscn`) | 시험 — 41방(v1.1.0: 42방) 모두 같은 기준 (9장) |
+| `scripts/world/bloom_decor.gd` | `BloomDecor` (v1.1.0): 정화된 방의 걷는 윗면에 돋는 풀·꽃·어린 나무 (MultiMesh 5벌, 방당 160 이하). `Purity` 가 붙이고 정화 물결에 맞춰 돋운다 (5장) |
+| `scripts/world/blur_wheel.gd` | `BlurWheel` (v1.1.0): 정원의 끝 배경의 흐리게 도는 물레방아 — 잿빛 재질 대신 자기 셰이더로 `Purity.level` 을 따라 회색 ↔ 원래 색 (7장 심연) |
 
 `Platform`·`TerrainPolygon`·`Thorns` 는 `_ready` 에서 `TerrainSkin.for_node(self, style_region)` 로 그림 옷을 찾고, 있으면 `TerrainArt` 를 붙인다 (없으면 옛 그리기).
 `SapPool` 은 그 방의 그림 옷에 `water` 조각이 있으면 물 그림을 만든다.
@@ -159,12 +161,13 @@
 
 ```json
 "depth": {
-  "ash":   {"haze": 0.28, "haze_color": "#d9dcdf", "contrast": 0.66, "sat": 0.8, "fore_value": 0.86, "fore_contrast": 1.04, "shadow": 0.6},
+  "ash":   {"haze": 0.34, "haze_color": "#d9dcdf", "contrast": 0.6, "sat": 0.8, "fore_value": 0.86, "fore_contrast": 1.04, "shadow": 0.6},
   "alive": {"haze": 0.1, "haze_color": "#f0e4c8", "contrast": 0.87, "sat": 0.94, "fore_value": 0.95, "fore_contrast": 1.03, "shadow": 0.45},
   "shadow_lod": 4.5, "shadow_offset": [0, 9]
 },
 "room_depth": {"village_02": {"ash": {"haze": 0.38, "haze_color": "#30343c", "fore_value": 1.08}, "shadow_color_ash": "#8d96a8"}}
 ```
+- (위 예는 수관. v1.1.0 에서 정화 전후 차이를 키우려고 마을을 뺀 그림 옷 일곱 벌의 `ash.haze` +0.06·`ash.contrast` −0.06 — 수관 0.28/0.66 → 0.34/0.60. 마을은 정화되지 않아 그대로; 더 바래게 하려면 `village.json` depth.ash haze 0.26→0.32·contrast 0.68→0.62, village_02 room_depth 0.38→0.44 / 0.62→0.56.)
 - `ash`·`alive` = 정화 전·후. 셰이더가 둘 다 받아 번지는 연출 중에는 화면 자리마다 섞는다. 정하지 않은 값은 '아무것도 안 함'(`Purity.DEPTH_STATE`).
   `depth` 바로 아래(ash·alive 밖) 열쇠: `shadow_lod`, `shadow_offset`, `shadow_color_ash`/`shadow_color_alive`, `thorn_keep`.
 - 방의 값 = 지역 그림 옷 `depth` ← 방 그림 옷(room_skins) `depth` ← 지역 그림 옷의 `room_depth[방]` ← 방 그림 옷의 `room_depth[방]` 차례로 덮어쓰기 (`TerrainSkin.depth_of` — 방별 값은 늘 마지막). `Room._ready` 가 `Purity.apply_depth` 로 넣는다.
@@ -207,10 +210,12 @@
   난간·등불 줄 토막(`prop`). 다리·판 넷은 `top_line`. 밤 방은 `room_tint`(지형 조금 밝게) + `room_depth`(어두운 아지랑이). 잿빛 = 따뜻한 회색.
 - **채굴장**: 나무 다리(`branch`)·비계 판(`slab`)·나무 바닥 띠·매단 등불·광주리·벽 등불 걸이(`hang_side`)·크레인 기둥(`wall`, grid)·들보(`ceiling`)·
   **붉은 수정 가시**(`mask` 로 수정만 떼어 냄 — 붉은 수정은 가시에만). 배경 장식은 방의 `Props` 노드(`tools/add_mine_props.py` 표).
+  v1.1.0: 관의 복도 펌프실 입구의 등불 기둥(`Props/PumpLamp`, gallows_a)은 배경 아지랑이 재질이라 안개에 묻혀서, 두 등 자리 뒤에 따뜻한 빛 둘(`scripts/world/lamp_glow.gd` — 더하기 혼합·잔잔한 깜빡임·잿빛 재질을 거치지 않음, 등 그림 뒤에 그림).
 - **잠긴 채굴장**: 수로 다리·문틀 들보·아치(`top_drop`)·수로 바닥 띠·관 기둥(`wall`, grid — 가운데 고리만 되풀이)·물 새는 관(`ceiling`).
   물레방아(`Waterwheel`: 1/4 테두리 조각을 네 번 돌려 조립, 축만 돈다)·기계 벽·기계 문(`TerrainProp`)·표시등(`MachineLamp` — 무쇠 펌프 정화 전 빨강 → 뒤 초록, 잿빛 재질을 거치지 않음).
 - **심연**: 한쪽 방향 발판 = 가는 덩굴 가지 셋, 한쪽 방향이 아닌 얇은 단 = 통나무(`log`), 매달린 뿌리 줄기 = 기둥(`pillar`). 어두운 방은 놓인 조각의 수정·버섯 자리(`pieces.json` 의 `glow`, `cut.glow` 로 찾음)에
-  작은 빛(`params.glow` — 방 하나 8개까지). 달빛 정원·정원의 끝은 `abyss_garden`(버섯·등불이 바닥 위에 서 있어 시험의 윗선은 `probe.deco`). 잿빛 = 보랏빛 도는 회색.
+  작은 빛(`params.glow` — 방 하나 8개까지). 달빛 정원·정원의 끝·두 갈래 길(v1.1.0)은 `abyss_garden`(버섯·등불이 바닥 위에 서 있어 시험의 윗선은 `probe.deco`). 잿빛 = 보랏빛 도는 회색.
+  정원의 끝 배경에는 흐린 물레방아(`BlurWheel` — 진엔딩 펌프 바퀴 그림을 미리 합친 한 장 `object_choice_pump_wheel.png`, 흐림 2.5·0.10 rad/s, 먼 배경과 빛줄기 사이; 잿빛이면 무채색 회색으로(`ash_color`·`ash_mix`) 정화되면 원래 색 × `alive_bright` 1.8 — 값은 모두 `blur_wheel.gd` 위쪽, 방 파일에서 덮어쓸 수 있음). 달빛 정원 끝 비석은 돌 기록물.
 - **수액의 호수**: 금빛 뿌리 발판(작은 폭포 달림)·고인 수액 바닥 띠·폭포 덩굴·줄기 껍질 벽(`wall`, strip)·둔덕 덤불. 숨은 내리막은 `sap_descent`(어두운 뿌리, 벽 = 뿌리 기둥 아래쪽만 `v_lo`~`v_hi`, `flip_right_cap`).
   배경 세 장(4-1·4-2·5)은 기획자 그림. 여왕 2페이즈의 가라앉는 디딤돌은 몸통·그림자까지 서서히 사라지고(`TerrainArt.set_host_alpha`) 다 가라앉으면 숨긴다.
   물은 진한 탁한 막(`murk`)이 뒤를 받친다. 발판 그림의 작은 폭포는 그림 자체가 곧은 사각 기둥이라, 잘리지 않게 이어 붙이기에서 피한다(`chain`·`skip`).
@@ -233,6 +238,7 @@
   - 한 방: `godot --path . -s res://tools/room_shots.gd -- canopy_01 --alive [--zoom=1.6 "--at=1300,900;3300,1900"] [--lines]` (`--lines` = 충돌 윗면 빨간 선)
   - 41방 정화 전·후 한꺼번에 (게임 배율 1.15, 소녀 자리): `... -- all --states=ash,alive --spot=player --scale=0.5 --out=<폴더>` (`--lantern` 이면 어두운 방에서 등불 빛)
 - **배경 장식 배치**: `python3 -I tools/add_mine_props.py [--check]` (채굴장·잠긴 채굴장 `Props`).
+- **방 목록 (v1.1.0)**: 방 파일을 고치면(이름·지도 자리·포탈·달빛풀·금 간 벽·기록물) **꼭** `python3 -I tools/make_rooms_index.py` → `data/map/rooms_index.json`(지도·달빛풀 이동·포탈 안내·일시정지가 읽는 방 이름의 단일 출처). 전체 회귀가 `--check` 로 확인한다. `tools/make_rooms.py`(옛 방 생성기)는 **절대 다시 돌리지 않는다**.
 
 ---
 
@@ -240,7 +246,7 @@
 
 - **`godot --headless --path . res://tools/probe_terrain.tscn [-- --art] [-- --verbose]`** — 1)~8) 옛 방식(그림 옷을 끄고), 9) 그림 조각 지형 (`--art` 면 9 만):
   - a) 그림 옷 8벌의 역할·atlas(2048 이하)·몸통 결·걷는 구간, `decor` 가 지형 역할에 없음, `room_skins` 대상
-  - b) **41방 같은 기준**: 모든 지형·가시·비밀 벽이 그림, 방에 맞는 그림 옷, 충돌 모양 그대로, 한쪽 방향 빛 점선 **없음**(v1.1.0), 드러난 윗면 발밑 8px 90% 넘게 그림,
+  - b) **41방(v1.1.0: 42방) 같은 기준**: 모든 지형·가시·비밀 벽이 그림, 방에 맞는 그림 옷, 충돌 모양 그대로, 한쪽 방향 빛 점선 **없음**(v1.1.0), 드러난 윗면 발밑 8px 90% 넘게 그림,
     그림 윗선이 충돌 윗면 −10~+10px (그림 옷 `params.probe.rail` = 뒤 난간 조각의 위 허용, `params.probe.deco` = 윗면에 선 장식을 뺄 높이), 끝 밖 그림 34px 이하,
     몸통 결 겹, 가시 그림·판정·끝 높이, **앞뒤 가르기**(재질·뒤 그림자·방의 값 = 데이터·범위)
   - c) 그림 옷을 끈 방과 켠 방의 충돌 모양(지형·가시·웅덩이)이 똑같다 · d) 가시 네 방향
@@ -250,6 +256,7 @@
   - j) 검토 반영: 가지 이음매마다 앞 토막 꼬리 20px 넘게, 방 경계 아래에 닿은 덩어리의 치마, 웅덩이 탁한 막(데이터대로)·정화 전 위 진하기 = `alpha_ash[0]`,
     뒤 그림자 스위치, 방별 값 차례(room_depth 가 마지막), 비밀 천장 옹이 위에 매단 장식 없음, 아랫면 단서 폭
 - `probe_terrain -- --cost` (창 있는 실행): 실제 렌더러 비용.
+- **`tools/probe_purify.tscn` (v1.1.0)**: 정화할 수 있는 36방의 풀포기(약 1200)가 모두 걷는 윗면 위(물리 질의로 밑동 아래 지형·위 빈 곳 확인), 가시·웅덩이 20px 안에 없음, 방당 160 이하, 마을 0, 어두운 방 밝기 0.28 → 0.46, 안개 ×0.5, 빛줄기 ×1.35, 잎 초록, 정화 기둥 팔레트·잎 6장, 42방 어디에도 한쪽 방향 점선 없음, 고리 너비 < 번짐 너비, 첫 프레임 +2ms 이하.
 - **지형 감사**: `python3 -I tools/audit_rooms.py` 와 `--locked` 오류 0 (충돌은 바꾸지 않는다).
 - 전체 회귀: `GODOT=<Godot 실행 파일> tools/regress.sh` (로그 `.regress/`; 맥의 병렬 작업 폴더에서는 같은 내용의 `/Users/wj/Projects/SeedWT/regress.sh <프로젝트 폴더>` 가 래퍼로 돌린다).
 
@@ -260,6 +267,7 @@
 - 노드 하나에 그리기 명령: 자기 항목 2개(조각·색) + 묶음 맨 아래 몸통 결·세로 결·뒤 그림자 (시험 e). 방 하나 삼각형 1만 6천 개 안팎.
 - **GPU 칠하기 비용은 맥 렌더러로 잴 수 없었다** — 잿빛 셰이더(색상 계산 + 표 찾기 3번 + 앞뒤 가르기 몇 줄)와 뒤 그림자(조각 넓이만큼 한 번 더, 텍스처 한 번)가 더해진다.
   아이폰 11 Pro 의 잿빛 수관 방·잠긴 채굴장 방에서 프레임을 꼭 확인할 것.
+  v1.1.0: 정화된 방은 풀포기 MultiMesh 5벌 = 그리기 호출 +5(맥에서 렌더 CPU 약 +0.1ms, 방 들어갈 때 지역마다 한 번 모양 만들기 1~2ms).
   **무거우면 먼저 `data/terrain/_settings.json` 의 `"shadows": false`** — 41방 모두 뒤 그림자 항목을 아예 만들지 않는다 (진하기 0 은 안 보이게만 할 뿐 칠하기 비용은 그대로다).
   한 지역·방만 끄려면 그 그림 옷 `depth`(또는 `room_depth`)의 `ash.shadow`·`alive.shadow` 를 둘 다 0 — 그 방도 항목을 만들지 않는다.
 - 그림 옷은 방에 들어올 때 그 지역 것과 그 `room_skins` 것만 기억에 남긴다 (`TerrainSkin.keep_region` — 지역을 다 돌아도 atlas·몸통 결이 쌓이지 않게).
@@ -272,4 +280,5 @@
 - 벽·천장은 곧은 조각을 이어 세우는 것뿐 (모서리·절벽 끝 전용 조각 없음). 수관·마을·심연에는 벽 그림이 없어 몸통 결 + 덩굴.
 - 지역마다 바닥 띠·벽·금 간 벽·가시 전용 그림이 모자라 같은 무늬가 되풀이되거나 다른 지역 그림을 빌려 쓴다.
 - ~~소녀가 웅덩이에 들어가도 다리가 물에 잠겨 보이지 않는다 (물 그림은 소녀 뒤).~~ → 2026-10-20 검수에서 고침 (6장 '앞 물').
-- 더 받을 지형 그림 목록은 `ART_PROMPTS.md` 12-2.
+- 정화 뒤 돋는 풀포기·꽃·어린 나무(v1.1.0)는 코드로 그린 임시 그림이다 — 그림 옷의 `decor` 조각은 채굴장 크레인·등불 같은 기계뿐이라 풀 그림이 없다. 진한 초록이 유화풍 배경보다 납작하게 도드라진다(특히 붉은 채굴장·쇠 다리 위).
+- 더 받을 지형 그림 목록은 `ART_PROMPTS.md` 12-2, v1.1.0 뒤 것(풀포기·한쪽 방향 발판 단서 등)은 13장.
