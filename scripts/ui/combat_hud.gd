@@ -128,6 +128,8 @@ var _hp_shown := 1.0       # 체력 막대가 천천히 따라오게
 var _guard_flash := 0.0
 var _stamina_refuse := 0.0   # 남은 붉은 번쩍임 (초)
 var _stamina_pulse := 0.0    # 남은 맥동 번쩍임 (초)
+var _guard_pieces: Array = []      # 가드 막대 틀 조각 (길이 배수가 바뀔 때만 다시 만든다 — 매 프레임 배열을 새로 만들지 않게)
+var _guard_pieces_scale := -1.0
 ## 성장 연출
 var _last_max_dews := -1
 var _last_max_hp := -1.0
@@ -383,7 +385,10 @@ func guard_frame_pieces(scale := -1.0) -> Array:
 
 ## 가드(스태미너) 막대: 틀 → 찬 부분 → 빈 부분 (길이 배수 scale)
 func _draw_guard_bar(ratio: float, scale: float) -> void:
-	for piece in guard_frame_pieces(scale):
+	if not is_equal_approx(scale, _guard_pieces_scale):
+		_guard_pieces = guard_frame_pieces(scale)
+		_guard_pieces_scale = scale
+	for piece in _guard_pieces:
 		_canvas.draw_texture_rect_region(BAR_GUARD, piece["dst"], piece["src"])
 	var fill := guard_fill_rect(scale)
 	var full_w := fill.size.x * clampf(ratio, 0.0, 1.0)
