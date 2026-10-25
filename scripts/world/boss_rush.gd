@@ -29,7 +29,8 @@ const BOSSES := [
 ]
 ## 러시 동안 떼어 두는 Progress 의 값들 (끝나면 그대로 되돌린다)
 const PROGRESS_FIELDS := ["flags", "abilities", "soul", "next_spawn", "pending_memory", "memory_return_scene", "upgrades",
-	"grasses", "last_grass", "rescued", "visited_rooms", "ending", "collected", "dust", "soul_cooldowns"]
+	"grasses", "last_grass", "rescued", "visited_rooms", "ending", "collected", "dust", "soul_cooldowns",
+	"tokens", "difficulty", "killed", "carry_hp", "carry_dews"]
 ## 보스가 쓰러진 뒤 다음 방으로 넘어가기까지 (초): 숨 고르기 + 보스가 빛으로 흩어짐
 const ADVANCE_BEAT := 2.6
 const ADVANCE_FADE := 1.0
@@ -221,6 +222,10 @@ static func _setup_progress(growth: Dictionary) -> void:
 	Progress.collected = {}
 	Progress.dust = 0
 	Progress.soul_cooldowns = {}
+	# v1.1.0: 러시용 새 사전 (떼어 둔 '쓰러뜨린 적' 사전에 러시가 쓰지 않게), 방 사이 체력·이슬 이어가기 없음
+	Progress.killed = {}
+	Progress.carry_hp = -1.0
+	Progress.carry_dews = -1
 	for m in Progress.get_meta_list():
 		Progress.remove_meta(m)
 	# 싸움터는 정화 전의 잿빛

@@ -13,9 +13,9 @@ extends Node
 ##  9) 검토 지적 수정: 회피·점프로 닫아도 쉬기 계속(입력 잠금) / '(여기)'를 손길로 골라도 다시 안 열림 / 스틱 한 번 = 한 칸 /
 ##     이미 골라진 줄도 터치 첫 누르기는 고르기만 / 사면 바로 저장 / HUD 가운데 글자 지움·머리 위 안내 숨김 / 갈 곳 없으면 성장 탭 /
 ##     메뉴가 손가락 떼기를 삼키지 않음 / 흡수 자리는 가슴 씨앗 / 불러오기 뒤 날던 가루는 더하지 않음 / 중간 보스에게 쓰러졌다 일어나도 다시 묶임
-## 10) 이슬 최대 8 (2026-10-20 기획자 결정): 숨은 구슬·이슬잔·구원 보상(정원사·어부)·중간 보스(정원사 장로)·성장 메뉴 각각으로
-##     8개에 닿고, 넘친 이슬은 하나마다 회복량 +10 이 되며 안내도 그렇게 말한다. 성장 메뉴 이슬 줄은 가득하면 '가득'(거절 "full", 빛 가루 그대로).
-##     옛 세이브(upgrades.dews 12) → 이슬 8 + 회복량 +70, 다시 저장해도 12 그대로. HUD 는 8개(7 + 1). 보스 러시 '다 자란 몸'은 정확히 8.
+## 10) 이슬 최대 5 (v1.1.0 기획자 요청 16, 전에는 8): 숨은 구슬·이슬잔·구원 보상(정원사·어부)·중간 보스(정원사 장로)·성장 메뉴 각각으로
+##     5개에 닿고, 넘친 이슬은 하나마다 회복량 +10 이 되며 안내도 그렇게 말한다. 성장 메뉴 이슬 줄은 가득하면 '가득'(거절 "full", 빛 가루 그대로).
+##     옛 세이브(upgrades.dews 12) → 이슬 5 + 회복량 +100, 다시 저장해도 12 그대로. HUD 는 5개(한 줄). 보스 러시 '다 자란 몸'도 최대 5.
 ## 마지막에 "[probe] 끝: 실패 N" 을 찍고 그 수로 종료한다. 진짜 세이브 파일은 시작 때 백업하고 끝에 되돌린다.
 
 var _fail := 0
@@ -369,22 +369,23 @@ func _probe_stat_logic() -> void:
 	var dews0 := _player.max_dews
 	var cur_dews0 := _player.dews
 	var spent := 0
-	for i in 3:
+	# v1.1.0 이슬 최대 5 (기본 3 + 성장 메뉴 2단계)
+	for i in 2:
 		spent += StatMenu.cost_of(by["dews"], i)
 		r = StatMenu.buy(by["dews"], _player)
 		_check(r == "", "이슬 %d단계 구매" % (i + 1))
-	_check(spent == 600 and Progress.dust == 10000 - 600, "이슬 3단계 비용 합 600 (쓴 %d, 남은 %d)" % [spent, Progress.dust])
-	_check(_player.max_dews == dews0 + 3, "소녀 이슬 최대 %d → %d (상태 %s)" % [dews0, _player.max_dews, _player.state_name()])
+	_check(spent == 320 and Progress.dust == 10000 - 320, "이슬 2단계 비용 합 320 (쓴 %d, 남은 %d)" % [spent, Progress.dust])
+	_check(_player.max_dews == dews0 + 2, "소녀 이슬 최대 %d → %d (상태 %s)" % [dews0, _player.max_dews, _player.state_name()])
 	# 늘어난 칸은 찬 채로 생긴다 (체력처럼; 방을 옮겨 소녀가 새로 만들어져도 같다 — 2026-10-19 검수: 산 이슬이 빈 칸이 됐다)
-	_check(_player.dews == cur_dews0 + 3, "늘어난 이슬 칸은 차 있다: %d → %d" % [cur_dews0, _player.dews])
+	_check(_player.dews == cur_dews0 + 2, "늘어난 이슬 칸은 차 있다: %d → %d" % [cur_dews0, _player.dews])
 	r = StatMenu.buy(by["dews"], _player)
-	_check(r == "maxed" and StatMenu.level_of("dews") == 3, "최대 단계면 거절 'maxed' (%s)" % r)
+	_check((r == "maxed" or r == "full") and StatMenu.level_of("dews") == 2, "이슬 5개(최대)면 거절 (%s)" % r)
 	var before := Progress.dust
 	for i in 7:
 		r = StatMenu.buy(by["max_hp"], _player)
 	_check(r == "" and StatMenu.level_of("max_hp") == 8 and before - Progress.dust == 700, "최대 체력 2~8단계: 비용 합 700 (%d), 단계 %d" % [before - Progress.dust, StatMenu.level_of("max_hp")])
 	_check(StatMenu.buy(by["max_hp"], _player) == "maxed" and is_equal_approx(_player.max_hp, 180.0), "9단계는 거절, 소녀 최대 체력 180 (%.0f)" % _player.max_hp)
-	_check(StatMenu.current_value_text("max_hp", _player) == "180" and StatMenu.current_value_text("attack", _player) == "+5%" and StatMenu.current_value_text("dews", _player) == "6개", "지금 값 글자: %s / %s / %s / %s" % [StatMenu.current_value_text("max_hp", _player), StatMenu.current_value_text("attack", _player), StatMenu.current_value_text("heal", _player), StatMenu.current_value_text("dews", _player)])
+	_check(StatMenu.current_value_text("max_hp", _player) == "180" and StatMenu.current_value_text("attack", _player) == "+5%" and StatMenu.current_value_text("dews", _player) == "5개", "지금 값 글자: %s / %s / %s / %s" % [StatMenu.current_value_text("max_hp", _player), StatMenu.current_value_text("attack", _player), StatMenu.current_value_text("heal", _player), StatMenu.current_value_text("dews", _player)])
 
 
 ## 7) 세이브 왕복
@@ -396,10 +397,10 @@ func _probe_save_roundtrip() -> void:
 	_check(Progress.dust == 0 and Progress.upgrades.is_empty(), "초기화 뒤 dust 0, 성장 없음")
 	SaveGame.load_game()
 	_check(Progress.dust == dust0, "불러온 뒤 dust %d (저장 %d)" % [Progress.dust, dust0])
-	_check(StatMenu.level_of("max_hp") == 8 and StatMenu.level_of("dews") == 3 and StatMenu.level_of("attack") == 1 and StatMenu.level_of("heal") == 0, "단계가 돌아왔다: 체력 %d 공격 %d 회복 %d 이슬 %d" % [StatMenu.level_of("max_hp"), StatMenu.level_of("attack"), StatMenu.level_of("heal"), StatMenu.level_of("dews")])
+	_check(StatMenu.level_of("max_hp") == 8 and StatMenu.level_of("dews") == 2 and StatMenu.level_of("attack") == 1 and StatMenu.level_of("heal") == 0, "단계가 돌아왔다: 체력 %d 공격 %d 회복 %d 이슬 %d" % [StatMenu.level_of("max_hp"), StatMenu.level_of("attack"), StatMenu.level_of("heal"), StatMenu.level_of("dews")])
 	_check(is_equal_approx(float(Progress.upgrades.get("max_hp", 0.0)), float(ups.get("max_hp", 0.0))) and is_equal_approx(float(Progress.upgrades.get("attack", 0.0)), 0.05), "성장 값도 그대로 (%s)" % Progress.upgrades)
 	_player._apply_abilities()
-	_check(is_equal_approx(_player.max_hp, 180.0) and _player.max_dews == 6, "불러온 뒤 소녀 수치 (체력 %.0f, 이슬 %d)" % [_player.max_hp, _player.max_dews])
+	_check(is_equal_approx(_player.max_hp, 180.0) and _player.max_dews == 5, "불러온 뒤 소녀 수치 (체력 %.0f, 이슬 %d)" % [_player.max_hp, _player.max_dews])
 	# 옛 세이브(dust 없음)
 	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SaveGame.PATH))
 	data.erase("dust")
@@ -755,7 +756,7 @@ func _probe_miniboss_respawn() -> void:
 	await _wait_absorbed(5.0)
 
 
-# ---------- 10) 이슬 최대 8 ----------
+# ---------- 10) 이슬 최대 5 ----------
 
 ## 지금 HUD 가운데 안내 글자
 func _hud_message() -> String:
@@ -800,41 +801,41 @@ func _collect_pickup(scene_path: String, id: String) -> Pickup:
 
 
 func _probe_dew_cap() -> void:
-	print("[probe] -- 이슬 최대 8")
+	print("[probe] -- 이슬 최대 5")
 	Progress.reset()
 	await _open("canopy_01")
 	if _player == null:
 		_check(false, "이슬 상한 시험: 소녀가 없다")
 		return
 	await _clear_enemies()
-	_check(Progress.MAX_DEWS == 8 and Progress.BASE_DEWS == 3 and is_equal_approx(Progress.DEW_OVERFLOW_HEAL, 10.0), "상수: 기본 3, 최대 8, 넘친 이슬 하나 = 회복량 +10")
+	_check(Progress.MAX_DEWS == 5 and Progress.BASE_DEWS == 3 and is_equal_approx(Progress.DEW_OVERFLOW_HEAL, 10.0), "상수: 기본 3, 최대 5, 넘친 이슬 하나 = 회복량 +10")
 	var heal_base := 45.0
 	# 계산 도우미
-	Progress.upgrades = {"dews": 4.0}
-	_check(Progress.dew_total() == 7 and Progress.dew_max() == 7 and Progress.dew_overflow() == 0 and not Progress.dews_full(), "이슬 성장 4 → 7개, 넘침 없음")
-	Progress.upgrades = {"dews": 5.0}
-	_check(Progress.dew_max() == 8 and Progress.dew_overflow() == 0 and Progress.dews_full(), "이슬 성장 5 → 8개 (가득), 넘침 없음")
+	Progress.upgrades = {"dews": 1.0}
+	_check(Progress.dew_total() == 4 and Progress.dew_max() == 4 and Progress.dew_overflow() == 0 and not Progress.dews_full(), "이슬 성장 1 → 4개, 넘침 없음")
+	Progress.upgrades = {"dews": 2.0}
+	_check(Progress.dew_max() == 5 and Progress.dew_overflow() == 0 and Progress.dews_full(), "이슬 성장 2 → 5개 (가득), 넘침 없음")
 	Progress.upgrades = {"dews": 12.0, "heal": 20.0}
-	_check(Progress.dew_total() == 15 and Progress.dew_max() == 8 and Progress.dew_overflow() == 7 and is_equal_approx(Progress.heal_bonus(), 90.0), "이슬 성장 12 → 8개 + 넘침 7, 회복량 성장 20 + 70 = %.0f" % Progress.heal_bonus())
-	Progress.upgrades = {"dews": 6.0}
-	_check(Progress.dew_overflow_of(1.0) == 1 and Progress.dew_overflow_of(2.0) == 1 and Progress.dew_overflow_of(3.0) == 1, "방금 받은 이슬 중 넘친 수: 6 이면 마지막 1개만 (%d / %d / %d)" % [Progress.dew_overflow_of(1.0), Progress.dew_overflow_of(2.0), Progress.dew_overflow_of(3.0)])
-	Progress.upgrades = {"dews": 5.0}
-	_check(Progress.dew_overflow_of(1.0) == 0, "딱 8개가 되는 이슬은 넘침 아님")
+	_check(Progress.dew_total() == 15 and Progress.dew_max() == 5 and Progress.dew_overflow() == 10 and is_equal_approx(Progress.heal_bonus(), 120.0), "이슬 성장 12 → 5개 + 넘침 10, 회복량 성장 20 + 100 = %.0f" % Progress.heal_bonus())
+	Progress.upgrades = {"dews": 3.0}
+	_check(Progress.dew_overflow_of(1.0) == 1 and Progress.dew_overflow_of(2.0) == 1 and Progress.dew_overflow_of(3.0) == 1, "방금 받은 이슬 중 넘친 수: 성장 3(이슬 6) 이면 마지막 1개만 (%d / %d / %d)" % [Progress.dew_overflow_of(1.0), Progress.dew_overflow_of(2.0), Progress.dew_overflow_of(3.0)])
+	Progress.upgrades = {"dews": 2.0}
+	_check(Progress.dew_overflow_of(1.0) == 0, "딱 5개가 되는 이슬은 넘침 아님")
 
-	# ── 숨은 구슬 (달빛 이슬): 7 → 8 은 이슬, 8 에서 하나 더는 회복량
+	# ── 숨은 구슬 (달빛 이슬): 4 → 5 는 이슬, 5 에서 하나 더는 회복량
 	Progress.upgrades = {}
-	_set_dews(4.0)
+	_set_dews(1.0)
 	_pickup_message()   # 가짜 안내판을 먼저 세운다
-	_check(_player.max_dews == 7 and is_equal_approx(_player.heal_amount, heal_base), "시작: 이슬 7, 회복량 45")
+	_check(_player.max_dews == 4 and is_equal_approx(_player.heal_amount, heal_base), "시작: 이슬 4, 회복량 45")
 	await _collect_pickup("res://scenes/world/pickup.tscn", "pick_probe_cap_1")
 	print("[probe] 구슬 1: 이슬 %d/%d, 회복량 %.0f, 안내 '%s'" % [_player.dews, _player.max_dews, _player.heal_amount, _pickup_message()])
-	_check(_player.max_dews == 8 and _player.dews == 8 and is_equal_approx(_player.heal_amount, heal_base) and _pickup_message() == "달빛 이슬이 하나 늘었다 (이제 8개)", "구슬로 8개에 닿음 (안내 '%s')" % _pickup_message())
+	_check(_player.max_dews == 5 and _player.dews == 5 and is_equal_approx(_player.heal_amount, heal_base) and _pickup_message() == "달빛 이슬이 하나 늘었다 (이제 5개)", "구슬로 5개에 닿음 (안내 '%s')" % _pickup_message())
 	await _collect_pickup("res://scenes/world/pickup.tscn", "pick_probe_cap_2")
 	print("[probe] 구슬 2: 이슬 %d/%d, 회복량 %.0f, 안내 '%s'" % [_player.dews, _player.max_dews, _player.heal_amount, _pickup_message()])
-	_check(_player.max_dews == 8 and is_equal_approx(_player.heal_amount, heal_base + 10.0) and is_equal_approx(float(Progress.upgrades["dews"]), 6.0) and Progress.is_collected("pick_probe_cap_2"), "가득할 때 구슬: 이슬 8 그대로, 회복량 +10, 성장 기록은 6 으로 늘고 모은 것으로 남음")
+	_check(_player.max_dews == 5 and is_equal_approx(_player.heal_amount, heal_base + 10.0) and is_equal_approx(float(Progress.upgrades["dews"]), 3.0) and Progress.is_collected("pick_probe_cap_2"), "가득할 때 구슬: 이슬 5 그대로, 회복량 +10, 성장 기록은 3 으로 늘고 모은 것으로 남음")
 	_check(_pickup_message() == "달빛 이슬 — 이슬이 가득해 회복량이 늘었다 (회복량 +10)", "구슬 안내가 실제 일을 말한다 ('%s')" % _pickup_message())
 	var hud: Node = _room.get_node("CombatHUD")
-	_check(hud.dew_slots().size() == 8 and hud.dew_rows() == 2, "HUD 이슬 8개, 두 줄 (%d, %d줄)" % [hud.dew_slots().size(), hud.dew_rows()])
+	_check(hud.dew_slots().size() == 5 and hud.dew_rows() == 1, "HUD 이슬 5개, 한 줄 (%d, %d줄)" % [hud.dew_slots().size(), hud.dew_rows()])
 	var growth: Array = hud.growth_items()
 	var heal_label := ""
 	for it in growth:
@@ -849,12 +850,12 @@ func _probe_dew_cap() -> void:
 	_check(str(hud.get("_flash_text")) == "이슬 가득 · 회복 +10" and is_equal_approx(_player.heal_amount, heal_base + 20.0), "HUD 짧은 글자도 '이슬 가득 · 회복 +10' ('%s'), 회복량 %.0f" % [hud.get("_flash_text"), _player.heal_amount])
 
 	# ── 이슬잔
-	_set_dews(4.0)
+	_set_dews(1.0)
 	await _collect_pickup("res://scenes/world/dew_cup.tscn", "pick_probe_cap_cup1")
-	_check(_player.max_dews == 8 and _pickup_message() == "이슬잔 — 이슬 방울을 하나 더 담을 수 있다 (이제 8개)", "이슬잔으로 8개에 닿음 ('%s')" % _pickup_message())
+	_check(_player.max_dews == 5 and _pickup_message() == "이슬잔 — 이슬 방울을 하나 더 담을 수 있다 (이제 5개)", "이슬잔으로 5개에 닿음 ('%s')" % _pickup_message())
 	await _collect_pickup("res://scenes/world/dew_cup.tscn", "pick_probe_cap_cup2")
 	print("[probe] 이슬잔 2: 이슬 %d, 회복량 %.0f, 안내 '%s'" % [_player.max_dews, _player.heal_amount, _pickup_message()])
-	_check(_player.max_dews == 8 and is_equal_approx(_player.heal_amount, heal_base + 10.0) and _pickup_message() == "이슬잔 — 이슬이 가득해 회복량이 늘었다 (회복량 +10)", "가득할 때 이슬잔: 회복량 +10, 안내 '%s'" % _pickup_message())
+	_check(_player.max_dews == 5 and is_equal_approx(_player.heal_amount, heal_base + 10.0) and _pickup_message() == "이슬잔 — 이슬이 가득해 회복량이 늘었다 (회복량 +10)", "가득할 때 이슬잔: 회복량 +10, 안내 '%s'" % _pickup_message())
 
 	_fake_hud.queue_free()   # 가짜 안내판은 구슬·이슬잔에만 (다른 것이 current_scene 의 CombatHUD 를 찾지 않게)
 	_fake_hud = null
@@ -862,22 +863,22 @@ func _probe_dew_cap() -> void:
 	# ── 구원 보상 (정원사 · 수액 어부)
 	for rid in ["gardener_canopy", "fisher_lake"]:
 		_check(str(RescuedHomes.reward_of(rid).get("type", "")) == "dews", "%s 의 보상은 이슬" % rid)
-		_set_dews(4.0)
+		_set_dews(1.0)
 		Progress.rescued[rid] = true
 		RescuedHomes.mark_reward_due(rid)
 		var t1 := RescuedHomes.settle_reward(rid)
-		_check(_player.max_dews == 8 and t1 == "이슬 방울을 1개 더 담을 수 있다", "%s 구원으로 8개에 닿음 ('%s')" % [rid, t1])
+		_check(_player.max_dews == 5 and t1 == "이슬 방울을 1개 더 담을 수 있다", "%s 구원으로 5개에 닿음 ('%s')" % [rid, t1])
 		# 같은 보상을 이슬이 가득한 때 받으면 (깃발을 되돌려 다시 받게 한다)
 		Progress.flags.erase(RescuedHomes.GIVEN + rid)
 		RescuedHomes.mark_reward_due(rid)
 		var t2 := RescuedHomes.settle_reward(rid)
 		print("[probe] %s 가득할 때: 이슬 %d, 회복량 %.0f, 안내 '%s'" % [rid, _player.max_dews, _player.heal_amount, t2])
-		_check(_player.max_dews == 8 and is_equal_approx(_player.heal_amount, heal_base + 10.0) and t2 == "이슬이 가득해 회복량이 늘었다 (회복량 +10)", "%s 가득할 때 구원: 회복량 +10, 안내 '%s'" % [rid, t2])
+		_check(_player.max_dews == 5 and is_equal_approx(_player.heal_amount, heal_base + 10.0) and t2 == "이슬이 가득해 회복량이 늘었다 (회복량 +10)", "%s 가득할 때 구원: 회복량 +10, 안내 '%s'" % [rid, t2])
 		Progress.rescued.erase(rid)
 		Progress.flags.erase(RescuedHomes.GIVEN + rid)
 		Progress.flags.erase(RescuedHomes.DUE + rid)
 
-	# ── 성장 메뉴: 7 → 8 은 산다, 8 이면 '가득'(빛 가루 그대로)
+	# ── 성장 메뉴: 4 → 5 는 산다, 5 면 '가득'(빛 가루 그대로)
 	var items := StatMenu.load_items()
 	var dew_item := {}
 	var dew_index := -1
@@ -886,19 +887,19 @@ func _probe_dew_cap() -> void:
 			dew_item = items[i]
 			dew_index = i
 	Progress.upgrades = {}
-	_set_dews(4.0)
+	_set_dews(1.0)
 	Progress.dust = 10000
 	var r := StatMenu.buy(dew_item, _player)
-	_check(r == "" and _player.max_dews == 8 and StatMenu.level_of("dews") == 1 and Progress.dust == 10000 - 120, "성장 메뉴로 8개에 닿음 (%s, 단계 %d, 빛 가루 %d)" % [r, StatMenu.level_of("dews"), Progress.dust])
+	_check(r == "" and _player.max_dews == 5 and StatMenu.level_of("dews") == 1 and Progress.dust == 10000 - 120, "성장 메뉴로 5개에 닿음 (%s, 단계 %d, 빛 가루 %d)" % [r, StatMenu.level_of("dews"), Progress.dust])
 	_check(StatMenu.can_buy(dew_item) == "full" and StatMenu.is_full("dews") and not StatMenu.is_full("heal"), "가득하면 이슬 줄은 'full' (%s)" % StatMenu.can_buy(dew_item))
 	r = StatMenu.buy(dew_item, _player)
-	_check(r == "full" and Progress.dust == 10000 - 120 and StatMenu.level_of("dews") == 1 and is_equal_approx(float(Progress.upgrades["dews"]), 5.0), "가득할 때 사면 거절 'full', 빛 가루·단계·성장 그대로 (%s, %d)" % [r, Progress.dust])
+	_check(r == "full" and Progress.dust == 10000 - 120 and StatMenu.level_of("dews") == 1 and is_equal_approx(float(Progress.upgrades["dews"]), 2.0), "가득할 때 사면 거절 'full', 빛 가루·단계·성장 그대로 (%s, %d)" % [r, Progress.dust])
 	var heal_item := {}
 	for it in items:
 		if it["kind"] == "heal":
 			heal_item = it
 	_check(StatMenu.can_buy(heal_item) == "", "회복량 줄은 그대로 살 수 있다")
-	_check(StatMenu.current_value_text("dews", _player) == "8개" and StatMenu.current_value_text("dews") == "8개", "지금 값 글자 '8개'")
+	_check(StatMenu.current_value_text("dews", _player) == "5개" and StatMenu.current_value_text("dews") == "5개", "지금 값 글자 '5개'")
 	# 화면: 이슬 줄을 고르고 결정 → '가득' 안내, 그리기 오류 없음
 	var menu := StatMenu.new()
 	var layer := CanvasLayer.new()
@@ -911,7 +912,7 @@ func _probe_dew_cap() -> void:
 	var why: String = menu.try_buy(dew_index)
 	await _frames(3)
 	print("[probe] 성장 메뉴 이슬 줄 (가득): '%s', 안내 '%s'" % [why, menu.get("_msg")])
-	_check(why == "full" and str(menu.get("_msg")) == StatMenu.full_text(StatMenu.load_data()) and str(menu.get("_msg")).contains("8"), "메뉴 안내: '%s'" % menu.get("_msg"))
+	_check(why == "full" and str(menu.get("_msg")) == StatMenu.full_text(StatMenu.load_data()) and str(menu.get("_msg")).contains("5"), "메뉴 안내: '%s'" % menu.get("_msg"))
 	_save_screenshot("debug_stat_menu_dews_full.png")
 	menu.close()
 	layer.queue_free()
@@ -920,17 +921,17 @@ func _probe_dew_cap() -> void:
 	_check(StatMenu.can_buy(dew_item) == "maxed", "최대 단계면 'maxed' 가 먼저")
 	# 소녀 없이 셈하는 글자 (회복량 = 45 + 성장 + 넘침)
 	Progress.upgrades = {"dews": 12.0, "heal": 10.0}
-	_check(StatMenu.current_value_text("dews") == "8개" and StatMenu.current_value_text("heal") == "125", "소녀 없이: 이슬 '%s', 회복량 '%s' (45 + 10 + 70)" % [StatMenu.current_value_text("dews"), StatMenu.current_value_text("heal")])
+	_check(StatMenu.current_value_text("dews") == "5개" and StatMenu.current_value_text("heal") == "155", "소녀 없이: 이슬 '%s', 회복량 '%s' (45 + 10 + 100)" % [StatMenu.current_value_text("dews"), StatMenu.current_value_text("heal")])
 
 	# ── 중간 보스 (정원사 장로, 보상 이슬 +1)
 	await _sleep(1.1)   # 모은 구슬들이 빛을 다 끄고 나서 방을 닫는다 (Pickup._collect 의 1초 기다림)
 	Progress.reset()
-	Progress.upgrades = {"dews": 5.0}
+	Progress.upgrades = {"dews": 2.0}
 	await _open("canopy_mini_2")
 	var boss: EnemyBase = _room.get("_boss") if _room else null
 	_check(boss != null and is_instance_valid(boss) and _room.reward_type == "dews", "정원사 장로 방 (보상 %s)" % (_room.reward_type if _room else "-"))
 	if boss != null and is_instance_valid(boss):
-		_check(_player.max_dews == 8, "들어설 때 이슬 8")
+		_check(_player.max_dews == 5, "들어설 때 이슬 5")
 		for e in get_tree().get_nodes_in_group("enemy"):
 			if e != boss:
 				e.queue_free()
@@ -940,12 +941,12 @@ func _probe_dew_cap() -> void:
 		boss.receive_hit(HitData.make(5.0, 10.0, _player), null)
 		await _frames(3)
 		print("[probe] 장로 쓰러짐(이슬 가득): 깃발 %s, 이슬 %d, 회복량 %.0f, 안내 '%s'" % [Progress.has(_room.defeat_flag), _player.max_dews, _player.heal_amount, _hud_message()])
-		_check(Progress.has(_room.defeat_flag) and _player.max_dews == 8 and is_equal_approx(_player.heal_amount, heal_base + 10.0), "가득할 때 중간 보스 보상: 이슬 8 그대로, 회복량 +10")
+		_check(Progress.has(_room.defeat_flag) and _player.max_dews == 5 and is_equal_approx(_player.heal_amount, heal_base + 10.0), "가득할 때 중간 보스 보상: 이슬 5 그대로, 회복량 +10")
 		_check(_hud_message() == "장로의 씨앗 주머니에서 이슬이 한 방울 — 이슬이 가득해 회복량이 늘었다 (회복량 +10)", "중간 보스 안내 '%s'" % _hud_message())
 		await _wait_absorbed(5.0)
-	# 7 에서 받으면 이슬 (원래 글자)
+	# 4 에서 받으면 이슬 (원래 글자)
 	Progress.reset()
-	Progress.upgrades = {"dews": 4.0}
+	Progress.upgrades = {"dews": 1.0}
 	await _open("canopy_mini_2")
 	boss = _room.get("_boss") if _room else null
 	if boss != null and is_instance_valid(boss):
@@ -957,10 +958,10 @@ func _probe_dew_cap() -> void:
 		boss.hp = 1.0
 		boss.receive_hit(HitData.make(5.0, 10.0, _player), null)
 		await _frames(3)
-		_check(_player.max_dews == 8 and is_equal_approx(_player.heal_amount, heal_base) and _hud_message() == _room.reward_text, "중간 보스로 8개에 닿음 ('%s')" % _hud_message())
+		_check(_player.max_dews == 5 and is_equal_approx(_player.heal_amount, heal_base) and _hud_message() == _room.reward_text, "중간 보스로 5개에 닿음 ('%s')" % _hud_message())
 		await _wait_absorbed(5.0)
 
-	# ── 옛 세이브: upgrades.dews 12 (상한 전 빌드에서 다 모은 것) → 이슬 8 + 회복량 +70, 다시 저장해도 12
+	# ── 옛 세이브: upgrades.dews 12 (상한 전 빌드에서 다 모은 것) → 이슬 5 + 회복량 +100, 다시 저장해도 12
 	Progress.reset()
 	await _open("canopy_01")
 	SaveGame.save("", _room.scene_file_path)
@@ -973,19 +974,19 @@ func _probe_dew_cap() -> void:
 	SaveGame.load_game()
 	await _open("canopy_01")   # 소녀가 새로 만들어진다 (방에 들어온 것처럼)
 	print("[probe] 옛 세이브(이슬 12): 이슬 %d/%d, 회복량 %.0f, 성장 %s" % [_player.dews, _player.max_dews, _player.heal_amount, Progress.upgrades])
-	_check(is_equal_approx(float(Progress.upgrades.get("dews", 0)), 12.0) and _player.max_dews == 8 and _player.dews == 8 and is_equal_approx(_player.heal_amount, heal_base + 70.0), "옛 세이브: 이슬 8 (가득 찬 채), 회복량 45 + 70 = %.0f" % _player.heal_amount)
+	_check(is_equal_approx(float(Progress.upgrades.get("dews", 0)), 12.0) and _player.max_dews == 5 and _player.dews == 5 and is_equal_approx(_player.heal_amount, heal_base + 100.0), "옛 세이브: 이슬 5 (가득 찬 채), 회복량 45 + 100 = %.0f" % _player.heal_amount)
 	hud = _room.get_node("CombatHUD")
 	await _frames(3)
-	_check(hud.dew_slots().size() == 8 and hud.dew_rows() == 2, "옛 세이브 HUD 도 이슬 8개 (7 + 1)")
+	_check(hud.dew_slots().size() == 5 and hud.dew_rows() == 1, "옛 세이브 HUD 도 이슬 5개 (한 줄)")
 	SaveGame.save("", _room.scene_file_path)
 	data = JSON.parse_string(FileAccess.get_file_as_string(SaveGame.PATH))
 	_check(is_equal_approx(float(data.get("upgrades", {}).get("dews", 0)), 12.0), "다시 저장해도 성장 기록은 12 그대로 (세이브 호환)")
 
-	# ── 보스 러시 '다 자란 몸' (저장 파일 없음): 이슬 정확히 8, 넘침 없음
+	# ── 보스 러시 '다 자란 몸' (저장 파일 없음): 이슬 최대 5
 	DirAccess.remove_absolute(SaveGame.PATH)
 	var g := BossRush.growth_from_save()
 	Progress.upgrades = g["upgrades"]
-	_check(g["source"] == "full" and Progress.dew_total() == 8 and Progress.dew_max() == 8 and Progress.dew_overflow() == 0, "보스 러시 다 자란 몸: 이슬 %d, 넘침 %d" % [Progress.dew_max(), Progress.dew_overflow()])
+	_check(g["source"] == "full" and Progress.dew_max() == 5, "보스 러시 다 자란 몸: 이슬 %d, 넘침 %d" % [Progress.dew_max(), Progress.dew_overflow()])
 	Progress.reset()
 	Music.stop(0.0)   # 장로 방의 보스곡·수관 곡을 끄고 끝낸다 (끝날 때 '쓰는 중인 소리' 경고가 남지 않게)
 	await _frames(3)

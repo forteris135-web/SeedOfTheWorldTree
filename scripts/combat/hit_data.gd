@@ -21,6 +21,9 @@ var from_player := false
 var reflected := false
 ## 맞았을 때 히트스톱 길이 (초)
 var hitstop := 0.05
+## 적·보스 능력치 배율(Balance: 기본 +45% × 던전 단계 × 난이도)을 받는가. false = Balance 배율 제외 — 몸통 부딪힘·환경.
+## (copy() 는 스크립트 변수를 모두 복사하므로 이 값도 함께 복사된다)
+var scaled := true
 
 
 static func make(p_damage: float, p_poise: float, p_source: Node2D, p_knockback := Vector2(300, -120)) -> HitData:

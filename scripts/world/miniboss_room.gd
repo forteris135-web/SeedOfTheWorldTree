@@ -99,7 +99,10 @@ func _on_boss_died(_purified: bool) -> void:
 	if dust_reward > 0 and is_instance_valid(_boss):
 		Dust.burst(self, _boss.global_position + Vector2(0, -_boss.hurt_height * 0.3), dust_reward, player)
 	Progress.set_flag(defeat_flag)
-	Progress.add_upgrade(reward_type, reward_amount)
+	if reward_type == "token":   # v1.1.0: 새순 보상 (이슬 최대치 보상 자리)
+		Progress.add_tokens(roundi(reward_amount))
+	else:
+		Progress.add_upgrade(reward_type, reward_amount)
 	$BossHUD.hide_boss()
 	$GateIn.open()
 	Music.play_region(region, room_id)

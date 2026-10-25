@@ -276,10 +276,14 @@ func _after_memory() -> void:
 	orb.queue_free()
 	for a in abilities:
 		Progress.gain_ability(a)
+	var tk := Progress.grant_boss_tokens(defeat_flag)   # v1.1.0: 보스 첫 정화의 새순 (한 번만, 러시 제외)
 	purify_from(player.global_position)
 	var hud := get_node_or_null("CombatHUD")
 	if hud:
-		hud.show_message(reward_message, 4.5)
+		var msg := reward_message
+		if msg != "" and tk > 0:
+			msg += "  ·  새순 +%d" % tk
+		hud.show_message(msg, 4.5)
 	if final_boss and has_node("Choices"):
 		$Choices.visible = true
 		for c in $Choices.get_children():

@@ -2,7 +2,8 @@ extends Node
 ## 세이브. 달빛풀에서 쉴 때 기기 안(user://save.json)에 저장한다. 타이틀의 "이어하기"가 읽는다.
 ## 보스 러시 중(BossRush.active)에는 저장 파일에 아무것도 쓰지도 지우지도 않는다 (러시는 떼어 둔 진행을 끝나고 되돌린다).
 
-const PATH := "user://save.json"
+## 저장 파일 경로. v1.1.0: 저장 칸(S)이 바꿀 수 있게 var (시험들이 SaveGame.PATH 를 식으로 쓰므로 이름은 그대로).
+var PATH := "user://save.json"
 
 
 func has_save() -> bool:
@@ -13,7 +14,7 @@ func save(grass_id: String, scene_path: String) -> void:
 	if BossRush.active:
 		return
 	var data := {
-		"version": 1,
+		"version": 2,   # v1.1.0 (새순·난이도). 옛 판(1) 파일은 읽은 뒤 SaveMigrate.after_load 가 고친다
 		"saved_at": Time.get_datetime_string_from_system(),
 		"grass": grass_id,
 		"scene": scene_path,
@@ -28,6 +29,8 @@ func save(grass_id: String, scene_path: String) -> void:
 		"purity": Purity.regions,
 		"collected": Progress.collected,
 		"dust": Progress.dust,
+		"tokens": Progress.tokens,
+		"difficulty": Progress.difficulty,
 	}
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
 	if f:
@@ -82,6 +85,8 @@ func load_game() -> String:
 	Progress.collected = data.get("collected", {})   # 옛 저장 파일에는 없다 → 빈 사전
 	Progress.dust = int(data.get("dust", 0))
 	Progress.dust_changed.emit(Progress.dust)
+	Progress.tokens = int(data.get("tokens", 0))   # 옛 저장 파일에는 없다 → 0 (이주가 채운다)
+	Progress.difficulty = str(data.get("difficulty", "normal"))   # 옛 저장 파일에는 없다 → Normal
 	var pur: Dictionary = data.get("purity", {})
 	# 먼저 모두 잿빛으로 (저장 파일에 없는 지역 — 예: 나중에 정화한 확장 지역 — 의 정화가 남지 않게)
 	for k in Purity.regions:
@@ -92,6 +97,8 @@ func load_game() -> String:
 	var scene := str(data.get("scene", ""))
 	if gid != "":
 		Progress.last_grass = {"id": gid, "scene": scene, "name": Progress.grasses.get(gid, {}).get("name", gid)}
+	# 모든 값을 채운 맨 끝에: 옛 판 저장 파일 고치기 (v1 → v2)
+	SaveMigrate.after_load(int(data.get("version", 1)))
 	Progress.next_spawn = "Grass:" + gid
 	return scene
 

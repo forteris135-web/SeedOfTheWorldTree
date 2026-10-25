@@ -198,6 +198,7 @@ func _tick_contact(delta: float) -> void:
 			var hit := HitData.make(dmg, 0.0, self, Vector2(520, -180))
 			hit.hitstop = 0.03
 			hit.parryable = false
+			hit.scaled = Balance.SCALE_CONTACT   # 몸통 부딪힘 8 은 능력치 배율을 받지 않는다 (기획자 고정값, v1.1.0 D6)
 			var result: String = area.receive(hit)
 			if result != "ignored":
 				_contact_cd = contact_interval

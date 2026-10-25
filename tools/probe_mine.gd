@@ -802,7 +802,11 @@ func _probe_piston_reach() -> void:
 		await _frames(3)
 	_player._invuln_timer = 9999.0
 	_player.hp = _player.max_hp
-	_check(got[300.0].has(28) and not got[450.0].has(28) and got[450.0].has(16), "피스톤 판정: 300 에 서면 %s (피스톤 28 포함), 450 이면 %s (피스톤 없음, 충격파 16)" % [got[300.0], got[450.0]])
+	# v1.1.0: 소녀가 받는 피해에 적 능력치 배율(Balance)이 붙는다 → 기대값도 같은 배율로 (판정 자리 시험은 그대로)
+	var m := Balance.atk_mult(Balance.region_of(_player))
+	var piston := int(round(28.0 * m))
+	var wave := int(round(16.0 * m))
+	_check(got[300.0].has(piston) and not got[450.0].has(piston) and got[450.0].has(wave), "피스톤 판정: 300 에 서면 %s (피스톤 28×%.2f=%d 포함), 450 이면 %s (피스톤 없음, 충격파 16×%.2f=%d)" % [got[300.0], m, piston, got[450.0], m, wave])
 	boss.queue_free()
 	await _frames(2)
 

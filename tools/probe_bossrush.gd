@@ -305,7 +305,7 @@ func _run() -> void:
 	await _frames(10)
 	var p4: Player = get_tree().get_first_node_in_group("player")
 	var full: Dictionary = BossRush.data()["full_power"]
-	_check(BossRush.growth_source == "full" and p4.max_dews == 8 and is_equal_approx(p4.max_hp, 100.0 + float(full["upgrades"]["max_hp"]))
+	_check(BossRush.growth_source == "full" and p4.max_dews == 5 and is_equal_approx(p4.max_hp, 100.0 + float(full["upgrades"]["max_hp"]))
 		and p4.max_jumps == 2 and Progress.has_ability("light") and Progress.has_ability("wind"),
 		"저장 파일이 없으면 다 자란 몸: 체력 %.0f, 이슬 %d, 점프 %d" % [p4.max_hp, p4.max_dews, p4.max_jumps])
 	# 다섯째(마지막) 보스를 쓰러뜨린 직후에 포기해도 완주로 남는다 (QA: 'quit' 로 남아 최고 기록·완주 수에 들지 않았다).

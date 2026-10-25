@@ -1201,6 +1201,8 @@ func _set_state(new_state: State) -> void:
 
 ## Hurtbox 가 부른다. 결과: "hit" / "guard" / "just_guard" / "guard_break" / "dodge" / "ignored"
 func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
+	# v1.1.0: 적·보스 능력치 배율(기본 +45% × 던전 단계 × 난이도)은 여기 한 곳에서 (HitData 원본은 고치지 않는다 — 같은 객체를 여럿이 받는다)
+	var dmg := Balance.incoming_damage(hit, self)
 	if state == State.DEAD or state == State.PURIFY or state == State.REST:
 		return "ignored"
 	if _invuln_timer > 0.0:
@@ -1222,8 +1224,8 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 			if hit.source and hit.source.has_method("on_just_guarded"):
 				hit.source.on_just_guarded(self, just_guard_poise)
 			return "just_guard"
-		guard -= hit.damage * guard_drain_ratio
-		hp = maxf(hp - hit.damage * guard_damage_ratio, 0.0)
+		guard -= dmg * guard_drain_ratio
+		hp = maxf(hp - dmg * guard_damage_ratio, 0.0)
 		hp_changed.emit(hp, max_hp)
 		velocity.x = -facing * 160.0
 		Juice.hitstop(0.03, 0.1)
@@ -1239,12 +1241,12 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 			Juice.shake(8.0)
 			return "guard_break"
 		guard_changed.emit(guard, max_guard)
-		guard_hit.emit(hit.damage)   # 보호막 충격 고리 + 막는 소리
+		guard_hit.emit(dmg)   # 보호막 충격 고리 + 막는 소리
 		return "guard"
 
-	hp = maxf(hp - hit.damage, 0.0)
+	hp = maxf(hp - dmg, 0.0)
 	hp_changed.emit(hp, max_hp)
-	hit_taken.emit(hit.damage)
+	hit_taken.emit(dmg)
 	velocity = Vector2(-from_dir * absf(hit.knockback.x), hit.knockback.y)
 	_hit_timer = hit_stun
 	_invuln_timer = invuln_time
@@ -1434,6 +1436,15 @@ func take_hazard(damage: float) -> void:
 	if cam:
 		cam.reset_smoothing()
 	input_enabled = true
+
+
+## 방을 옮길 때 앞 방의 체력·이슬을 이어 받는다 (v1.1.0 기획자 요청 13: 방 이동으로는 회복하지 않는다).
+## 체력은 1 아래로 내려가지 않는다 (방에 들어서자마자 쓰러지지 않게).
+func set_vitals(new_hp: float, new_dews: int) -> void:
+	hp = clampf(new_hp, 1.0, max_hp)
+	dews = clampi(new_dews, 0, max_dews)
+	hp_changed.emit(hp, max_hp)
+	dews_changed.emit(dews)
 
 
 ## 방이 부른다: 마지막 달빛풀에서 다시 일어난다.
