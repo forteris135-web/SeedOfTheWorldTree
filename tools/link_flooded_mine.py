@@ -3,6 +3,7 @@
 사용: python3 -I tools/link_flooded_mine.py          → scenes/rooms/*.tscn 을 고치고, 끝에 연결 검사를 한다
       python3 -I tools/link_flooded_mine.py --dry    → 무엇을 바꿀지만 적는다
       python3 -I tools/link_flooded_mine.py --check  → 고치지 않고 연결 검사만 (문제가 있으면 exit 1)
+         (v1.1.0: 꼭 있어야 하는 연결 표 V110_LINKS 와 '모든 포탈이 양쪽으로 이어짐'도 본다)
       --root <방 폴더>  → scenes/rooms 대신 다른 폴더(사본)에 적용·검사
 
 **통합할 때 꼭:** 이 묶음의 브랜치에는 기존 방(수관·마을·채굴장·심연 10곳)을 일부러 기준판 그대로 두었다 (다른 묶음과 방 파일이
@@ -11,8 +12,10 @@
 → `res://tools/probe_mine.tscn -- --linked` 실패 0 을 확인한다.
 
 1) 채굴장 · 책임자의 방(mine_deep): 오른쪽 벽을 1800 밀어(3000 → 4800) 심연 포탈 너머로 **수액에 잠긴 통로**를 낸다.
-   통로 바닥 위에 수액 웅덩이 세 개(sap_pool: 수액 위 걷기가 없으면 느려지고 체력이 깎인다), 끝에 잠긴 채굴장 포탈
-   (requires_ability "sap_walk" → 잠긴 길 "수액이 깊다…"), 돌아오는 자리 Markers/FromFlooded.
+   통로 바닥 위에 수액 웅덩이 세 개(sap_pool: 수액 위 걷기가 없으면 느려지고 체력이 깎인다), 끝에 잠긴 채굴장 포탈, 돌아오는 자리 Markers/FromFlooded.
+   (예전에는 이 포탈이 sap_walk 를 요구했다. v1.1.0 — 기획자 요청 20 — 부터 잠긴 채굴장의 입구는 관의 복도(mine_02 ToFlooded)이고,
+    이 포탈은 조건 없음(책임자의 방에 왔다 = 등불이 있다), 반대쪽 잠긴 채굴장 → 책임자의 방 지름길(flooded_mine_01 ToMineDeep)은 등불.
+    잠긴 채굴장의 수액은 '얕음'(sap_pool shallow). 이 연결은 손으로 고쳤고 아래 V110_LINKS 로 검사한다.)
    지도: 책임자의 방이 넓어지므로 심연 지역 방(region "abyss", 숨겨진 방 제외 — abyss_01·abyss_02·moon_garden·abyss_boss 와
    다른 묶음이 더한 심연 방)의 map_offset.x 를 +1800 (책임자의 방 오른쪽 끝과 겹칠 때만 → 두 번 돌려도 한 번만 민다).
    옛 저장 파일의 지도(가 본 방의 자리)는 책임자의 방에 끼우는 MapFix 노드(scripts/world/map_offset_fix.gd)가 바로잡는다.
@@ -177,9 +180,10 @@ def link_mine_deep():
     pools = sap_pool("SapPool1", 3060, 1020, 460, 100) + sap_pool("SapPool2", 3600, 1020, 420, 100) + sap_pool("SapPool3", 4080, 1020, 420, 100)
     txt = insert_after_section(txt, "Hazards", pools)
     txt = insert_after_section(txt, "Markers", marker("FromFlooded", 4700, 1032))
-    txt = insert_after_section(txt, "Exits", portal("ToFlooded", 4610, 1100, "flooded_mine_01", "FromMineDeep", "sap_walk", LOCK_MSG))
+    # v1.1.0: 조건 없음 (위 설명 1)
+    txt = insert_after_section(txt, "Exits", portal("ToFlooded", 4610, 1100, "flooded_mine_01", "FromMineDeep"))
     save(room, txt)
-    print("%s: 오른쪽으로 1800 넓힘 + 수액 웅덩이 3 + 잠긴 채굴장 포탈(sap_walk) + FromFlooded" % room)
+    print("%s: 오른쪽으로 1800 넓힘 + 수액 웅덩이 3 + 잠긴 채굴장 포탈 + FromFlooded" % room)
 
 
 def room_files():
@@ -283,6 +287,34 @@ def link_closet(room):
 PORTAL_RE = re.compile(r'^target_scene = "res://scenes/rooms/([^"]+)\.tscn"\nspawn_name = "([^"]*)"$', re.M)
 MARKER_RE = re.compile(r'^\[node name="([^"]+)" type="Marker2D" parent="Markers"\]$', re.M)
 
+# v1.1.0 (기획자 요청 20·28): 꼭 이렇게 이어져 있어야 하는 포탈 — (방, 포탈 노드) → (건너갈 방, 등장 자리, 필요 능력)
+#  - 무쇠 펌프 던전 입구는 관의 복도(새를 쓰러뜨린 직후 갈 수 있음), 잠긴 채굴장 → 책임자의 방은 등불이 있어야
+#    (등불 없이 책임자의 방 → 심연 → 뿌리지기로 새는 길을 막는다), 책임자의 방 쪽 문은 조건 없음
+#  - 뿌리지기 방 오른쪽 문 너머 '두 갈래 길'(일반 엔딩 장치 둘)
+V110_LINKS = {
+    ("mine_02", "ToFlooded"): ("flooded_mine_01", "FromMine02", ""),
+    ("flooded_mine_01", "Exit1"): ("mine_02", "FromFlooded", ""),
+    ("flooded_mine_01", "ToMineDeep"): ("mine_deep", "FromFlooded", "lantern"),
+    ("mine_deep", "ToFlooded"): ("flooded_mine_01", "FromMineDeep", ""),
+    ("abyss_boss", "ToEnding"): ("abyss_ending", "FromBoss", ""),
+    ("abyss_ending", "ToBoss"): ("abyss_boss", "FromEnding", ""),
+}
+
+
+def exits_of(txt):
+    """방의 포탈들: {노드 이름: (건너갈 방, 등장 자리, 필요 능력)}"""
+    out = {}
+    for m in NODE_RE.finditer(txt):
+        if m.group(3) != "Exits":
+            continue
+        body = m.group(5)
+        t = re.search(r'^target_scene = "res://scenes/rooms/([^"]+)\.tscn"$', body, re.M)
+        sp = re.search(r'^spawn_name = "([^"]*)"$', body, re.M)
+        rq = re.search(r'^requires_ability = "([^"]*)"$', body, re.M)
+        if t:
+            out[m.group(1)] = (t.group(1), sp.group(1) if sp else "", rq.group(1) if rq else "")
+    return out
+
 
 def check():
     """모든 방의 포탈 → 건너갈 방의 등장 자리(Markers/<spawn_name>)가 있는지, 지도 사각형(map_offset + bounds)이 겹치지 않는지."""
@@ -307,8 +339,23 @@ def check():
             if p[0] < q[2] and q[0] < p[2] and p[1] < q[3] and q[1] < p[3]:
                 print("  지도 겹침: %s %s ↔ %s %s" % (keys[a], tuple(int(v) for v in p), keys[b], tuple(int(v) for v in q)))
                 over += 1
-    print("연결 검사 (%d방): 잘못된 포탈 %d, 지도 겹침 %d" % (len(rooms), bad, over))
-    return bad + over
+    # v1.1.0 연결 표
+    exits = {r: exits_of(t) for r, t in rooms.items()}
+    v110 = 0
+    for (r, node), want in sorted(V110_LINKS.items()):
+        got = exits.get(r, {}).get(node)
+        if got != want:
+            print("  v1.1.0 연결 다름: %s/%s → %s (기대 %s)" % (r, node, got, want))
+            v110 += 1
+    # 모든 포탈은 양쪽으로 이어진다 (건너간 방에 이 방으로 돌아오는 포탈이 있다)
+    one_way = 0
+    for r, ex in exits.items():
+        for node, (target, spawn, req) in ex.items():
+            if target in exits and not any(t2 == r for (t2, _s, _q) in exits[target].values()):
+                print("  한쪽 연결: %s/%s → %s (돌아오는 포탈이 없다)" % (r, node, target))
+                one_way += 1
+    print("연결 검사 (%d방): 잘못된 포탈 %d, 지도 겹침 %d, v1.1.0 연결 다름 %d, 한쪽 연결 %d" % (len(rooms), bad, over, v110, one_way))
+    return bad + over + v110 + one_way
 
 
 if __name__ == "__main__":

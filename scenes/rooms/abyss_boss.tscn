@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3 uid="uid://c1seedabyssboss"]
+[gd_scene load_steps=29 format=3 uid="uid://c1seedabyssboss"]
 
 [ext_resource type="Script" path="res://scripts/bosses/boss_room.gd" id="1_room"]
 [ext_resource type="PackedScene" uid="uid://c1seedplayer" path="res://scenes/player/player.tscn" id="2_player"]
@@ -17,6 +17,7 @@
 [ext_resource type="Script" path="res://scripts/world/fog_gate.gd" id="19_gate"]
 [ext_resource type="PackedScene" uid="uid://c1seedbosshud" path="res://scenes/ui/boss_hud.tscn" id="20_boss_hud"]
 [ext_resource type="PackedScene" uid="uid://c1seedportal" path="res://scenes/world/portal.tscn" id="40_portal"]
+[ext_resource type="Script" path="res://scripts/world/blur_wheel.gd" id="22_blur_wheel"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_exit"]
 size = Vector2(80, 400)
@@ -56,7 +57,7 @@ script = ExtResource("1_room")
 bounds = Rect2(0, 0, 3700, 1800)
 region = "abyss"
 room_id = "abyss_boss"
-display_name = "뿌리의 심연 · 정원의 끝"
+display_name = "심연 · 정원의 끝"
 map_offset = Vector2(51900, -200)
 is_boss_room = true
 boss_track = "boss_rootkeeper_p1"
@@ -82,6 +83,12 @@ scroll_scale = Vector2(0.1, 0.1)
 [node name="Sky" type="Sprite2D" parent="Backdrop/Far"]
 texture = ExtResource("11_bg")
 script = ExtResource("12_art_backdrop")
+
+[node name="Wheel" type="Parallax2D" parent="Backdrop"]
+scroll_scale = Vector2(0.25, 0.25)
+
+[node name="BlurWheel" type="Node2D" parent="Backdrop/Wheel"]
+script = ExtResource("22_blur_wheel")
 
 [node name="Shafts" type="Parallax2D" parent="Backdrop"]
 scroll_scale = Vector2(0.3, 0.3)
@@ -183,7 +190,7 @@ position = Vector2(140, 1323)
 [node name="AfterBoss" type="Marker2D" parent="Markers"]
 position = Vector2(1800, 1432)
 
-[node name="FromVillage" type="Marker2D" parent="Markers"]
+[node name="FromEnding" type="Marker2D" parent="Markers"]
 position = Vector2(3460, 1432)
 
 [node name="GroundLine" type="Marker2D" parent="Markers"]
@@ -233,21 +240,16 @@ position = Vector2(140, 1380)
 target_scene = "res://scenes/rooms/moon_garden.tscn"
 spawn_name = "FromBoss"
 
+[node name="ToEnding" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(3610, 1500)
+target_scene = "res://scenes/rooms/abyss_ending.tscn"
+spawn_name = "FromBoss"
+
 [node name="Choices" type="Node2D" parent="."]
 visible = false
 
-[node name="Roots" parent="Choices" instance=ExtResource("21_choice")]
-position = Vector2(1300, 1500)
-choice = "sacrifice"
-label = "심연의 뿌리에 손을 얹는다"
-
-[node name="Pipe" parent="Choices" instance=ExtResource("21_choice")]
-position = Vector2(2500, 1500)
-choice = "return"
-label = "마력의 관을 끊는다"
-
 [node name="Pump" parent="Choices" instance=ExtResource("21_choice")]
-position = Vector2(3050, 1500)
+position = Vector2(2400, 1500)
 choice = "third"
 label = "심연의 거대한 펌프를 거꾸로 돌린다"
 

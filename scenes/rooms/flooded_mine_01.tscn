@@ -221,30 +221,42 @@ one_way = true
 [node name="SapPool1" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(900, 1080)
 size = Vector2(800, 120)
+shallow = true
 
 [node name="SapPool2" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(2300, 1080)
 size = Vector2(700, 120)
+shallow = true
 
 [node name="Markers" type="Node2D" parent="."]
 
 [node name="FromMineDeep" type="Marker2D" parent="Markers"]
-position = Vector2(120, 1032)
+position = Vector2(800, 1032)
 
 [node name="FromFlooded02" type="Marker2D" parent="Markers"]
 position = Vector2(3880, 1032)
+
+[node name="FromMine02" type="Marker2D" parent="Markers"]
+position = Vector2(120, 1032)
 
 [node name="Exits" type="Node2D" parent="."]
 
 [node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(190, 1100)
-target_scene = "res://scenes/rooms/mine_deep.tscn"
+target_scene = "res://scenes/rooms/mine_02.tscn"
 spawn_name = "FromFlooded"
 
 [node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(3810, 1100)
 target_scene = "res://scenes/rooms/flooded_mine_02.tscn"
 spawn_name = "FromFlooded01"
+
+[node name="ToMineDeep" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(720, 1100)
+target_scene = "res://scenes/rooms/mine_deep.tscn"
+spawn_name = "FromFlooded"
+requires_ability = "lantern"
+locked_message = "어둠 속으로 이어진 갱도다… 등불이 있어야 한다"
 
 [node name="Interactables" type="Node2D" parent="."]
 

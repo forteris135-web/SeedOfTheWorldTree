@@ -19,7 +19,8 @@ const REMAINS_CLEAR := 70.0
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	if "--bosstest" in args or "--pumpshots" in args or "--bossshots" in args:
-		# 시험용: 이 방은 수액 위 걷기가 있어야만 올 수 있다 (바닥이 수액 — 없으면 시험 중 소녀가 수액에 녹는다)
+		# 시험용: 예전에는 이 방에 수액 위 걷기가 있어야만 올 수 있었다 (바닥이 수액). v1.1.0 부터 잠긴 채굴장의 수액은 얕아서
+		# (sap_pool shallow — 피해 없음, 조금 느려짐) 능력 없이도 싸울 수 있지만, 보스 시험 결과를 예전과 같게 두려고 그대로 준다.
 		Progress.gain_ability("sap_walk")
 	super._ready()
 	var remains := get_node_or_null("PumpRemains")

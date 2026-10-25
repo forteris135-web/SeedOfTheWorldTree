@@ -1,0 +1,7 @@
+{
+ "_설명": "마지막 선택지 장치(scripts/world/ending_choice.gd)가 화면에 띄우는 글. 문장은 임시 (SCRIPT.md 정리는 기획자). locked_hint 의 {n} 은 읽은 경전 조각 수, {total} 은 모두(4)로 바뀐다. 장치 앞의 행동 이름(뿌리에 손을 얹는다 등)은 방 파일의 label 값.",
+ "locked_hint": "경전의 조각이 모자라다 ({n}/{total})",
+ "lantern_look": "셀레니아는 허리의 작은 등불을 내려다보았다.",
+ "third_ritual": "다섯 영혼이 함께 손을 얹었다.",
+ "chosen": "…"
+}

@@ -15,7 +15,8 @@ extends Node
 ##  7) 여왕 나비 되받기(실제 경로: 가드 → 저스트 가드 → 되받은 나비가 여왕에게 맞음): 한 마리 = 45 + 28 + REFLECT_POISE, 두 마리로는 안 무너짐
 ##  8) 무너진 채 2페이즈로 넘어가면 흐트러짐이 0 으로 돌아간다 (갈라짐 뒤 한 대에 또 무너지지 않음)
 ##  9) 회상에서 돌아온 보스 방: 호수 수액이 처음엔 잿빛이었다가(깜빡이지 않고) 정화 번짐과 함께 차오른다
-## 10) (`-- --hidden` 또는 village_02 에 숨은 입구가 있을 때) 숨은 입구: 등불 전엔 틈(지도에 없음) → 등불 + 다가가면 드러남·깃발·지도.
+## 10) (`-- --hidden` 또는 village_02 에 숨은 입구가 있을 때) 숨은 입구: 멀리선 틈(지도에 없음) → v1.1.0: 등불이 없어도 가까이(400) 가면
+##     '본 것'(깃발·지도 ◆·잠긴 포탈 — 들어가지는 못함) → 등불을 얻으면 들어간다.
 ##     `-- --hidden` 을 주면 village_02 에 입구가 없을 때 실패로 센다 (통합 뒤 link_sap_lake.py 를 빼먹지 않게)
 ## scripts/world/room.gd 의 시험 함수는 건드리지 않는다.
 
@@ -779,32 +780,25 @@ func _probe_hidden_portal_shots() -> void:
 		e.queue_free()
 	var hp: HiddenPortal = _room.get_node("Exits/ToHiddenDescent")
 	var map_portals: Array = Progress.visited_rooms.get("village_02", {}).get("portals", [])
-	_check(not hp._revealed and not hp._glow.visible and not hp.is_in_group("portal") and not map_portals.has(hp.position), "숨은 입구: 등불 전엔 어두운 틈만 (문 빛 꺼짐, 지도에도 없음)")
-	# 등불 없이 손길 → 안내
+	_check(not hp._revealed and not hp._glow.visible and not hp.is_in_group("portal") and not map_portals.has(hp.position), "숨은 입구: 처음엔 어두운 틈만 (문 빛 꺼짐, 지도에도 없음)")
+	await _shot("hidden_portal_far")
+	# v1.1.0: 등불이 없어도 가까이 가면 '본 것' — 깃발·지도 ◆·잠긴 포탈, 손길로는 들어가지 못한다
 	_player.global_position = hp.global_position + Vector2(-60, -68)
 	_player.velocity = Vector2.ZERO
 	_player.facing = 1
 	_player.get_node("Camera2D").reset_smoothing()
-	await _wait(0.6)
+	await _wait(1.5)
+	map_portals = Progress.visited_rooms.get("village_02", {}).get("portals", [])
+	_check(hp._revealed and hp.is_in_group("portal") and Progress.has(hp.seen_flag) and map_portals.has(hp.position) and not Progress.has_ability("lantern"),
+		"숨은 입구: 등불 없이 다가가도 드러난다 ('본 것' — 깃발 %s, 지도 ◆ %s)" % [Progress.has(hp.seen_flag), map_portals.has(hp.position)])
 	await _press("interact")
 	await _wait(0.3)
 	_check(is_instance_valid(_room) and _room.scene_file_path.ends_with("village_02.tscn") and not hp._used, "등불 없이 손길: 들어가지 않는다 (잠긴 길)")
 	await _shot("hidden_portal_locked")
-	# 등불을 얻어도 멀리 있으면 아직 그대로, 다가가면 드러난다
-	_player.global_position = hp.global_position + Vector2(900, -68)
-	_player.velocity = Vector2.ZERO
-	await _wait(0.4)
-	Progress.gain_ability("lantern")
-	await _wait(0.6)
-	var still_hidden := not hp._revealed
-	_player.global_position = hp.global_position + Vector2(200, -68)
-	_player.velocity = Vector2.ZERO
-	await _wait(1.5)
-	map_portals = Progress.visited_rooms.get("village_02", {}).get("portals", [])
-	_check(still_hidden and hp._revealed and hp._glow.visible and hp.is_in_group("portal") and Progress.has(hp.seen_flag) and map_portals.has(hp.position), "숨은 입구: 등불을 가진 채 다가가면 드러난다 (멀리선 그대로 %s, 깃발 %s, 지도 ◆ %s)" % [still_hidden, Progress.has(hp.seen_flag), map_portals.has(hp.position)])
-	await _shot("hidden_portal_revealed")
-	# 다음에 들어오면 처음부터 포탈
+	# 다음에 들어오면 처음부터 (잠긴) 포탈, 등불을 얻으면 들어간다
 	await _open("village_02", "FromVillage01")
 	var hp2: HiddenPortal = _room.get_node("Exits/ToHiddenDescent")
 	_check(hp2._revealed and hp2.is_in_group("portal"), "다시 들어오면 처음부터 드러나 있다 (깃발 기억)")
+	Progress.gain_ability("lantern")
+	await _shot("hidden_portal_revealed")
 	Progress.reset()

@@ -3,20 +3,22 @@ extends Node
 ## 실행: godot --headless --path . res://tools/probe_mine.tscn
 ##  1) 새 방 12개(잠긴 채굴장 3 + 숨겨진 방 9)가 뜨고 포탈·달빛풀·기록물·보상이 자리에 있는지
 ##  2) 금 간 벽: 능력 없이는 튕기고(blocked) 안 부서진다 / 있으면 약공격 3대 또는 무거운 공격 1대에 부서지고 Progress.collected 에 남는다
-##  3) 잠긴 채굴장 포탈: sap_walk 없이는 잠긴 길 (책임자의 방에 link 가 적용돼 있으면 그 포탈도 확인)
+##  3) 잠긴 채굴장 포탈: sap_walk 를 요구하는 포탈은 잠긴 길. v1.1.0: 입구는 관의 복도(mine_02 ToFlooded, 조건 없음),
+##     책임자의 방 쪽 문(ToFlooded)은 조건 없음, 잠긴 채굴장 → 책임자의 방 지름길(ToMineDeep)은 등불
 ##  4) 작은 펌프: 2초 리듬으로 쏜다, 약공격은 절반
 ##  5) 무쇠 펌프: 1페이즈 순서 고정(피스톤→분사→빨아들이기), 장갑(약공격 35%·되받은 분사·BROKEN ×2), 빨아들이기(바람), 2페이즈 무작위·엇박·수액 기둥, 쓰러짐→정화
 ##  6) 경비병 방패·기계 장갑이 벽 부수기 + 무거운 공격에 깨진다
 ##  7) 회상 곡: 모든 회상이 정식 곡 recollection (옛 '보스 수에 따라 길어지는 임시 주제곡'은 없앰) + 정화한 보스 수 세기
 ##  8) 대사 데이터: 오웬·티아 추가 대사(priority 로 먼저 골라짐), 광부, 경전 조각·완성 구절, 회상·엔딩
-##  9) 세 번째 선택지: 네 능력 없으면 숨고(능력만 있고 뿌리지기 깃발이 없어도 숨김) 있으면 보이며 five_souls 깃발 → 엔딩 씬 "제3의 길" 로드 → interact 로 ending "third"
+##  9) 세 번째 선택지 (v1.1.0 조건 = 뿌리지기 정화 + 경전 조각 네 장): 모자라면 보이되 꺼짐(잿빛·손길 거절 — 네 능력만으로는 안 열림),
+##     다 모으면 열리며 five_souls 깃발 → 엔딩 씬 "제3의 길" 로드 → interact 로 ending "third"
 ## 10) 회상에서 돌아온 무쇠 펌프 방: 영혼이 깃들어 벽 부수기(wall_break)를 얻고, 멈춘 펌프 위의 싹(PumpRemains)이 보인다
 ## 11) 엔딩 뒤 이어서 탐험: 엔딩 씬이 저장 → 타이틀이 저장 파일로 클리어(제3의 길)를 알아봄 → 이어하기가 마지막 달빛풀로
 ##     (기기의 진짜 저장 파일 user://save.json 은 시험 전에 떠 두었다가 끝나고 되돌린다)
 ## 12) 수액 방울 실제 비행: 무쇠 펌프·작은 펌프가 쏜 방울을 여러 거리에서 저스트 가드 → 되받은 방울이 쏜 쪽 몸통에 맞는다
 ##     (바닥에 떨어지지 않음), 작은 펌프는 사거리 끝에서도 방울이 소녀에게 닿는다
 ## 13) 피스톤 판정이 보이는 망치 자리(앞 150~370)에만: 300 에 서면 피스톤 28, 450 이면 피스톤 없음(충격파만)
-## 14) 빨아들이기 실제 물리(펌프 방): 가만히 서 있으면 300px 넘게 끌리고, 반대로 달리면 벗어난다
+## 14) 빨아들이기 실제 물리(펌프 방): 가만히 서 있으면 300px 넘게 끌리고, 반대로 달리면 벗어난다 — 수액 위 걷기로 한 번, 새 직후(수액 위 걷기 없이 얕은 수액 0.85배)로 한 번
 ## 15) 정화하는 순간 멈춘 펌프+싹이 펌프 자리에 나타나고 회상 뒤에도 같은 자리, 2페이즈 음악(곡은 그대로, 한 번 휘청 — Music.falter), 옛 저장 지도 바로잡기(MapOffsetFix)
 ## -- --linked : 통합 뒤(link_flooded_mine.py 를 돌린 뒤) 엄격 모드 — 기존 방에 잠긴 채굴장 입구·벽장·등장 자리가 없으면 실패.
 ##    (이 묶음의 브랜치에는 기존 방을 기준판 그대로 두었으므로 기본 모드에서는 '연결 전' 으로 적고 넘어간다)
@@ -108,7 +110,7 @@ func _run() -> void:
 # ---------- 1) 방 ----------
 func _probe_rooms() -> void:
 	var rooms := {
-		"flooded_mine_01": {"portals": 2, "grass": 1, "pumps": 3},
+		"flooded_mine_01": {"portals": 3, "grass": 1, "pumps": 3},
 		"flooded_mine_02": {"portals": 3, "records": 1, "pumps": 3, "cracked": 1},
 		"flooded_mine_boss": {"portals": 1, "grass": 1, "boss": true},
 		"canopy_hidden_1": {"portals": 1, "pickups": 1},
@@ -257,8 +259,24 @@ func _probe_portal_lock() -> void:
 		for n in _all(deep):
 			if n is SapPool:
 				pools += 1
-		_check(to_flooded.requires_ability == "sap_walk" and deep.get_node_or_null("Markers/FromFlooded") != null and pools == 3 and deep.bounds.size.x == 4800,
-			"책임자의 방: 잠긴 채굴장 포탈(sap_walk) %s, FromFlooded 자리, 수액 웅덩이 %d, 너비 %d" % [to_flooded.target_scene.get_file(), pools, int(deep.bounds.size.x)])
+		# v1.1.0: 이 문은 조건 없음 (책임자의 방에 왔다 = 등불이 있다). 웅덩이 셋은 깊은 수액 그대로
+		_check(to_flooded.requires_ability == "" and deep.get_node_or_null("Markers/FromFlooded") != null and pools == 3 and deep.bounds.size.x == 4800,
+			"책임자의 방: 잠긴 채굴장 포탈(조건 없음) %s, FromFlooded 자리, 수액 웅덩이 %d, 너비 %d" % [to_flooded.target_scene.get_file(), pools, int(deep.bounds.size.x)])
+		# v1.1.0: 잠긴 채굴장의 입구는 관의 복도, 책임자의 방으로 가는 지름길은 등불
+		var f1 = load("res://scenes/rooms/flooded_mine_01.tscn").instantiate()
+		add_child(f1)
+		await _frames(2)
+		var exit1: Node = f1.get_node_or_null("Exits/Exit1")
+		var short: Node = f1.get_node_or_null("Exits/ToMineDeep")
+		var m02 = load("res://scenes/rooms/mine_02.tscn").instantiate()
+		add_child(m02)
+		await _frames(2)
+		var entry: Node = m02.get_node_or_null("Exits/ToFlooded")
+		_check(exit1 != null and exit1.target_scene.ends_with("mine_02.tscn") and exit1.spawn_name == "FromFlooded" and short != null and short.target_scene.ends_with("mine_deep.tscn") and short.requires_ability == "lantern"
+			and entry != null and entry.target_scene.ends_with("flooded_mine_01.tscn") and entry.requires_ability == "" and m02.get_node_or_null("Markers/FromFlooded") != null,
+			"잠긴 채굴장 입구 = 관의 복도 ToFlooded(조건 없음) ↔ Exit1, 책임자의 방 지름길 ToMineDeep(등불)")
+		m02.queue_free()
+		f1.queue_free()
 		var fix: Node = deep.get_node_or_null("MapFix")
 		_check(fix != null and fix.moves.has("abyss_01"), "책임자의 방: 옛 저장 지도 바로잡기 노드 MapFix (심연 방 %s)" % [fix.moves.keys() if fix else []])
 	elif _linked:
@@ -572,16 +590,27 @@ func _probe_third_way() -> void:
 	c1.label = "심연의 거대한 펌프를 거꾸로 돌린다"
 	add_child(c1)
 	await _frames(1)
-	_check(c1.is_locked() and not c1.visible and not Progress.has("five_souls"), "세 번째 선택지: 네 능력 없음 → 숨김(%s), five_souls 깃발 없음" % (not c1.visible))
+	# v1.1.0: 잠겨도 숨지 않고 보이되 꺼져 있다 (잿빛)
+	_check(c1.is_locked() and c1.visible and c1.art_node().modulate.is_equal_approx(EndingChoice.LOCKED_TINT) and not Progress.has("five_souls"), "세 번째 선택지: 조건 없음 → 잠김(보이되 잿빛), five_souls 깃발 없음")
 	c1.queue_free()
 	for a in ["wind", "light", "sap_walk", "wall_break"]:
 		Progress.gain_ability(a)
+	Progress.set_flag("boss_root_defeated")
 	var c1b: EndingChoice = load("res://scenes/world/ending_choice.tscn").instantiate()
 	c1b.choice = "third"
 	add_child(c1b)
 	await _frames(1)
-	_check(c1b.is_locked() and not c1b.visible and not Progress.has("five_souls"), "세 번째 선택지: 네 능력은 있지만 뿌리지기 정화 깃발 없음 → 숨김(%s)" % (not c1b.visible))
+	_check(c1b.is_locked() and c1b.visible and not Progress.has("five_souls"), "세 번째 선택지: 네 능력 + 뿌리지기 정화여도 경전 조각이 없으면 잠김 (예전 '다섯 영혼' 조건 없앰)")
 	c1b.queue_free()
+	Progress.set_flag("boss_root_defeated", false)
+	for n in 4:
+		Progress.set_flag("read_scripture_%d" % (n + 1))
+	var c1c: EndingChoice = load("res://scenes/world/ending_choice.tscn").instantiate()
+	c1c.choice = "third"
+	add_child(c1c)
+	await _frames(1)
+	_check(c1c.is_locked() and not Progress.has("five_souls"), "세 번째 선택지: 경전 네 장이어도 뿌리지기 정화 깃발이 없으면 잠김")
+	c1c.queue_free()
 	# 1편 두 선택지는 영혼 수와 상관없이 늘 열려 있다
 	var c_sac: EndingChoice = load("res://scenes/world/ending_choice.tscn").instantiate()
 	c_sac.choice = "sacrifice"
@@ -594,7 +623,7 @@ func _probe_third_way() -> void:
 	c2.choice = "third"
 	add_child(c2)
 	await _frames(1)
-	_check(not c2.is_locked() and c2.visible and Progress.has("five_souls"), "세 번째 선택지: 네 능력 있음 → 보임(%s), five_souls 깃발 %s" % [c2.visible, Progress.has("five_souls")])
+	_check(not c2.is_locked() and c2.visible and Progress.has("five_souls"), "세 번째 선택지: 뿌리지기 정화 + 경전 네 장 → 열림(%s), five_souls 깃발 %s" % [c2.visible, Progress.has("five_souls")])
 	# 엔딩 씬: "third" 로 뜨는지 (음악·깃발·저장)
 	Progress.ending = "third"
 	Progress.last_grass = {}
@@ -613,8 +642,8 @@ func _probe_third_way() -> void:
 ## 선택 → ending "third". 3초 뒤 장면이 엔딩으로 바뀌므로 **시험의 맨 마지막**에 부른다 (그 전에 끝내고 quit).
 func _probe_third_interact() -> void:
 	Progress.reset()
-	for a in ["wind", "light", "sap_walk", "wall_break"]:
-		Progress.gain_ability(a)
+	for n in 4:
+		Progress.set_flag("read_scripture_%d" % (n + 1))
 	Progress.set_flag("boss_root_defeated")
 	var c2: EndingChoice = load("res://scenes/world/ending_choice.tscn").instantiate()
 	c2.choice = "third"
@@ -819,18 +848,32 @@ func _probe_piston_reach() -> void:
 
 
 # ---------- 14) 빨아들이기 실제 물리 ----------
+## v1.1.0(D14): 펌프 던전은 새 직후(이단 점프·바람만) 올 수 있다 — 수액 위 걷기 없이 얕은 수액(0.85배) 위에서도
+## 반대로 달리면 빨아들이기에서 벗어나는지 함께 본다 (보스 자동 시험 --bosstest 는 예전처럼 수액 위 걷기를 주고 돈다).
 func _probe_suck_real() -> void:
+	for setup in ["sap_walk", "early"]:
+		await _probe_suck_once(setup)
+
+
+func _probe_suck_once(setup: String) -> void:
 	Progress.reset()
-	Progress.gain_ability("sap_walk")
+	if setup == "sap_walk":
+		Progress.gain_ability("sap_walk")
+	else:
+		Progress.gain_ability("double_jump")
+		Progress.gain_ability("wind")
+		Progress.set_flag("boss_bird_defeated")
 	Progress.next_spawn = "FromFlooded02"
 	var room = load("res://scenes/rooms/flooded_mine_boss.tscn").instantiate()
 	add_child(room)
 	await _frames(3)
 	var player: Player = room.player
 	var boss: IronPump = room.boss
+	var sap: SapPool = room.get_node("Hazards/SapFloor")
 	player._invuln_timer = 9999.0
 	player.global_position = Vector2(1500, 1430)
 	var res: Array = []
+	var in_sap := true
 	for mode in ["stand", "run_away"]:
 		# 다음 빨아들이기 예고가 시작될 때 소녀를 펌프 앞 520 에 세운다
 		var t := 0.0
@@ -849,11 +892,16 @@ func _probe_suck_real() -> void:
 		while boss.state == IronPump.State.SUCK and boss.attack_phase == "active" and boss._timer > 0.25:
 			player._invuln_timer = 9999.0
 			await get_tree().physics_frame
+			if mode == "run_away" and not sap._players_in.has(player):
+				in_sap = false
 		Input.action_release(away)
 		var toward := (player.global_position.x - x0) * -boss.facing   # + 면 펌프 쪽으로 끌림
 		res.append(toward)
 		await _frames(2)
-	_check(res.size() == 2 and res[0] > 300.0 and res[1] < -150.0, "빨아들이기 실제 물리: 가만히 서면 펌프 쪽으로 %.0fpx 끌림, 반대로 달리면 %.0fpx (벗어남)" % [res[0] if res.size() > 0 else 0.0, res[1] if res.size() > 1 else 0.0])
+	var tag := "수액 위 걷기" if setup == "sap_walk" else "새 직후(수액 위 걷기 없음, 얕은 수액 0.85배)"
+	if setup == "early":
+		_check(not Progress.has_ability("sap_walk") and sap.shallow and in_sap, "펌프 방 초반 조건: 수액 위 걷기 없음 (시험 플래그 없이 방을 열면 주지 않음), 바닥 수액은 얕음, 벗어나는 동안 수액 속")
+	_check(res.size() == 2 and res[0] > 300.0 and res[1] < -150.0, "빨아들이기 실제 물리 [%s]: 가만히 서면 펌프 쪽으로 %.0fpx 끌림, 반대로 달리면 %.0fpx (벗어남)" % [tag, res[0] if res.size() > 0 else 0.0, res[1] if res.size() > 1 else 0.0])
 	room.queue_free()
 	await _frames(3)
 	for p in get_tree().get_nodes_in_group("projectile"):

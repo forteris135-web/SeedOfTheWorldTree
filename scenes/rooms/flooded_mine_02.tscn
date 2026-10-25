@@ -246,10 +246,12 @@ secret_id = "cracked_flooded_mine_02_1"
 [node name="SapFloor1" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(620, 2040)
 size = Vector2(880, 110)
+shallow = true
 
 [node name="SapFloor2" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(1820, 2040)
 size = Vector2(1000, 110)
+shallow = true
 
 [node name="Markers" type="Node2D" parent="."]
 
