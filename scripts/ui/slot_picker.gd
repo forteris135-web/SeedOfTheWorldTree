@@ -21,6 +21,8 @@ const BACK_W := 360.0
 const BACK_H := 58.0
 ## 이만큼 누르고 있으면 칸 지우기 (터치·마우스)
 const LONG_PRESS := 0.6
+## 지우기 확인을 건 뒤 이 시간 안의 두 번째 누름은 받지 않는다 (△ 를 결정 버튼처럼 연타해 저장을 지우는 일이 없게)
+const DELETE_CONFIRM_DELAY := 0.45
 ## 난이도별 글자 색 (카드의 난이도 이름)
 const DIFF_COLOR := {"easy": Color(0.62, 0.9, 0.62), "normal": Color(0.82, 0.86, 0.92), "hard": Color(1.0, 0.72, 0.42), "nightmare": Color(1.0, 0.5, 0.6)}
 
@@ -34,6 +36,8 @@ var _confirm := -1
 var _delete_armed := -1
 ## 지우기 확인을 길게 누르기로 걸었는가 (안내 글자가 달라진다)
 var _delete_by_touch := false
+## 지우기 확인을 건 때 (_t)
+var _delete_armed_at := 0.0
 var _summaries: Array = []
 var _open := false
 var _t := 0.0
@@ -303,9 +307,12 @@ func delete_request(i: int, by_touch := false) -> void:
 	if _delete_armed != i:
 		_delete_armed = i
 		_delete_by_touch = by_touch
+		_delete_armed_at = _t
 		_index = i
 		Sfx.play("blip")
 		return
+	if _t - _delete_armed_at < DELETE_CONFIRM_DELAY:
+		return   # 너무 빠른 두 번째 누름 (연타) — 확인 글자를 읽을 틈을 둔다
 	_delete_armed = -1
 	SaveGame.delete_slot(i + 1)
 	refresh()

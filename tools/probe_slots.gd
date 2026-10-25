@@ -535,9 +535,12 @@ func _probe_title_ui() -> void:
 	await _act("move_down")
 	await _key(KEY_X)
 	var armed := sp.delete_armed()
-	var still := SaveGame.has_save_in(2)
+	await _key(KEY_X)   # 곧바로 한 번 더 (연타) → 받지 않는다
+	var still := SaveGame.has_save_in(2) and sp.delete_armed() == 1
+	await _wait(0.5)
 	await _key(KEY_X)
-	_check(armed == 1 and still and not SaveGame.has_save_in(2) and sp.is_open() and sp.delete_armed() == -1, "키보드 X 한 번 → 지우기 확인, 두 번 → 칸 2 지움")
+	_check(armed == 1 and still and not SaveGame.has_save_in(2) and sp.is_open() and sp.delete_armed() == -1,
+		"키보드 X 한 번 → 지우기 확인, 곧바로 연타는 무시, 잠시 뒤 한 번 더 → 칸 2 지움")
 	await _drop(t)
 	# 패드 △/Y: 확인 중 결정은 확인만 거둔다, 마지막 칸을 지우면 칸 고르기가 닫히고 '이어하기'가 사라진다
 	_slot_file(3, "2026-10-22T10:00:00")
@@ -550,6 +553,7 @@ func _probe_title_ui() -> void:
 	await _act("jump")
 	_check(armed_y == 2 and sp.delete_armed() == -1 and not t._started and SaveGame.has_save_in(3), "패드 Y → 지우기 확인, 그때 결정을 누르면 확인만 거둠 (불러오지 않음)")
 	await _pad_y()
+	await _wait(0.5)
 	await _pad_y()
 	await _frames(3)
 	_check(not SaveGame.any_save() and not sp.is_open() and not t.has_item("Continue"), "패드 Y 두 번으로 마지막 칸을 지우면 칸 고르기가 닫히고 '이어하기'가 사라진다")
