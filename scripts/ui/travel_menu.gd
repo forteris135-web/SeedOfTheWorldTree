@@ -2,12 +2,27 @@ extends CanvasLayer
 class_name TravelMenu
 ## 이동 메뉴 (기획서 8장 "빠른 이동"): 피워 둔 달빛풀끼리 뿌리로 이어져 있다. 쉬는 중에 손길 버튼으로 연다.
 ## 지역 순(수관 → 마을 → 채굴장 → 심연)으로 늘어놓고, 위·아래 / 터치로 고른다.
+## 줄 이름 = 그 달빛풀이 있는 방의 지도 이름, 왼쪽 칸 = 지도와 같은 지역 이름 (v1.1.0 기획자 요청 21 — RoomIndex 한 곳에서).
+## 저장 파일에 남은 옛 달빛풀 이름은 쓰지 않는다 (옛 저장도 바로 맞는 이름).
 ## (옆 방으로 가는 포탈은 메뉴가 아니라 Portal 이 바로 건너간다.)
 
 signal closed
 
 const REGION_ORDER := {"canopy": 0, "village": 1, "sap_lake": 2, "mine": 3, "flooded_mine": 4, "abyss": 5}
-const REGION_NAMES := {"canopy": "수관", "village": "마을", "sap_lake": "수액의 호수", "mine": "채굴장", "flooded_mine": "잠긴 채굴장", "abyss": "심연"}
+## 지역 이름 (옛 이름표 — 지금은 RoomIndex.region_label 을 쓴다; 같은 값)
+const REGION_NAMES := RoomIndex.REGION_LABEL
+## 줄 왼쪽 지역 칸 너비 (가장 긴 '수액의 호수'·'잠긴 채굴장'이 이름 칸을 침범하지 않게)
+const REGION_COL_W := 150.0
+## 지역 칸이 시작하는 자리·이름 칸이 시작하는 자리 (줄 왼쪽 끝 기준)
+const REGION_COL_X := 32.0
+const NAME_COL_X := REGION_COL_X + REGION_COL_W + 14.0
+## 줄 너비 (한 줄로 늘어놓을 때. 두 단이면 화면 폭에 맞춰 줄인다)
+const ROW_W := 840.0
+## 줄 높이가 이보다 낮아지면 두 단으로 늘어놓는다 (달빛풀이 많아져도 아래 안내와 겹치지 않고, 손가락으로 누르기 쉽게)
+const ROW_MIN_ONE_COL := 40.0
+const COL_GAP := 40.0
+## 목록 아래에 비워 두는 높이 (안내 줄 자리)
+const LIST_BOTTOM_PAD := 110.0
 
 var _kind := "grass"          # grass / portal
 var _title := ""
@@ -42,8 +57,13 @@ func open(current_grass_id: String) -> void:
 	var items: Array = []
 	for id in Progress.grasses:
 		var g: Dictionary = Progress.grasses[id]
-		var scene: String = g.get("scene", "")
-		items.append({"id": id, "name": g.get("name", id), "scene": scene, "region": g.get("region", region_of_scene(scene))})
+		var rid := RoomIndex.room_of_grass(str(id))
+		# 방 목록에 있는 달빛풀: 방 파일·지역·이름을 목록에서 (저장된 경로·이름은 옛 값일 수 있다)
+		var scene: String = RoomIndex.scene_of(rid) if rid != "" else str(g.get("scene", ""))
+		var region: String = RoomIndex.region_of(rid, str(g.get("region", region_of_scene(scene))))
+		# 같은 지역 안에서는 지도 왼쪽(들어가는 쪽)부터 — 대개 지나온 차례 (모르는 방은 맨 뒤)
+		var order := RoomIndex.room_offset(rid).x if rid != "" else INF
+		items.append({"id": id, "name": RoomIndex.grass_room_name(str(id), str(g.get("name", id))), "scene": scene, "region": region, "order": order})
 	_open_list("grass", "뿌리를 따라 이동", "피워 둔 달빛풀로 갈 수 있다", "아직 다른 달빛풀을 피우지 않았다. 달빛풀에 손을 대어 두면 여기서 이어진다.", items, current_grass_id)
 
 
@@ -59,6 +79,10 @@ func _open_list(kind: String, title: String, subtitle: String, empty_hint: Strin
 		var rb: int = REGION_ORDER.get(b["region"], 9)
 		if ra != rb:
 			return ra < rb
+		var oa: float = a.get("order", INF)
+		var ob: float = b.get("order", INF)
+		if oa != ob:
+			return oa < ob
 		return a["name"] < b["name"])
 	_index = 0
 	for i in _items.size():
@@ -131,9 +155,24 @@ func _move(dir: int) -> void:
 	_panel.queue_redraw()
 
 
-func _row_height() -> float:
+## 목록이 쓸 수 있는 높이 (목록 위 끝 ~ 아래 안내 줄 위)
+func _list_space() -> float:
+	return maxf(_panel.size.y - LIST_BOTTOM_PAD - _list_top(), 200.0)
+
+
+## 몇 단으로 늘어놓는가 (1 또는 2)
+func _columns() -> int:
 	var n := maxi(_items.size(), 1)
-	return clampf(floorf(_panel.size.y * 0.58 / n), 36.0, 56.0)
+	return 1 if n * ROW_MIN_ONE_COL <= _list_space() else 2
+
+
+## 한 단에 들어가는 줄 수
+func _rows_per_column() -> int:
+	return ceili(float(maxi(_items.size(), 1)) / _columns())
+
+
+func _row_height() -> float:
+	return clampf(floorf(_list_space() / _rows_per_column()), 30.0, 56.0)
 
 
 ## 목록이 시작하는 높이 (하위 메뉴가 탭 머리 아래로 내릴 수 있다)
@@ -143,11 +182,14 @@ func _list_top() -> float:
 
 func _row_rect(i: int) -> Rect2:
 	var size := _panel.size
-	var w := 720.0
-	var x := (size.x - w) / 2.0
+	var cols := _columns()
+	var rows := _rows_per_column()
+	var w := ROW_W if cols == 1 else minf((size.x - 160.0 - COL_GAP) / 2.0, ROW_W)
+	var total := w * cols + COL_GAP * (cols - 1)
+	var x := (size.x - total) / 2.0 + floori(float(i) / rows) * (w + COL_GAP)
 	var y0 := _list_top()
 	var rh := _row_height()
-	return Rect2(x, y0 + i * rh, w, rh - 5.0)
+	return Rect2(x, y0 + (i % rows) * rh, w, rh - 5.0)
 
 
 func _item_at(pos: Vector2) -> int:
@@ -193,7 +235,7 @@ func _draw_list(font: Font) -> void:
 	var size := _panel.size
 	var accent := _accent()
 	var rh := _row_height()
-	var font_size := 26 if rh >= 50.0 else 22
+	var font_size := 26 if rh >= 50.0 else (22 if rh >= 38.0 else 19)
 	for i in _items.size():
 		var r := _row_rect(i)
 		var sel := i == _index
@@ -203,11 +245,11 @@ func _draw_list(font: Font) -> void:
 		var rc: Color = MapScreen.REGION_COLORS.get(region, Color(0.4, 0.4, 0.4))
 		_panel.draw_rect(Rect2(r.position + Vector2(12, 10), Vector2(8, r.size.y - 20)), rc.lightened(0.25))
 		var baseline := r.position.y + r.size.y / 2.0 + font_size * 0.36
-		_panel.draw_string(font, Vector2(r.position.x + 32, baseline), REGION_NAMES.get(region, ""), HORIZONTAL_ALIGNMENT_LEFT, 90, font_size - 6, Color(1, 1, 1, 0.5))
+		_panel.draw_string(font, Vector2(r.position.x + REGION_COL_X, baseline), RoomIndex.region_label(region), HORIZONTAL_ALIGNMENT_LEFT, REGION_COL_W, font_size - 6, Color(1, 1, 1, 0.5))
 		var text: String = it["name"] + ("   (여기)" if it["id"] == _current_id else "")
-		_panel.draw_string(font, Vector2(r.position.x + 120, baseline), ("▸  " if sel else "    ") + text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, accent if sel else Color(0.9, 0.9, 0.9))
+		_panel.draw_string(font, Vector2(r.position.x + NAME_COL_X, baseline), ("▸  " if sel else "    ") + text, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - NAME_COL_X - 8.0, font_size, accent if sel else Color(0.9, 0.9, 0.9))
 	if _items.size() <= 1:
-		_panel.draw_string(font, Vector2(size.x / 2.0 - 400, _list_top() + _items.size() * rh + 40), _empty_hint, HORIZONTAL_ALIGNMENT_CENTER, 800, 22, Color(1, 1, 1, 0.55))
+		_panel.draw_string(font, Vector2(size.x / 2.0 - 400, _list_top() + _rows_per_column() * rh + 40), _empty_hint, HORIZONTAL_ALIGNMENT_CENTER, 800, 22, Color(1, 1, 1, 0.55))
 
 
 ## 아래 안내 줄의 글자 (안내는 메뉴 안에만 둔다)

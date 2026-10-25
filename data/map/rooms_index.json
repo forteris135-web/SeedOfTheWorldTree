@@ -1,0 +1,2550 @@
+{
+ "region_labels": {
+  "canopy": "수관",
+  "village": "마을",
+  "mine": "채굴장",
+  "flooded_mine": "잠긴 채굴장",
+  "sap_lake": "수액의 호수",
+  "abyss": "심연"
+ },
+ "rooms": {
+  "abyss_01": {
+   "name": "심연 · 그을린 뿌리",
+   "region": "abyss",
+   "offset": [
+    41100,
+    500
+   ],
+   "bounds": [
+    0,
+    0,
+    4200,
+    2000
+   ],
+   "boss": false,
+   "markers": {
+    "FromMineDeep": [
+     120,
+     1732
+    ],
+    "FromAbyss02": [
+     4080,
+     1732
+    ],
+    "FromHidden1": [
+     4030,
+     1252
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1800
+     ],
+     "to": "mine_deep",
+     "spawn": "ToAbyss",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      4010,
+      1800
+     ],
+     "to": "abyss_02",
+     "spawn": "FromAbyss01",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      3938,
+      1320
+     ],
+     "to": "abyss_hidden_1",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "abyss_entry",
+     "name": "심연 · 초입",
+     "pos": [
+      500,
+      1800
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [
+    "cracked_abyss_01_1"
+   ],
+   "records": [
+    "burnt_roots"
+   ]
+  },
+  "abyss_02": {
+   "name": "심연 · 옛 약속의 비석",
+   "region": "abyss",
+   "offset": [
+    45300,
+    100
+   ],
+   "bounds": [
+    0,
+    0,
+    3600,
+    2400
+   ],
+   "boss": false,
+   "markers": {
+    "FromAbyss01": [
+     120,
+     2132
+    ],
+    "FromGarden": [
+     3480,
+     632
+    ],
+    "FromAbyssMini": [
+     1480,
+     832
+    ],
+    "FromHidden1": [
+     170,
+     1682
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      2200
+     ],
+     "to": "abyss_01",
+     "spawn": "FromAbyss02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      3410,
+      700
+     ],
+     "to": "moon_garden",
+     "spawn": "FromAbyss02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit3",
+     "pos": [
+      1350,
+      900
+     ],
+     "to": "abyss_mini_1",
+     "spawn": "FromAbyss02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      262,
+      1750
+     ],
+     "to": "abyss_hidden_2",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [
+    "cracked_abyss_02_1"
+   ],
+   "records": [
+    "old_promise"
+   ]
+  },
+  "abyss_boss": {
+   "name": "뿌리의 심연 · 정원의 끝",
+   "region": "abyss",
+   "offset": [
+    51900,
+    -200
+   ],
+   "bounds": [
+    0,
+    0,
+    3700,
+    1800
+   ],
+   "boss": true,
+   "markers": {
+    "FromGarden": [
+     140,
+     1323
+    ],
+    "AfterBoss": [
+     1800,
+     1432
+    ],
+    "FromVillage": [
+     3460,
+     1432
+    ],
+    "GroundLine": [
+     1800,
+     1500
+    ],
+    "HoverLeft": [
+     1200,
+     1000
+    ],
+    "HoverCenter": [
+     1950,
+     920
+    ],
+    "HoverRight": [
+     2800,
+     1000
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToGarden",
+     "pos": [
+      140,
+      1380
+     ],
+     "to": "moon_garden",
+     "spawn": "FromBoss",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "abyss_boss_gate",
+     "name": "심연 · 정원의 끝",
+     "pos": [
+      420,
+      1380
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "abyss_hidden_1": {
+   "name": "심연 · 뿌리 틈",
+   "region": "abyss",
+   "offset": [
+    41100,
+    2600
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "abyss_01",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": [
+    "scripture_4"
+   ]
+  },
+  "abyss_hidden_2": {
+   "name": "심연 · 비석 뒤",
+   "region": "abyss",
+   "offset": [
+    45300,
+    2600
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "abyss_02",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "abyss_hidden",
+     "name": "심연 · 비석 뒤",
+     "pos": [
+      900,
+      700
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "abyss_mini_1": {
+   "name": "심연 · 포자 어미의 둥지",
+   "region": "abyss",
+   "offset": [
+    45600,
+    -1400
+   ],
+   "bounds": [
+    0,
+    0,
+    2600,
+    1500
+   ],
+   "boss": false,
+   "markers": {
+    "FromAbyss02": [
+     220,
+     1232
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1300
+     ],
+     "to": "abyss_02",
+     "spawn": "FromAbyssMini",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "canopy_01": {
+   "name": "수관 · 시작의 가지",
+   "region": "canopy",
+   "offset": [
+    0,
+    0
+   ],
+   "bounds": [
+    0,
+    -420,
+    4800,
+    2750
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy02": [
+     4600,
+     332
+    ],
+    "FromHidden": [
+     1650,
+     -8
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToCanopy02",
+     "pos": [
+      4620,
+      400
+     ],
+     "to": "canopy_02",
+     "spawn": "FromCanopy01",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden",
+     "pos": [
+      1650,
+      60
+     ],
+     "to": "canopy_hidden",
+     "spawn": "FromCanopy01",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "canopy_start",
+     "name": "수관 · 시작의 가지",
+     "pos": [
+      640,
+      2200
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "canopy_02": {
+   "name": "수관 · 바람의 틈",
+   "region": "canopy",
+   "offset": [
+    4800,
+    -1600
+   ],
+   "bounds": [
+    0,
+    0,
+    2400,
+    2600
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy01": [
+     120,
+     2332
+    ],
+    "FromCanopy03": [
+     2200,
+     232
+    ],
+    "FromHidden1": [
+     170,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      2400
+     ],
+     "to": "canopy_01",
+     "spawn": "FromCanopy02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      2230,
+      300
+     ],
+     "to": "canopy_03",
+     "spawn": "FromCanopy02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      262,
+      700
+     ],
+     "to": "canopy_hidden_1",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "canopy_wind",
+     "name": "수관 · 바람의 틈 위",
+     "pos": [
+      2050,
+      300
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [
+    "cracked_canopy_02_1"
+   ],
+   "records": []
+  },
+  "canopy_03": {
+   "name": "수관 · 잎의 회랑",
+   "region": "canopy",
+   "offset": [
+    7200,
+    -2400
+   ],
+   "bounds": [
+    0,
+    0,
+    5200,
+    1400
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy02": [
+     120,
+     1032
+    ],
+    "FromCanopy04": [
+     5080,
+     1032
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1100
+     ],
+     "to": "canopy_02",
+     "spawn": "FromCanopy03",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      5010,
+      1100
+     ],
+     "to": "canopy_04",
+     "spawn": "FromCanopy03",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "canopy_04": {
+   "name": "수관 · 가지 갈림길",
+   "region": "canopy",
+   "offset": [
+    12400,
+    -3200
+   ],
+   "bounds": [
+    0,
+    0,
+    3500,
+    2200
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy03": [
+     120,
+     1932
+    ],
+    "FromBoss": [
+     3080,
+     1932
+    ],
+    "FromCanopy05": [
+     3080,
+     1932
+    ],
+    "FromHidden1": [
+     170,
+     1482
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      2000
+     ],
+     "to": "canopy_03",
+     "spawn": "FromCanopy04",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      3010,
+      2000
+     ],
+     "to": "canopy_05",
+     "spawn": "FromCanopy04",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      262,
+      1550
+     ],
+     "to": "canopy_hidden_2",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "canopy_fork",
+     "name": "수관 · 갈림길",
+     "pos": [
+      400,
+      2000
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [
+    "cracked_canopy_04_1"
+   ],
+   "records": []
+  },
+  "canopy_05": {
+   "name": "수관 · 이끼 계단",
+   "region": "canopy",
+   "offset": [
+    12500,
+    -6203
+   ],
+   "bounds": [
+    0,
+    0,
+    2900,
+    3000
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy04": [
+     120,
+     2732
+    ],
+    "FromCanopy06": [
+     2480,
+     292
+    ],
+    "FromCanopyMini1": [
+     320,
+     1612
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      2800
+     ],
+     "to": "canopy_04",
+     "spawn": "FromCanopy05",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      2410,
+      360
+     ],
+     "to": "canopy_06",
+     "spawn": "FromCanopy05",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit3",
+     "pos": [
+      190,
+      1680
+     ],
+     "to": "canopy_mini_1",
+     "spawn": "FromCanopy05",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "canopy_moss_top",
+     "name": "수관 · 이끼 계단 위",
+     "pos": [
+      2000,
+      360
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": [
+    "moss_stairs_note"
+   ]
+  },
+  "canopy_06": {
+   "name": "수관 · 바람의 다리",
+   "region": "canopy",
+   "offset": [
+    15400,
+    -6623
+   ],
+   "bounds": [
+    0,
+    0,
+    5400,
+    1600
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy05": [
+     120,
+     712
+    ],
+    "FromCanopy07": [
+     5280,
+     712
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      780
+     ],
+     "to": "canopy_05",
+     "spawn": "FromCanopy06",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      5210,
+      780
+     ],
+     "to": "canopy_07",
+     "spawn": "FromCanopy06",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "canopy_bridge_end",
+     "name": "수관 · 다리 끝",
+     "pos": [
+      3600,
+      780
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "canopy_07": {
+   "name": "수관 · 잿빛 둥지",
+   "region": "canopy",
+   "offset": [
+    15900,
+    -5023
+   ],
+   "bounds": [
+    0,
+    0,
+    3600,
+    2400
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy06": [
+     120,
+     532
+    ],
+    "FromBoss": [
+     3480,
+     2132
+    ],
+    "FromCanopyMini2": [
+     3300,
+     1232
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      600
+     ],
+     "to": "canopy_06",
+     "spawn": "FromCanopy07",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      3410,
+      2200
+     ],
+     "to": "canopy_boss",
+     "spawn": "FromCanopy04",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit3",
+     "pos": [
+      3410,
+      1300
+     ],
+     "to": "canopy_mini_2",
+     "spawn": "FromCanopy07",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "canopy_nest",
+     "name": "수관 · 잿빛 둥지",
+     "pos": [
+      3000,
+      2200
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": [
+    "ash_nest_stone"
+   ]
+  },
+  "canopy_boss": {
+   "name": "수관 · 꼭대기의 하늘",
+   "region": "canopy",
+   "offset": [
+    15900,
+    -2623
+   ],
+   "bounds": [
+    0,
+    0,
+    3700,
+    1800
+   ],
+   "boss": true,
+   "markers": {
+    "FromCanopy04": [
+     140,
+     1323
+    ],
+    "AfterBoss": [
+     1800,
+     1432
+    ],
+    "FromVillage": [
+     3460,
+     1432
+    ],
+    "GroundLine": [
+     1800,
+     1500
+    ],
+    "HoverLeft": [
+     1200,
+     1140
+    ],
+    "HoverCenter": [
+     1950,
+     1050
+    ],
+    "HoverRight": [
+     2800,
+     1140
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToCanopy04",
+     "pos": [
+      140,
+      1380
+     ],
+     "to": "canopy_07",
+     "spawn": "FromBoss",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToVillage",
+     "pos": [
+      3610,
+      1500
+     ],
+     "to": "village_01",
+     "spawn": "FromCanopy",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "canopy_boss_gate",
+     "name": "수관 · 싸움터 앞",
+     "pos": [
+      420,
+      1380
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "canopy_hidden": {
+   "name": "수관 · 잿가지의 둥지",
+   "region": "canopy",
+   "offset": [
+    1200,
+    -2400
+   ],
+   "bounds": [
+    0,
+    0,
+    2600,
+    1500
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy01": [
+     220,
+     1232
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1300
+     ],
+     "to": "canopy_01",
+     "spawn": "FromHidden",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "canopy_hidden_1": {
+   "name": "수관 · 벽 속의 둥지",
+   "region": "canopy",
+   "offset": [
+    4800,
+    -2600
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "canopy_02",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "canopy_hidden_2": {
+   "name": "수관 · 갈라진 가지 속",
+   "region": "canopy",
+   "offset": [
+    10800,
+    -3300
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "canopy_04",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": [
+    "scripture_1"
+   ]
+  },
+  "canopy_mini_1": {
+   "name": "수관 · 늙은 벌목꾼의 가지",
+   "region": "canopy",
+   "offset": [
+    9900,
+    -5823
+   ],
+   "bounds": [
+    0,
+    0,
+    2600,
+    1500
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy05": [
+     220,
+     1232
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1300
+     ],
+     "to": "canopy_05",
+     "spawn": "FromCanopyMini1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "canopy_mini_2": {
+   "name": "수관 · 장로의 온실",
+   "region": "canopy",
+   "offset": [
+    19500,
+    -5023
+   ],
+   "bounds": [
+    0,
+    0,
+    2600,
+    1500
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy07": [
+     220,
+     1232
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1300
+     ],
+     "to": "canopy_07",
+     "spawn": "FromCanopyMini2",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "flooded_mine_01": {
+   "name": "잠긴 채굴장 · 펌프실 통로",
+   "region": "flooded_mine",
+   "offset": [
+    35600,
+    3800
+   ],
+   "bounds": [
+    0,
+    0,
+    4000,
+    1400
+   ],
+   "boss": false,
+   "markers": {
+    "FromMineDeep": [
+     120,
+     1032
+    ],
+    "FromFlooded02": [
+     3880,
+     1032
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1100
+     ],
+     "to": "mine_deep",
+     "spawn": "FromFlooded",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      3810,
+      1100
+     ],
+     "to": "flooded_mine_02",
+     "spawn": "FromFlooded01",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "flooded_entry",
+     "name": "잠긴 채굴장 · 펌프실 입구",
+     "pos": [
+      450,
+      1100
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "flooded_mine_02": {
+   "name": "잠긴 채굴장 · 배관 위",
+   "region": "flooded_mine",
+   "offset": [
+    39700,
+    3800
+   ],
+   "bounds": [
+    0,
+    0,
+    3000,
+    2200
+   ],
+   "boss": false,
+   "markers": {
+    "FromFlooded01": [
+     120,
+     2032
+    ],
+    "FromFloodedBoss": [
+     2880,
+     352
+    ],
+    "FromHidden1": [
+     250,
+     1382
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      2100
+     ],
+     "to": "flooded_mine_01",
+     "spawn": "FromFlooded02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      2810,
+      420
+     ],
+     "to": "flooded_mine_boss",
+     "spawn": "FromFlooded02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      190,
+      1450
+     ],
+     "to": "flooded_mine_hidden_1",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [
+    "cracked_flooded_mine_02_1"
+   ],
+   "records": [
+    "blueprint_piece"
+   ]
+  },
+  "flooded_mine_boss": {
+   "name": "잠긴 채굴장 · 펌프실의 심장",
+   "region": "flooded_mine",
+   "offset": [
+    35600,
+    5300
+   ],
+   "bounds": [
+    0,
+    0,
+    3700,
+    1800
+   ],
+   "boss": true,
+   "markers": {
+    "FromFlooded02": [
+     140,
+     1323
+    ],
+    "AfterBoss": [
+     1800,
+     1432
+    ],
+    "GroundLine": [
+     1800,
+     1500
+    ],
+    "HoverLeft": [
+     1200,
+     1000
+    ],
+    "HoverCenter": [
+     1950,
+     920
+    ],
+    "HoverRight": [
+     2800,
+     1000
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToFlooded02",
+     "pos": [
+      140,
+      1380
+     ],
+     "to": "flooded_mine_02",
+     "spawn": "FromFloodedBoss",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "flooded_boss_gate",
+     "name": "잠긴 채굴장 · 심장 앞",
+     "pos": [
+      420,
+      1380
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "flooded_mine_hidden_1": {
+   "name": "잠긴 채굴장 · 녹슨 틈",
+   "region": "flooded_mine",
+   "offset": [
+    42800,
+    3800
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "flooded_mine_02",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "hidden_descent": {
+   "name": "수액의 호수 · 숨은 내리막",
+   "region": "sap_lake",
+   "offset": [
+    23540,
+    -923
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    3000
+   ],
+   "boss": false,
+   "markers": {
+    "FromVillage": [
+     980,
+     232
+    ],
+    "FromLake": [
+     1250,
+     2632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToVillage",
+     "pos": [
+      970,
+      300
+     ],
+     "to": "village_02",
+     "spawn": "FromHiddenDescent",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToLake",
+     "pos": [
+      1410,
+      2700
+     ],
+     "to": "sap_lake_01",
+     "spawn": "FromDescent",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "mine_01": {
+   "name": "채굴장 · 내려가는 갱도",
+   "region": "mine",
+   "offset": [
+    27700,
+    -1000
+   ],
+   "bounds": [
+    0,
+    0,
+    2900,
+    3200
+   ],
+   "boss": false,
+   "markers": {
+    "FromVillage": [
+     120,
+     372
+    ],
+    "FromMine02": [
+     2480,
+     2932
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      440
+     ],
+     "to": "village_02",
+     "spawn": "FromMine",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      2410,
+      3000
+     ],
+     "to": "mine_02",
+     "spawn": "FromMine01",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "mine_top",
+     "name": "채굴장 · 갱도 입구",
+     "pos": [
+      600,
+      440
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": [
+    "mine_poster"
+   ]
+  },
+  "mine_02": {
+   "name": "채굴장 · 관의 복도",
+   "region": "mine",
+   "offset": [
+    30600,
+    700
+   ],
+   "bounds": [
+    0,
+    0,
+    5000,
+    1500
+   ],
+   "boss": false,
+   "markers": {
+    "FromMine01": [
+     120,
+     1132
+    ],
+    "FromMineBoss": [
+     4880,
+     1132
+    ],
+    "FromMineDeep": [
+     4760,
+     652
+    ],
+    "FromMineMini": [
+     1830,
+     1132
+    ],
+    "FromHidden1": [
+     170,
+     802
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1200
+     ],
+     "to": "mine_01",
+     "spawn": "FromMine02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      4810,
+      1200
+     ],
+     "to": "mine_boss",
+     "spawn": "FromMine02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit3",
+     "pos": [
+      4830,
+      720
+     ],
+     "to": "mine_deep",
+     "spawn": "FromMine02",
+     "requires": "lantern",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit4",
+     "pos": [
+      1700,
+      1200
+     ],
+     "to": "mine_mini_1",
+     "spawn": "FromMine02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      262,
+      870
+     ],
+     "to": "mine_hidden_2",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "mine_owen",
+     "name": "채굴장 · 오웬의 등불",
+     "pos": [
+      2600,
+      1200
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [
+    "cracked_mine_02_1"
+   ],
+   "records": [
+    "scripture_mine"
+   ]
+  },
+  "mine_boss": {
+   "name": "채굴장 · 등불의 심장",
+   "region": "mine",
+   "offset": [
+    35600,
+    1900
+   ],
+   "bounds": [
+    0,
+    0,
+    3700,
+    1800
+   ],
+   "boss": true,
+   "markers": {
+    "FromMine02": [
+     140,
+     1323
+    ],
+    "AfterBoss": [
+     1800,
+     1432
+    ],
+    "FromVillage": [
+     3460,
+     1432
+    ],
+    "GroundLine": [
+     1800,
+     1500
+    ],
+    "HoverLeft": [
+     1200,
+     1000
+    ],
+    "HoverCenter": [
+     1950,
+     920
+    ],
+    "HoverRight": [
+     2800,
+     1000
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToMine02",
+     "pos": [
+      140,
+      1380
+     ],
+     "to": "mine_02",
+     "spawn": "FromMineBoss",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "mine_boss_gate",
+     "name": "채굴장 · 심장 앞",
+     "pos": [
+      420,
+      1380
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "mine_deep": {
+   "name": "채굴장 · 책임자의 방",
+   "region": "mine",
+   "offset": [
+    35600,
+    500
+   ],
+   "bounds": [
+    0,
+    0,
+    4800,
+    1400
+   ],
+   "boss": false,
+   "markers": {
+    "FromMine02": [
+     120,
+     1032
+    ],
+    "ToAbyss": [
+     2880,
+     1032
+    ],
+    "FromFlooded": [
+     4700,
+     1032
+    ],
+    "FromHidden1": [
+     170,
+     772
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1100
+     ],
+     "to": "mine_02",
+     "spawn": "FromMineDeep",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      2810,
+      1100
+     ],
+     "to": "abyss_01",
+     "spawn": "FromMineDeep",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToFlooded",
+     "pos": [
+      4610,
+      1100
+     ],
+     "to": "flooded_mine_01",
+     "spawn": "FromMineDeep",
+     "requires": "sap_walk",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      262,
+      840
+     ],
+     "to": "mine_hidden_1",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "mine_deep",
+     "name": "채굴장 · 가장 깊은 곳",
+     "pos": [
+      1150,
+      1100
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [
+    "cracked_mine_deep_1"
+   ],
+   "records": [
+    "last_order"
+   ]
+  },
+  "mine_hidden_1": {
+   "name": "채굴장 · 묻힌 갱도",
+   "region": "mine",
+   "offset": [
+    34000,
+    -500
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "mine_deep",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "mine_hidden_2": {
+   "name": "채굴장 · 막힌 관",
+   "region": "mine",
+   "offset": [
+    30600,
+    -200
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "mine_02",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": [
+    "scripture_3"
+   ]
+  },
+  "mine_mini_1": {
+   "name": "채굴장 · 괴수의 굴",
+   "region": "mine",
+   "offset": [
+    31000,
+    2200
+   ],
+   "bounds": [
+    0,
+    0,
+    2600,
+    1500
+   ],
+   "boss": false,
+   "markers": {
+    "FromMine02": [
+     220,
+     1232
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1300
+     ],
+     "to": "mine_02",
+     "spawn": "FromMineMini",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "moon_garden": {
+   "name": "달빛 정원",
+   "region": "abyss",
+   "offset": [
+    48900,
+    300
+   ],
+   "bounds": [
+    0,
+    0,
+    3000,
+    1300
+   ],
+   "boss": false,
+   "markers": {
+    "FromAbyss02": [
+     120,
+     1032
+    ],
+    "FromBoss": [
+     2880,
+     1032
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1100
+     ],
+     "to": "abyss_02",
+     "spawn": "FromGarden",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      2810,
+      1100
+     ],
+     "to": "abyss_boss",
+     "spawn": "FromGarden",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "",
+     "name": "",
+     "pos": [
+      410,
+      1100
+     ],
+     "decor": true
+    },
+    {
+     "id": "",
+     "name": "",
+     "pos": [
+      650,
+      1100
+     ],
+     "decor": true
+    },
+    {
+     "id": "",
+     "name": "",
+     "pos": [
+      1000,
+      1100
+     ],
+     "decor": true
+    },
+    {
+     "id": "",
+     "name": "",
+     "pos": [
+      1950,
+      1100
+     ],
+     "decor": true
+    },
+    {
+     "id": "",
+     "name": "",
+     "pos": [
+      2300,
+      1100
+     ],
+     "decor": true
+    },
+    {
+     "id": "",
+     "name": "",
+     "pos": [
+      2560,
+      1100
+     ],
+     "decor": true
+    },
+    {
+     "id": "moon_garden",
+     "name": "달빛 정원",
+     "pos": [
+      1500,
+      1100
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "sap_lake_01": {
+   "name": "수액의 호수 · 호숫가의 뿌리",
+   "region": "sap_lake",
+   "offset": [
+    25400,
+    2200
+   ],
+   "bounds": [
+    0,
+    0,
+    4600,
+    1800
+   ],
+   "boss": false,
+   "markers": {
+    "FromDescent": [
+     200,
+     532
+    ],
+    "FromLake02": [
+     4330,
+     1492
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToDescent",
+     "pos": [
+      190,
+      600
+     ],
+     "to": "hidden_descent",
+     "spawn": "FromLake",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToLake02",
+     "pos": [
+      4410,
+      1560
+     ],
+     "to": "sap_lake_02",
+     "spawn": "FromLake01",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "lake_shore",
+     "name": "수액의 호수 · 호숫가의 뿌리",
+     "pos": [
+      2050,
+      1560
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": [
+    "fisher_tally"
+   ]
+  },
+  "sap_lake_02": {
+   "name": "수액의 호수 · 수면 자국 벽",
+   "region": "sap_lake",
+   "offset": [
+    28500,
+    4000
+   ],
+   "bounds": [
+    0,
+    0,
+    3300,
+    3000
+   ],
+   "boss": false,
+   "markers": {
+    "FromLake01": [
+     480,
+     2832
+    ],
+    "FromBoss": [
+     3020,
+     432
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToLake01",
+     "pos": [
+      400,
+      2900
+     ],
+     "to": "sap_lake_01",
+     "spawn": "FromLake02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToBoss",
+     "pos": [
+      3110,
+      500
+     ],
+     "to": "sap_lake_boss",
+     "spawn": "FromLake02",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "lake_marks",
+     "name": "수액의 호수 · 수면 자국 위",
+     "pos": [
+      2550,
+      1100
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": [
+    "dry_channel_mark"
+   ]
+  },
+  "sap_lake_boss": {
+   "name": "수액의 호수 · 호수 한가운데",
+   "region": "sap_lake",
+   "offset": [
+    31900,
+    3800
+   ],
+   "bounds": [
+    0,
+    0,
+    3700,
+    1800
+   ],
+   "boss": true,
+   "markers": {
+    "FromLake02": [
+     140,
+     1313
+    ],
+    "AfterBoss": [
+     1850,
+     1433
+    ],
+    "GroundLine": [
+     1850,
+     1500
+    ],
+    "HoverLeft": [
+     1250,
+     733
+    ],
+    "HoverCenter": [
+     1850,
+     733
+    ],
+    "HoverRight": [
+     2450,
+     733
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToLake02",
+     "pos": [
+      140,
+      1380
+     ],
+     "to": "sap_lake_02",
+     "spawn": "FromBoss",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "lake_boss_gate",
+     "name": "수액의 호수 · 호수 한가운데 앞",
+     "pos": [
+      420,
+      1380
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [],
+   "records": []
+  },
+  "village_01": {
+   "name": "마을 · 입구의 거리",
+   "region": "village",
+   "offset": [
+    19600,
+    -2523
+   ],
+   "bounds": [
+    0,
+    0,
+    4200,
+    1600
+   ],
+   "boss": false,
+   "markers": {
+    "FromCanopy": [
+     120,
+     1332
+    ],
+    "FromVillage02": [
+     4080,
+     1332
+    ],
+    "FromHidden1": [
+     4030,
+     952
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1400
+     ],
+     "to": "canopy_boss",
+     "spawn": "FromVillage",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      4010,
+      1400
+     ],
+     "to": "village_02",
+     "spawn": "FromVillage01",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      3938,
+      1020
+     ],
+     "to": "village_hidden_1",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "village_gate",
+     "name": "마을 · 입구의 등불",
+     "pos": [
+      480,
+      1400
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [
+    "cracked_village_01_1"
+   ],
+   "records": [
+    "village_poster"
+   ]
+  },
+  "village_02": {
+   "name": "마을 · 등불 골목",
+   "region": "village",
+   "offset": [
+    23800,
+    -2523
+   ],
+   "bounds": [
+    0,
+    0,
+    3800,
+    1600
+   ],
+   "boss": false,
+   "markers": {
+    "FromVillage01": [
+     120,
+     1332
+    ],
+    "FromShrine": [
+     3550,
+     503
+    ],
+    "FromMine": [
+     3600,
+     1332
+    ],
+    "FromVillageMini": [
+     2980,
+     492
+    ],
+    "FromHiddenDescent": [
+     820,
+     1332
+    ],
+    "FromHidden1": [
+     170,
+     882
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1400
+     ],
+     "to": "village_01",
+     "spawn": "FromVillage02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit2",
+     "pos": [
+      3610,
+      560
+     ],
+     "to": "village_shrine",
+     "spawn": "FromVillage02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit3",
+     "pos": [
+      3610,
+      1400
+     ],
+     "to": "mine_01",
+     "spawn": "FromVillage",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/Exit4",
+     "pos": [
+      2850,
+      560
+     ],
+     "to": "village_mini_1",
+     "spawn": "FromVillage02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToHiddenDescent",
+     "pos": [
+      720,
+      1400
+     ],
+     "to": "hidden_descent",
+     "spawn": "FromVillage",
+     "requires": "lantern",
+     "hidden": true
+    },
+    {
+     "node": "Exits/ToHidden1",
+     "pos": [
+      262,
+      950
+     ],
+     "to": "village_hidden_2",
+     "spawn": "FromMain",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [
+    {
+     "id": "village_tia",
+     "name": "마을 · 마을 끝 달빛풀",
+     "pos": [
+      3300,
+      1400
+     ],
+     "decor": false
+    }
+   ],
+   "cracked": [
+    "cracked_village_02_1"
+   ],
+   "records": []
+  },
+  "village_hidden_1": {
+   "name": "마을 · 지붕 밑 다락",
+   "region": "village",
+   "offset": [
+    19600,
+    -3523
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "village_01",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": [
+    "scripture_2"
+   ]
+  },
+  "village_hidden_2": {
+   "name": "마을 · 숨은 뜰",
+   "region": "village",
+   "offset": [
+    23400,
+    -3523
+   ],
+   "bounds": [
+    0,
+    0,
+    1600,
+    900
+   ],
+   "boss": false,
+   "markers": {
+    "FromMain": [
+     120,
+     632
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "village_02",
+     "spawn": "FromHidden1",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "village_mini_1": {
+   "name": "마을 · 경비대장의 망루",
+   "region": "village",
+   "offset": [
+    25000,
+    -4100
+   ],
+   "bounds": [
+    0,
+    0,
+    2600,
+    1500
+   ],
+   "boss": false,
+   "markers": {
+    "FromVillage02": [
+     220,
+     1232
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1300
+     ],
+     "to": "village_02",
+     "spawn": "FromVillageMini",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
+  },
+  "village_shrine": {
+   "name": "마을 · 세계수의 사당",
+   "region": "village",
+   "offset": [
+    27600,
+    -3200
+   ],
+   "bounds": [
+    0,
+    0,
+    3200,
+    1200
+   ],
+   "boss": false,
+   "markers": {
+    "FromVillage02": [
+     120,
+     932
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/Exit1",
+     "pos": [
+      190,
+      1000
+     ],
+     "to": "village_02",
+     "spawn": "FromShrine",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": [
+    "scripture_village"
+   ]
+  }
+ }
+}

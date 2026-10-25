@@ -203,7 +203,7 @@ func interact(by: Player) -> void:
 	by.start_rest(self)
 	rested.emit(by)
 	if grass_id != "":
-		SaveGame.save(grass_id, get_tree().current_scene.scene_file_path)
+		SaveGame.save(grass_id, _room_scene())
 		var hud := get_tree().current_scene.get_node_or_null("CombatHUD")
 		if hud:
 			hud.flash("저장되었다")
@@ -211,10 +211,22 @@ func interact(by: Player) -> void:
 
 func _register() -> void:
 	if grass_id != "":
-		var scene_path := get_tree().current_scene.scene_file_path
-		var shown := display_name if display_name != "" else grass_id
+		var scene_path := _room_scene()
+		# 이름은 지도와 같은 방 이름 (v1.1.0 기획자 요청 21 — RoomIndex). 방 목록에 없으면 이 달빛풀의 표시 이름.
+		var shown := RoomIndex.grass_room_name(grass_id, display_name if display_name != "" else grass_id)
 		Progress.grasses[grass_id] = {"scene": scene_path, "name": shown}
 		Progress.last_grass = {"id": grass_id, "scene": scene_path, "name": shown}
+
+
+## 이 달빛풀이 놓인 방의 파일 경로 (시험처럼 방이 '지금 장면'의 자식으로 놓여 있어도 방 파일을 가리키게).
+func _room_scene() -> String:
+	var n := get_parent()
+	while n != null:
+		if n is Room and (n as Room).scene_file_path != "":
+			return (n as Room).scene_file_path
+		n = n.get_parent()
+	var cs := get_tree().current_scene
+	return cs.scene_file_path if cs else ""
 
 
 ## 이동해서 도착했다: 바로 쉬는 자세로.

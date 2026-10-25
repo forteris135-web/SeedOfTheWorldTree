@@ -128,6 +128,17 @@ func _on_boss_telegraph(kind: String) -> void:
 				Music.play(boss_track_2, 0.6, true)
 
 
+## 지도 탐사 요소: 이 방의 지역 보스 (정화해야 '모두 찾음' — v1.1.0 기획자 요청 24). Room._collect_explore_ids 가 부른다.
+func _boss_flags() -> Array:
+	return [defeat_flag] if defeat_flag != "" else []
+
+
+## 쓰러졌다 (v1.1.0, D10). 2.6초 뒤:
+## 1) 보스가 이미 쓰러져 정화를 기다리면 승리를 지킨다 — 문만 열고 이 방의 마지막 자리에서 일어나 다시 손을 얹으러 온다.
+## 2) 그 밖에는 마지막으로 쉰 달빛풀의 방을 다시 읽는다 (Room._respawn_at_last_grass) — 이 방이면 보스가 완전히 새로 만들어져
+##    싸움이 처음 상태로 돌아간다 (잎 더미·연속 공격 단계·투사체까지).
+## 3) 쉰 달빛풀이 없으면 이 방을 다시 읽어 들어온 자리에서 일어난다 (Room._reload_here — 역시 싸움이 처음 상태로).
+##    다시 읽을 수 없을 때(시험이 방을 자식으로 놓았을 때 등)만 예전처럼 이 자리에서 싸움을 되돌린다.
 func _on_player_died() -> void:
 	if _rush:
 		_rush_player_died()
@@ -135,9 +146,9 @@ func _on_player_died() -> void:
 	await get_tree().create_timer(2.6).timeout
 	if player == null or not is_instance_valid(player):
 		return
-	respawn_enemies()
 	if _boss_is_down():
-		# 보스는 이미 쓰러져 정화를 기다린다: 승리를 되돌리지 않는다. 문만 열고 마지막 자리에서 일어나 다시 손을 얹으러 온다.
+		Progress.clear_killed()
+		respawn_enemies()
 		gate_in.open()
 		gate_out.open()
 		_clear_hostile_projectiles()
@@ -146,6 +157,12 @@ func _on_player_died() -> void:
 		if cam0:
 			cam0.reset_smoothing()
 		return
+	if _respawn_at_last_grass():
+		return
+	if not Progress.has(defeat_flag) and is_instance_valid(boss) and _reload_here():
+		return
+	Progress.clear_killed()
+	respawn_enemies()
 	if is_instance_valid(boss):
 		boss.reset_fight()
 	fight_started = false

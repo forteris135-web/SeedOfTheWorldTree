@@ -20,6 +20,13 @@ const TEX := preload("res://art/objects/portal.png")
 const OPAQUE_BOTTOM := 1232.0
 const DOOR_CENTER := Vector2(630.0, 720.0)
 const GLOW := Color(1.0, 0.9, 0.68)
+## 안내 글자 칸 너비 (가운데 맞춤)
+const PROMPT_W := 760.0
+## 방 끝에서 이만큼 안쪽에 있는 포탈은 글자를 방 안쪽으로 붙인다 (글자 끝이 포탈 가운데에서 PROMPT_INSET 만큼 바깥)
+const PROMPT_EDGE := 420.0
+const PROMPT_INSET := 110.0
+## 아직 가 보지 않은 방으로 가는 포탈의 목적지 이름
+const UNKNOWN_NAME := "???"
 
 var _sprite: Sprite2D
 var _glow: Sprite2D
@@ -29,6 +36,8 @@ var _player_near: Player
 var _time := 0.0
 var _used := false
 var _warned_at := -10.0
+## 안내에 붙는 목적지 이름 (가 본 방이면 지도 이름, 아니면 "???") — 다가올 때마다 다시 정한다
+var _dest_name := ""
 
 
 func _ready() -> void:
@@ -107,14 +116,27 @@ func _ready() -> void:
 		light.position = door
 		add_child(light)
 
+	# 안내 글자: '들어가기 → 목적지 이름' 이 길어져도 포탈 위 가운데에 오게 (넓은 칸 + 가운데 맞춤)
 	_prompt = Label.new()
 	_prompt.add_theme_font_size_override("font_size", 22)
 	_prompt.add_theme_color_override("font_color", Color("ffe9c0"))
 	_prompt.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	_prompt.add_theme_constant_override("outline_size", 6)
-	_prompt.position = Vector2(-90, -360)
+	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_prompt.size = Vector2(PROMPT_W, 34)
+	_prompt.position = Vector2(-PROMPT_W / 2.0, -360)
+	# 방 끝에 붙은 포탈은 글자가 화면 밖으로 잘리지 않게 방 안쪽으로 붙인다 (카메라는 방 경계 밖을 보여 주지 않는다)
+	if room and room.get("bounds") is Rect2:
+		var b: Rect2 = room.get("bounds")
+		if b.end.x - position.x < PROMPT_EDGE:
+			_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			_prompt.position.x = -PROMPT_W + PROMPT_INSET
+		elif position.x - b.position.x < PROMPT_EDGE:
+			_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			_prompt.position.x = -PROMPT_INSET
 	_prompt.visible = false
 	add_child(_prompt)
+	_dest_name = destination_name()
 
 
 func _room() -> Node:
@@ -130,7 +152,7 @@ func _process(delta: float) -> void:
 	if _player_near and not _used and _player_near.pick_interactable() == self:
 		_prompt.visible = true
 		var locked := requires_ability != "" and not Progress.has_ability(requires_ability)
-		_prompt.text = "잠긴 길" if locked else "%s  들어가기" % InputDevice.prompt("interact")
+		_prompt.text = "잠긴 길" if locked else "%s 들어가기 → %s" % [InputDevice.prompt("interact"), _dest_name]
 	else:
 		_prompt.visible = false
 	var pulse := 0.85 + 0.15 * sin(_time * 1.7)
@@ -141,7 +163,21 @@ func _process(delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if body is Player:
 		_player_near = body
+		_dest_name = destination_name()
 		body.register_interactable(self)
+
+
+## 이 포탈이 가는 방 (방 id = 방 파일 이름)
+func destination_id() -> String:
+	return target_scene.get_file().get_basename()
+
+
+## 안내에 쓰는 목적지 이름 (v1.1.0 기획자 요청 22): 가 본 방이면 지도 이름(RoomIndex), 아니면 "???".
+func destination_name() -> String:
+	var to := destination_id()
+	if to == "" or not Progress.visited_rooms.has(to):
+		return UNKNOWN_NAME
+	return RoomIndex.room_name(to, str(Progress.visited_rooms[to].get("name", to)))
 
 
 func _on_body_exited(body: Node) -> void:

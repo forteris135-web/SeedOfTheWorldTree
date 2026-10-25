@@ -28,11 +28,18 @@ var _map: MapScreen
 var player: Player
 var rest_point := Vector2.ZERO
 var _spawn := Vector2.ZERO
-var _enemy_spawns: Array = []   # [{scene: String, position: Vector2, parent: Node, props: Dictionary}]
+## 이 방에 들어온 자리 (Progress.next_spawn 값: 표식 이름 / "Grass:<id>" / "" = 새로 시작·이어하기·시험). _reload_here 가 같은 자리로 다시 읽는다.
+var _arrival_spawn := ""
+## 처음 놓인 적들: [{scene, position, parent, props, key: 순번 글자, track: 쓰러뜨림을 기억하는가}]
+## key = 방에 놓인 순서(트리 순서)의 번호. 쓰러뜨린 일반 적은 Progress.killed[room_id][key] 에 남아 달빛풀에서 쉬기 전까지 다시 나타나지 않는다
+## (v1.1.0 기획자 요청 13). 구원할 수 있는 자·깃발이 있는 적(중간 보스·거대화 적)·중간 보스 방의 보스는 기억하지 않는다 —
+## 그들은 구원 기록·깃발이 맡는다 (구원할 수 있는 사람은 반드시 구원된다).
+var _enemy_spawns: Array = []
 ## 포탈·달빛풀로 들어선 뒤 적이 소녀를 알아채지 않는 시간(초). 화면이 밝아지는 1.2초 + 둘러볼 틈.
 const ARRIVAL_GRACE := 2.8
-## 지도용 탐사 요소의 id 목록 (방에 들어올 때 한 번 모은다): pickups / rescues / records / grasses / minibosses
+## 지도용 탐사 요소의 id 목록 (방에 들어올 때 한 번 모은다): pickups / rescues / records / grasses / minibosses / walls / bosses
 ## minibosses = 이 방 중간 보스의 깃발(defeat_flag). 쓰러뜨려야 '모두 찾음'이 된다 (2026-10-19 기획자 결정).
+## walls = 금 간 벽(CrackedWall.secret_id, 부숴야), bosses = 지역 보스 깃발(정화해야) — v1.1.0 기획자 요청 23·24.
 var _explore_ids := {}
 var _explore_timer := 0.0
 
@@ -41,6 +48,8 @@ func _ready() -> void:
 	player = get_tree().get_first_node_in_group("player") as Player
 	EnemyBase.arrival_grace_until = 0.0
 	var arrived_resting := false   # 달빛풀로 이동해 와서 쉬는 자세로 도착 (음악: 쉼터 곡을 이어 간다)
+	var arrived_spawn := Progress.next_spawn   # 다른 방에서 넘어왔는가 (비어 있으면 새로 시작·이어하기·시험)
+	_arrival_spawn = arrived_spawn
 	if player:
 		# 다른 방에서 넘어왔다면 그 출구에 맞는 자리에 선다
 		if Progress.next_spawn != "":
@@ -75,11 +84,20 @@ func _ready() -> void:
 		player.died.connect(_on_player_died)
 		player.rest_started.connect(_on_player_rested)
 		player.state_changed.connect(_on_player_state_for_music)
+		# 방을 옮겨도 체력·이슬은 이어진다 (v1.1.0 기획자 요청 13 — Game.go_to 가 앞 방에서 적어 둔 값).
+		# 달빛풀로 도착하면 쉬기(가득)라서 이어 받지 않는다. 기력(가드 게이지)은 이어 가지 않는다 (가득).
+		if not arrived_resting and arrived_spawn != "" and Progress.carry_hp >= 0.0:
+			player.set_vitals(Progress.carry_hp, Progress.carry_dews if Progress.carry_dews >= 0 else player.dews)
+	# 한 번 이어 받은 값은 지운다 (다음 방에서 다시 쓰이지 않게)
+	Progress.carry_hp = -1.0
+	Progress.carry_dews = -1
 	var overrides := _scene_overrides()
 	for e in get_tree().get_nodes_in_group("enemy"):
 		if e is Node2D and e.scene_file_path != "":
-			_enemy_spawns.append({"scene": e.scene_file_path, "position": e.position, "parent": e.get_parent(),
-				"props": overrides.get(_rel_path(e), {})})
+			var info := {"scene": e.scene_file_path, "position": e.position, "parent": e.get_parent(),
+				"props": overrides.get(_rel_path(e), {}), "key": str(_enemy_spawns.size()), "track": _tracks_kill(e)}
+			_enemy_spawns.append(info)
+			_bind_enemy(e, info, true)
 	Purity.progress.connect(_on_purity_progress)
 	Purity.apply_region(region)
 	Purity.apply_depth(TerrainSkin.depth_of(self))   # 앞뒤 가르기 (배경 아지랑이·앞 지형·뒤 그림자 — 방의 그림 옷 데이터)
@@ -202,7 +220,8 @@ func open_map() -> void:
 
 ## 지도에 이 방을 기록한다 (방문한 방만 지도에 그려진다).
 ## 지도용 계약: visited_rooms[room_id] 에 "explore_total"(이 방의 탐사 요소 수) 와 "explore_found"(그중 찾은 수) 를 넣는다.
-## 탐사 요소 = 아이템(Pickup, 비밀 안의 것 포함) + 구원 가능한 자 + 기록물 + 달빛풀(장식 아님) + 중간 보스(쓰러뜨림).
+## 탐사 요소 = 아이템(Pickup, 비밀 안의 것 포함) + 구원 가능한 자 + 기록물 + 달빛풀(장식 아님) + 중간 보스(쓰러뜨림)
+## + 금 간 벽(부숨) + 지역 보스(정화). 다 찾으면(0/0 포함) 지도에서 초록.
 func _register_on_map() -> void:
 	if room_id == "":
 		return
@@ -237,10 +256,13 @@ func _register_on_map() -> void:
 ## 중간 보스: 방의 깃발(MiniBossRoom.defeat_flag, _miniboss_flags) + 깃발을 가진 적(EnemyBase.defeat_flag — 거대화 중간 보스·잿가지 거인).
 ## 이미 쓰러뜨린 보스는 _ready 에서 queue_free 되지만 이 프레임 끝까지는 남아 있고, 방의 깃발로도 센다.
 func _collect_explore_ids() -> Dictionary:
-	var ids := {"pickups": [], "rescues": [], "records": [], "grasses": [], "minibosses": []}
+	var ids := {"pickups": [], "rescues": [], "records": [], "grasses": [], "minibosses": [], "walls": [], "bosses": []}
 	for flag in _miniboss_flags():
 		if flag != "" and not ids["minibosses"].has(flag):
 			ids["minibosses"].append(flag)
+	for flag in _boss_flags():
+		if flag != "" and not ids["bosses"].has(flag):
+			ids["bosses"].append(flag)
 	var nodes: Array = []
 	_walk(self, nodes)
 	for n in nodes:
@@ -253,6 +275,9 @@ func _collect_explore_ids() -> Dictionary:
 		elif n is MoonlightGrass:
 			if not n.decor and n.grass_id != "" and not ids["grasses"].has(n.grass_id):
 				ids["grasses"].append(n.grass_id)
+		elif n is CrackedWall:
+			if n.secret_id != "" and not ids["walls"].has(n.secret_id):
+				ids["walls"].append(n.secret_id)
 		elif n is EnemyBase:
 			if n.savable and n.rescue_id != "" and not ids["rescues"].has(n.rescue_id):
 				ids["rescues"].append(n.rescue_id)
@@ -262,8 +287,12 @@ func _collect_explore_ids() -> Dictionary:
 
 
 ## 이 방에 있는 중간 보스의 깃발들. 보통 방은 없음, MiniBossRoom 이 자기 defeat_flag 를 돌려준다.
-## (BossRoom 의 defeat_flag 는 지역 보스라서 탐사 요소가 아니다)
 func _miniboss_flags() -> Array:
+	return []
+
+
+## 이 방의 지역 보스 깃발들 (v1.1.0 기획자 요청 24: 보스 방은 보스를 정화해야 '모두 찾음'). 보통 방은 없음, BossRoom 이 돌려준다.
+func _boss_flags() -> Array:
 	return []
 
 
@@ -295,6 +324,12 @@ func _explore_found() -> int:
 		if Progress.grasses.has(id):
 			n += 1
 	for flag in _explore_ids.get("minibosses", []):
+		if Progress.has(flag):
+			n += 1
+	for id in _explore_ids.get("walls", []):
+		if Progress.is_collected(id):
+			n += 1
+	for flag in _explore_ids.get("bosses", []):
 		if Progress.has(flag):
 			n += 1
 	return n
@@ -338,11 +373,14 @@ func _on_purity_progress(value: float) -> void:
 				t.color = terrain_color
 
 
-## 모든 일반 적을 처음 자리로 되돌린다 (불사의 저주).
+## 모든 일반 적을 처음 자리로 되돌린다 (불사의 저주). 단 쓰러뜨린 기록(Progress.killed)이 남은 적은 그대로 비워 둔다 —
+## 달빛풀에서 쉬거나 쓰러져 다시 일어날 때는 기록을 먼저 지우고(clear_killed) 부르므로 모두 돌아온다.
 func respawn_enemies() -> void:
 	for e in get_tree().get_nodes_in_group("enemy"):
 		e.queue_free()
 	for info in _enemy_spawns:
+		if _is_killed_spawn(info):
+			continue
 		var scene: PackedScene = load(info["scene"])
 		if scene == null:
 			continue
@@ -353,7 +391,43 @@ func respawn_enemies() -> void:
 		var props: Dictionary = info.get("props", {})
 		for k in props:
 			e.set(k, props[k])
+		_bind_enemy(e, info, false)
 		(info["parent"] as Node).add_child(e)
+
+
+## 이 적의 쓰러뜨림을 기억하는가 (처음 놓인 적을 모을 때 한 번 묻는다).
+## 구원할 수 있는 자(구원 기록이 맡음)·깃발이 있는 적(깃발이 맡음)은 빼고, MiniBossRoom 은 자기 보스도 뺀다.
+func _tracks_kill(e: Node) -> bool:
+	var eb := e as EnemyBase
+	if room_id == "" or eb == null:
+		return false
+	return not eb.savable and eb.defeat_flag == ""
+
+
+## 이 자리의 적은 쓰러뜨린 기록이 있는가
+func _is_killed_spawn(info: Dictionary) -> bool:
+	return bool(info.get("track", false)) and Progress.is_killed(room_id, str(info.get("key", "")))
+
+
+## 적에게 자리 번호를 붙이고 쓰러짐을 듣는다. already_in_tree: 방 파일에 처음부터 있던 적 (기록이 있으면 지운다 — 묘목·빛 가루 없이).
+func _bind_enemy(e: Node, info: Dictionary, already_in_tree: bool) -> void:
+	var key := str(info.get("key", ""))
+	e.set_meta("spawn_key", key)
+	if not bool(info.get("track", false)):
+		return
+	if already_in_tree and Progress.is_killed(room_id, key):
+		e.remove_from_group("enemy")
+		e.queue_free()
+		return
+	var eb := e as EnemyBase
+	if eb:
+		eb.died.connect(_on_enemy_killed.bind(key))   # 적 하나에 한 번만 불린다 (처음 놓일 때 / 다시 만들 때)
+
+
+## 일반 적을 쓰러뜨렸다 (정화했든 아니든): 달빛풀에서 쉬기 전까지 이 자리는 비어 있다.
+func _on_enemy_killed(_purified: bool, key: String) -> void:
+	if room_id != "":
+		Progress.mark_killed(room_id, key)
 
 
 ## 방 파일(.tscn)이 인스턴스 노드에 덮어쓴 속성들: { "Enemies/MinerSavable": {"rescue_id": "miner_hidden", …} }.
@@ -391,6 +465,7 @@ static func _clean_path(p: String) -> String:
 
 func _on_player_rested(grass: Node2D) -> void:
 	rest_point = grass.global_position + Vector2(0, -2)
+	Progress.clear_killed()   # 쉬면 쓰러뜨린 적이 모두 돌아온다 (모든 방)
 	respawn_enemies()
 	_rest_music = true
 	Music.rest_begin()   # 쉬는 동안 쉼터 곡 (rest_moonlight_grass)
@@ -405,10 +480,57 @@ func _on_player_state_for_music(new_state: int) -> void:
 		Music.rest_end()
 
 
+## 쓰러졌다 (v1.1.0 기획자 요청 13, D10): 2.6초 뒤 마지막으로 쉰 달빛풀에서 '쉬기'와 같게 깨어난다 —
+## 그 방을 다시 읽으므로(같은 방이어도) 체력·이슬·기력이 가득하고, 쓰러뜨린 적이 모두 돌아오고, 보스 방이면 보스도 새로 나온다.
+## 아직 달빛풀에서 쉰 적이 없으면 이 방의 시작 자리에서 일어난다. (BossRoom·MiniBossRoom 도 같은 규칙: _respawn_at_last_grass)
 func _on_player_died() -> void:
 	await get_tree().create_timer(2.6).timeout
 	if player == null or not is_instance_valid(player):
 		return
+	if _respawn_at_last_grass():
+		return
+	_revive_here()
+
+
+## 마지막으로 쉰 달빛풀의 방으로 (그 달빛풀에서 쉬는 자세로 도착). 갈 수 없으면 false (보스 러시·쉰 적 없음·장면 전환 중·
+## 이 방이 '지금 장면'이 아님 — 시험이 방을 자기 자식으로 놓았을 때 장면 바꾸기가 시험 자체를 지우지 않게, 그 자리에서 일어난다).
+func _respawn_at_last_grass() -> bool:
+	if BossRush.active or Game.is_busy() or not is_inside_tree() or get_tree().current_scene != self:
+		return false
+	var gid := str(Progress.last_grass.get("id", ""))
+	# 달빛풀이 있는 방은 방 목록(RoomIndex)에서 찾는다 (없으면 저장된 경로). 방 파일이 아니면 가지 않는다.
+	var scene := RoomIndex.scene_of(RoomIndex.room_of_grass(gid))
+	if scene == "":
+		scene = str(Progress.last_grass.get("scene", ""))
+	if gid == "" or not scene.begins_with("res://scenes/rooms/") or not ResourceLoader.exists(scene):
+		return false
+	Progress.clear_killed()
+	Progress.carry_hp = -1.0
+	Progress.carry_dews = -1
+	Progress.next_spawn = "Grass:" + gid
+	Game.go_to(scene, 0.8, 1.0)
+	return true
+
+
+## 쉰 달빛풀이 없을 때 이 방을 다시 읽어 들어온 자리(_arrival_spawn)에서 일어난다 — 보스 방 재도전을 처음 상태로
+## (v1.1.0 기획자 요청 13: 보스 잎 더미·연속 공격 단계까지 새로). 체력·이슬은 가득(쓰러진 소녀는 Game.go_to 가 적지 않는다).
+## 갈 수 없으면 false (보스 러시·장면 전환 중·이 방이 '지금 장면'이 아님·방 파일 없음).
+func _reload_here() -> bool:
+	if BossRush.active or Game.is_busy() or not is_inside_tree() or get_tree().current_scene != self:
+		return false
+	if not scene_file_path.begins_with("res://scenes/rooms/"):
+		return false
+	Progress.clear_killed()
+	Progress.carry_hp = -1.0
+	Progress.carry_dews = -1
+	Progress.next_spawn = _arrival_spawn if not _arrival_spawn.begins_with("Grass:") else ""
+	Game.go_to(scene_file_path, 0.8, 1.0)
+	return true
+
+
+## 이 방에서 그대로 일어난다 (쉰 달빛풀이 없을 때): 쓰러뜨린 적이 돌아오고 체력·이슬이 가득.
+func _revive_here() -> void:
+	Progress.clear_killed()
 	respawn_enemies()
 	player.revive(rest_point)
 	var cam := player.get_node_or_null("Camera2D")
