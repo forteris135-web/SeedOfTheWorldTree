@@ -255,7 +255,7 @@ func _find_dark(room: Room) -> void:
 
 
 func _apply_dark(v: float) -> void:
-	if _dark_cm == null or not is_instance_valid(_dark_cm):
+	if not is_instance_valid(_dark_cm):
 		return
 	_dark_cm.color = _dark_base.lerp(Color.WHITE, DARK_LIFT * clampf(v, 0.0, 1.0))
 
