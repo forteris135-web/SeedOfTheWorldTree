@@ -6,5 +6,5 @@
 collision_layer = 0
 collision_mask = 2
 script = ExtResource("1_dew_cup")
-kind = "dews"
-amount = 1.0
+kind = "token"
+amount = 2.0

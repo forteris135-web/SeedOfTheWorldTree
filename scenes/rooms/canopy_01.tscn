@@ -274,7 +274,7 @@ display_name = "수관 · 시작의 가지"
 [node name="Pickup1" parent="Interactables" instance=ExtResource("52_pickup")]
 position = Vector2(4200, 2010)
 pickup_id = "pick_canopy_01_1"
-kind = "dews"
+kind = "token"
 amount = 1.0
 hidden_in = "secret_canopy_01_1"
 

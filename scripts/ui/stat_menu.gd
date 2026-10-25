@@ -6,9 +6,9 @@ class_name StatMenu
 ## 소녀가 _apply_abilities 로 다시 계산한다 — 아이템·구원 보상과 같은 길.
 ## 이 노드는 CanvasLayer 가 아니라 Control 이다: GrassMenu(달빛풀 메뉴)가 자기 판 안에 넣고 open()/handle()/close() 로 부린다.
 ## 안내 글자는 메뉴 안에만 둔다 (기획자 결정: 플레이 화면에 설명 글자 없음).
-## 이슬은 최대 8개 (Progress.MAX_DEWS, 2026-10-20 기획자 결정): 이슬이 가득하면 이슬 줄은 비용 대신 '가득'을 보이고 사지 않는다
-## (거절 이유 "full"). 빛 가루가 회복량으로 바뀌어 사라지는 것보다 분명하다 — 회복량을 원하면 회복량 줄을 산다.
-## 단계·비용은 그대로라 단계 눈금이 덜 찬 채 '가득'일 수 있다 (구슬·이슬잔·구원·중간 보스로 먼저 찬 경우).
+## 이슬은 최대 5개 (Progress.MAX_DEWS, v1.1.0 기획자 요청 16: 기본 3 + 이 메뉴의 이슬 2단계). 이슬이 가득하면 이슬 줄은
+## 비용 대신 '가득'을 보이고 사지 않는다 (거절 이유 "full"; 단계를 다 채워 가득해도 '가득'). 다른 이슬 보상은 모두 새순이 되었다.
+## v1.1.0 (기획자 요청 14): 빛 가루 비용은 v1.0 의 1.4배 (stats.json). 새순으로 사는 기술은 옆 탭 SkillMenu.
 
 signal purchased(kind: String, level: int, cost: int)
 ## "no_dust"(모자람) / "maxed"(최대 단계) / "full"(이슬이 이미 가득 — 이슬 줄만)
@@ -88,7 +88,7 @@ static func can_buy(item: Dictionary) -> String:
 	return ""
 
 
-## 단계와 상관없이 더 받을 수 없는가: 이슬이 이미 최대(8개)다.
+## 단계와 상관없이 더 받을 수 없는가: 이슬이 이미 최대(5개)다.
 static func is_full(kind: String) -> bool:
 	return kind == "dews" and Progress.dews_full()
 
@@ -235,7 +235,10 @@ func try_buy(i: int) -> String:
 		"maxed":
 			_shake = 0.6
 			Sfx.play("blip", -6.0)
-			_say(_data.get("maxed", "더는 자랄 수 없다"), Color(0.8, 0.8, 0.8))
+			if is_full(kind):
+				_say(full_text(_data), FULL_COLOR)   # 이슬 줄은 다 채우면 '가득' 표시와 같은 말로
+			else:
+				_say(_data.get("maxed", "더는 자랄 수 없다"), Color(0.8, 0.8, 0.8))
 			rejected.emit(kind, why)
 		"full":
 			_shake = 0.6
@@ -316,16 +319,16 @@ func _draw() -> void:
 			var pip := Rect2(r.position + Vector2(46 + k * 18.0, 54), Vector2(12, 12))
 			draw_rect(pip, DUST_COLOR if k < lvl else Color(1, 1, 1, 0.15))
 		draw_string(font, r.position + Vector2(46 + maxl * 18.0 + 10, 66), "%d / %d" % [lvl, maxl], HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1, 0.55))
-		var full := lvl < maxl and is_full(kind)
+		var full := is_full(kind)
 		var desc := str(item.get("desc", ""))
 		if full:
 			desc = str(_data.get("dews_full_desc", "이슬은 {max}개까지")).format({"max": Progress.MAX_DEWS})
 		draw_string(font, r.position + Vector2(DESC_X, 66), desc, HORIZONTAL_ALIGNMENT_LEFT, 300, 18, Color(FULL_COLOR, 0.75) if full else Color(1, 1, 1, 0.5))
-		# 비용 (오른쪽)
-		if lvl >= maxl:
-			draw_string(font, r.position + Vector2(r.size.x - 180, 44), "최대", HORIZONTAL_ALIGNMENT_RIGHT, 160, 26, Color(0.65, 0.65, 0.65))
-		elif full:
+		# 비용 (오른쪽). 이슬 줄은 가득하면 단계와 상관없이 '가득' (최대 단계 = 이슬 5개)
+		if full:
 			draw_string(font, r.position + Vector2(r.size.x - 180, 44), str(_data.get("full_label", "가득")), HORIZONTAL_ALIGNMENT_RIGHT, 160, 26, FULL_COLOR)
+		elif lvl >= maxl:
+			draw_string(font, r.position + Vector2(r.size.x - 180, 44), "최대", HORIZONTAL_ALIGNMENT_RIGHT, 160, 26, Color(0.65, 0.65, 0.65))
 		else:
 			var cost := cost_of(item, lvl)
 			var ok := Progress.dust >= cost

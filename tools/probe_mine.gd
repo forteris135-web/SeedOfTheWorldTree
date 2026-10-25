@@ -380,10 +380,10 @@ func _probe_dew_cup() -> void:
 	cup.pickup_id = "pick_probe_cup"
 	add_child(cup)
 	await _frames(2)
-	var before := _player.max_dews
+	var before := Progress.tokens   # v1.1.0: 이슬잔은 이슬 대신 새순 2
 	cup._collect(_player)
 	await _frames(3)
-	_check(_player.max_dews == before + 1 and Progress.is_collected("pick_probe_cup") and is_equal_approx(float(Progress.upgrades.get("dews", 0)), 1.0), "이슬잔: 모으면 이슬 최대 %d → %d, collected %s" % [before, _player.max_dews, Progress.is_collected("pick_probe_cup")])
+	_check(Progress.tokens == before + 2 and Progress.is_collected("pick_probe_cup") and _player.max_dews == 3, "이슬잔: 모으면 새순 %d → %d, 이슬 %d 그대로, collected %s" % [before, Progress.tokens, _player.max_dews, Progress.is_collected("pick_probe_cup")])
 	cup.queue_free()
 	await _frames(2)
 	Progress.reset()

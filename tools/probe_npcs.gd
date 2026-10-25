@@ -14,7 +14,7 @@ extends Node
 ##  5) 같은 방이 집(시험용 덮어쓰기로 경비병 집을 village_01 로): 손길 연타(0.15초마다)에도 말풍선마다 1초 넘게 보이고,
 ##     감사의 말이 끝나고 마지막 대사가 2.5초 넘게 보인 뒤에야 떠난다. 떠나는 중 일시정지하면 사라짐 연출(빛 가루)이 멈춘다.
 ##     같은 방 집 자리에 빛에서 나타난다. 덮어쓰기를 지우면 경비병의 진짜 집은 사당.
-##  6) 말 안 걸고 떠나기: canopy_03 의 정원사를 정화만 하고 방을 닫으면 깃발 home_gardener_canopy, 보상(이슬 +1)도 받는다.
+##  6) 말 안 걸고 떠나기: canopy_03 의 정원사를 정화만 하고 방을 닫으면 깃발 home_gardener_canopy, 보상(새순 +1)도 받는다.
 ##  7) village_02: 오웬 구원 상태로 띄우면 기존 Npc_owen 하나뿐(집 NPC 중복 없음), 정원사 집 NPC(2560, 1400) 가 owen_rescued 묶음을 말한다.
 ##  8) 보상은 꼭 한 번: (a) 감사의 말 중 '불러오기'(구원 전 세이브) → 보상이 새지 않고, 다시 구원하면 15 한 번만
 ##     (b) 쓰러짐 연출(0.5초) 안에 방을 떠나도 다음 방에서 받음 (b2) 다시 깨어난(respawn) 적도 같음
@@ -401,14 +401,14 @@ func _probe_leave_without_talking() -> void:
 	_check(enemy != null, "canopy_03 에 구원 가능한 정원사 있음")
 	if enemy == null:
 		return
-	var dews_before: float = Progress.upgrades.get("dews", 0.0)
+	var tokens_before := Progress.tokens   # v1.1.0: 정원사 보상은 이슬 대신 새순 1
 	var npc := await _rescue(enemy, "gardener_canopy")
 	if npc == null:
 		return
 	_check(npc.is_greeting(), "정원사 감사의 말 중 (아직 보상 전)")
 	await _close()   # 말 안 걸고 방을 떠난다
 	_check(Progress.has("home_gardener_canopy"), "방을 떠나자 깃발 home_gardener_canopy")
-	_check(float(Progress.upgrades.get("dews", 0.0)) == dews_before + 1.0, "감사의 말 중에 떠나도 보상(이슬 +1)은 한 번 받음: %.0f → %.0f" % [dews_before, Progress.upgrades.get("dews", 0.0)])
+	_check(Progress.tokens == tokens_before + 1, "감사의 말 중에 떠나도 보상(새순 +1)은 한 번 받음: %d → %d" % [tokens_before, Progress.tokens])
 
 
 # ---------- 7) 등불 골목: 오웬 중복 없음 + 정원사 집 ----------

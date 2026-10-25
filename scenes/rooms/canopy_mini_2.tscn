@@ -53,10 +53,9 @@ map_offset = Vector2(19500, -5023)
 terrain_color = Color(0.09, 0.085, 0.06, 1)
 boss_name = "정원사 장로"
 defeat_flag = "miniboss_elder_gardener_defeated"
-reward_type = "dews"
-reward_amount = 1.0
-reward_text = "장로의 씨앗 주머니에서 이슬이 한 방울 — 이슬 방울 +1"
-reward_text_full = "장로의 씨앗 주머니에서 이슬이 한 방울 — 이슬이 가득해 회복량이 늘었다 (회복량 +{heal})"
+reward_type = "token"
+reward_amount = 2.0
+reward_text = "정원사 장로가 남긴 새순 — 새순 +2"
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_glow")
