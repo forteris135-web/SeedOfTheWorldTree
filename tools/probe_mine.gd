@@ -404,7 +404,11 @@ func _probe_guard_machine() -> void:
 	Progress.gain_ability("wall_break")
 	var p0 := guard.poise
 	var r_yes: String = guard.receive_hit(_hit(32.0, 60.0), null)
-	_check(r_no == "blocked" and r_yes == "hit" and guard.poise - p0 >= 40.0, "경비병 방패: 벽 부수기 없음 %s / 있음+씨앗 베기 %s (흐트러짐 +%.0f, 방패 열림 %s)" % [r_no, r_yes, guard.poise - p0, guard._block_open > 0.0])
+	# v1.1.0: 벽 부수기의 전투 효과는 꺼 둠 (Balance.WALL_BREAK_COMBAT = false, D15) → 벽 부수기가 있어도 방패는 그대로 막는다
+	if Balance.WALL_BREAK_COMBAT:
+		_check(r_no == "blocked" and r_yes == "hit" and guard.poise - p0 >= 40.0, "경비병 방패: 벽 부수기 없음 %s / 있음+씨앗 베기 %s (흐트러짐 +%.0f, 방패 열림 %s)" % [r_no, r_yes, guard.poise - p0, guard._block_open > 0.0])
+	else:
+		_check(r_no == "blocked" and r_yes == "blocked", "경비병 방패: 벽 부수기 전투 효과 꺼짐 — 없음 %s / 있음+씨앗 베기 %s (그대로 막음)" % [r_no, r_yes])
 	guard.queue_free()
 	Progress.reset()
 	var m: Machine = load("res://scenes/enemies/machine.tscn").instantiate()
@@ -421,7 +425,10 @@ func _probe_guard_machine() -> void:
 	hp0 = m.hp
 	m.receive_hit(_hit(12.0, 20.0), null)
 	var light2 := hp0 - m.hp
-	_check(is_equal_approx(light1, 12.0 * 0.35) and is_equal_approx(heavy, 32.0) and m.is_armor_broken() and is_equal_approx(light2, 12.0), "기계 장갑: 약공격 %.1f(35%%) → 벽 부수기+씨앗 베기 %.0f 로 장갑 깨짐(%s) → 약공격 %.1f(온전히)" % [light1, heavy, m.is_armor_broken(), light2])
+	if Balance.WALL_BREAK_COMBAT:
+		_check(is_equal_approx(light1, 12.0 * 0.35) and is_equal_approx(heavy, 32.0) and m.is_armor_broken() and is_equal_approx(light2, 12.0), "기계 장갑: 약공격 %.1f(35%%) → 벽 부수기+씨앗 베기 %.0f 로 장갑 깨짐(%s) → 약공격 %.1f(온전히)" % [light1, heavy, m.is_armor_broken(), light2])
+	else:
+		_check(is_equal_approx(light1, 12.0 * 0.35) and is_equal_approx(heavy, 32.0) and not m.is_armor_broken() and is_equal_approx(light2, 12.0 * 0.35), "기계 장갑: 벽 부수기 전투 효과 꺼짐 — 약공격 %.1f(35%%), 씨앗 베기 %.0f, 장갑 그대로(깨짐 %s), 약공격 %.1f(35%%)" % [light1, heavy, m.is_armor_broken(), light2])
 	m.queue_free()
 	await _frames(2)
 	Progress.reset()

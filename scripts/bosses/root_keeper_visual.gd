@@ -804,10 +804,8 @@ func _draw_marks() -> void:
 			for x: float in _boss.spike_marks:
 				RootSpike.draw_telegraph(_marks, Vector2(x, g), p, _tg(1.0, guard), fade, pulse)
 		RootKeeper.State.SWEEP, RootKeeper.State.SWEEP2:
-			# 휘두를 호 모양의 부채꼴. 판정 사각형(sweep_reach)을 그대로 덮도록 땅까지 내려온다 — 보스 바로 앞도 붉다.
-			var pts := sweep_fan(_boss.state)
-			_marks.draw_colored_polygon(pts, _tg((0.12 + 0.18 * p) * fade, guard))
-			_marks.draw_polyline(pts + PackedVector2Array([pts[0]]), _tg((0.5 + 0.4 * p) * fade, guard), 3.0, true)
+			# v1.1.0: 휘두르기의 공격 범위 예고는 보스의 RangeTelegraph 가 판정과 같은 사각형으로 그린다 (예전 붉은 부채꼴은 판정보다 훨씬 컸다)
+			pass
 		RootKeeper.State.ORBS, RootKeeper.State.SEEDS:
 			# 지팡이 머리에 모이는 빛의 고리
 			var h := head_world()
@@ -821,15 +819,8 @@ func _draw_marks() -> void:
 				var half := 420.0 if _boss.phase == 2 else 300.0
 				_marks.draw_rect(Rect2(px - half, g - 6, half * 2.0, 8), _tg(0.1 + 0.12 * p, true))
 		RootKeeper.State.WALL:
-			# 지나갈 띠 전체가 붉게 (가드 불가)
-			var x0 := bx
-			var x1 := (_boss.arena.end.x if f > 0.0 else _boss.arena.position.x) if _boss.arena.size.x > 0.0 else bx + f * 1600.0
-			var lane := Rect2(minf(x0, x1), g - 330.0, absf(x1 - x0), 330.0)   # 판정 윗끝(발밑 기준 320)보다 조금 높게
-			_marks.draw_rect(lane, _tg((0.1 + 0.14 * p) * fade, false))
-			_marks.draw_rect(Rect2(lane.position.x, g - 8, lane.size.x, 10), _tg((0.4 + 0.4 * p) * fade, false))
-			# 벽 실루엣
-			var wx := bx + f * 40.0
-			_marks.draw_rect(Rect2(minf(wx, wx + f * 220.0), g - 310.0, 220.0, 310.0), _tg(0.6 * p * fade, false), false, 3.0)
+			# v1.1.0: 뿌리 벽이 쓸고 갈 구간은 보스의 RangeTelegraph 가 판정과 같은 사각형으로 그린다 (예전엔 아레나 끝까지·판정보다 높게)
+			pass
 		RootKeeper.State.HAND:
 			for x: float in _boss.hand_targets:
 				# 땅의 붉은 타원 + 위로 뻗는 기둥 + 손가락 자국 (가드 불가)
@@ -857,17 +848,7 @@ func _draw_marks() -> void:
 			var ex := _boss.arena.end.x if _boss.arena.size.x > 0.0 else bx + 1600.0
 			_marks.draw_rect(Rect2(ax, g - 90.0, ex - ax, 90.0), _tg((0.1 + 0.16 * p) * fade, false))
 			_marks.draw_rect(Rect2(ax, g - 8, ex - ax, 10), _tg((0.4 + 0.4 * p) * fade, false))
-			# 발밑 반원 (땅 위쪽만 — 원 전체를 그리면 아래 반이 바닥 위에 비쳐 보였다)
-			var half := PackedVector2Array()
-			for i in 25:
-				var a := PI + PI * i / 24.0
-				half.append(Vector2(bx + cos(a) * 150.0, g + sin(a) * 150.0))
-			_marks.draw_colored_polygon(half, _tg((0.12 + 0.2 * p) * fade, false))
-			_marks.draw_arc(Vector2(bx, g), 150.0, PI, TAU, 24, _tg((0.5 + 0.4 * p) * fade, false), 3.0, true)
-			# 내려찍기 판정 기둥 (발밑 기준 좌우 130, 높이 190 — 반원만으로는 판정 위쪽 모서리가 예고 밖이었다)
-			var col := Rect2(bx - 150.0, g - 205.0, 300.0, 205.0)
-			_marks.draw_rect(col, _tg((0.08 + 0.12 * p) * fade, false))
-			_marks.draw_rect(col, _tg((0.45 + 0.4 * p) * fade, false), false, 2.5)
+			# (내려찍기 판정 기둥은 v1.1.0 부터 보스의 RangeTelegraph 가 판정과 같은 사각형 ±130 으로 그린다 — 예전 기둥 폭 300·반원은 뺐다)
 			# 충격파가 달릴 방향 화살
 			for d: float in [-1.0, 1.0]:
 				var x: float = bx + d * (200.0 + 300.0 * p)
@@ -876,30 +857,15 @@ func _draw_marks() -> void:
 				_marks.draw_line(Vector2(x + d * 40.0, g - 45), Vector2(x + d * 20.0, g - 25), _tg(0.8 * p * fade, false), 3.0)
 
 
-## 휘두르기 부채꼴 (월드 좌표 다각형): 손잡이 높이쯤(땅 위 FAN_CENTER_H)을 중심으로 뒤-위(지팡이를 치켜든 자리)에서
-## 앞으로 돌아 땅에 닿는 호 + 땅을 따라 판정 뒤끝까지 + 판정 위끝까지. 판정 사각형(보스 sweep_reach)을 반드시 덮는다.
-## 되돌려 베기(SWEEP2)는 앞에서 올려 베므로 호가 앞-위에서 시작한다.
-const FAN_CENTER_H := 150.0
+## 휘두르기 예고 영역 (월드 좌표 다각형). v1.1.0 (기획자 요청 1): 판정과 같은 사각형 — 보스 sweep_reach(미끄러짐 포함)의
+## 네 모서리 (경계 위의 점도 안에 들도록 1px 넓힌다). 그려지는 예고는 보스의 RangeTelegraph 이고, 이 함수는 시험이 그 자리를 읽는 통로.
 func sweep_fan(st: int) -> PackedVector2Array:
 	var reach: Rect2 = _boss.sweep_reach(st)
 	var g := _boss.ground_y
 	var f := float(_boss.facing)
 	var bx := _boss.global_position.x
-	var front := reach.end.x               # 판정 앞끝 (+미끄러짐)
-	var back := reach.position.x            # 판정 뒤끝 (음수 = 뒤)
-	var top := reach.position.y - 20.0      # 판정 위끝 (발밑 기준, 음수)
-	var cx := 20.0
-	var r := Vector2(front - cx, FAN_CENTER_H).length()
-	var th_ground := atan2(front - cx, -FAN_CENTER_H)   # 호가 땅(앞끝)에 닿는 각도
-	var th0 := -0.55 if st == RootKeeper.State.SWEEP else 0.15
-	var pts := PackedVector2Array()
-	var n := 24
-	for i in n + 1:
-		var th := lerpf(th0, th_ground, float(i) / n)
-		var lp := Vector2(cx + sin(th) * r, -FAN_CENTER_H - cos(th) * r)
-		pts.append(Vector2(bx + f * lp.x, g + lp.y))
-	pts.append(Vector2(bx + f * back, g))
-	var start_fwd := cx + sin(th0) * r
-	if start_fwd > back:
-		pts.append(Vector2(bx + f * back, g + top))
-	return pts
+	var x0 := bx + f * (reach.position.x - 1.0)
+	var x1 := bx + f * (reach.end.x + 1.0)
+	var y0 := g + reach.position.y - 1.0
+	var y1 := g + reach.end.y + 1.0
+	return PackedVector2Array([Vector2(x0, y0), Vector2(x1, y0), Vector2(x1, y1), Vector2(x0, y1)])

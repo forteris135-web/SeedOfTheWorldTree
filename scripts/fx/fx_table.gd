@@ -237,9 +237,12 @@ const EFFECTS := {
 	# 날개 휘두르기: 앞을 쓸어내리는 잿빛 바람 초승달
 	"wing_sweep": {"tex": "gust_crescent", "blend": "mix", "life": 0.34, "scale": [0.6, 0.7], "ease": 3.0, "fade_out": 0.45, "palette": "ash",
 		"keep": 0.55, "energy": 1.05, "priority": 2, "children": [["gust_leaf", 3, Vector2(60, 40)]]},
-	# 부리 찍기: 부리 끝의 별빛 + 잎 부스러기
-	"peck_burst": {"tex": "star_burst", "life": 0.28, "scale": [0.32, 0.6], "ease": 3.0, "fade_out": 0.35, "rot_rand": 180.0, "palette": "ash", "keep": 0.4,
+	# 부리 찍기: 판정 앞끝의 별빛 + 잎 부스러기 (v1.1.0: 판정 높이·크기에 맞춰 띄운다 — 무작위 회전 없음)
+	"peck_burst": {"tex": "star_burst", "life": 0.28, "scale": [0.55, 0.6], "ease": 3.0, "fade_out": 0.35, "palette": "ash", "keep": 0.4,
 		"energy": 1.1, "priority": 1, "children": [["gust_leaf", 2, Vector2(20, 20)]]},
+	# 부리 찍기: 앞으로 튀어 나가며 쓸고 가는 구간의 잿빛 바람 줄기 (v1.1.0 — 판정이 쓸고 가는 사각형에 맞춰 띄운다)
+	"peck_streak": {"tex": "wisp_beam", "blend": "mix", "life": 0.32, "scale": [0.9, 1.0], "ease": 3.0, "fade_in": 0.05, "fade_out": 0.5,
+		"palette": "ash", "keep": 0.5, "color": Color(1, 1, 1, 0.9), "energy": 1.05, "priority": 2},
 	# 잎 삼키기를 끊었을 때 / 잎 더미가 먹혀 흩어질 때
 	"pile_burst": {"tex": "leaf_burst", "blend": "mix", "life": 0.55, "scale": [0.4, 0.6], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.86),
 		"palette": "ash", "keep": 0.5, "priority": 1, "children": [["gust_leaf", 4, Vector2(60, 20)]]},
@@ -265,6 +268,12 @@ const EFFECTS := {
 			["dust_puff", 2, Vector2(20, 4), {"vel": Vector2(-240, -50), "offset": Vector2(-100, -8), "scale": 1.5}],
 			["dust_puff", 2, Vector2(20, 4), {"vel": Vector2(240, -50), "offset": Vector2(100, -8), "scale": 1.5}],
 			["ember", 8, Vector2(160, 30), {"offset": Vector2(0, -40)}]]},
+	# 등불 회전 (v1.1.0): 근접 판정(±230, 높이 350)을 덮는 불꽃 소용돌이 — 판정 사각형에 맞춰 띄운다 (돌지 않는다: 도는 그림은 바깥 사각형이 커진다)
+	"knight_spin": {"tex": "gust_double", "blend": "mix", "life": 0.8, "scale": [0.92, 1.0], "ease": 3.0, "fade_in": 0.08, "fade_out": 0.6,
+		"palette": "fire", "keep": 0.12, "energy": 1.05, "flicker": 0.15, "priority": 2, "children": [["ember", 6, Vector2(150, 110), {"offset": Vector2(0, -180)}]]},
+	# 돌진 (v1.1.0): 돌진 판정(기사 앞 40~420)을 덮는 창끝 불빛 — 기사를 따라가다 돌진이 끝나면 걷힌다
+	"charge_lance": {"tex": "lance_streak", "blend": "mix", "life": 2.6, "scale": [1.0, 1.0], "fade_in": 0.03, "fade_out": 0.94, "scale_xy": Vector2(-1.0, 1.0),
+		"palette": "fire", "keep": 0.2, "energy": 1.05, "flicker": 0.1, "priority": 2},
 	# 돌진: 뒤로 끌리는 불빛 줄기 (몸을 따라간다)
 	"charge_streak": {"tex": "wisp_beam", "life": 0.26, "scale": [0.5, 0.56], "scale_xy": Vector2(1.0, 0.7), "pivot": Vector2(0.95, 0.5),
 		"fade_in": 0.1, "fade_out": 0.4, "palette": "fire", "color": Color(1, 1, 1, 0.55), "priority": 1},
@@ -290,7 +299,8 @@ const EFFECTS := {
 	# 지팡이 내려찍기 (가드 불가): 붉은 뿌리 덩어리 터짐 + 붉은 고리 + 먼지
 	"root_stomp": {"tex": "root_burst", "blend": "mix", "life": 0.55, "scale": [0.7, 1.0], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.9),
 		"palette": "danger", "keep": 0.5, "priority": 2,
-		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 2.6, "palette": "danger"}],
+		# v1.1.0: 바닥 고리는 판정 폭(±130)에 맞춘 크기 (예전 2.6 = ±294 — 양쪽 충격파는 충격파 노드가 그린다)
+		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 1.15, "palette": "danger"}],
 			["dust_puff", 2, Vector2(20, 4), {"vel": Vector2(-220, -50), "offset": Vector2(-80, -8), "scale": 1.4}],
 			["dust_puff", 2, Vector2(20, 4), {"vel": Vector2(220, -50), "offset": Vector2(80, -8), "scale": 1.4}]]},
 	# 2페이즈에 다시 일어서는 순간: 감아 오르는 달빛 기둥 + 빛 알갱이
@@ -314,14 +324,16 @@ const EFFECTS := {
 	# 수면을 치는 물보라 (물결을 띄울 때·내려앉을 때)
 	"sap_splash": {"tex": "water_splash", "blend": "mix", "life": 0.5, "scale": [0.42, 0.6], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.9),
 		"palette": "sap", "keep": 0.45, "priority": 1, "children": [["sap_droplet", 4, Vector2(40, 6), {"offset": Vector2(0, -30)}]]},
+	# v1.1.0: 착지 충격 판정(±170)에 맞춰 띄운다 — 바닥 고리도 판정 폭으로 (예전 2.2 = ±249)
 	"queen_land": {"tex": "splash_crown", "blend": "mix", "life": 0.55, "scale": [0.6, 0.85], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.85),
 		"palette": "sap", "keep": 0.45, "priority": 2,
-		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 2.2, "palette": "sap"}], ["sap_droplet", 6, Vector2(80, 6), {"offset": Vector2(0, -20)}]]},
+		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 1.5, "palette": "sap"}], ["sap_droplet", 6, Vector2(80, 6), {"offset": Vector2(0, -20)}]]},
 	# ===================== 무쇠 펌프 · 작은 펌프 · 물 =====================
 	# 피스톤이 땅을 침: 물보라 + 왕관 물보라 + 김 + 납작한 고리
+	# v1.1.0: 피스톤 판정(앞 150~370)에 맞춰 띄운다 — 바닥 고리도 판정 폭 (양쪽 충격파는 투사체가 그린다)
 	"pump_slam": {"tex": "water_splash", "blend": "mix", "life": 0.55, "scale": [0.6, 0.85], "ease": 3.0, "fade_out": 0.4, "pivot": Vector2(0.5, 0.9),
 		"palette": "sap", "keep": 0.4, "priority": 2,
-		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 2.6, "palette": "sap"}], ["steam_puff", 3, Vector2(70, 10), {"offset": Vector2(0, -30)}],
+		"children": [["ground_ring", 1, Vector2.ZERO, {"scale": 0.95, "palette": "sap"}], ["steam_puff", 3, Vector2(70, 10), {"offset": Vector2(0, -30)}],
 			["sap_droplet", 6, Vector2(60, 6), {"offset": Vector2(0, -30)}]]},
 	# 관·대롱에서 수액이 뿜어지는 순간: 짧은 물줄기 + 방울 (opts.rot 로 쏘는 방향)
 	"sap_jet": {"tex": "water_laser", "blend": "mix", "life": 0.2, "scale": [0.3, 0.42], "ease": 3.0, "fade_out": 0.3, "pivot": Vector2(0.06, 0.5),
@@ -329,8 +341,18 @@ const EFFECTS := {
 	# 빨아들이기: 관으로 빨려 드는 물줄기 조각·방울 (opts.vel)
 	"suck_strip": {"tex": "water_strip", "blend": "mix", "life": 0.45, "scale": [0.42, 0.3], "ease": 1.0, "fade_in": 0.2, "fade_out": 0.6,
 		"palette": "sap", "keep": 0.4, "color": Color(1, 1, 1, 0.7), "priority": 0},
-	"pump_bite": {"tex": "star_burst", "life": 0.3, "scale": [0.3, 0.55], "ease": 3.0, "fade_out": 0.35, "rot_rand": 180.0, "palette": "sap",
+	# v1.1.0: 물기 판정(앞 40~360, 높이 250)에 맞춰 띄운다 (무작위 회전 없음 — 돌리면 바깥 사각형이 커진다)
+	"pump_bite": {"tex": "star_burst", "life": 0.3, "scale": [0.5, 0.55], "ease": 3.0, "fade_out": 0.35, "palette": "sap",
 		"energy": 1.1, "priority": 1, "children": [["sap_droplet", 4, Vector2(20, 20)]]},
+	# 김 분출 (v1.1.0 맞딜 응징): 몸 둘레 판정(±260, 높이 300)을 덮는 김 덩이 — 판정 사각형에 맞춰 띄운다
+	"pump_vent": {"tex": "dome", "blend": "mix", "life": 0.42, "scale": [0.85, 1.0], "ease": 3.0, "fade_out": 0.45, "pivot": Vector2(0.5, 0.95),
+		"palette": "steam", "keep": 0.25, "color": Color(1.0, 0.92, 0.85, 0.85), "priority": 2,
+		"children": [["steam_puff", 6, Vector2(200, 60), {"offset": Vector2(0, -120), "scale": 1.6}], ["ground_ring", 1, Vector2.ZERO, {"scale": 1.4}]]},
+	# 김 분출 예고: 김 구멍에서 새는 주황 김 (막을 수 있는 공격 → 주황) / 몸 둘레에서 새는 김
+	"vent_warn": {"tex": "steam_column", "blend": "mix", "life": 0.5, "scale": [0.4, 0.75], "ease": 2.0, "fade_out": 0.45, "pivot": Vector2(0.5, 0.95),
+		"vel": Vector2(0, -60), "palette": "fire", "keep": 0.3, "color": Color(1, 1, 1, 0.7), "priority": 1},
+	"vent_leak": {"tex": "puff", "blend": "mix", "life": 0.5, "scale": [0.2, 0.45], "ease": 2.0, "fade_out": 0.4, "vel": Vector2(0, -70),
+		"vel_rand": Vector2(40, 20), "drag": 1.2, "rot_rand": 40.0, "palette": "steam", "keep": 0.3, "color": Color(1, 0.9, 0.8, 0.55), "priority": 0},
 	# 장갑이 깨짐: 김이 터지고 불똥이 튄다
 	"pump_break": {"tex": "star_crescent", "life": 0.55, "scale": [0.5, 0.9], "ease": 3.0, "fade_out": 0.4, "palette": "gold", "keep": 0.2, "energy": 1.1,
 		"priority": 2, "children": [["steam_puff", 5, Vector2(90, 40)], ["spark", 8, Vector2(30, 30)]]},

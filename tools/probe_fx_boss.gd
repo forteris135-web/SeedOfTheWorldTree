@@ -179,7 +179,7 @@ func _test_bosses() -> void:
 	b = r["boss"]
 	_check(_watcher(b) != null, "기사: 기술 이펙트 관찰자가 붙어 있다")
 	var plan := [["THRUST", 60, ["spear_thrust"]], ["SLAM", 90, ["danger_ember", "knight_slam"]], ["COMBO3", 140, ["spear_thrust", "spear_swing", "spear_upper"]],
-		["FLAME", 80, ["lantern_arc"]], ["WAVE", 80, ["wave_flash"]], ["CHARGE", 110, ["charge_streak"]]]
+		["FLAME", 80, ["ember"]], ["WAVE", 80, ["wave_flash"]], ["CHARGE", 110, ["charge_streak", "charge_lance"]]]
 	for item in plan:
 		var nm: String = item[0]
 		b.phase = 1
@@ -189,7 +189,7 @@ func _test_bosses() -> void:
 	b.phase = 2
 	b._set_state(b.State.MARCH)
 	b._timer = 99.0
-	await _try(r, "기사 등불 회전 (2페이즈)", func() -> void: b.force_attack(b.State.SPIN), 120, ["fire_ring"])
+	await _try(r, "기사 등불 회전 (2페이즈)", func() -> void: b.force_attack(b.State.SPIN), 120, ["knight_spin", "fire_pillar_burst"])
 	b._set_state(b.State.MARCH)
 	b._timer = 99.0
 	await _try(r, "기사 등불 던지기 → 주황 예고 고리(가드 가능) → 불기둥", func() -> void: b.force_attack(b.State.THROW), 200, ["danger_ring", "fire_pillar_burst"])

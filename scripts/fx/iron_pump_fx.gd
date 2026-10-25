@@ -23,9 +23,13 @@ func _ready() -> void:
 
 
 func _on_slammed() -> void:
-	# 피스톤 머리(흡입 팔 끝)가 땅을 친 자리 — 높이는 땅
-	var head := vis_point("piston", ahead(300.0, 0.0))
-	Fx.spawn("pump_slam", Vector2(head.x, boss.global_position.y))
+	# v1.1.0 (기획자 요청 1): 피스톤 물보라 = 피스톤 판정 사각형 그대로 (예전엔 망치 머리 x≈391 에 떠 판정 가운데보다 130px 앞이었다)
+	var reach: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
+	if reach.size != Vector2.ZERO:
+		fit_fx("pump_slam", reach, facing())
+	else:
+		var head := vis_point("piston", ahead(300.0, 0.0))
+		Fx.spawn("pump_slam", Vector2(head.x, boss.global_position.y))
 
 
 func _on_state(_old: int, _new: int) -> void:
@@ -37,8 +41,21 @@ func _on_state(_old: int, _new: int) -> void:
 				Fx.spawn("steam_puff", _vent() + Vector2(randf_range(-40.0, 40.0), 0.0), {"scale": 1.3})
 
 
+func _on_phase(_st: int, _old: String, new: String) -> void:
+	if state_name() == "VENT" and new == "active":
+		# 김 분출: 판정 사각형(몸 둘레 ±260, 높이 300) 그대로 김이 터진다
+		var reach: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
+		if reach.size != Vector2.ZERO:
+			fit_fx("pump_vent", reach, facing())
+
+
 func _tick(delta: float) -> void:
 	var st := state_name()
+	if st == "VENT" and String(val("attack_phase", "")) == "startup" and every("vent_warn", 0.08, delta):
+		# 김 분출 예고: 김 구멍과 몸 둘레에서 주황 김이 새어 나온다 (막을 수 있는 공격 → 주황, 붉은빛은 가드 불가만)
+		var v := _vent()
+		Fx.spawn("vent_warn", v + Vector2(randf_range(-30.0, 30.0), 0.0))
+		Fx.spawn("vent_leak", boss.global_position + Vector2(randf_range(-230.0, 230.0), randf_range(-260.0, -40.0)))
 	if red():
 		if every("red", 0.1, delta):
 			var v := _vent()
@@ -54,7 +71,12 @@ func _tick(delta: float) -> void:
 				Fx.spawn("suck_strip", from, {"vel": to / 0.42, "rot": rad_to_deg(to.angle()) + 180.0})
 			var bit := bool(val("_bit", false))
 			if bit and not _prev_bit:
-				Fx.spawn("pump_bite", _mouth())
+				# v1.1.0: 물기 별빛 = 물기 판정 사각형 그대로 (예전엔 관 입 (417,-152) 에 떠 판정 앞끝에 겨우 걸쳤다)
+				var reach: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
+				if reach.size != Vector2.ZERO:
+					fit_fx("pump_bite", reach, facing())
+				else:
+					Fx.spawn("pump_bite", _mouth())
 			_prev_bit = bit
 		"IDLE":
 			if every("idle_steam", 1.1, delta):

@@ -110,11 +110,7 @@ func _physics_process(delta: float) -> void:
 	_time += delta
 	var from := global_position
 	var to := from + direction * speed * delta
-	var ray := PhysicsRayQueryParameters2D.create(from, to, 1)
-	var hit_terrain := get_world_2d().direct_space_state.intersect_ray(ray)
-	if not hit_terrain.is_empty() and not passes_through(hit_terrain.get("collider")):
-		_vanish()
-		return
+	# v1.1.0 (기획자 요청 4): 보스 투사체라 지형(벽·가지)에 막히지 않는다 — 수명이 다하면 사라진다.
 	global_position = to
 	rotation = direction.angle()
 	if _art:

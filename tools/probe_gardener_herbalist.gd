@@ -36,6 +36,10 @@ func _ready() -> void:
 		await _run_film(OS.get_cmdline_user_args()[fi + 1])
 		get_tree().quit()
 		return
+	# 몹의 우연(달려들기·뒤로 빠지기 확률)을 고정한다 — 뒤로 빠진 직후 예고로 들어가는 길에서 거대화 약초꾼의 발이
+	# 기준(7.2px)에 걸치는 판이 가끔 나와 시험이 흔들렸다 (v1.1.0 몹 돌아서기로 행동 순서가 바뀐 뒤). --seed N 으로 바꿔 볼 수 있다.
+	var si := OS.get_cmdline_user_args().find("--seed")
+	seed(int(OS.get_cmdline_user_args()[si + 1]) if si >= 0 else 20261025)
 	print("[probe] 시작: 정원사·약초꾼 부위 뼈대")
 	_make_floor()
 	_player = (load("res://scenes/player/player.tscn") as PackedScene).instantiate()

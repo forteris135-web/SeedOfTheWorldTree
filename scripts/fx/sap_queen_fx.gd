@@ -15,7 +15,12 @@ var _prev_spawned := 0
 func _on_state(old: int, _new: int) -> void:
 	match state_name():
 		"LANDED":
-			Fx.spawn("queen_land", boss.global_position)
+			# v1.1.0: 착지 물보라 = 착지 충격 판정 ±170 그대로 (예전 ±106, 바닥 고리 ±249)
+			var reach: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
+			if reach.size != Vector2.ZERO:
+				fit_fx("queen_land", reach, 1)
+			else:
+				Fx.spawn("queen_land", boss.global_position)
 		"TAKEOFF":
 			if state_is(old) == "LANDED" or state_is(old) == "BROKEN":
 				Fx.spawn("sap_splash", boss.global_position, {"scale": 0.7})

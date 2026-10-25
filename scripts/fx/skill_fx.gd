@@ -131,3 +131,57 @@ func vis_point(kind: String, fallback: Vector2) -> Vector2:
 		if p.is_finite() and p.distance_to(boss.global_position) < VIS_RANGE:
 			return p
 	return fallback
+
+
+## v1.1.0 (기획자 요청 1: 판정 = 예고 = 이펙트): 이펙트 그림을 월드 사각형(보통 근접 판정이 덮는 구간)에 맞춰 띄운다.
+## 그림이 가장 커졌을 때(표의 scale 중 큰 값)의 그림 사각형이 target 과 같은 자리·크기가 되게 가로·세로 배율(scale_xy)과 자리를 정한다.
+## rot_deg: 그림을 돌리는 각도(도, 오른쪽을 볼 때 — 표의 rot 는 무시하고 이 값을 쓴다). 돌린 그림의 바깥 사각형이 target 에 맞는다.
+## opts 는 Fx.spawn 의 opts (facing·rot·scale_xy 는 여기서 정한다). 그림은 거의 꽉 찬 그림들이라(여백 3~5px) 그림 사각형 = 보이는 부분.
+func fit_fx(fx_name: String, target: Rect2, face: int, rot_deg := 0.0, opts := {}) -> FxSprite:
+	var def: Dictionary = Fx.Table.EFFECTS.get(fx_name, {})
+	if def.is_empty() or target.size.x <= 1.0 or target.size.y <= 1.0:
+		return null
+	var tk = def["tex"]
+	var tex: Texture2D = Fx.texture(tk[0] if tk is Array else tk)
+	if tex == null:
+		return null
+	var ts := tex.get_size()
+	var sc: Array = def.get("scale", [1.0, 1.0])
+	var smax := maxf(float(sc[0]), float(sc[1])) * float(opts.get("scale", 1.0))
+	var sxy: Vector2 = def.get("scale_xy", Vector2.ONE)
+	var f := 1.0 if face >= 0 else -1.0
+	var th := deg_to_rad(rot_deg)
+	var cs := absf(cos(th))
+	var sn := absf(sin(th))
+	# 돌린 그림의 바깥 사각형 = (w·cos + h·sin, w·sin + h·cos) → 원하는 크기가 되는 그림 가로·세로 크기 (W, H)
+	var W := target.size.x
+	var H := target.size.y
+	var gw := W
+	var gh := H
+	var det := cs * cs - sn * sn
+	if absf(th) > 0.01 and absf(det) > 0.2:
+		gw = (W * cs - H * sn) / det
+		gh = (H * cs - W * sn) / det
+	if gw <= 4.0 or gh <= 4.0:
+		gw = W
+		gh = H
+		th = 0.0
+	var oxy := Vector2(gw / (ts.x * smax * absf(sxy.x)), gh / (ts.y * smax * absf(sxy.y)))
+	# 가장 커졌을 때의 배율 (Fx 가 쓰는 것과 같다: 표 scale_xy × opts scale_xy × facing·뒤집기 × 표 scale)
+	var flip := bool(def.get("flip_v", false)) != bool(opts.get("flip_v", false))
+	var scl := Vector2(sxy.x * oxy.x * f * smax, sxy.y * oxy.y * (-1.0 if flip else 1.0) * smax)
+	var pivot: Vector2 = def.get("pivot", Vector2(0.5, 0.5))
+	var off := (Vector2(0.5, 0.5) - pivot) * ts   # 그림 가운데가 노드 자리에서 떨어진 만큼 (배율 전)
+	var rot := th * f
+	var center_off := (off * scl).rotated(rot)
+	var o: Dictionary = opts.duplicate()
+	o["facing"] = f
+	o["scale_xy"] = oxy
+	o["rot"] = rot_deg - float(def.get("rot", 0.0))
+	var at := target.get_center() - center_off
+	var fol = opts.get("follow", null)
+	if fol is Node2D and is_instance_valid(fol):
+		# 따라다니는 이펙트 (돌진 등): 보스에서 떨어진 만큼을 offset 으로 (Fx 가 바라보는 쪽에 맞춰 뒤집으므로 x 는 미리 되돌린다)
+		var rel: Vector2 = at - (fol as Node2D).global_position
+		o["offset"] = Vector2(rel.x * f, rel.y)
+	return Fx.spawn(fx_name, at, o)

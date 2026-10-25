@@ -13,9 +13,12 @@ extends "res://scripts/fx/skill_fx.gd"
 
 var _prev_rings := 0
 var _prev_wave_sent := false
+## 돌진 동안 기사를 따라다니는 창끝 불빛 [FxSprite, gen] (돌진이 끝나면 거둔다)
+var _lance: Array = []
 
 
 func _on_state(_old: int, _new: int) -> void:
+	_end_lance()
 	match state_name():
 		"STUCK":
 			Fx.spawn("spear_stuck", vis_point("spear_tip", ahead(380.0, -155.0)), {"facing": facing()})
@@ -25,25 +28,43 @@ func _on_state(_old: int, _new: int) -> void:
 			_prev_rings = 0
 
 
+## v1.1.0 (기획자 요청 1): 근접 공격 이펙트는 판정이 덮는 사각형(보스의 melee_reach — 공격 범위 예고와 같은 값)에 맞춰 띄운다.
 func _on_phase(_st: int, _old: String, new: String) -> void:
 	if new != "active":
+		_end_lance()
 		return
 	var f := facing()
+	var reach := _reach()
 	match state_name():
 		"THRUST":
-			Fx.spawn("spear_thrust", _thrust_at(), {"facing": f})
+			fit_fx("spear_thrust", reach, f)
 		"COMBO3":
 			match int(val("combo_step", 0)):
 				0:
-					Fx.spawn("spear_thrust", _thrust_at(), {"facing": f})
+					fit_fx("spear_thrust", reach, f)
 				1:
-					Fx.spawn("spear_swing", ahead(150.0, -170.0), {"facing": f, "rot": 20.0})
+					fit_fx("spear_swing", reach, f)
 				2:
-					Fx.spawn("spear_upper", ahead(150.0, -220.0), {"facing": f})
+					fit_fx("spear_upper", reach, f, -70.0)
+		"WAVE":
+			fit_fx("spear_swing", reach, f)
 		"FLAME":
-			Fx.spawn("lantern_arc", ahead(130.0, -130.0), {"facing": f, "rot": 15.0})
+			# 근접 판정이 없다 → 근접 호 이펙트 없이 등불의 불씨만 (불꽃 파도 그림은 투사체가 그린다)
+			var lan0 := vis_point("lantern", ahead(80.0, -170.0))
+			for i in 4:
+				Fx.spawn("ember", lan0 + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
 		"SLAM":
-			Fx.spawn("knight_slam", boss.global_position)
+			fit_fx("knight_slam", reach, 1)
+		"SPIN":
+			fit_fx("knight_spin", reach, f)
+		"CHARGE":
+			# 돌진 판정(기사 앞 40~420)을 덮는 창끝 불빛이 기사를 따라간다
+			var box: Rect2 = boss.call("charge_box") if boss.has_method("charge_box") else Rect2(40, -170, 380, 130)
+			var hb: Node2D = val("hitbox")
+			if hb:
+				var fx := fit_fx("charge_lance", RangeTelegraph.box_world(hb, box, f), f, 0.0, {"follow": boss})
+				if fx:
+					_lance = [fx, fx.gen]
 		"THROW":
 			var lan := vis_point("lantern", ahead(80.0, -170.0))
 			for i in 5:
@@ -67,24 +88,35 @@ func _tick(delta: float) -> void:
 				if every("dust", 0.08, delta):
 					Fx.spawn("dust_puff", ahead(-40.0, -10.0), {"vel": Vector2(-facing() * 160.0, -40.0)})
 		"SPIN":
+			# 불꽃 고리 투사체가 나갈 때마다 고리가 나가는 두 자리(양쪽 바닥)에서 작은 불꽃 (고리 그림은 투사체가 그린다;
+			# 예전의 넓은 바닥 불꽃 고리는 근접 판정(±230)보다 넓어 v1.1.0 에서 뺐다)
 			var r := int(val("rings_sent", 0))
 			while _prev_rings < r:
 				_prev_rings += 1
-				Fx.spawn("fire_ring", Vector2(boss.global_position.x, float(val("ground_y", boss.global_position.y)) - 30.0), {"scale": 1.0 + 0.15 * _prev_rings})
+				var gy := float(val("ground_y", boss.global_position.y))
+				for d in [-1.0, 1.0]:
+					Fx.spawn("fire_pillar_burst", Vector2(boss.global_position.x + d * 90.0, gy), {"scale": 0.6})
 		"WAVE":
 			var sent := bool(val("_wave_sent", false))
 			if sent and not _prev_wave_sent and String(val("attack_phase", "")) == "active":
 				# 검기가 생기는 자리(땅 가까이 앞 150) — 창끝은 이때 머리 위 높이라 따라가지 않는다 (검기와 번쩍임이 떨어져 보였다)
 				Fx.spawn("wave_flash", ahead(150.0, -120.0), {"facing": facing()})
-				Fx.spawn("spear_swing", ahead(140.0, -150.0), {"facing": facing(), "rot": 10.0, "scale": 1.1})
 			_prev_wave_sent = sent
 	if st != "WAVE":
 		_prev_wave_sent = false
 
 
-## 찌르기 불빛 줄기의 뒤끝 자리: x 는 판정 앞 470px 를 덮는 예전 자리, 높이는 뼈대 창끝 (판정 높이 100~210 안으로)
-func _thrust_at() -> Vector2:
-	var base := ahead(-10.0, -155.0)
-	var tip := vis_point("spear_tip", base)
-	var gy := boss.global_position.y
-	return Vector2(base.x, clampf(tip.y, gy - 210.0, gy - 100.0))
+## 지금 근접 공격의 판정 구간 (보스의 melee_reach). 못 읽으면 앞쪽 기본 자리.
+func _reach() -> Rect2:
+	if boss.has_method("melee_reach"):
+		var r: Rect2 = boss.call("melee_reach")
+		if r.size != Vector2.ZERO:
+			return r
+	var c := ahead(200.0, -155.0)
+	return Rect2(c - Vector2(230.0, 60.0), Vector2(460.0, 120.0))
+
+
+func _end_lance() -> void:
+	if _lance.size() == 2:
+		Fx.end_soon(_lance[0], _lance[1])
+	_lance = []

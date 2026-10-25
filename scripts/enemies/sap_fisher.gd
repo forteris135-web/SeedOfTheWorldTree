@@ -28,7 +28,14 @@ func _physics_process(delta: float) -> void:
 	# 바탕 상태 기계를 쓰되, 거리 유지만 바꾼다 (정원사·약초꾼과 같은 방식)
 	if state == State.CHASE and player and _sees_player(notice_range * 1.4):
 		var dx := player.global_position.x - global_position.x
-		facing = 1 if dx > 0.0 else -1
+		# v1.1.0: 등 뒤로 간 소녀에게는 turn_delay(0.5초) 뒤에 돌아선다. 도는 동안은 멈칫
+		if _turn_toward_player(delta) != facing:
+			_tick_common(delta)
+			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+			if not is_on_floor():
+				velocity.y += gravity * delta
+			move_and_slide()
+			return
 		if absf(dx) < keep_distance and _can_walk(-facing):
 			_tick_common(delta)
 			if is_on_floor() and _timer <= -0.5 and hop_speed > 0.0:

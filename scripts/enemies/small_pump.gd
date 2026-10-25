@@ -22,6 +22,7 @@ signal shot
 const HEAVY_POISE := 45.0
 
 var shots := 0
+var _noticed := false
 var _beat := 0.9
 var _armor_timer := 0.0
 
@@ -41,14 +42,19 @@ func _physics_process(delta: float) -> void:
 	if state in [State.IDLE, State.PATROL, State.ALERT, State.CHASE] and _in_range():
 		# 제자리에서 소녀를 겨누고 리듬에 맞춰 쏜다 (쫓지도, 펄쩍 뛰지도 않는다)
 		_tick_common(delta)
-		var dx := player.global_position.x - global_position.x
-		facing = 1 if dx > 0.0 else -1
+		if not _noticed:
+			# 처음 겨눌 때는 소녀 쪽으로 바로 돈다 (다른 몹의 '발견'과 같은 규칙)
+			_noticed = true
+			facing = 1 if player.global_position.x > global_position.x else -1
+		# v1.1.0: 등 뒤로 간 소녀에게는 turn_delay(0.5초) 뒤에 돌아선다 (리듬의 박이 와도 돌아서는 중이면 그 박은 쉰다 — 박자는 그대로)
+		var turning := _turn_toward_player(delta) != facing
 		velocity.x = move_toward(velocity.x, 0.0, 1500.0 * delta)
 		if not is_on_floor():
 			velocity.y += gravity * delta
 		if _beat <= 0.0 and is_on_floor():
 			_beat = rhythm
-			_begin_windup()
+			if not turning:
+				_begin_windup()
 		move_and_slide()
 		return
 	if anim_hint == "shoot" and state != State.STRIKE:
@@ -74,7 +80,7 @@ func _shoot() -> void:
 	p.global_position = origin
 	# 소녀가 움직이는 쪽을 조금 앞질러 겨눈다 (리듬을 알면 구르기로 피하고, 가드로 되받는다)
 	var aim := player.global_position + Vector2(player.velocity.x * 0.25, -50.0 - absf(player.global_position.x - origin.x) * 0.18)
-	p.launch((aim - origin).normalized(), self, false)
+	p.launch(_forward_aim((aim - origin).normalized()), self, false)   # 등 뒤로는 쏘지 않는다 (v1.1.0)
 	shots += 1
 	shot.emit()
 	_visual_call("recoil", [1.0])
@@ -89,7 +95,7 @@ func receive_hit(hit: HitData, hb: Hurtbox) -> String:
 		back.damage *= reflect_damage_multiplier
 		return super.receive_hit(back, hb)
 	var heavy := hit.poise >= HEAVY_POISE
-	if heavy and hit.from_player and Progress.has_ability("wall_break"):
+	if Balance.WALL_BREAK_COMBAT and heavy and hit.from_player and Progress.has_ability("wall_break"):   # v1.1.0: 전투 효과 꺼 둠 (D15)
 		_armor_timer = armor_break_time   # 장갑이 깨졌다: 한동안 약공격도 온전히
 	if hit.poise < 30.0 and state != State.BROKEN and _armor_timer <= 0.0:
 		var weak := hit.copy()   # Hitbox 는 같은 HitData 를 여러 상대에게 넘기므로 원본을 고치지 않는다

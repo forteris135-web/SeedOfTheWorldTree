@@ -36,6 +36,9 @@ func _ready() -> void:
 	EliteTraits.apply(self, EliteTraits.HP_MULT, EliteTraits.SIZE_MULT, 1.35)
 	cloud_radius *= 1.5
 	cloud_dps *= elite_damage_mult
+	# v1.1.0 정리: 후려치기·포자 덩이도 다른 거대화처럼 거대화 피해 배율(1.35)을 받는다
+	swipe_damage *= elite_damage_mult
+	bolt_damage *= elite_damage_mult
 	keep_distance *= 1.2
 	super._ready()
 	EliteTraits.fit_visual(self)
@@ -73,9 +76,9 @@ func _begin_windup() -> void:
 	_mode = "spores"
 	if player:
 		var d := player.global_position - global_position
-		if absf(d.x) <= swipe_range and absf(d.y) < 180.0:
+		# 앞에 있을 때만 후려친다 (v1.1.0: 예고를 시작하는 순간 등 뒤의 소녀 쪽으로 홱 돌지 않는다 — 돌아서기 0.5초)
+		if absf(d.x) <= swipe_range and absf(d.y) < 180.0 and d.x * float(facing) >= 0.0:
 			_mode = "swipe"
-			facing = 1 if d.x > 0.0 else -1
 			_timer = windup_time * 1.35   # 길게 예고: 큰 몸이 뒤로 젖혀진다
 			anim_hint = ""
 
@@ -116,10 +119,10 @@ func _throw_bolt(i: int) -> void:
 	get_parent().add_child(p)
 	var origin := global_position + Vector2(facing * 60.0 * EliteTraits.SIZE_MULT, -hurt_height * 0.5)
 	p.global_position = origin
-	var aim := player.global_position + Vector2(0, -50) - origin
+	var aim := _forward_aim((player.global_position + Vector2(0, -50) - origin).normalized())   # 등 뒤로는 던지지 않는다 (v1.1.0)
 	# 여러 발이면 위아래로 조금씩 벌린다
 	var spread := (float(i) - (bolts_per_volley - 1) * 0.5) * 0.22
-	p.launch(aim.normalized().rotated(spread * facing), self, false)
+	p.launch(aim.rotated(spread * facing), self, false)
 	_visual_call("recoil", [1.2])
 	if i + 1 < bolts_per_volley:
 		get_tree().create_timer(0.22).timeout.connect(func() -> void:

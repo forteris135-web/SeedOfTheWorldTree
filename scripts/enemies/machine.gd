@@ -75,8 +75,8 @@ func is_armor_broken() -> bool:
 
 
 func receive_hit(hit: HitData, hb: Hurtbox) -> String:
-	# 벽 부수기: 무거운 공격이 장갑을 깬다 (한동안 약공격도 온전히)
-	if hit.from_player and hit.poise >= WALL_BREAK_POISE and Progress.has_ability("wall_break"):
+	# 벽 부수기: 무거운 공격이 장갑을 깬다 (한동안 약공격도 온전히). v1.1.0: 전투 효과는 꺼 둠 (Balance.WALL_BREAK_COMBAT, D15)
+	if Balance.WALL_BREAK_COMBAT and hit.from_player and hit.poise >= WALL_BREAK_POISE and Progress.has_ability("wall_break"):
 		_armor_timer = armor_break_time
 		_flash = 1.0
 	# 단단함: 약한 공격(흐트러짐 30 미만)은 피해가 크게 준다. 무너졌을 땐·장갑이 깨졌을 땐 온전히.

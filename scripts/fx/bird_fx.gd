@@ -25,6 +25,8 @@ var _peck_pending := false
 const PECK_AT := 0.5
 ## 기술이 끊기면(무너짐 등) 거둘 따라다니는 이펙트: [[FxSprite, gen], ...]
 var _held: Array = []
+## 부리 찍기가 시작될 때의 판정 구간 (별빛은 이 구간의 앞끝에 — 새가 이미 앞으로 나간 뒤에 다시 재면 앞으로 밀린다)
+var _peck_rect := Rect2()
 
 
 func _on_state(old: int, _new: int) -> void:
@@ -55,9 +57,13 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		return
 	match state_name():
 		"SWEEP":
-			Fx.spawn("wing_sweep", ahead(150.0, -110.0), {"facing": facing(), "rot": 30.0})
+			# v1.1.0: 날개 바람 초승달 = 판정 사각형 그대로 (예전엔 판정보다 110px 높고 56px 앞이었다)
+			fit_fx("wing_sweep", _reach(ahead(125.0, -90.0)), facing())
 		"PECK":
-			_peck_pending = true   # 부리가 내리찍히는 순간(타격 진행 PECK_AT)에 부리 끝에서 터진다 — _tick
+			# 부리 찍기: 앞으로 튀어 나가며 쓸고 가는 구간(판정·예고와 같은 사각형)에 잿빛 바람 줄기
+			_peck_rect = _reach(ahead(235.0, -95.0))
+			fit_fx("peck_streak", _peck_rect, facing())
+			_peck_pending = true   # 부리가 내리찍히는 순간(타격 진행 PECK_AT)에 판정 앞끝에서 별빛이 터진다 — _tick
 
 
 func _tick(delta: float) -> void:
@@ -67,7 +73,11 @@ func _tick(delta: float) -> void:
 			_peck_pending = false
 		elif not boss.has_method("phase_progress") or float(boss.call("phase_progress")) >= PECK_AT:
 			_peck_pending = false
-			Fx.spawn("peck_burst", vis_point("beak", ahead(230.0, -60.0)), {"facing": facing()})
+			# 별빛은 판정 높이 그대로, 판정 앞끝 안쪽에 (예전엔 부리 끝 = 판정 윗변 위에 떴다)
+			var rr := _peck_rect if _peck_rect.size != Vector2.ZERO else _reach(ahead(235.0, -95.0))
+			var side := rr.size.y
+			var fx0 := rr.end.x - side if facing() > 0 else rr.position.x
+			fit_fx("peck_burst", Rect2(fx0, rr.position.y, side, side), facing())
 	if st == "WIND":
 		if red():
 			if every("ember", 0.1, delta):
@@ -97,6 +107,13 @@ func _tick(delta: float) -> void:
 	if _prev_crouch and not cr and st == "TAKEOFF":
 		Fx.spawn("bird_land", boss.global_position, {"scale": 0.8})
 	_prev_crouch = cr
+
+
+## 지금 근접 공격의 판정 구간 (보스의 melee_reach — 예고·판정과 같은 값). 못 읽으면 예전 자리 둘레 (fallback 가운데, 300×160)
+func _reach(fallback_center: Vector2) -> Rect2:
+	if boss.has_method("melee_reach"):
+		return boss.call("melee_reach")
+	return Rect2(fallback_center - Vector2(150, 80), Vector2(300, 160))
 
 
 ## 날갯바람이 부는 동안: 바람 방향(_wind_dir)으로 화면을 가로지르는 줄기·초승달·잎

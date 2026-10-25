@@ -62,6 +62,11 @@ const TRACK := "boss_sap_queen"
 const LAND_MIN_WIDTH := 300.0
 ## 물결을 띄우려 내려오는 높이 (수면에서 위로)
 const WAVE_DIP := 170.0
+## 내려앉기 착지 충격 판정 (Hitbox 노드 = 발밑 기준, 좌우 같음). v1.1.0: 공격 범위 예고·이펙트가 이 값을 그대로 쓴다.
+const LAND_BOX := Rect2(-170, -70, 340, 90)
+## 맞딜 방지 계량기 (v1.1.0): 내려앉은 동안 이 거리 안에 붙어 있으면 쌓이고, 다 차면 곧바로 날아올라 수액 물결.
+## 다 찬 채 하늘에 있으면 다음 패턴은 소녀에게 가장 가까운 돌로 내려앉기.
+const CROWD_RANGE := 280.0
 
 @export_group("능력치")
 @export var max_hp := 1300.0
@@ -69,6 +74,9 @@ const WAVE_DIP := 170.0
 @export var poise_decay := 8.0
 @export var broken_time := 5.0
 @export var broken_damage_multiplier := 1.6
+## 무너졌다 날아오른 뒤 이 시간(초) 동안은 흐트러짐이 쌓이지 않는다 (v1.1.0 맞딜 방지 — 기사·뿌리지기와 같은 규칙.
+## 되받은 나비는 기술의 보상이라 그대로)
+@export var poise_immune_after_broken := 2.5
 
 @export_group("패턴")
 @export var dust_damage := 14.0
@@ -136,6 +144,12 @@ var _spawned := 0
 var _last_beat := -1
 var _rng := RandomNumberGenerator.new()
 var debug_log := false
+## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
+var _tel: RangeTelegraph
+var crowd := CrowdMeter.new(CROWD_RANGE)
+## 지금 공격이 맞딜 응징인가 (응징 공격 동안은 흐트러짐이 쌓이지 않는다 — 되받은 나비는 그대로)
+var punishing := false
+var _poise_immune := 0.0
 var _state_started_ms := 0
 
 @onready var sprite: Sprite2D = $Sprite
@@ -149,6 +163,9 @@ const SAP_WAVE := preload("res://scenes/combat/sap_wave.tscn")
 func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/sap_queen_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
+	_tel = RangeTelegraph.attach(self)
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
+	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
 	_home = global_position
 	set_collision_mask_value(1, false)
@@ -208,6 +225,9 @@ func reset_fight() -> void:
 	velocity = Vector2.ZERO
 	set_collision_mask_value(1, false)
 	hitbox.deactivate()
+	crowd.reset()
+	_tel.clear()
+	_poise_immune = 0.0
 	_raise_stones()
 	global_position = _home
 	_set_state(State.WAIT)
@@ -324,8 +344,12 @@ func _physics_process(delta: float) -> void:
 	_timer -= delta
 	_bob_t += delta
 	_face_hold = maxf(_face_hold - delta, 0.0)
+	_poise_immune = maxf(_poise_immune - delta, 0.0)
 	if attack_phase != "startup":
 		telegraph_amount = maxf(telegraph_amount - delta * 4.0, 0.0)
+	if player:
+		# 맞딜 방지: 내려앉은 동안(땅에서 때릴 수 있을 때)만 쌓인다
+		crowd.tick(delta, global_position, player.global_position, state == State.LANDED, facing)
 	if player and state in [State.HOVER, State.DUST, State.BUTTERFLIES, State.LANDED, State.INTRO, State.TAKEOFF]:
 		var dx := player.global_position.x - global_position.x
 		var want := 1 if dx > 0.0 else -1
@@ -367,7 +391,12 @@ func _physics_process(delta: float) -> void:
 		State.LANDED:
 			_ground(delta)
 			velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
-			if _left() <= 0.0:
+			if crowd.ready():
+				# 맞딜 방지 (v1.1.0): 내려앉은 몸에 붙어 버티는 소녀에게 — 곧바로 날아올라 수액 물결 (점프로 넘긴다)
+				crowd.consume()
+				_punish_wave()
+				punishing = true
+			elif _left() <= 0.0:
 				_begin_takeoff()
 		State.TAKEOFF:
 			set_collision_mask_value(1, false)
@@ -389,6 +418,7 @@ func _physics_process(delta: float) -> void:
 			if _timer <= 0.0:
 				poise = 0.0
 				poise_changed.emit(poise, max_poise)
+				_poise_immune = poise_immune_after_broken
 				_begin_takeoff()
 		State.FALLEN:
 			_settle(delta)
@@ -432,7 +462,13 @@ func _next_pattern() -> void:
 	var order: Array = [State.DUST, State.WAVE, State.BUTTERFLIES, State.LAND] if phase == 1 \
 		else [State.DUST, State.BUTTERFLIES, State.WAVE, State.DUST, State.BUTTERFLIES, State.LAND]
 	var next: State = order[_pattern_index % order.size()]
-	_pattern_index += 1
+	if crowd.ready():
+		# 맞딜 방지 (v1.1.0): 계량기가 찬 채 하늘에 있다 → 소녀에게 가장 가까운 돌로 내려앉는다 (착지 충격)
+		crowd.consume()
+		next = State.LAND
+		punishing = true
+	else:
+		_pattern_index += 1
 	_hover_target = _random_hover()
 	var startup := BEAT * 2.0
 	if phase == 2:
@@ -469,6 +505,9 @@ func _begin(st: State, t0: float, startup: float, active: float, recovery: float
 	startup_len = startup
 	active_len = active
 	recovery_len = recovery
+	if st == State.LAND:
+		# 착지 충격의 공격 범위 예고: 내려앉을 자리 ±170 (v1.1.0 — 예전엔 디딤돌 전체 ±370 이 빛났다)
+		_tel.show_rect(melee_reach(), false, maxf(_left(), 0.05))
 
 
 func _phase_step(_delta: float, on_active: Callable) -> void:
@@ -535,6 +574,7 @@ func _land_step(delta: float) -> void:
 	var top := _stone_top_center(_land_stone)
 	windup_progress = 1.0 - clampf(_left() / maxf(startup_len, 0.001), 0.0, 1.0)
 	telegraph_amount = windup_progress
+	_tel.update_rect(melee_reach())
 	var left := _left()
 	if left > LAND_DIVE:
 		_fly_toward(top + Vector2(0, -280.0), delta, 5.0)
@@ -566,10 +606,32 @@ func _touch_down() -> void:
 	_phase_end = maxf(_phase_end, _clock - BEAT * 0.5) + BEAT * LANDED_BEATS
 	var hit := HitData.make(land_damage, 0.0, self, Vector2(420, -260))
 	hit.hitstop = 0.05
-	hitbox.set_box(Rect2(-170, -70, 340, 90), 1)
+	hitbox.set_box(LAND_BOX, 1)
 	hitbox.activate(hit, 0.2)
 	Juice.shake(7.0)
 	Sfx.play("land", -2.0, 0.05)
+
+
+## 지금 근접 공격(내려앉기 착지 충격)의 판정이 덮을 월드 사각형. 내려앉는 중이면 내려앉을 자리, 앉은 뒤면 지금 자리.
+## 공격 범위 예고·이펙트·시험이 같은 값을 쓴다. 근접 공격이 아니면 빈 사각형.
+func melee_reach() -> Rect2:
+	if state == State.LAND:
+		var top := _stone_top_center(_land_stone)
+		return Rect2(top + hitbox.position + LAND_BOX.position, LAND_BOX.size)
+	if state == State.LANDED:
+		return RangeTelegraph.box_world(hitbox, LAND_BOX, 1)
+	return Rect2()
+
+
+## 맞딜 응징: 내려앉은 채로 곧바로 수면 가까이 떠올라 셋째 박에 물결 (가드·점프로 피한다)
+func _punish_wave() -> void:
+	hitbox.deactivate()
+	set_collision_mask_value(1, false)
+	_landed_touch = false
+	_hover_target = _random_hover()
+	_spawned = 0
+	telegraph.emit("wave")
+	_begin(State.WAVE, _clock, BEAT * 2.0, BEAT, BEAT * 2.0)
 
 
 func _begin_takeoff() -> void:
@@ -601,6 +663,7 @@ func _scatter_dust() -> void:
 		p.size = Vector2(22, 22)
 		p.color = Color(0.7, 0.95, 1.0)
 		p.guardable = true
+		_pierce(p)
 		get_parent().add_child(p)
 		var spread := (float(i) / maxf(count - 1, 1) - 0.5) * 2.2
 		var dir := Vector2(sin(spread), cos(spread)).normalized()
@@ -653,6 +716,7 @@ func _spawn_butterfly(index: int, count: int) -> void:
 	p.lifetime = 5.0
 	p.size = Vector2(34, 26)
 	p.color = Color(0.55, 0.9, 1.0)
+	_pierce(p)
 	get_parent().add_child(p)
 	var origin := global_position + Vector2(facing * 90.0 + (index - (count - 1) / 2.0) * 40.0, -140.0)
 	p.global_position = origin
@@ -660,6 +724,17 @@ func _spawn_butterfly(index: int, count: int) -> void:
 	var dir := (target - origin).normalized().rotated((index - (count - 1) / 2.0) * 0.2)
 	p.launch(dir, self, false)
 	p.reflected.connect(func(_pr): Sfx.play("select", -4.0, 0.1))
+
+
+## v1.1.0 (기획자 요청 4): 보스 투사체는 지형(디딤돌·섬·가지)을 뚫고 지나간다. 호수 바닥(가장 낮은 디딤) 아래로 내려가면 사라진다.
+func _pierce(p: Projectile) -> void:
+	p.pierce_terrain = true
+	var bed := ground_y + 120.0
+	var room := get_parent()
+	var lake_bed := room.get_node_or_null("Terrain/LakeBed") as Node2D if room else null
+	if lake_bed:
+		bed = lake_bed.global_position.y
+	p.floor_y = maxf(bed, ground_y) + p.hit_radius() + 4.0
 
 
 # ---------- 2페이즈: 디딤돌 가라앉기 ----------
@@ -707,6 +782,8 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		dmg *= broken_damage_multiplier
 	elif not is_ground():
 		dmg *= AIR_DAMAGE_RATIO
+	if (punishing or _poise_immune > 0.0) and not reflected:
+		gained = 0.0   # 맞딜 응징 중·무너졌다 날아오른 직후에는 무너뜨릴 수 없다
 	hp = maxf(hp - dmg, 0.0)
 	hp_changed.emit(hp, max_hp)
 	_add_poise(gained)
@@ -831,8 +908,12 @@ func _set_state(new_state: State) -> void:
 		print("[여왕] %s %.2f초 → %s (박 %d, 시계 %.2f)" % [State.keys()[state], (Time.get_ticks_msec() - _state_started_ms) / 1000.0, State.keys()[new_state], beat_index(), _clock])
 	_state_started_ms = Time.get_ticks_msec()
 	state = new_state
+	if new_state not in [State.LAND, State.WAVE]:
+		punishing = false   # 응징(내려앉기, 또는 물결)이 끝나면 꺼진다 — 내려앉은 뒤(LANDED)는 다시 무너뜨릴 수 있는 빈틈
 	if new_state not in ATTACK_STATES:
 		attack_phase = ""
+	if _tel and new_state != State.LAND:
+		_tel.end()   # 내려앉기가 끝나거나(착지) 끊기면 예고는 걷힌다
 	state_changed.emit(new_state)
 
 

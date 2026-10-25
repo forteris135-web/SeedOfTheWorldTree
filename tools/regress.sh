@@ -29,7 +29,7 @@ echo "== 방 로드"
 for r in scenes/rooms/*.tscn; do n=$(basename $r .tscn); out=$(tmo 60 "$G" --headless --path . res://$r -- --screenshot 2>&1 | grep -E "SCRIPT ERROR|Parse Error" | head -1); [ -n "$out" ] && echo "$n: $out"; done; echo "rooms: $(ls scenes/rooms/*.tscn | wc -l | tr -d ' ') loaded"
 echo "== probe"
 for f in $(ls tools/probe_*.tscn | xargs -n1 basename | sed 's/\.tscn$//'); do
-  case $f in probe_lake) p $f -- --hidden;; probe_mine) p $f -- --linked;; *) p $f;; esac
+  case $f in probe_lake) p $f -- --hidden;; probe_mine) p $f -- --linked;; probe_facetank) p $f --fixed-fps 60 -- --quick;; *) p $f;; esac
 done
 # 씬이 없는 -s 스크립트 시험 (씬이 생기면 위에서 이미 돌았다)
 for f in probe_selenia probe_texts; do

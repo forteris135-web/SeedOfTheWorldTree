@@ -188,7 +188,7 @@ func _draw_mark() -> void:
 static func draw_telegraph(ci: CanvasItem, pos: Vector2, p: float, col: Color, fade: float, pulse: float) -> void:
 	var a := col.a * fade
 	var c := Color(col.r, col.g, col.b)
-	var w := 110.0 + 50.0 * p
+	var w := WIDTH   # v1.1.0: 예고 바닥 폭 = 판정 폭 (예전엔 110 → 160 으로 커져 판정보다 넓었다)
 	ci.draw_rect(Rect2(pos + Vector2(-w / 2.0, -14), Vector2(w, 18)), Color(c, (0.2 + 0.3 * p * (0.6 + 0.4 * pulse)) * a))
 	for i in 5:
 		var hh := 24.0 + 26.0 * i

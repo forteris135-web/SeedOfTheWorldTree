@@ -31,8 +31,9 @@ signal state_changed(old_state: State, new_state: State)
 ## 공격 뒤 뒤로 빠질 확률.
 @export var backstep_chance := 0.35
 ## 추격 중 소녀가 등 뒤로 갔을 때 돌아서기까지 걸리는 시간(초). 0 이면 바로 돈다.
-## 방패를 든 경비병처럼 몸이 무거운 자는 늦게 돌아서서(0.45) 등 뒤가 빈틈이 된다. 도는 동안은 걷지 않고 멈칫한다.
-@export var turn_delay := 0.0
+## v1.1.0 (기획자 번외 요청): 모든 몹이 0.5초 — 알아챈 뒤 소녀가 구르기·달리기로 등 뒤로 가면 0.5초 뒤에 돌아선다.
+## 도는 동안은 걷지도 공격하지도 않고 멈칫한다 (등 뒤가 빈틈). 처음 알아챌 때(_alert)만 바로 돈다.
+@export var turn_delay := 0.5
 ## 쓰러질 때 떨어뜨리는 재화 '빛 가루' (±DUST_JITTER 흔들림, 2026-10-19 기획자 요청 9번). 정화의 손길로 쓰러지거나 구원되면
 ## DUST_PURIFY_BONUS 를 더 준다. 0 이면 안 떨어뜨린다 (중간 보스는 MiniBossRoom 이 0 으로 두고 따로 준다).
 @export var dust_value := 10
@@ -136,6 +137,9 @@ func _ready() -> void:
 	if defeat_flag != "" and Progress.has(defeat_flag):
 		queue_free()
 		return
+	# v1.1.0 체력 배율 (Balance: 던전 단계 1.1^단계 × 난이도 — 수관은 ×1). 거대화(EliteTraits.apply)는 이미 곱해진 뒤.
+	# 다시 나타날 때(respawn)는 씬 값에서 새로 시작하므로 겹쳐 곱해지지 않는다.
+	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
 	_origin = global_position
 	var shape := CollisionShape2D.new()
@@ -387,7 +391,7 @@ func _can_walk(dir: int) -> bool:
 ## turn_delay 가 0 이면 바로 돈다. 아니면 소녀가 등 뒤에 그 시간 동안 **이어서** 있어야 돈다:
 ##  - 이미 그쪽을 보고 있으면 기다린 시간은 0 으로 뚝 끊기지 않고 절반 속도로 식는다
 ##    (좌우를 turn_delay 보다 빠르게 번갈아 넘나들어도 결국 돌아선다 — 영영 굳는 일 없음).
-##  - 소녀가 몸에 겹쳐 있으면(등 뒤라고 할 수 없음) 바로 돈다.
+##  - v1.1.0: 몸에 겹치면 바로 돌던 규칙은 없앴다 (구르기로 몸을 뚫고 지나가면 곧바로 돌아서던 원인).
 func _turn_toward_player(delta: float) -> int:
 	if player == null:
 		return facing
@@ -396,7 +400,7 @@ func _turn_toward_player(delta: float) -> int:
 	if want == facing:
 		_turn_timer = maxf(_turn_timer - delta * 0.5, 0.0)
 		return want
-	if turn_delay <= 0.0 or absf(dx) < hurt_radius * 1.5:
+	if turn_delay <= 0.0:
 		facing = want
 		_turn_timer = 0.0
 		return want
@@ -407,15 +411,29 @@ func _turn_toward_player(delta: float) -> int:
 	return want
 
 
-## 발견: 펄쩍 뛰며 경계한다. 늦게 도는 자(turn_delay > 0)는 여기서도 바로 돌지 않는다 (등 뒤에서 다가가면 그만큼 빈틈).
+## 발견: 펄쩍 뛰며 경계한다. 처음 알아챈 순간(대기·순찰 → 발견)에는 소녀 쪽으로 바로 돈다 (v1.1.0).
+## 그 뒤 소녀가 구르기로 등 뒤로 가면 turn_delay(0.5초) 뒤에야 돈다 (_turn_toward_player).
 func _alert() -> void:
 	_turn_timer = 0.0
-	if player and turn_delay <= 0.0:
+	if player:
 		facing = 1 if player.global_position.x > global_position.x else -1
 	velocity.y = -420.0
 	velocity.x = 0.0
 	_set_state(State.ALERT)
 	_timer = 0.3
+
+
+## 쏘는 방향이 등 뒤를 향하지 않게 (v1.1.0 몹 돌아서기): 앞쪽 반원 밖이면 앞으로 곧게 접는다.
+## 쏘는 몹은 지금 바라보는 쪽으로만 쏜다 — 소녀가 등 뒤면 돌아선 뒤에 쏜다 (돌아서는 동안은 예고를 시작하지 않는다).
+func _forward_aim(dir: Vector2) -> Vector2:
+	if dir.x * float(facing) >= 0.15:
+		return dir
+	return Vector2(float(facing), clampf(dir.y, -0.45, 0.45)).normalized()
+
+
+## 소녀가 지금 바라보는 쪽(앞)에 있는가
+func _player_in_front() -> bool:
+	return player != null and (player.global_position.x - global_position.x) * float(facing) >= 0.0
 
 
 func _begin_windup() -> void:

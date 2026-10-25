@@ -30,6 +30,9 @@ signal telegraph(kind: String)   # "wind" 등 붉은 예고
 @export var broken_time := 5.0
 ## 무너진 동안 받는 피해 배수.
 @export var broken_damage_multiplier := 1.6
+## 무너졌다 일어선 뒤 이 시간(초) 동안은 흐트러짐이 쌓이지 않는다 (v1.1.0 맞딜 방지 — 기사·뿌리지기와 같은 규칙.
+## 공격 버튼만 두들겨 무너짐을 잇따라 만드는 '샌드백'을 막는다. 되받은 깃털은 기술의 보상이라 그대로)
+@export var poise_immune_after_broken := 2.5
 
 @export_group("하늘")
 @export var hover_speed := 5.0            # 목표 지점으로 다가가는 빠르기
@@ -104,6 +107,12 @@ var _home := Vector2.ZERO
 var _bob_t := 0.0
 var _wind_dir := 1
 var _face_hold := 0.0
+## 공격 범위 예고 (v1.1.0) / 맞딜 방지 계량기 (v1.1.0)
+var _tel: RangeTelegraph
+var crowd := CrowdMeter.new(CROWD_RANGE)
+## 지금 공격이 맞딜 응징인가 (응징 공격은 흐트러짐이 쌓이지 않는다 — 두들겨 끊을 수 없다. 구르기로 피해야 한다)
+var punishing := false
+var _poise_immune := 0.0
 
 ## 그림이 읽는 공개 값들 (기사·뿌리지기와 같은 약속)
 var attack_phase := ""          # SWEEP/PECK 의 startup / active / recovery (아니면 "")
@@ -130,6 +139,16 @@ var muzzle_flash := 0.0
 @onready var body_shape: CollisionShape2D = $CollisionShape2D
 
 const PROJECTILE := preload("res://scenes/combat/projectile.tscn")
+## 근접 판정 (바라보는 쪽 기준, Hitbox 노드(발밑 y -60) 기준 — v1.1.0: 예고·이펙트가 이 값을 그대로 쓴다)
+const SWEEP_BOX := Rect2(-40, -120, 330, 180)
+const PECK_BOX := Rect2(80, -90, 200, 110)
+## 부리 찍기: 앞으로 튀어 나가는 첫 속도와 감속 (판정이 켜진 0.3초 동안 앞으로 쓸고 간다)
+const PECK_SPEED := 520.0
+const PECK_DECEL := 900.0
+const PECK_ACTIVE := 0.3
+const SWEEP_ACTIVE := 0.22
+## 맞딜 방지 계량기 (v1.1.0): 땅에서 이 거리 안에 붙어 있으면 쌓이고, 다 차면 소녀 쪽으로 돌아 날개 휘두르기
+const CROWD_RANGE := 280.0
 ## 부리 끝 바로 앞 (오른쪽을 볼 때; 예전 한 장 그림의 부리 ≈ 몸 가운데에서 (+210, −70), 깃털 자세로 살짝 젖힘 — 깃털이 생기는 판정 출발점이라 그대로 둔다)
 const MUZZLE_OFFSET := Vector2(230.0, -235.0)
 ## 그림 가운데 (Sprite position)
@@ -139,11 +158,14 @@ const BODY_OFFSET := Vector2(0.0, -150.0)
 func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/bird_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
+	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
 	_home = global_position
 	set_collision_mask_value(1, false)
 	visible = false
 	hitbox.landed.connect(_on_hit_landed)
+	_tel = RangeTelegraph.attach(self)
 
 
 ## 방이 싸움을 시작시킨다.
@@ -172,6 +194,9 @@ func reset_fight() -> void:
 	hitbox.deactivate()
 	global_position = _home
 	_clear_telegraphs()
+	crowd.reset()
+	_tel.clear()
+	_poise_immune = 0.0
 	_set_state(State.WAIT)
 	hp_changed.emit(hp, max_hp)
 	poise_changed.emit(poise, max_poise)
@@ -199,6 +224,7 @@ func _physics_process(delta: float) -> void:
 	_timer -= delta
 	_bob_t += delta
 	_face_hold = maxf(_face_hold - delta, 0.0)
+	_poise_immune = maxf(_poise_immune - delta, 0.0)
 	stagger = maxf(stagger - delta / 0.6, 0.0)
 	if state != State.FEATHERS:
 		telegraph_amount = maxf(telegraph_amount - delta * 4.0, 0.0)
@@ -207,6 +233,9 @@ func _physics_process(delta: float) -> void:
 		rain_warn = maxf(rain_warn - delta * 3.0, 0.0)
 	muzzle_flash = maxf(muzzle_flash - delta * 9.0, 0.0)
 	crouching = state == State.TAKEOFF and _timer > 1.1 - takeoff_crouch
+	if player:
+		# 맞딜 방지: 땅에 내려와 있을 때만 쌓인다 (하늘의 새에게 붙을 수는 없다)
+		crowd.tick(delta, global_position, player.global_position, state in GROUND_STATES, facing)
 	if player and state != State.FEATHERS and state in AIR_STATES + [State.INTRO, State.GROUND_IDLE, State.EAT]:
 		# 데드존 + 최소 유지 시간: 소녀가 바로 밑을 지나도 매 프레임 뒤집히지 않는다.
 		# 깃털 화살 동안은 고정 (시작할 때 한 번 소녀 쪽을 본다) — 붉은 점·깃털 출발점이 반대편으로 건너뛰지 않게.
@@ -342,6 +371,7 @@ func _physics_process(delta: float) -> void:
 			if _timer <= 0.0:
 				poise = 0.0
 				poise_changed.emit(poise, max_poise)
+				_poise_immune = poise_immune_after_broken
 				_begin_takeoff()
 		State.FALLEN:
 			_settle_to_ground(delta)
@@ -350,8 +380,12 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
+## 2페이즈 쉬는 시간 배수 (v1.1.0 맞딜 방지 사다리 4단계: 2페이즈 공격 사이 쉬는 시간 −15%)
+const P2_REST_MULT := 0.85
+
+
 func _rest() -> float:
-	return hover_rest if phase == 1 else hover_rest * 0.65
+	return hover_rest if phase == 1 else hover_rest * 0.65 * P2_REST_MULT
 
 
 func _fly_toward(target: Vector2, delta: float, k: float) -> void:
@@ -428,6 +462,7 @@ func _spawn_leaf() -> void:
 	p.trail_count = 4
 	p.fade_in = leaf_fade_in               # 화면 안에서 생겨도 툭 나타나지 않게
 	p.look = "bird_leaf"                   # 이펙트 리뉴얼 F2: 그림 (scripts/fx/fx_art.gd)
+	_pierce(p)
 	var dir := Vector2(randf_range(-0.25, 0.25), 1.0)
 	var pos: Vector2
 	if phase == 1:
@@ -462,6 +497,7 @@ func _spawn_feather(index: int, count: int) -> void:
 	p.glow = 1.0
 	p.trail_count = 5
 	p.look = "bird_feather"                # 이펙트 리뉴얼 F2: 금빛 깃털 그림
+	_pierce(p)
 	get_parent().add_child(p)
 	var origin := muzzle_point()
 	p.global_position = origin
@@ -469,6 +505,12 @@ func _spawn_feather(index: int, count: int) -> void:
 	var dir := (player.global_position + Vector2(0, -40) - origin).normalized().rotated(spread)
 	p.launch(dir, self, false)
 	p.reflected.connect(func(_pr): _fatigue += 2)
+
+
+## v1.1.0 (기획자 요청 4): 보스 투사체는 지형(가지·벽)을 뚫고 지나간다. 바닥 아래(아무도 맞을 수 없는 곳)로 내려가면 사라진다.
+func _pierce(p: Projectile) -> void:
+	p.pierce_terrain = true
+	p.floor_y = ground_y + p.hit_radius() + 4.0
 
 
 ## 깃털이 나가는 자리 (부리 끝 바로 앞; global_position 은 발밑이고 그림은 150px 위). 붉은 점 예고도 여기에 그린다.
@@ -508,6 +550,15 @@ func _nearest_available_pile() -> Node2D:
 
 func _pick_ground_action() -> void:
 	_ground_timer -= 0.0
+	if crowd.ready() and player:
+		# 맞딜 방지 (v1.1.0): 몸에 붙어 버티는 소녀에게는 잎 더미·날아오르기보다 먼저 — 소녀 쪽으로 돌아 날개 휘두르기
+		crowd.consume()
+		facing = 1 if player.global_position.x > global_position.x else -1
+		_face_hold = face_hold
+		_ground_actions += 1
+		_start_melee(State.SWEEP)
+		punishing = true
+		return
 	if _ground_actions == 0 and _target_pile and is_instance_valid(_target_pile) and _target_pile.available:
 		_ground_actions += 1
 		_set_state(State.WALK_TO_PILE)
@@ -520,45 +571,68 @@ func _pick_ground_action() -> void:
 		facing = 1 if player.global_position.x > global_position.x else -1
 	var dist := absf(player.global_position.x - global_position.x) if player else 999.0
 	if dist > 260.0 or randf() < 0.4:
-		_set_state(State.PECK)
+		_start_melee(State.PECK)
+	else:
+		_start_melee(State.SWEEP)
+
+
+## 근접 공격(날개 휘두르기·부리 찍기)을 시작한다: 예고 길이와 공격 범위 예고(RangeTelegraph, 판정과 같은 사각형).
+func _start_melee(st: State) -> void:
+	_set_state(st)
+	if st == State.PECK:
 		_timer = peck_windup if phase == 1 else peck_windup * 0.8
 	else:
-		_set_state(State.SWEEP)
 		_timer = sweep_windup if phase == 1 else sweep_windup * 0.75
 	_melee_stage = 0
 	attack_phase = "startup"
 	windup_progress = 0.0
 	startup_len = _timer
+	_tel.show_rect(melee_reach(), false, _timer)
+
+
+## 시험·연출용: 근접 공격을 바로 건다 ("SWEEP" / "PECK")
+func force_melee(kind: String) -> void:
+	_start_melee(State.PECK if kind == "PECK" else State.SWEEP)
+
+
+## 지금 근접 공격의 판정이 덮을 월드 사각형 (부리 찍기는 앞으로 튀어 나가며 쓸고 갈 구간 전체). 예고·이펙트·시험이 같은 값을 쓴다.
+func melee_reach() -> Rect2:
+	if state == State.PECK:
+		return RangeTelegraph.box_world(hitbox, PECK_BOX, facing, RangeTelegraph.slide_distance(PECK_SPEED, PECK_DECEL, PECK_ACTIVE),
+			RangeTelegraph.slide_first(PECK_SPEED, PECK_DECEL))
+	return RangeTelegraph.box_world(hitbox, SWEEP_BOX, facing)
 
 
 var _melee_stage := 0
 func _melee_phase(kind: String) -> void:
 	if _melee_stage == 0:
-		# 예고 중
+		# 예고 중 (공격 범위 예고는 보스가 미끄러져도 판정 자리를 따라간다)
 		windup_progress = 1.0 - clampf(_timer / maxf(startup_len, 0.001), 0.0, 1.0)
+		_tel.update_rect(melee_reach())
 		if _timer <= 0.0:
 			_melee_stage = 1
 			attack_phase = "active"
+			_tel.end()
 			if kind == "sweep":
 				var hit := HitData.make(sweep_damage, 0.0, self, Vector2(520, -220))
-				hitbox.set_box(Rect2(-40, -120, 330, 180), facing)
-				hitbox.activate(hit, 0.22)
-				_timer = 0.22
+				hitbox.set_box(SWEEP_BOX, facing)
+				hitbox.activate(hit, SWEEP_ACTIVE)
+				_timer = SWEEP_ACTIVE
 			else:
 				var hit2 := HitData.make(peck_damage, 0.0, self, Vector2(420, -160))
-				hitbox.set_box(Rect2(80, -90, 200, 110), facing)
-				hitbox.activate(hit2, 0.3)
-				velocity.x = facing * 520.0
-				_timer = 0.3
+				hitbox.set_box(PECK_BOX, facing)
+				hitbox.activate(hit2, PECK_ACTIVE)
+				velocity.x = facing * PECK_SPEED
+				_timer = PECK_ACTIVE
 			active_len = _timer
 			Juice.shake(3.0)
 	elif _melee_stage == 1:
 		if kind == "peck":
-			velocity.x = move_toward(velocity.x, 0.0, 900.0 * get_physics_process_delta_time())
+			velocity.x = move_toward(velocity.x, 0.0, PECK_DECEL * get_physics_process_delta_time())
 		if _timer <= 0.0:
 			_melee_stage = 2
 			attack_phase = "recovery"
-			_timer = 0.9 if phase == 1 else 0.65
+			_timer = 0.9 if phase == 1 else 0.65 * P2_REST_MULT
 			recovery_len = _timer
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, 1600.0 * get_physics_process_delta_time())
@@ -595,6 +669,8 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 		Juice.shake(5.0)
 	elif state in AIR_STATES:
 		_fatigue += 1 if not hit.from_player or hit.poise < 25.0 else 2
+	if (punishing or _poise_immune > 0.0) and not (hit.from_player and hit.source == self):
+		gained = 0.0   # 맞딜 응징 중·무너졌다 일어선 직후에는 무너뜨릴 수 없다 (되받은 깃털은 기술의 보상이라 그대로)
 	_add_poise(gained)
 	if hp <= 0.0:
 		_fall()
@@ -684,8 +760,11 @@ func _set_state(new_state: State) -> void:
 		print("[새] %s %.2f초 → %s" % [State.keys()[state], (Time.get_ticks_msec() - _state_started_ms) / 1000.0, State.keys()[new_state]])
 	_state_started_ms = Time.get_ticks_msec()
 	state = new_state
+	punishing = false   # 응징은 그 공격 한 번 (새 공격은 응징이 아니다 — _start_melee 뒤 응징이면 다시 켠다)
 	if new_state != State.SWEEP and new_state != State.PECK:
 		attack_phase = ""
+		if _tel:
+			_tel.end()   # 근접 공격이 끊기면 예고도 걷힌다
 	state_changed.emit(new_state)
 
 

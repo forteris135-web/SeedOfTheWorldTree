@@ -18,14 +18,22 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		return
 	var f := facing()
 	match state_name():
-		"SWEEP":
-			_staff_arc(ahead(150.0, -160.0), 20.0, false)
-		"SWEEP2":
-			_staff_arc(ahead(150.0, -180.0), -25.0, true)
+		"SWEEP", "SWEEP2":
+			# v1.1.0 (기획자 요청 1): 지팡이 초승달 = 판정 사각형(미끄러짐 포함 — 공격 범위 예고와 같은 값) 그대로.
+			# (예전엔 가슴 앞 250 에 1.3배로 떠 판정보다 약 200px 높았다.) 되돌려 베기는 위아래를 뒤집어 올려 벤다.
+			var reach: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
+			if reach.size != Vector2.ZERO:
+				fit_fx("staff_arc", reach, f, 0.0, {"flip_v": state_name() == "SWEEP2"})
+			else:
+				_staff_arc(ahead(150.0, -160.0), 20.0, state_name() == "SWEEP2")
 		"ORBS":
 			Fx.spawn("orb_charge", vis_point("staff_head", boss.call("orb_origin") if boss.has_method("orb_origin") else body_point(1.0, 460.0)))
 		"STOMP":
-			Fx.spawn("root_stomp", boss.global_position)
+			var sr: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
+			if sr.size != Vector2.ZERO:
+				fit_fx("root_stomp", sr, 1)   # 판정 ±130 그대로 (예전 ±80)
+			else:
+				Fx.spawn("root_stomp", boss.global_position)
 		"RING":
 			Fx.spawn("ring_flash", boss.global_position + Vector2(0, -200))
 		"WALL":
