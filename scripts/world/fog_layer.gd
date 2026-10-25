@@ -5,6 +5,8 @@ extends Sprite2D
 @export var fog_color := Color(1.0, 0.95, 0.82, 0.13)
 @export var noise_scale := 1.0             # 클수록 큰 덩어리
 @export var seed := 3
+## 정화된 지역에서는 안개가 걷힌다: 투명도 × CLEAR_ALPHA (정화 연출 중에는 Purity.progress 를 따라 서서히 — v1.1.0 기획자 요청 5)
+const CLEAR_ALPHA := 0.5
 
 var _offset := Vector2.ZERO
 
@@ -52,8 +54,14 @@ func _ready() -> void:
 	var need := BackdropUtil.cover_size(self, room)
 	region_rect = Rect2(_offset, need)
 	position = BackdropUtil.center_of(self, room)
-	modulate = fog_color
 	material = preload("res://shaders/ash_purify.tres")
+	_on_purity(Purity.level)
+	Purity.progress.connect(_on_purity)
+
+
+## 정화 정도(0 잿빛 ~ 1 정화)에 맞춰 안개 진하기를 바꾼다
+func _on_purity(v: float) -> void:
+	modulate = Color(fog_color.r, fog_color.g, fog_color.b, fog_color.a * lerpf(1.0, CLEAR_ALPHA, clampf(v, 0.0, 1.0)))
 
 
 func _process(delta: float) -> void:

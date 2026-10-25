@@ -19,6 +19,20 @@ const SHADOW_MAT := preload("res://shaders/terrain_shadow.tres")
 var regions := {"canopy": false, "village": false, "mine": false, "abyss": false}
 var _tween: Tween
 
+## ---- 정화 전후 차이 (v1.1.0 기획자 요청 5) ----
+## 지금 방의 정화 정도 (progress 신호의 마지막 값: 0 잿빛 ~ 1 정화). 안개·빛줄기·떨어지는 잎·풀포기가 읽는다.
+var level := 0.0
+## 번지는 물결 (play_purify): 중심(화면 비율 좌표)·반지름(화면 높이 = 1 — ash_purify 셰이더와 같은 단위). 물결이 없으면 wave_active = false.
+var wave_center := Vector2(0.5, 0.5)
+var wave_radius := 0.0
+var wave_active := false
+## 어두운 방(Room.dark): 정화된 지역이면 CanvasModulate 색을 하얀색 쪽으로 이만큼 밝힌다 (Room.dark_color.lerp(WHITE, DARK_LIFT))
+const DARK_LIFT := 0.25
+## 정화된 방에 Purity 가 붙이는 풀포기 노드 이름 (BloomDecor)
+const BLOOM_NAME := "BloomDecor"
+var _dark_cm: CanvasModulate
+var _dark_base := Color.BLACK
+
 
 func _ready() -> void:
 	# 방이 뜨기 전(타이틀 등)에도 표가 비어 있지 않게 첫 지역 팔레트를 넣어 둔다
@@ -42,12 +56,18 @@ var _luts := {}
 
 
 ## 방이 시작될 때: 그 지역의 상태(와 잿빛 팔레트)를 바로 적용한다.
+## 정화된 지역이면 방에 풀포기(BloomDecor)를 다 핀 채로 붙이고, 어두운 방이면 조금 밝힌다 — 방이 다 준비된 뒤(call_deferred)에.
 func apply_region(region: String) -> void:
+	if _tween:
+		_tween.kill()   # 앞 방의 물결이 남아 있으면 멈춘다 (아래에서 상태를 바로 맞춘다)
+	wave_active = false
+	wave_radius = 0.0
 	var p := 1.0 if is_purified(region) else 0.0
 	_set_param("ash_lut", ash_lut(region))
 	_set_param("purity", p)
 	_set_param("radius", 0.0)
-	progress.emit(p)
+	_emit(p)
+	call_deferred("_attach_room_effects", region)
 
 
 ## 앞뒤 가르기 기본값 — 아무것도 안 함. 방의 그림 옷 데이터("depth", TerrainSkin.depth_of)가 덮어쓴다 (TERRAIN.md 5장).
@@ -97,6 +117,7 @@ func apply_depth(spec: Dictionary) -> void:
 
 
 ## 색이 번져 돌아오는 연출. screen_center 는 화면 비율 좌표(0~1).
+## 물결 테두리가 지나는 자리마다 풀포기가 돋고(BloomDecor), 안개가 걷히고, 빛줄기가 밝아지고, 잎이 푸르러진다 (progress 를 따라).
 func play_purify(region: String, screen_center: Vector2, duration := 3.5) -> void:
 	regions[region] = true
 	region_changed.emit(region, true)
@@ -105,14 +126,25 @@ func play_purify(region: String, screen_center: Vector2, duration := 3.5) -> voi
 	_set_param("center", screen_center)
 	_set_param("purity", 0.0)
 	_set_param("radius", 0.0)
+	wave_center = screen_center
+	wave_radius = 0.0
+	wave_active = true
+	_emit(0.0)
+	var room := _room_for(region)
+	if room:
+		_find_dark(room)
+		_bloom(room, true, false)
 	_tween = create_tween()
 	_tween.tween_method(func(r: float) -> void:
 		_set_param("radius", r)
-		progress.emit(clampf(r / 1.6, 0.0, 1.0)), 0.0, 2.6, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		wave_radius = r
+		_emit(clampf(r / 1.6, 0.0, 1.0)), 0.0, 2.6, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_tween.tween_callback(func() -> void:
 		_set_param("purity", 1.0)
 		_set_param("radius", 0.0)
-		progress.emit(1.0))
+		wave_active = false
+		wave_radius = 0.0
+		_emit(1.0))
 
 
 ## 테스트용: 다시 잿빛으로.
@@ -121,9 +153,111 @@ func reset_region(region: String) -> void:
 	region_changed.emit(region, false)
 	if _tween:
 		_tween.kill()
+	wave_active = false
+	wave_radius = 0.0
 	_set_param("purity", 0.0)
 	_set_param("radius", 0.0)
-	progress.emit(0.0)
+	_emit(0.0)
+	call_deferred("_attach_room_effects", region)
+
+
+## progress 신호 (정화 정도를 기억해 두고, 어두운 방의 밝기도 따라 바꾼다)
+func _emit(v: float) -> void:
+	level = v
+	progress.emit(v)
+	_apply_dark(v)
+
+
+## apply_region 뒤 (방이 다 준비된 다음 — Room._ready 가 CanvasModulate 를 apply_region 뒤에 만든다):
+## 정화된 지역이면 풀포기를 다 핀 채로 붙이고, 아니면 뗀다. 어두운 방이면 CanvasModulate 를 찾아 지금 정화 정도대로 밝힌다.
+func _attach_room_effects(region: String) -> void:
+	if wave_active:
+		return   # 물결 중에는 play_purify 가 맡는다
+	var room := _room_for(region)
+	if room == null:
+		return
+	_bloom(room, is_purified(region), true)
+	_find_dark(room)
+	_apply_dark(level)
+
+
+## 지금 방 (그 지역의). 보통은 current_scene. 시험(probe)이 방을 자기 아래에 띄웠으면 나무에서 찾는다 (가장 나중 것).
+func _room_for(region: String) -> Room:
+	if not is_inside_tree():
+		return null
+	var tree := get_tree()
+	var cs := tree.current_scene
+	if cs is Room and not cs.is_queued_for_deletion() and (cs as Room).region == region:
+		return cs as Room
+	var best: Room = null
+	for r in tree.root.find_children("*", "Room", true, false):
+		if r is Room and r.is_inside_tree() and not r.is_queued_for_deletion() and (r as Room).region == region:
+			best = r as Room
+	return best
+
+
+## 방의 풀포기: want 면 있게(bloomed — 다 핀 채로 / false — 숨긴 채 물결을 기다림), 아니면 지운다.
+func _bloom(room: Room, want: bool, bloomed: bool) -> BloomDecor:
+	var d := room.get_node_or_null(BLOOM_NAME) as BloomDecor
+	if d and d.is_queued_for_deletion():
+		d = null
+	if not want:
+		if d:
+			d.name = BLOOM_NAME + "_old"
+			d.queue_free()
+		return null
+	if d == null:
+		d = BloomDecor.new()
+		d.name = BLOOM_NAME
+		room.add_child(d)
+		# 지형 바로 앞(가시·물건·적·소녀보다 뒤)에 그린다
+		var terrain := room.get_node_or_null("Terrain")
+		if terrain:
+			room.move_child(d, terrain.get_index() + 1)
+		d.setup(room, bloomed)
+	elif bloomed:
+		d.bloom_all()
+	else:
+		d.begin_wave()
+	return d
+
+
+## 지금 방의 풀포기 (없으면 null — 시험용)
+func bloom_decor() -> BloomDecor:
+	if not is_inside_tree():
+		return null
+	var cs := get_tree().current_scene
+	var room: Room = cs as Room if cs is Room else null
+	if room == null:
+		for r in get_tree().root.find_children("*", "Room", true, false):
+			if r is Room and not r.is_queued_for_deletion():
+				room = r as Room
+	if room == null:
+		return null
+	var d := room.get_node_or_null(BLOOM_NAME) as BloomDecor
+	return d if d and not d.is_queued_for_deletion() else null
+
+
+## 어두운 방의 CanvasModulate (Room._ready 가 만든 것 — 색이 dark_color) 를 기억한다
+func _find_dark(room: Room) -> void:
+	_dark_cm = null
+	if not room.dark:
+		return
+	for c in room.get_children():
+		if not (c is CanvasModulate) or c.is_queued_for_deletion():
+			continue
+		var cm := c as CanvasModulate
+		if cm.has_meta("purity_dark") or cm.color.is_equal_approx(room.dark_color):
+			cm.set_meta("purity_dark", true)   # 밝힌 뒤에는 색이 달라지므로 표시해 둔다
+			_dark_cm = cm
+			_dark_base = room.dark_color
+			return
+
+
+func _apply_dark(v: float) -> void:
+	if _dark_cm == null or not is_instance_valid(_dark_cm):
+		return
+	_dark_cm.color = _dark_base.lerp(Color.WHITE, DARK_LIFT * clampf(v, 0.0, 1.0))
 
 
 ## 지역의 잿빛 팔레트 표. data/terrain/<지역>.json 의 "ash": {"neutral": [[밝기, "#색"], …], "hues": {"green": […], …}}

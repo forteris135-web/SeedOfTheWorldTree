@@ -10,7 +10,7 @@ class_name Platform
 ## - 디테일(2026-10-19 기획자 요청): 실루엣 가장자리에 읽히는 디테일(이끼 무더기·잘린 잔가지·늘어진 이끼 수염·
 ##   뿌리 가닥·잎 달린 덩굴·가지 끝 잎 묶음·덩어리 모서리 이끼), 안쪽은 윗면 빛 띠 + 껍질 결·홈·옹이,
 ##   지역별 장식(TerrainStyle 표). 지역은 조상 Room 의 region (style_region 으로 강제 가능).
-## - 그림은 세 겹이다: 몸통(이 노드) → 윗면 빛 겹(테두리·빛 띠·one_way 점선) → 장식 겹(이끼·잎·매달린 것).
+## - 그림은 세 겹이다: 몸통(이 노드) → 윗면 빛 겹(테두리·빛 띠) → 장식 겹(이끼·잎·매달린 것).
 ##   정화 연출 중 Room 이 매 프레임 바꾸는 테두리 색은 윗면 빛 겹만 다시 그린다 (몸통·장식은 그대로).
 ##   비밀 벽(SecretWall)은 자기 그림을 쓰므로 겹을 만들지 않는다.
 ## - label_text 는 개발용 메모다: 설정의 '개발 표시'(debug_hud)가 켜져 있을 때만 보인다.
@@ -61,7 +61,7 @@ const DEFAULT_VINE := Color(0.13, 0.17, 0.1)
 ## 장식을 그릴지 (벽·천장은 끈다)
 @export var decorate := true
 ## 한쪽 방향 발판: 아래에서 뛰어오르면 통과해 위에 올라선다 (아래+점프로 내려갈 수도 있다 — player.gd 가 one_way 를 읽는다).
-## 눈으로 구분하는 단서: 아랫선을 따라 끊어진 빛 점선 (글자 없음). 세기는 ONE_WAY_DASH_* 상수.
+## (옛 단서였던 아랫선의 빛 점선은 v1.1.0 기획자 요청으로 없앴다 — 그림 지형은 한쪽 방향 발판을 가는 가지로 그려 구분한다.)
 @export var one_way := false:
 	set(v):
 		one_way = v
@@ -91,6 +91,7 @@ const PALE_MOSS_LIGHT := Color(0.96, 0.98, 0.86)
 const PALE_MIX := 0.45
 ## one_way 단서: 아랫선 바로 안쪽의 빛 점선 (조각 길이 / 간격 / 투명도 / 굵기). 윗면 테두리(굵기 2.0, 투명도 0.8)보다 조금 약하게.
 ## 몸통 밖(배경 위)에 그리면 수관처럼 환한 방에서는 안 보여서, 아랫선 바로 안쪽(2.5px 위)에 그린다.
+## v1.1.0: 점선은 더 그리지 않는다 (_draw_edge 가 _one_way_dashes 를 부르지 않음). 값·함수는 되살릴 때를 위해 남겨 둔다.
 const ONE_WAY_DASH_LEN := 10.0
 const ONE_WAY_DASH_GAP := 12.0
 const ONE_WAY_DASH_ALPHA := 0.6
@@ -617,20 +618,17 @@ func _metal_body(b: TerrainStyle.Batch, rng: RandomNumberGenerator, thin: bool) 
 		TerrainStyle.draw_strap(b, self, rng, x, y1, thin, st)
 
 
-## 윗면 빛 겹: 빛 띠 + one_way 점선 + 윗면 테두리. 정화 연출 중에는 이것만 다시 그린다.
+## 윗면 빛 겹: 빛 띠 + 윗면 테두리. 정화 연출 중에는 이것만 다시 그린다.
 func _draw_edge(ci: CanvasItem) -> void:
 	var thin: bool = _geo["thin"]
-	if not thin and not decorate and not one_way:
+	if not thin and not decorate:
 		return
-	var w := size.x
 	var h := size.y
 	var top: PackedVector2Array = _geo["top"]
 	var b := TerrainStyle.Batch.new()
 	if TerrainStyle.detail >= 1 and (thin or decorate):
 		var depth := minf(18.0, h * 0.45) if thin else minf(float(_style["glow_depth"]), h * 0.3)
 		TerrainStyle.draw_top_glow(b, top, edge_color, depth)
-	if one_way:
-		_one_way_dashes(b, w, h, float(_geo["sag"]))
 	b.flush(ci)
 	if thin:
 		ci.draw_polyline(top, edge_color, 2.0, true)
@@ -638,7 +636,7 @@ func _draw_edge(ci: CanvasItem) -> void:
 		ci.draw_polyline(Transform2D(0.0, Vector2(0, 1)) * top, edge_color, 2.0, true)
 
 
-## one_way 단서: 아랫선을 따라 끊어진 빛 점선. 가지는 처진 아랫선(같은 sag)을 따라가고, 덩어리는 밑변을 따라 그린다.
+## one_way 단서: 아랫선을 따라 끊어진 빛 점선. 가지는 처진 아랫선(같은 sag)을 따라가고, 덩어리는 밑변을 따라 그린다. (v1.1.0 부터 쓰지 않는다)
 func _one_way_dashes(b: TerrainStyle.Batch, w: float, h: float, sag: float) -> void:
 	var tint := Color(edge_color.r, edge_color.g, edge_color.b, ONE_WAY_DASH_ALPHA)
 	var half := Vector2(0, ONE_WAY_DASH_WIDTH * 0.5)
