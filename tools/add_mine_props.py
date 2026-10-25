@@ -32,6 +32,8 @@ PROPS = {
         ("FrameB", "prop", (1500, 1200), {"piece": "frame_b", "shade": DIM}),
         ("Crane", "prop", (2950, 1200), {"piece": "crane_a", "shade": DIM, "flip_h": True}),
         ("FrameA", "prop", (4000, 1200), {"piece": "frame_a", "shade": DIM}),
+        # v1.1.0: 펌프실(잠긴 채굴장) 입구 ToFlooded(3950) 옆 표지(3700) 곁의 등불 기둥 — 입구를 찾기 쉽게
+        ("PumpLamp", "prop", (3600, 1200), {"piece": "gallows_a", "shade": DIM, "flip_h": True}),
     ],
     "mine_boss": [
         ("Crane", "prop", (860, 1500), {"piece": "crane_a", "shade": DIM}),

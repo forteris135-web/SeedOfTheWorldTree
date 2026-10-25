@@ -9,6 +9,13 @@
      "그 펌프… 내 스승님들이 만든 거예요. 거꾸로 돌릴 수 있게 설계했다고 들었지만, 아무도 그러지 않았죠.",
      "멈춰 줘서 고마워요. 스승님들도… 그걸 바랐을 거예요."
     ]
+   },
+   {
+    "when": "owen_rescued,!boss_pump_defeated",
+    "lines": [
+     "관의 복도 끝에 펌프실로 내려가는 배수 갱도가 있지.",
+     "기사의 문 바로 앞이오. 표지가 서 있을 거요."
+    ]
    }
   ]
  },
@@ -28,6 +35,22 @@
     "set": "tia_told_five_souls",
     "lines": [
      "언니, 등불 하나면 충분해. 아빠가 그랬어."
+    ]
+   },
+   {
+    "when": "boss_knight_defeated,has_tia_lantern,!owen_rescued,!tia_told_sap_crack,!boss_queen_defeated",
+    "priority": 3,
+    "set": "tia_told_sap_crack",
+    "lines": [
+     "골목 끝 틈에서 수액 냄새가 났어. 등불이 있으면 내려가 볼 수 있을 거야."
+    ]
+   },
+   {
+    "when": "boss_knight_defeated,reunion_done,!tia_told_sap_crack,!boss_queen_defeated",
+    "priority": 3,
+    "set": "tia_told_sap_crack",
+    "lines": [
+     "골목 끝 틈에서 수액 냄새가 났어. 등불이 있으면 내려가 볼 수 있을 거야."
     ]
    }
   ]

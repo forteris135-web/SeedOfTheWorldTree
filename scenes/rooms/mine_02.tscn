@@ -151,6 +151,13 @@ script = ExtResource("61_prop")
 piece = "frame_a"
 shade = Color(0.8, 0.78, 0.78, 1)
 
+[node name="PumpLamp" type="Node2D" parent="Props"]
+position = Vector2(3600, 1200)
+script = ExtResource("61_prop")
+piece = "gallows_a"
+shade = Color(0.8, 0.78, 0.78, 1)
+flip_h = true
+
 [node name="Terrain" type="Node2D" parent="."]
 
 [node name="WallLeft" parent="Terrain" instance=ExtResource("3_platform")]
@@ -260,6 +267,9 @@ position = Vector2(1830, 1132)
 [node name="FromHidden1" type="Marker2D" parent="Markers"]
 position = Vector2(170, 802)
 
+[node name="FromFlooded" type="Marker2D" parent="Markers"]
+position = Vector2(3820, 1132)
+
 [node name="Exits" type="Node2D" parent="."]
 
 [node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
@@ -289,6 +299,11 @@ target_scene = "res://scenes/rooms/mine_hidden_2.tscn"
 spawn_name = "FromMain"
 art_scale = 0.2
 
+[node name="ToFlooded" parent="Exits" instance=ExtResource("40_portal")]
+position = Vector2(3950, 1200)
+target_scene = "res://scenes/rooms/flooded_mine_01.tscn"
+spawn_name = "FromMine02"
+
 [node name="Interactables" type="Node2D" parent="."]
 
 [node name="Grass1" parent="Interactables" instance=ExtResource("9_grass")]
@@ -301,6 +316,11 @@ position = Vector2(3600, 650)
 record_id = "scripture_mine"
 kind = "book"
 
+[node name="Record_pump_way_sign" parent="Interactables" instance=ExtResource("30_record")]
+position = Vector2(3700, 1200)
+record_id = "pump_way_sign"
+kind = "note"
+
 [node name="Enemies" type="Node2D" parent="."]
 
 [node name="Machine1" parent="Enemies" instance=ExtResource("34_machine")]
@@ -310,7 +330,7 @@ position = Vector2(1200, 1132)
 position = Vector2(3300, 1132)
 
 [node name="Guard3" parent="Enemies" instance=ExtResource("27_guard")]
-position = Vector2(4300, 1132)
+position = Vector2(4340, 1132)
 
 [node name="Machine4" parent="Enemies" instance=ExtResource("34_machine")]
 position = Vector2(4500, 872)

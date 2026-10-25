@@ -2,6 +2,7 @@ extends Area2D
 class_name SapPool
 ## 수액 웅덩이 (확장판 공용). 원점은 왼쪽 위, size 만큼의 수면.
 ## 수액 위 걷기(능력 "sap_walk")가 없으면: 안에서 느려지고 조금씩 체력이 깎인다 (즉사 아님). 구르기도 짧아진다(roll_slow).
+##   얕은 수액(shallow — 잠긴 채굴장, v1.1.0)은 능력이 없어도 피해 없이 조금만 느려진다.
 ## 능력이 있으면: 수면 위를 미끄러지듯 빠르게 지나고(slow_factor 1.35, 체력 안 깎임) 구르기 거리가 길어진다(roll_glide).
 ##   (EXPANSION.md 2장 "수액 위에서 구르기 거리가 길어진다" — player.roll_factor 를 이 웅덩이가 매 프레임 정한다)
 ## **판정(맞는 영역: 높이의 0.2 ~ 1)·surface_y()(여왕의 물결 기준)는 그림과 상관없이 그대로다.**
@@ -41,6 +42,11 @@ class_name SapPool
 @export var color := Color(0.25, 0.55, 0.75, 0.55)
 ## 이 지역이 정화되면 살아난 수액으로 보인다 (비우면 늘 잿빛 수액)
 @export var region := ""
+## 얕은 수액 (v1.1.0 기획자 요청 20 — 잠긴 채굴장을 초반에 갈 수 있게): 수액 위 걷기가 없어도 체력이 깎이지 않고 조금만 느려진다
+## (SHALLOW_SLOW · SHALLOW_ROLL). 능력이 있으면 깊은 수액과 똑같이 미끄러진다. 호수·책임자의 방 웅덩이는 깊은 수액 그대로.
+@export var shallow := false
+const SHALLOW_SLOW := 0.85
+const SHALLOW_ROLL := 0.9
 
 ## 살아난 수액의 색(코드로 그리는 몸통)과 차오르는 높이(px, 그림만)
 const ALIVE_COLOR := Color(0.3, 0.75, 0.85, 0.7)
@@ -203,6 +209,9 @@ func _physics_process(delta: float) -> void:
 			if can_walk():
 				b.slow_factor = glide
 				b.roll_factor = roll_glide
+			elif shallow:
+				b.slow_factor = SHALLOW_SLOW
+				b.roll_factor = SHALLOW_ROLL
 			else:
 				b.slow_factor = slow
 				b.roll_factor = roll_slow

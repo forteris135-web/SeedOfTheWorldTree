@@ -252,8 +252,6 @@ spawn_name = "FromMineDeep"
 position = Vector2(4610, 1100)
 target_scene = "res://scenes/rooms/flooded_mine_01.tscn"
 spawn_name = "FromMineDeep"
-requires_ability = "sap_walk"
-locked_message = "수액이 깊다. 수면 위를 걸을 힘이 필요하다."
 
 [node name="ToHidden1" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(262, 840)

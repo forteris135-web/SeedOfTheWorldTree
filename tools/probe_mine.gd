@@ -3,13 +3,15 @@ extends Node
 ## 실행: godot --headless --path . res://tools/probe_mine.tscn
 ##  1) 새 방 12개(잠긴 채굴장 3 + 숨겨진 방 9)가 뜨고 포탈·달빛풀·기록물·보상이 자리에 있는지
 ##  2) 금 간 벽: 능력 없이는 튕기고(blocked) 안 부서진다 / 있으면 약공격 3대 또는 무거운 공격 1대에 부서지고 Progress.collected 에 남는다
-##  3) 잠긴 채굴장 포탈: sap_walk 없이는 잠긴 길 (책임자의 방에 link 가 적용돼 있으면 그 포탈도 확인)
+##  3) 잠긴 채굴장 포탈: sap_walk 를 요구하는 포탈은 잠긴 길. v1.1.0: 입구는 관의 복도(mine_02 ToFlooded, 조건 없음),
+##     책임자의 방 쪽 문(ToFlooded)은 조건 없음, 잠긴 채굴장 → 책임자의 방 지름길(ToMineDeep)은 등불
 ##  4) 작은 펌프: 2초 리듬으로 쏜다, 약공격은 절반
 ##  5) 무쇠 펌프: 1페이즈 순서 고정(피스톤→분사→빨아들이기), 장갑(약공격 35%·되받은 분사·BROKEN ×2), 빨아들이기(바람), 2페이즈 무작위·엇박·수액 기둥, 쓰러짐→정화
 ##  6) 경비병 방패·기계 장갑이 벽 부수기 + 무거운 공격에 깨진다
 ##  7) 회상 곡: 모든 회상이 정식 곡 recollection (옛 '보스 수에 따라 길어지는 임시 주제곡'은 없앰) + 정화한 보스 수 세기
 ##  8) 대사 데이터: 오웬·티아 추가 대사(priority 로 먼저 골라짐), 광부, 경전 조각·완성 구절, 회상·엔딩
-##  9) 세 번째 선택지: 네 능력 없으면 숨고(능력만 있고 뿌리지기 깃발이 없어도 숨김) 있으면 보이며 five_souls 깃발 → 엔딩 씬 "제3의 길" 로드 → interact 로 ending "third"
+##  9) 세 번째 선택지 (v1.1.0 조건 = 뿌리지기 정화 + 경전 조각 네 장): 모자라면 보이되 꺼짐(잿빛·손길 거절 — 네 능력만으로는 안 열림),
+##     다 모으면 열리며 five_souls 깃발 → 엔딩 씬 "제3의 길" 로드 → interact 로 ending "third"
 ## 10) 회상에서 돌아온 무쇠 펌프 방: 영혼이 깃들어 벽 부수기(wall_break)를 얻고, 멈춘 펌프 위의 싹(PumpRemains)이 보인다
 ## 11) 엔딩 뒤 이어서 탐험: 엔딩 씬이 저장 → 타이틀이 저장 파일로 클리어(제3의 길)를 알아봄 → 이어하기가 마지막 달빛풀로
 ##     (기기의 진짜 저장 파일 user://save.json 은 시험 전에 떠 두었다가 끝나고 되돌린다)
@@ -108,7 +110,7 @@ func _run() -> void:
 # ---------- 1) 방 ----------
 func _probe_rooms() -> void:
 	var rooms := {
-		"flooded_mine_01": {"portals": 2, "grass": 1, "pumps": 3},
+		"flooded_mine_01": {"portals": 3, "grass": 1, "pumps": 3},
 		"flooded_mine_02": {"portals": 3, "records": 1, "pumps": 3, "cracked": 1},
 		"flooded_mine_boss": {"portals": 1, "grass": 1, "boss": true},
 		"canopy_hidden_1": {"portals": 1, "pickups": 1},
@@ -257,8 +259,24 @@ func _probe_portal_lock() -> void:
 		for n in _all(deep):
 			if n is SapPool:
 				pools += 1
-		_check(to_flooded.requires_ability == "sap_walk" and deep.get_node_or_null("Markers/FromFlooded") != null and pools == 3 and deep.bounds.size.x == 4800,
-			"책임자의 방: 잠긴 채굴장 포탈(sap_walk) %s, FromFlooded 자리, 수액 웅덩이 %d, 너비 %d" % [to_flooded.target_scene.get_file(), pools, int(deep.bounds.size.x)])
+		# v1.1.0: 이 문은 조건 없음 (책임자의 방에 왔다 = 등불이 있다). 웅덩이 셋은 깊은 수액 그대로
+		_check(to_flooded.requires_ability == "" and deep.get_node_or_null("Markers/FromFlooded") != null and pools == 3 and deep.bounds.size.x == 4800,
+			"책임자의 방: 잠긴 채굴장 포탈(조건 없음) %s, FromFlooded 자리, 수액 웅덩이 %d, 너비 %d" % [to_flooded.target_scene.get_file(), pools, int(deep.bounds.size.x)])
+		# v1.1.0: 잠긴 채굴장의 입구는 관의 복도, 책임자의 방으로 가는 지름길은 등불
+		var f1 = load("res://scenes/rooms/flooded_mine_01.tscn").instantiate()
+		add_child(f1)
+		await _frames(2)
+		var exit1: Node = f1.get_node_or_null("Exits/Exit1")
+		var short: Node = f1.get_node_or_null("Exits/ToMineDeep")
+		var m02 = load("res://scenes/rooms/mine_02.tscn").instantiate()
+		add_child(m02)
+		await _frames(2)
+		var entry: Node = m02.get_node_or_null("Exits/ToFlooded")
+		_check(exit1 != null and exit1.target_scene.ends_with("mine_02.tscn") and exit1.spawn_name == "FromFlooded" and short != null and short.target_scene.ends_with("mine_deep.tscn") and short.requires_ability == "lantern"
+			and entry != null and entry.target_scene.ends_with("flooded_mine_01.tscn") and entry.requires_ability == "" and m02.get_node_or_null("Markers/FromFlooded") != null,
+			"잠긴 채굴장 입구 = 관의 복도 ToFlooded(조건 없음) ↔ Exit1, 책임자의 방 지름길 ToMineDeep(등불)")
+		m02.queue_free()
+		f1.queue_free()
 		var fix: Node = deep.get_node_or_null("MapFix")
 		_check(fix != null and fix.moves.has("abyss_01"), "책임자의 방: 옛 저장 지도 바로잡기 노드 MapFix (심연 방 %s)" % [fix.moves.keys() if fix else []])
 	elif _linked:
@@ -565,16 +583,27 @@ func _probe_third_way() -> void:
 	c1.label = "심연의 거대한 펌프를 거꾸로 돌린다"
 	add_child(c1)
 	await _frames(1)
-	_check(c1.is_locked() and not c1.visible and not Progress.has("five_souls"), "세 번째 선택지: 네 능력 없음 → 숨김(%s), five_souls 깃발 없음" % (not c1.visible))
+	# v1.1.0: 잠겨도 숨지 않고 보이되 꺼져 있다 (잿빛)
+	_check(c1.is_locked() and c1.visible and c1.art_node().modulate.is_equal_approx(EndingChoice.LOCKED_TINT) and not Progress.has("five_souls"), "세 번째 선택지: 조건 없음 → 잠김(보이되 잿빛), five_souls 깃발 없음")
 	c1.queue_free()
 	for a in ["wind", "light", "sap_walk", "wall_break"]:
 		Progress.gain_ability(a)
+	Progress.set_flag("boss_root_defeated")
 	var c1b: EndingChoice = load("res://scenes/world/ending_choice.tscn").instantiate()
 	c1b.choice = "third"
 	add_child(c1b)
 	await _frames(1)
-	_check(c1b.is_locked() and not c1b.visible and not Progress.has("five_souls"), "세 번째 선택지: 네 능력은 있지만 뿌리지기 정화 깃발 없음 → 숨김(%s)" % (not c1b.visible))
+	_check(c1b.is_locked() and c1b.visible and not Progress.has("five_souls"), "세 번째 선택지: 네 능력 + 뿌리지기 정화여도 경전 조각이 없으면 잠김 (예전 '다섯 영혼' 조건 없앰)")
 	c1b.queue_free()
+	Progress.set_flag("boss_root_defeated", false)
+	for n in 4:
+		Progress.set_flag("read_scripture_%d" % (n + 1))
+	var c1c: EndingChoice = load("res://scenes/world/ending_choice.tscn").instantiate()
+	c1c.choice = "third"
+	add_child(c1c)
+	await _frames(1)
+	_check(c1c.is_locked() and not Progress.has("five_souls"), "세 번째 선택지: 경전 네 장이어도 뿌리지기 정화 깃발이 없으면 잠김")
+	c1c.queue_free()
 	# 1편 두 선택지는 영혼 수와 상관없이 늘 열려 있다
 	var c_sac: EndingChoice = load("res://scenes/world/ending_choice.tscn").instantiate()
 	c_sac.choice = "sacrifice"
@@ -587,7 +616,7 @@ func _probe_third_way() -> void:
 	c2.choice = "third"
 	add_child(c2)
 	await _frames(1)
-	_check(not c2.is_locked() and c2.visible and Progress.has("five_souls"), "세 번째 선택지: 네 능력 있음 → 보임(%s), five_souls 깃발 %s" % [c2.visible, Progress.has("five_souls")])
+	_check(not c2.is_locked() and c2.visible and Progress.has("five_souls"), "세 번째 선택지: 뿌리지기 정화 + 경전 네 장 → 열림(%s), five_souls 깃발 %s" % [c2.visible, Progress.has("five_souls")])
 	# 엔딩 씬: "third" 로 뜨는지 (음악·깃발·저장)
 	Progress.ending = "third"
 	Progress.last_grass = {}
@@ -606,8 +635,8 @@ func _probe_third_way() -> void:
 ## 선택 → ending "third". 3초 뒤 장면이 엔딩으로 바뀌므로 **시험의 맨 마지막**에 부른다 (그 전에 끝내고 quit).
 func _probe_third_interact() -> void:
 	Progress.reset()
-	for a in ["wind", "light", "sap_walk", "wall_break"]:
-		Progress.gain_ability(a)
+	for n in 4:
+		Progress.set_flag("read_scripture_%d" % (n + 1))
 	Progress.set_flag("boss_root_defeated")
 	var c2: EndingChoice = load("res://scenes/world/ending_choice.tscn").instantiate()
 	c2.choice = "third"

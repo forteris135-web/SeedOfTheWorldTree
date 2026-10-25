@@ -240,7 +240,7 @@ position = Vector2(720, 1400)
 target_scene = "res://scenes/rooms/hidden_descent.tscn"
 spawn_name = "FromVillage"
 requires_ability = "lantern"
-locked_message = "어둠이 너무 짙다. 틈 너머가 보이지 않는다."
+locked_message = "깊은 틈 아래에서 수액 냄새가 올라온다… 등불 없이는 내려갈 수 없다"
 reveal_message = "등불이 어두운 틈을 비춘다. 아래로 이어지는 길이 보인다."
 
 [node name="ToHidden1" parent="Exits" instance=ExtResource("40_portal")]

@@ -12,7 +12,8 @@ extends Node
 ##  6) 엔딩 뒤 세계: 마지막 달빛풀에 도착(쉬는 자세), 마을 빛(되돌림 · 제3의 길), 티아·등불지기·오웬의 엔딩 뒤 대사, 재회가 남았으면 재회가 먼저.
 ##     옛 빌드의 저장 파일(last_ending 깃발 없이 cleared·ending_*·"ending" 값만)을 이어해도 엔딩 뒤 마을 빛·대사가 나온다.
 ##  7) 건너뛰기를 연타해도 허밍은 정해진 장면에서 시작, 경전 고쳐 쓰기 글자 단계, 경전 구절 메아리(조각을 읽었을 때만).
-##  8) 진짜 장면 바꾸기로 끝까지: 정원의 끝(abyss_boss)의 '마력의 관' 선택지 → 엔딩 장면 → 끝 화면 '이어서 탐험하기' → 달빛 정원에 쉬는 자세로 도착(쉼터 곡).
+##  8) 진짜 장면 바꾸기로 끝까지: 두 갈래 길(abyss_ending — v1.1.0 에 일반 엔딩 장치가 정원의 끝에서 옮겨 옴)의 '마력의 관' 선택지
+##     → 엔딩 장면 → 끝 화면 '이어서 탐험하기' → 달빛 정원에 쉬는 자세로 도착(쉼터 곡).
 ## 마지막 줄 "[probe] 끝: 실패 N".
 
 const THEME := "오직 생명만이"
@@ -632,16 +633,16 @@ func _probe_full_flow() -> void:
 	get_tree().root.add_child(dummy)
 	get_tree().current_scene = dummy
 	Game._busy = false
-	get_tree().change_scene_to_file("res://scenes/rooms/abyss_boss.tscn")
-	var room: Node = await _wait_scene("abyss_boss", 10.0)
+	get_tree().change_scene_to_file("res://scenes/rooms/abyss_ending.tscn")
+	var room: Node = await _wait_scene("abyss_ending", 10.0)
 	var choice: EndingChoice = room.get_node_or_null("Choices/Pipe") if room else null
 	var player: Player = get_tree().get_first_node_in_group("player")
-	_check(choice != null and room.get_node("Choices").visible and player != null, "정원의 끝: 선택지가 깨어 있다 (뿌리지기 정화 뒤)")
+	_check(choice != null and room.get_node("Choices").visible and player != null, "두 갈래 길: 선택지가 깨어 있다 (뿌리지기 정화 뒤)")
 	if choice == null or player == null:
 		return
 	await _frames(30)
 	Progress.ending = ""
-	# 2026-10-20 통합(이펙트 Fx): 정원의 끝에 오래 사는 이펙트를 하나 띄워 두고, 엔딩 장면에 남지 않는지 본다
+	# 2026-10-20 통합(이펙트 Fx): 장치 방에 오래 사는 이펙트를 하나 띄워 두고, 엔딩 장면에 남지 않는지 본다
 	Fx.spawn("pickup_big", player.global_position, {"life": 60.0, "children": false})
 	choice.interact(player)
 	var ending: Node = await _wait_scene("ending_scene", 12.0)
@@ -655,7 +656,7 @@ func _probe_full_flow() -> void:
 	while not e.end_menu_ready() and Time.get_ticks_msec() - t0 < 90000:
 		await get_tree().process_frame
 		fx_max = maxi(fx_max, Fx.active_count())
-	_check(fx_max == 0, "엔딩 장면 동안 이펙트(Fx)가 하나도 떠 있지 않다 (정원의 끝 이펙트도 거둠, 최대 %d)" % fx_max)
+	_check(fx_max == 0, "엔딩 장면 동안 이펙트(Fx)가 하나도 떠 있지 않다 (두 갈래 길 이펙트도 거둠, 최대 %d)" % fx_max)
 	_check(e.end_menu_ready() and Music.current() == Music.ENDING_TRACK, "엔딩 끝 화면까지, 허밍이 흐르는 중 (%s)" % Music.current())
 	e.time_scale = 1.0
 	e.choose("explore")

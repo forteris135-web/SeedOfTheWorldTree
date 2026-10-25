@@ -225,6 +225,7 @@ one_way = true
 [node name="SapFloor" parent="Hazards" instance=ExtResource("54_sap_pool")]
 position = Vector2(700, 1440)
 size = Vector2(2840, 110)
+shallow = true
 
 [node name="Markers" type="Node2D" parent="."]
 

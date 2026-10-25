@@ -1,0 +1,25 @@
+{
+ "_설명": "v1.1.0 (기획자 요청 19·26) 새 기록물. DialogueData 가 records.json 에 깊은 합치기로 이어 붙인다. 문장은 임시 (SCRIPT.md 정리는 기획자). pump_way_sign = 관의 복도(mine_02) 펌프실 입구 옆 표지, root_gate_stone = 달빛 정원 끝 뿌리지기 방 앞 비석 (경전·진엔딩 단서; 네 조각을 다 읽으면 extra 줄이 더해진다).",
+ "pump_way_sign": {
+  "title": "배수 갱도 표지",
+  "lines": [
+   "↓ 펌프실 — 수액이 차오르면 출입 금지",
+   "(누군가 덧칠했다: '심장은 아직 뛴다')"
+  ]
+ },
+ "root_gate_stone": {
+  "title": "정원 끝의 비석",
+  "lines": [
+   "네 조각의 말씀이 흩어진 날, 정원은 문을 닫았다.",
+   "말씀을 모두 모은 이만이 톱니를 거꾸로 돌릴 수 있으리라."
+  ],
+  "extra": [
+   {
+    "when": "read_scripture_1,read_scripture_2,read_scripture_3,read_scripture_4",
+    "lines": [
+     "(비석의 글자가 희미하게 빛난다. 네 말씀이 모두 모였다.)"
+    ]
+   }
+  ]
+ }
+}

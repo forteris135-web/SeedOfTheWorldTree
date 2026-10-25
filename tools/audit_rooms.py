@@ -9,7 +9,7 @@
 를 찾는다.
 
 사용:
-  python3 tools/audit_rooms.py                 # 25개 방 전부 (ORDER)
+  python3 tools/audit_rooms.py                 # 방 전부 (ORDER + 그 밖의 방 이름순)
   python3 tools/audit_rooms.py mine_01 canopy_03   # 고른 방만
   python3 tools/audit_rooms.py --verbose mine_01   # 면·간선(창 폭까지) 자세히
   python3 tools/audit_rooms.py --oneway            # one_way 후보 발판 목록(규칙 + 내려가기 안전 확인, 파일의 켜짐 상태 그대로 표시)
@@ -76,6 +76,7 @@ ORDER = ["canopy_01", "canopy_02", "canopy_03", "canopy_04", "canopy_05", "canop
          "village_01", "village_02", "village_shrine", "village_mini_1",
          "mine_01", "mine_02", "mine_mini_1", "mine_deep", "mine_boss",
          "abyss_01", "abyss_02", "abyss_mini_1", "moon_garden", "abyss_boss",
+         "abyss_ending",   # v1.1.0: 뿌리지기 방 오른쪽 '두 갈래 길' (일반 엔딩 장치 둘)
          # 확장판 · 잠긴 채굴장 묶음 (금 간 벽 뒤 숨겨진 방들은 작아서 함께 돈다)
          "flooded_mine_01", "flooded_mine_02", "flooded_mine_boss",
          "canopy_hidden_1", "canopy_hidden_2", "village_hidden_1", "village_hidden_2",
@@ -198,9 +199,12 @@ class Room:
                 w, h = p.get("size", (400.0, 60.0))
                 self.thorns.append({"name": n["name"], "x0": gx + 4.0, "y0": gy + 0.3 * h, "x1": gx + w - 4.0, "y1": gy + h,
                                     "rx0": gx, "ry0": gy, "w": w, "h": h})
-            elif base == "portal.tscn":
+            elif base in ("portal.tscn", "hidden_portal.tscn"):
                 self.targets.append({"kind": "portal", "name": n["name"], "x": gx, "y": gy, "requires": p.get("requires_ability", ""), "secret": "",
                                      "later": LOCKED and "_hidden_" in str(p.get("target_scene", ""))})
+            elif base == "ending_choice.tscn":
+                # v1.1.0: 엔딩 장치 (정원의 끝 = 진엔딩, 두 갈래 길 = 일반 엔딩 둘) — 손길이 닿는 자리에 서 있어야 한다
+                self.targets.append({"kind": "choice", "name": n["name"], "x": gx, "y": gy, "requires": "", "secret": ""})
             elif base == "moonlight_grass.tscn":
                 if not p.get("decor", False):
                     self.targets.append({"kind": "grass", "name": n["name"], "x": gx, "y": gy, "requires": "", "secret": ""})
@@ -754,6 +758,9 @@ def target_segments(room, t):
         return find_segments(room, t["x"], t["y"], 20.0, 100.0)
     if k in ("record", "npc"):
         return find_segments(room, t["x"], t["y"], 20.0, 80.0)
+    if k == "choice":
+        # 엔딩 장치의 손길 영역: 밑동 위 (0,-80) 반지름 170 → 밑동 양옆 120px 안의 바닥이면 닿는다
+        return find_segments(room, t["x"], t["y"], 120.0, 80.0)
     if k == "rescue":
         return find_segments(room, t["x"], t["y"], 24.0, 80.0)
     if k == "pickup":
