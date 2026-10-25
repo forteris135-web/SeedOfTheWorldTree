@@ -126,6 +126,10 @@ var crowd := CrowdMeter.new(CROWD_RANGE)
 var punishing := false
 ## 뿌리 벽: 판정이 켜진 자리와 벽까지 갈 수 있는 거리 (예고·이펙트가 쓴다)
 var _wall_from := Vector2.ZERO
+## 뿌리 벽 돌진 거리 기억 (_wall_travel): 출발 자리·방향·거리. 새 뿌리 벽을 시작할 때 비운다
+var _wall_run_from := Vector2(INF, INF)
+var _wall_run_face := 0
+var _wall_run := 0.0
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -430,6 +434,8 @@ func _begin(st: State, startup: float) -> void:
 	_timer = startup
 	startup_len = startup
 	# v1.1.0: 근접 공격(휘두르기·내려찍기·뿌리 벽)은 판정과 같은 사각형으로 공격 범위를 예고한다 (가시·손·씨앗·구슬은 각자의 예고)
+	if st == State.WALL:
+		_wall_run_from = Vector2(INF, INF)   # 새 돌진: 안개 문·벽 자리를 다시 잰다
 	if st in [State.SWEEP, State.SWEEP2, State.STOMP, State.WALL]:
 		_tel.show_rect(melee_reach(), st in RED_STATES, startup)
 
@@ -459,7 +465,10 @@ func melee_reach() -> Rect2:
 
 ## 뿌리 벽 돌진이 갈 수 있는 거리: 판정이 마지막으로 닿을 때까지 (WALL_SPEED × (판정 길이 - 한 틱)),
 ## 그 사이에 벽(안개 문·지형 벽)이 있으면 몸이 벽에 닿는 데까지.
+## 한 번 잰 값을 출발 자리·방향이 같으면 다시 쓴다 (예고가 매 틱 부르므로 — 매 프레임 광선 질의를 새로 만들지 않게, 아이폰)
 func _wall_travel(from: Vector2) -> float:
+	if facing == _wall_run_face and from.distance_squared_to(_wall_run_from) < 1.0:
+		return _wall_run
 	var run := WALL_SPEED * (WALL_ACTIVE - 1.0 / 60.0)
 	var half := 60.0
 	var cs := get_node_or_null("CollisionShape2D") as CollisionShape2D
@@ -474,6 +483,9 @@ func _wall_travel(from: Vector2) -> float:
 		var c = hit.get("collider")
 		if not (c is Platform and (c as Platform).one_way):
 			run = minf(run, maxf(absf(float(hit["position"].x) - from.x) - half, 0.0))
+	_wall_run_from = from
+	_wall_run_face = facing
+	_wall_run = run
 	return run
 
 

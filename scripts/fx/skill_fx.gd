@@ -137,6 +137,8 @@ func vis_point(kind: String, fallback: Vector2) -> Vector2:
 ## 그림이 가장 커졌을 때(표의 scale 중 큰 값)의 그림 사각형이 target 과 같은 자리·크기가 되게 가로·세로 배율(scale_xy)과 자리를 정한다.
 ## rot_deg: 그림을 돌리는 각도(도, 오른쪽을 볼 때 — 표의 rot 는 무시하고 이 값을 쓴다). 돌린 그림의 바깥 사각형이 target 에 맞는다.
 ## opts 는 Fx.spawn 의 opts (facing·rot·scale_xy 는 여기서 정한다). 그림은 거의 꽉 찬 그림들이라(여백 3~5px) 그림 사각형 = 보이는 부분.
+## opts.ground_y (월드 y) 를 주면 딸린 이펙트(바닥 고리·먼지·김)를 그림의 기준점 대신 그 바닥 높이에서 띄운다 —
+## 판정 사각형에 맞춘 그림의 기준점(pivot)은 바닥보다 위에 오기 때문 (내려찍기 고리가 허리 높이에 떠 보이던 것, v1.1.0 검수).
 func fit_fx(fx_name: String, target: Rect2, face: int, rot_deg := 0.0, opts := {}) -> FxSprite:
 	var def: Dictionary = Fx.Table.EFFECTS.get(fx_name, {})
 	if def.is_empty() or target.size.x <= 1.0 or target.size.y <= 1.0:
@@ -184,4 +186,29 @@ func fit_fx(fx_name: String, target: Rect2, face: int, rot_deg := 0.0, opts := {
 		# 따라다니는 이펙트 (돌진 등): 보스에서 떨어진 만큼을 offset 으로 (Fx 가 바라보는 쪽에 맞춰 뒤집으므로 x 는 미리 되돌린다)
 		var rel: Vector2 = at - (fol as Node2D).global_position
 		o["offset"] = Vector2(rel.x * f, rel.y)
-	return Fx.spawn(fx_name, at, o)
+	if not opts.has("ground_y"):
+		return Fx.spawn(fx_name, at, o)
+	o.erase("ground_y")
+	o["children"] = false
+	var main := Fx.spawn(fx_name, at, o)
+	_spawn_children(def, Vector2(at.x, float(opts["ground_y"])), f, opts)
+	return main
+
+
+## 표의 딸린 이펙트를 origin 에서 띄운다 (Fx.spawn 의 딸린 이펙트와 같은 규칙: 개수·퍼짐·offset·팔레트·크기 물려받기)
+func _spawn_children(def: Dictionary, origin: Vector2, f: float, opts: Dictionary) -> void:
+	for ch in def.get("children", []):
+		var cname: String = ch[0]
+		var count: int = ch[1] if ch.size() > 1 else 1
+		var spread: Vector2 = ch[2] if ch.size() > 2 else Vector2.ZERO
+		var copts: Dictionary = (ch[3] as Dictionary).duplicate() if ch.size() > 3 else {}
+		copts["facing"] = f * float(copts.get("facing", 1.0))
+		if opts.has("palette") and not copts.has("palette"):
+			copts["palette"] = opts["palette"]
+		if opts.has("scale"):
+			copts["scale"] = float(copts.get("scale", 1.0)) * float(opts["scale"])
+		var coff: Vector2 = copts.get("offset", Vector2.ZERO)
+		copts.erase("offset")
+		for i in count:
+			var jitter := Vector2(randf_range(-spread.x, spread.x), randf_range(-spread.y, spread.y))
+			Fx.spawn(cname, origin + Vector2(coff.x * f, coff.y) + jitter, copts)

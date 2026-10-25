@@ -1,4 +1,5 @@
 extends Node
+const ArtMeasure := preload("res://tools/shot_art_measure.gd")
 ## 보스 그림 움직임 수치 검사 (화면 없이).
 ## 보스 씬을 띄우되 엔진의 자동 처리는 끄고, 내가 1/60초씩 _physics_process / _process 를 직접 불러
 ## 공격 한 사이클(예비 → 타격 → 되돌림 → 복귀) 동안 그림의 기울기·배율·세로 위치가 프레임 사이에 얼마나 뛰는지 찍는다.
@@ -1463,13 +1464,12 @@ func _check_shot(p: Projectile, label: String, base_size: Vector2, base_radius: 
 		label, p.size, p.draw_scale, body.size.x, body.size.y, old_draw.x, old_draw.y, ratio_x, ratio_y, full.size.x, full.size.y, p.hit_radius(), shape_r, p.outline_color, p.glow, p.trail_count])
 	_ok(p.size == base_size and absf(p.hit_radius() - base_radius) < 0.01 and absf(shape_r - base_radius) < 0.01, "%s 판정은 그대로 (반지름 %.0f)" % [label, base_radius])
 	if p.has_art():
-		# 2026-10-19 이펙트 리뉴얼 F2: 코드 그림 대신 기획자 그림(그림 묶음 look). 그림(꼬리 포함)의 긴 쪽이 판정 지름의 3배 이상,
-		# 짧은 쪽이 판정 지름 이상이면 '판정보다 크게 잘 보인다'. 예전 다각형 크기·테두리 규칙은 코드 그림에만 해당한다.
-		var hit_d := p.hit_radius() * 2.0
-		var long_side := maxf(body.size.x, body.size.y)
-		var short_side := minf(body.size.x, body.size.y)
-		print("[probe]    %s: 그림 묶음 %s → 그림 %.0f × %.0f (판정 지름 %.0f)" % [label, p.look, body.size.x, body.size.y, hit_d])
-		_ok(long_side >= hit_d * 3.0 and short_side >= hit_d, "%s 그림이 판정보다 크게 보인다" % label)
+		# 2026-10-19 이펙트 리뉴얼 F2: 코드 그림 대신 기획자 그림(그림 묶음 look). 예전 다각형 크기·테두리 규칙은 코드 그림에만 해당한다.
+		# v1.1.0 (기획자 요청 4, 명세 3.6): 예전엔 '그림이 판정보다 크게(긴 쪽 ≥ 판정 지름 ×3)' 였으나 이제 보이는 그림 반경 = 판정 반경 ±20%
+		# (알파 ≥ 0.25 픽셀을 재어서, 뒤로 끌리는 꼬리는 빼고 — tools/shot_art_measure.gd)
+		var m := ArtMeasure.projectile(p)
+		print("[probe]    %s: 그림 묶음 %s → %s" % [label, p.look, ArtMeasure.describe(m)])
+		_ok(ArtMeasure.fits(m), "%s 보이는 그림 반경 = 판정 반경 ±20%%" % label)
 		_ok(p.glow > 0.0 and p.trail_count >= 2 and p._glow != null, "%s 발광·꼬리 있음" % label)
 		return
 	_ok(ratio_x >= 1.6 and ratio_x <= 2.1 and ratio_y >= 1.6 and ratio_y <= 2.1, "%s 몸 그림은 예전 그림의 1.6~2.1배" % label)

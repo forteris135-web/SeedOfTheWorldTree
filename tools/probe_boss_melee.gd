@@ -1,4 +1,5 @@
 extends Node
+const ArtMeasure := preload("res://tools/shot_art_measure.gd")
 ## Claude Code용 시험: 보스 근접 공격의 판정 = 공격 범위 예고 = 공격 이펙트 (v1.1.0 기획자 요청 1).
 ## 실행: godot --headless --path . res://tools/probe_boss_melee.tscn   (-- --only knight 처럼 한 보스만)
 ## 각 공격을 걸고 (보스 발밑·바라보는 쪽 = +x 기준 좌표로):
@@ -6,6 +7,8 @@ extends Node
 ##  - 예고: 보스의 RangeTelegraph 가 예비동작 끝(타격 직전)에 그리던 사각형 — 판정과 ±2px (움직이는 공격 ±MOVE_TOL)
 ##  - 이펙트: 그 공격의 이펙트 그림(알파 0.25 이상 부분, 투명도 0.25 이상인 동안)의 합 — 각 변이 판정 변에서 ±max(40px, 그 치수의 15%)
 ## 보스가 소녀를 맞히지 않게 소녀는 무적·입력 끔. 판정 숫자는 바꾸지 않는다(이펙트·예고를 판정에 맞춘다).
+## 보스 투사체 (명세 3.6): 지형 관통·바닥선, 그리고 보이는 그림 반경 = 판정 반경 ±20% (tools/shot_art_measure.gd 로 그림 픽셀을 잰다 —
+## 새 잎·깃털, 기사 불꽃 파도·고리·등불·불기둥·검기, 여왕 가루·나비, 펌프 충격파·분사, 뿌리지기 달빛 구슬·씨앗 비).
 
 const TEL_TOL := 2.0
 ## 움직이는 공격(돌진·미끄러짐)의 예고 허용 (물리 틱 단위 적분 차이)
@@ -275,13 +278,18 @@ func _shot_rules(label: String, b: Node, spawn: Callable, need_floor := true) ->
 		if p is Projectile:
 			ok = p.pierce_terrain and (not need_floor or (p.floor_y >= float(b.ground_y) and p.floor_y < 1e8))
 			txt = "pierce %s, 바닥선 %.0f (보스 바닥 %.0f)" % [p.pierce_terrain, p.floor_y, b.ground_y]
-			if p.has_art():
-				var ab: Rect2 = p.art_bounds()
-				var vis_r := minf(ab.size.x, ab.size.y) * 0.5
-				print("[probe]   (참고) %s 그림 반경(짧은 변 절반) %.0f / 판정 반경 %.0f = %.2f배" % [label, vis_r, p.hit_radius(), vis_r / maxf(p.hit_radius(), 1.0)])
+			var m := ArtMeasure.projectile(p)
+			_check(ArtMeasure.fits(m), "%s: 보이는 그림 반경 = 판정 반경 ±20%% — %s" % [label, ArtMeasure.describe(m)])
 		elif p is RootOrb:
 			ok = p.ground_y == float(b.ground_y)
 			txt = "달빛 구슬: 지형 검사 없음, 바닥선 %.0f" % p.ground_y
+			# 그림(_art)은 진행 방향으로 돈다 → 그 반대로 돌려 진행 방향 좌표로
+			var m := ArtMeasure.metric(ArtMeasure.sprite_points(p._art, -p._art.rotation), "dir")
+			var r: float = p.radius * 0.85
+			m["r"] = r
+			m["ratio"] = m["vis"] / r
+			m["ratio_min"] = m["ratio"]
+			_check(ArtMeasure.fits(m), "%s: 보이는 그림 반경 = 판정 반경 ±20%% — %s" % [label, ArtMeasure.describe(m)])
 		_check(ok, "%s: 보스 투사체는 지형을 뚫는다 — %s" % [label, txt])
 		break
 
@@ -352,6 +360,10 @@ func _projectile_rules() -> void:
 	await _frames(2)
 	var lan := _new_shots(kn, before)
 	_check(lan.size() == 1 and lan[0].pierce_terrain and is_equal_approx(lan[0].floor_y, float(kn.ground_y)), "기사 등불 던지기: 지형을 뚫고 바닥선 = 바닥(%.0f)" % kn.ground_y)
+	if lan.size() == 1:
+		var lm := ArtMeasure.projectile(lan[0])
+		_check(ArtMeasure.fits(lm), "기사 던진 등불: 보이는 그림 반경 = 판정 반경 ±20%% — %s" % ArtMeasure.describe(lm))
+	var pil_before := get_tree().get_nodes_in_group("projectile").duplicate()
 	var marks0 := get_tree().get_nodes_in_group("knight_pillar_mark").size()
 	var t := 0
 	while t < 240 and get_tree().get_nodes_in_group("knight_pillar_mark").size() == marks0:
@@ -368,6 +380,19 @@ func _projectile_rules() -> void:
 		half *= LanternKnight.PILLAR_MARK_END_SCALE
 		var pillar_r := maxf(160.0 * 0.6, 10.0)
 		_check(absf(half - pillar_r) <= 1.0 and is_equal_approx(LanternKnight.PILLAR_RADIUS, pillar_r), "불기둥 예고 반폭 %.1f = 판정 반경 %.1f (예전 77.5)" % [half, pillar_r])
+		# 불기둥 그림 (예고가 끝나면 선다): 가로·세로 반폭 모두 판정 반경 ±20%
+		var tp := 0
+		var pil: Array = []
+		while tp < 120 and pil.is_empty():
+			await get_tree().physics_frame
+			tp += 1
+			for q in _new_shots(kn, pil_before):
+				if q is Projectile and q.speed <= 0.0:
+					pil.append(q)
+		_check(not pil.is_empty(), "불기둥이 섰다 (%d틱)" % tp)
+		if not pil.is_empty():
+			var pm2 := ArtMeasure.projectile(pil[0])
+			_check(ArtMeasure.fits(pm2), "불기둥: 보이는 그림 반폭 = 판정 반경 ±20%% — %s" % ArtMeasure.describe(pm2))
 	await _unload(r)
 	r = await _load_room("sap_lake_boss")
 	var qn: Node2D = r["boss"]
@@ -382,6 +407,21 @@ func _projectile_rules() -> void:
 	r = await _load_room("abyss_boss")
 	var rk: Node2D = r["boss"]
 	await _shot_rules("뿌리지기 달빛 구슬", rk, func() -> void: rk._spawn_orb(0.0))
+	# 씨앗 비: 떨어지는 동안 판정 원 SEED_R — 그림(아래로 떨어진다: 진행 방향 = +y 를 +x 로 돌려서)
+	var sd_before := get_tree().get_nodes_in_group("projectile").duplicate()
+	rk._spawn_seed(rk.global_position.x - 300.0)
+	await _frames(2)
+	var seeds: Array = []
+	for q in get_tree().get_nodes_in_group("projectile"):
+		if q is RootSeed and not (q in sd_before):
+			seeds.append(q)
+	_check(not seeds.is_empty(), "뿌리지기 씨앗 비가 생겼다")
+	if not seeds.is_empty():
+		var sm := ArtMeasure.metric(ArtMeasure.sprite_points(seeds[0]._art, -PI / 2.0), "dir")
+		sm["r"] = RootSeed.SEED_R
+		sm["ratio"] = sm["vis"] / RootSeed.SEED_R
+		sm["ratio_min"] = sm["ratio"]
+		_check(ArtMeasure.fits(sm), "뿌리지기 씨앗 비: 보이는 그림 반경 = 판정 반경 ±20%% — %s" % ArtMeasure.describe(sm))
 	# 뿌리 가시: 예고 바닥 폭 = 판정 폭 (110)
 	var spike_src := FileAccess.get_file_as_string("res://scripts/combat/root_spike.gd")
 	_check(spike_src.contains("var w := WIDTH") and is_equal_approx(RootSpike.WIDTH, 110.0), "뿌리 가시 예고 바닥 폭 = 판정 폭 %.0f (예전 110 → 160 으로 커졌다)" % RootSpike.WIDTH)
@@ -389,6 +429,15 @@ func _projectile_rules() -> void:
 	# 검기: 지형 검사 없음 (수명으로만 사라진다)
 	var sw := FileAccess.get_file_as_string("res://scripts/bosses/sword_wave.gd")
 	_check(not sw.contains("intersect_ray"), "기사 검기(SwordWave)는 지형에 막히지 않는다")
+	# 검기 그림 vs 판정 상자 (가로 = 진행 방향): 보이는 세로 반폭·앞 끝이 판정 상자의 반높이·반너비 ±20%
+	var wv: SwordWave = load("res://scenes/bosses/sword_wave.tscn").instantiate()
+	add_child(wv)
+	var box_h := wv.size.y * 0.85 * 0.5
+	var box_w := wv.size.x * 0.5 * 0.5
+	var wm := ArtMeasure.metric(ArtMeasure.sprite_points(wv._art), "dir")
+	var ok_w: bool = wm["perp"] >= box_h * 0.8 and wm["perp"] <= box_h * 1.2 and wm["front"] >= box_w * 0.8 and wm["front"] <= box_w * 1.2
+	_check(ok_w, "기사 검기: 보이는 그림 세로 반폭 %.1f / 판정 %.1f = %.2f배, 앞 끝 %.1f / 판정 %.1f = %.2f배 (±20%%)" % [wm["perp"], box_h, wm["perp"] / box_h, wm["front"], box_w, wm["front"] / box_w])
+	wv.queue_free()
 
 
 ## 네 변이 각각 tol 안에서 같은가

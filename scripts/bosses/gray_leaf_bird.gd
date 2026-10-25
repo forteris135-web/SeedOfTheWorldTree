@@ -49,8 +49,9 @@ signal telegraph(kind: String)   # "wind" 등 붉은 예고
 @export var feather_speed := 1000.0
 ## 첫 깃털을 쏘기 전 부리 앞 붉은 점 예고 시간 (예고 0.6초의 끝부분)
 @export var feather_warn_time := 0.3
-## 탄막 그림 배율 (판정은 그대로). 기획자 요청 1.6~2배.
-@export var shot_draw_scale := 1.8
+## 탄막 바탕 그림·발광 배율 (판정은 그대로). 2026-10-19 기획자 요청으로 1.8 이었으나 v1.1.0 (요청 4 '예고 = 판정', 명세 3.6)에서
+## 보이는 그림을 판정 반경 ±20% 로 맞추며 1.0 (그림 묶음 배율은 scripts/fx/fx_art.gd — 발광 원 크기만 이 값을 따른다)
+@export var shot_draw_scale := 1.0
 ## 잎이 생길 때 서서히 나타나는 시간 (화면 안에서 툭 생겨나 보이지 않게)
 @export var leaf_fade_in := 0.12
 @export var wind_telegraph := 0.8
@@ -454,7 +455,7 @@ func _spawn_leaf() -> void:
 	p.lifetime = 7.0
 	p.fall_gravity = 40.0
 	p.size = Vector2(46, 20)               # 판정 기준 (반지름 12) — 그대로
-	p.draw_scale = shot_draw_scale         # 그림만 1.8배
+	p.draw_scale = shot_draw_scale         # 발광 원 배율 (그림은 판정 크기 — fx_art.gd)
 	p.color = Color(0.5, 0.52, 0.49)       # 잿빛 잎
 	p.outline_color = Color(0.98, 0.99, 0.95, 1.0)   # 흰 테두리
 	p.core_color = Color(0.3, 0.31, 0.28, 1.0)       # 잎맥
@@ -490,7 +491,7 @@ func _spawn_feather(index: int, count: int) -> void:
 	p.poise = 0.0
 	p.reflectable = true
 	p.size = Vector2(76, 16)               # 판정 기준 (반지름 10) — 그대로
-	p.draw_scale = shot_draw_scale         # 그림만 1.8배
+	p.draw_scale = shot_draw_scale         # 발광 원 배율 (그림은 판정 크기 — fx_art.gd)
 	p.color = Color(0.86, 0.9, 0.94)       # 은빛
 	p.outline_color = Color(1.0, 1.0, 1.0, 1.0)
 	p.core_color = Color(1.0, 0.25, 0.2, 1.0)        # 붉은 심

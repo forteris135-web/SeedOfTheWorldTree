@@ -54,7 +54,7 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 			for i in 4:
 				Fx.spawn("ember", lan0 + Vector2(randf_range(-20.0, 20.0), randf_range(-20.0, 20.0)))
 		"SLAM":
-			fit_fx("knight_slam", reach, 1)
+			fit_fx("knight_slam", reach, 1, 0.0, {"ground_y": float(val("ground_y", boss.global_position.y))})   # 바닥 고리·먼지는 발밑 높이에서
 		"SPIN":
 			fit_fx("knight_spin", reach, f)
 		"CHARGE":

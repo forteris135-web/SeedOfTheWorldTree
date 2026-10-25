@@ -31,7 +31,7 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		"STOMP":
 			var sr: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
 			if sr.size != Vector2.ZERO:
-				fit_fx("root_stomp", sr, 1)   # 판정 ±130 그대로 (예전 ±80)
+				fit_fx("root_stomp", sr, 1, 0.0, {"ground_y": float(val("ground_y", boss.global_position.y))})   # 판정 ±130 그대로 (예전 ±80), 바닥 고리·먼지는 발밑 높이
 			else:
 				Fx.spawn("root_stomp", boss.global_position)
 		"RING":

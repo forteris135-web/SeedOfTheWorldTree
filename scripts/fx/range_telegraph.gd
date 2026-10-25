@@ -7,11 +7,13 @@ class_name RangeTelegraph
 ## 색: 막을 수 있는 공격 = 주황 COLOR_GUARD, 가드 불가 = 진한 붉은빛 COLOR_RED ('가드 불가는 늘 진한 붉은빛' 원칙).
 ##
 ## 쓰는 법 (보스 스크립트):
-##   _tel = RangeTelegraph.attach(self)                       # _ready 에서 한 번 (보스 그림 뒤에 그려진다)
+##   _tel = RangeTelegraph.attach(self)                       # _ready 에서 한 번 (채움은 보스 그림 뒤, 테두리는 앞에 그려진다)
 ##   _tel.show_rect(RangeTelegraph.box_world(hitbox, BOX, facing, slide), unguardable, startup)   # 예비동작 시작
 ##   _tel.update_rect(...)                                    # 예비동작 동안 보스가 움직이면 매 틱 (진행은 그대로)
 ##   _tel.end()                                               # 타격 시작 (또는 공격이 끊김)
-## 아이폰 부담: 사각형 3~4개를 그리는 노드 하나 (보스마다 하나, 매 프레임 새로 만드는 것 없음).
+## 아이폰 부담: 사각형 3~4개를 그리는 노드 둘 (보스마다 하나, 매 프레임 새로 만드는 것 없음).
+## 채움은 보스 그림 **뒤**(지형 위), 테두리·바닥 번쩍 선은 보스 그림 **앞**(FRONT_Z) — 몸 둘레를 치는 공격(내려찍기·등불 회전·김 분출)은
+## 사각형 대부분이 보스 몸에 가려져 채움만으로는 안 보였다 (v1.1.0 검수).
 
 const COLOR_GUARD := Color(1.0, 0.75, 0.30, 0.28)
 const COLOR_RED := Color(1.0, 0.15, 0.10, 0.38)
@@ -23,6 +25,8 @@ const LINE_W := 3.0
 const BASE_FILL := 0.3
 ## 가드 불가 예고의 맥동 (초당 횟수, 빛에 민감한 사람을 위해 3 이하)
 const RED_PULSE_HZ := 2.5
+## 테두리 겹의 그리기 순서 (보스·소녀 0 보다 위, 이펙트 6·앞 물 3 보다 아래)
+const FRONT_Z := 1
 
 ## 지금 그리는 사각형 (월드 좌표)
 var rect := Rect2()
@@ -31,9 +35,11 @@ var duration := 0.5
 var _t := 0.0
 var _out := -1.0
 var _on := false
+var _front: Node2D   # 테두리 겹 (보스 그림 앞)
 
 
-## 보스(부모)에 붙인다: 첫 자식으로 넣어 보스 그림·이펙트보다 **뒤**에 그려진다 (지형 위, 보스·소녀 아래).
+## 보스(부모)에 붙인다: 첫 자식으로 넣어 채움이 보스 그림·이펙트보다 **뒤**에 그려진다 (지형 위, 보스·소녀 아래).
+## 테두리는 자식 겹(z FRONT_Z)이라 보스 그림 앞에 보인다.
 static func attach(boss: Node2D) -> RangeTelegraph:
 	var t := RangeTelegraph.new()
 	t.name = "RangeTelegraph"
@@ -80,6 +86,17 @@ static func slide_first(v0: float, decel: float, decel_first := false, dt := 1.0
 func _ready() -> void:
 	visible = false
 	set_process(false)
+	_front = Node2D.new()
+	_front.name = "Outline"
+	_front.z_index = FRONT_Z
+	add_child(_front)
+	_front.draw.connect(_draw_front)
+
+
+func _redraw() -> void:
+	queue_redraw()
+	if _front:
+		_front.queue_redraw()
 
 
 ## 예비동작 시작: 사각형을 0 부터 차오르게 그린다 (dur 초에 가득).
@@ -93,7 +110,7 @@ func show_rect(world_rect: Rect2, ug: bool, dur: float) -> void:
 	visible = true
 	set_process(true)
 	_pin()
-	queue_redraw()
+	_redraw()
 
 
 ## 예비동작 동안 자리만 옮긴다 (차오름은 그대로)
@@ -102,7 +119,7 @@ func update_rect(world_rect: Rect2) -> void:
 		return
 	if world_rect != rect:
 		rect = world_rect
-		queue_redraw()
+		_redraw()
 
 
 ## 타격이 시작됐다 (또는 끊겼다): 빠르게 걷힌다.
@@ -148,7 +165,7 @@ func _process(delta: float) -> void:
 	else:
 		_t = minf(_t + delta, duration)
 	_pin()
-	queue_redraw()
+	_redraw()
 
 
 func _draw() -> void:
@@ -156,19 +173,39 @@ func _draw() -> void:
 		return
 	var p := progress()
 	var e := 1.0 - (1.0 - p) * (1.0 - p)
-	var a := 1.0 if _out < 0.0 else clampf(1.0 - _out / FADE_OUT, 0.0, 1.0)
+	var a := _alpha()
 	var col := COLOR_RED if unguardable else COLOR_GUARD
-	if unguardable:
-		a *= 0.8 + 0.2 * sin(_t * TAU * RED_PULSE_HZ)
-	var c := Color(col.r, col.g, col.b)
+	var c := _rgb()
 	# 옅은 바탕 (사각형 전체) + 바닥에서 위로 차오르는 채움
 	draw_rect(rect, Color(c, col.a * BASE_FILL * a))
 	var h := rect.size.y * e
 	if h > 0.5:
 		draw_rect(Rect2(rect.position.x, rect.end.y - h, rect.size.x, h), Color(c, col.a * (1.0 - BASE_FILL) * a))
-	# 테두리: 옅게 → 진하게 (사각형 안쪽에 그려 바깥 경계 = 판정 경계)
+	# 테두리·바닥 번쩍 선은 앞 겹(_draw_front)이 그린다
+
+
+## 앞 겹: 테두리 옅게 → 진하게 (사각형 안쪽에 그려 바깥 경계 = 판정 경계) + 다 차오르기 직전 바닥 선이 밝게 (곧 친다)
+func _draw_front() -> void:
+	if not _on or rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return
+	var p := progress()
+	var e := 1.0 - (1.0 - p) * (1.0 - p)
+	var a := _alpha()
+	var c := _rgb()
 	var ln := Rect2(rect.position + Vector2(LINE_W, LINE_W) * 0.5, rect.size - Vector2(LINE_W, LINE_W))
-	draw_rect(ln, Color(c.lightened(0.15), (0.45 + 0.5 * e) * a), false, LINE_W)
-	# 다 차오르기 직전: 바닥 선이 밝게 (곧 친다)
+	_front.draw_rect(ln, Color(c.lightened(0.15), (0.45 + 0.5 * e) * a), false, LINE_W)
 	if p > 0.7:
-		draw_line(Vector2(rect.position.x, rect.end.y - 1.5), Vector2(rect.end.x, rect.end.y - 1.5), Color(1, 1, 1, 0.5 * (p - 0.7) / 0.3 * a), 3.0)
+		_front.draw_line(Vector2(rect.position.x, rect.end.y - 1.5), Vector2(rect.end.x, rect.end.y - 1.5), Color(1, 1, 1, 0.5 * (p - 0.7) / 0.3 * a), 3.0)
+
+
+## 지금 투명도 (걷힘·가드 불가 맥동 포함)
+func _alpha() -> float:
+	var a := 1.0 if _out < 0.0 else clampf(1.0 - _out / FADE_OUT, 0.0, 1.0)
+	if unguardable:
+		a *= 0.8 + 0.2 * sin(_t * TAU * RED_PULSE_HZ)
+	return a
+
+
+func _rgb() -> Color:
+	var col := COLOR_RED if unguardable else COLOR_GUARD
+	return Color(col.r, col.g, col.b)

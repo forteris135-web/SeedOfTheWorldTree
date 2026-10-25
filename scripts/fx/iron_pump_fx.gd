@@ -26,7 +26,7 @@ func _on_slammed() -> void:
 	# v1.1.0 (기획자 요청 1): 피스톤 물보라 = 피스톤 판정 사각형 그대로 (예전엔 망치 머리 x≈391 에 떠 판정 가운데보다 130px 앞이었다)
 	var reach: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()
 	if reach.size != Vector2.ZERO:
-		fit_fx("pump_slam", reach, facing())
+		fit_fx("pump_slam", reach, facing(), 0.0, {"ground_y": float(val("ground_y", boss.global_position.y))})   # 바닥 고리·김·방울은 발밑 높이에서
 	else:
 		var head := vis_point("piston", ahead(300.0, 0.0))
 		Fx.spawn("pump_slam", Vector2(head.x, boss.global_position.y))

@@ -1,7 +1,9 @@
 extends Node
+const ArtMeasure := preload("res://tools/shot_art_measure.gd")
 ## 보스·적 기술 이펙트 시험 (2026-10-19 이펙트 리뉴얼 F2, 화면 없이 돈다).
 ## 실행: godot --headless --path . res://tools/probe_fx_boss.tscn      마지막 줄 "[probe] 끝: 실패 N"
-## 1) 투사체 그림 묶음(look): 그림이 모두 있고, 판정(반지름·모양)은 look 이 없을 때와 같고, 그림이 판정보다 크고,
+## 1) 투사체 그림 묶음(look): 그림이 모두 있고, 판정(반지름·모양)은 look 이 없을 때와 같고, 그림이 보이고(v1.1.0: 보스 투사체 그림 =
+##    판정 ±20% 는 probe_boss_melee 가 잰다),
 ##    저스트 가드로 되받으면 금빛 재질로 바뀐다.
 ## 2) 보스 다섯 마리 모두 기술 이펙트 관찰자가 붙어 있고, 기술을 걸면 그 기술의 이펙트가 뜬다 (가드 불가 예고는 붉은 불티).
 ## 3) 공격 노드 그림: 뿌리 가시가 솟으며 그림이 드러나고(판정 높이는 그대로 자란다), 뿌리 손은 움켜쥐면 쥔 손 그림,
@@ -70,13 +72,15 @@ func _test_looks() -> void:
 		add_child(b)
 		var ra := _shape_r(a)
 		var rb := _shape_r(b)
-		var bb := b.body_bounds()
-		var big := maxf(bb.size.x, bb.size.y) >= b.hit_radius() * 2.0
-		if absf(ra - rb) > 0.01 or not b.has_art() or not big:
-			bad.append("%s(판정 %.1f/%.1f, 그림 %s)" % [k, ra, rb, bb.size])
+		# v1.1.0 (명세 3.6): 예전엔 '그림이 판정보다 크다'를 보았으나 이제 보스 투사체의 보이는 그림은 판정 반경 ±20% —
+		# 실제 크기(size)로 tools/probe_boss_melee 가 잰다. 여기서는 그림이 실제로 보이는가(알파 ≥ 0.25 픽셀이 있다)만.
+		var m := ArtMeasure.projectile(b)
+		var seen: bool = not m.is_empty() and int(m["n"]) > 0 and m["vis"] >= 4.0
+		if absf(ra - rb) > 0.01 or not b.has_art() or not seen:
+			bad.append("%s(판정 %.1f/%.1f, 그림 %s)" % [k, ra, rb, ArtMeasure.describe(m)])
 		a.free()
 		b.free()
-	_check(bad.is_empty(), "그림 묶음마다 판정은 그대로, 그림은 판정보다 크다 %s" % [bad])
+	_check(bad.is_empty(), "그림 묶음마다 판정은 그대로, 그림이 보인다 %s" % [bad])
 	# 되받기: 금빛 재질로
 	var f: Projectile = scene.instantiate()
 	f.look = "bird_feather"

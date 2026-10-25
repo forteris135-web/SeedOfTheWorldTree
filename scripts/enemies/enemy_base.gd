@@ -423,11 +423,21 @@ func _alert() -> void:
 	_timer = 0.3
 
 
-## 쏘는 방향이 등 뒤를 향하지 않게 (v1.1.0 몹 돌아서기): 앞쪽 반원 밖이면 앞으로 곧게 접는다.
-## 쏘는 몹은 지금 바라보는 쪽으로만 쏜다 — 소녀가 등 뒤면 돌아선 뒤에 쏜다 (돌아서는 동안은 예고를 시작하지 않는다).
+## 쏘는 방향의 가장 작은 앞쪽 가로 성분 (_forward_aim)
+const AIM_MIN_X := 0.15
+
+
+## 쏘는 방향이 등 뒤를 향하지 않게 (v1.1.0 몹 돌아서기). 쏘는 몹은 지금 바라보는 쪽으로만 쏜다 — 소녀가 등 뒤면 돌아선 뒤에 쏜다
+## (돌아서는 동안은 예고를 시작하지 않는다).
+##  - 앞쪽이면 그대로. 앞쪽이지만 거의 바로 위·아래(가로 성분 < AIM_MIN_X)면 위·아래 겨냥은 그대로 두고 가로만 AIM_MIN_X 로 —
+##    머리 위 가지의 소녀를 24° 로 접어 쏘아 빗나가던 것 (v1.1.0 검수)
+##  - 등 뒤면 앞으로 곧게 접는다 (위아래 ±0.45 까지)
 func _forward_aim(dir: Vector2) -> Vector2:
-	if dir.x * float(facing) >= 0.15:
+	var fx := dir.x * float(facing)
+	if fx >= AIM_MIN_X:
 		return dir
+	if fx >= 0.0:
+		return Vector2(float(facing) * AIM_MIN_X, dir.y).normalized()
 	return Vector2(float(facing), clampf(dir.y, -0.45, 0.45)).normalized()
 
 

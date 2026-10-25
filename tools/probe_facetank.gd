@@ -8,8 +8,11 @@ extends Node
 ## 성장: 그 보스를 만날 즈음의 예상치 (명세 3.8 표 — Progress.upgrades 를 직접 정한다, 영혼 '씨앗').
 ## 통과: Normal 에서 5보스 × 3자리 × 씨드 2개 = 30판 모두 봇이 쓰러진다 (300초 안에). 이기거나 300초를 버티면 FAIL.
 ##   --quick (전체 회귀용): front·inside × 씨드 1 = 10판. --diff easy 등: 결과만 출력 (합격 판정은 Normal 만).
-##   --sim-stamina: (P 묶음 병합 전 추정용) 봇이 명세 2.1 의 스태미너 규칙(1·2·3타 10/12/15, 공격 중 회복 없음, 벗어난 뒤 0.5초 지연,
-##   28/초, 3타 뒤 0.35초 잠금)을 스스로 지키며 누른다. 소녀 쪽에 스태미너가 들어온 뒤에는 쓰지 않는다 (두 번 빠진다).
+##   스태미너 흉내 (P 묶음 병합 전): 소녀에게 스태미너 규칙이 아직 없으면(Player.light_stamina_cost 없음) **저절로** 켜진다.
+##   봇이 명세 2.1·2.2 의 규칙(1·2·3타 10/12/15, 공격 중 회복 없음, 벗어난 뒤 0.5초 지연, 28/초, 3타 뒤 0.35초 잠금)을 스스로 지키며
+##   누르고, 소녀의 피해도 P 묶음 값으로 맞춘다(씨앗 베기 32 → 40, 일반·씨앗 새순 배율 Progress.skill_damage_mult) — 맞딜 승인 기준은
+##   합친 게임(명세 9.5)이므로. 소녀 쪽에 스태미너가 들어오면 저절로 꺼진다 (두 번 빠지지 않게).
+##   --sim-stamina: 늘 켠다 / --no-sim: 늘 끈다 (스태미너 없는 지금 소녀 그대로 — 참고용 '날것' 결과).
 
 const TIME_LIMIT := 300.0
 const SPOT_DIST := 140.0
@@ -37,6 +40,7 @@ const ACCEL := 6
 
 var _fail := 0
 var _sim := false
+var _sim_mode := "auto"
 var _accel := 1
 var _diff := "normal"
 var _results: Array = []
@@ -45,7 +49,7 @@ var _results: Array = []
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var quick := "--quick" in args
-	_sim = "--sim-stamina" in args
+	_sim_mode = "on" if "--sim-stamina" in args else ("off" if "--no-sim" in args else "auto")
 	# --fixed-fps 로 도는가: 물리 30틱이 실제 시간 0.25초보다 빨리 지나가면 그렇다 (엔진 인자는 get_cmdline_args 에 남지 않는다)
 	var t_us := Time.get_ticks_usec()
 	await _frames(30)
@@ -69,7 +73,7 @@ func _ready() -> void:
 	if si >= 0 and si + 1 < args.size():
 		spots = Array(args[si + 1].split(","))
 	Settings.data["screen_shake"] = false
-	print("[probe] 맞딜 시험 시작 (난이도 %s, %s, 물리 %d틱/초 × 시간 %d배%s)" % [_diff, "빠른 판" if quick else "전체", Engine.physics_ticks_per_second, _accel, ", 스태미너 추정" if _sim else ""])
+	print("[probe] 맞딜 시험 시작 (난이도 %s, %s, 물리 %d틱/초 × 시간 %d배, 스태미너 흉내 %s)" % [_diff, "빠른 판" if quick else "전체", Engine.physics_ticks_per_second, _accel, {"auto": "자동", "on": "켬", "off": "끔"}[_sim_mode]])
 	if _accel > 1:
 		print("[probe] (실시간 실행이라 빠른 판·%d배속 — 전체 30판은 --fixed-fps 60 으로)" % _accel)
 	var t_wall := Time.get_ticks_msec()
@@ -127,6 +131,15 @@ func _run(prof: Dictionary, spot: String, sd: int) -> void:
 	var player := get_tree().get_first_node_in_group("player") as Player
 	var boss := room.get_node("Boss") as Node2D
 	var gy: float = boss.ground_y
+	var has_stamina := "light_stamina_cost" in player
+	_sim = _sim_mode == "on" or (_sim_mode == "auto" and not has_stamina)
+	if _results.is_empty():
+		print("[probe] 소녀 스태미너 규칙: %s → 스태미너 흉내 %s" % ["있음 (P 묶음)" if has_stamina else "없음", "켬 (P 묶음 수치로 피해도 맞춤)" if _sim else "끔"])
+	if _sim and not has_stamina:
+		# P 묶음 수치 (명세 2.4·0.3): 씨앗 베기 40 × 씨앗 새순 배율, 일반 공격 × 일반 새순 배율 (공통 강화 attack_multiplier 는 소녀가 곱한다)
+		player.slash_damage = 40.0 * Progress.skill_damage_mult("seed")
+		var mn := Progress.skill_damage_mult("normal")
+		player.light_damage = [12.0 * mn, 12.0 * mn, 18.0 * mn]
 	var arena: Rect2 = boss.arena
 	if "--log" in OS.get_cmdline_user_args():
 		boss.debug_log = true
@@ -157,7 +170,7 @@ func _run(prof: Dictionary, spot: String, sd: int) -> void:
 			sim[0] -= SIM_COST[clampi(step - 1, 0, 2)]
 			if step == 3:
 				sim[2] = 0.09 + 0.12 + SIM_LOCK)
-	var dt := float(_accel) / float(Engine.physics_ticks_per_second)   # 한 틱의 게임 시간 (늘 1/60초)
+	var dt := float(_accel) / float(Engine.physics_ticks_per_second)   # 한 틱의 기준 게임 시간 1/60초 (히트스톱 없을 때; 여왕 박자 시계 보정용)
 	var t := 0.0
 	var move_t := 0.0
 	var tick := 0
@@ -165,12 +178,15 @@ func _run(prof: Dictionary, spot: String, sd: int) -> void:
 	var hp_min := player.hp
 	while t < TIME_LIMIT:
 		await get_tree().physics_frame
+		# 이 틱에 흐른 게임 시간: 히트스톱(시간 배수 0.05) 동안은 거의 흐르지 않는다 → 싸움 시간·300초 상한·0.25초 움직임 주기가
+		# 히트스톱 틱 수만큼 늘어나지 않게 (예전엔 틱마다 1/60초를 그대로 더했다)
+		var gdt := Engine.time_scale / float(Engine.physics_ticks_per_second)
 		if _accel > 1 and Engine.time_scale != float(_accel):
 			Engine.time_scale = float(_accel)   # 히트스톱이 1 로 되돌린 시간 배수를 다시 (한 틱 = 1/60초 유지)
 		if _accel > 1 and boss is SapQueen:
 			# 여왕의 박자 시계는 '시간 배수를 뺀 실제 시간'으로 센다 (히트스톱에 느려지지 않게) → 배속 실행에서는 게임 시간만큼 보탠다
 			boss._clock += dt * (1.0 - 1.0 / float(_accel))
-		t += dt
+		t += gdt
 		tick += 1
 		if not is_instance_valid(player) or not is_instance_valid(boss):
 			result = "gone"
@@ -183,7 +199,7 @@ func _run(prof: Dictionary, spot: String, sd: int) -> void:
 			result = "won"
 			break
 		# --- 움직임: 0.25초마다 목표 자리로 ---
-		move_t += dt
+		move_t += gdt
 		if move_t >= MOVE_EVERY:
 			move_t = 0.0
 			var tx := _target_x(boss, spot, arena)
@@ -197,10 +213,10 @@ func _run(prof: Dictionary, spot: String, sd: int) -> void:
 			if sim[3] and not busy:
 				sim[1] = maxf(sim[1], SIM_DELAY)
 			sim[3] = busy
-			sim[1] = maxf(sim[1] - dt, 0.0)
-			sim[2] = maxf(sim[2] - dt, 0.0)
+			sim[1] = maxf(sim[1] - gdt, 0.0)
+			sim[2] = maxf(sim[2] - gdt, 0.0)
 			if not busy and sim[1] <= 0.0 and sim[2] <= 0.0:
-				sim[0] = minf(sim[0] + SIM_REGEN * dt, max_st)
+				sim[0] = minf(sim[0] + SIM_REGEN * gdt, max_st)
 		# --- 행동: 짝수 틱에 누르고 홀수 틱에 모두 뗀다 (누를 때마다 '막 눌림'이 되게) ---
 		_release_all()
 		if tick % 2 == 1:
