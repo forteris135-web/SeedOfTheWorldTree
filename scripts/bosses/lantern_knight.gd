@@ -696,7 +696,7 @@ func _spawn_flame_wave(dir: int) -> void:
 	p.lifetime = 2.2
 	p.size = Vector2(70, 48)
 	p.color = Color(1.0, 0.6, 0.25)
-	_flame_look(p)
+	_flame_look(p, 1.6)
 	p.look = "knight_flame"   # 이펙트 리뉴얼 F2: 불꽃 초승달 그림
 	_pierce(p)
 	get_parent().add_child(p)
@@ -746,7 +746,7 @@ func _spawn_ring(i: int) -> void:
 		p.lifetime = 2.2
 		p.size = Vector2(84, 42)
 		p.color = Color(1.0, 0.55 + 0.1 * i, 0.2)
-		_flame_look(p)
+		_flame_look(p, 1.6)
 		p.look = "knight_flame"
 		_pierce(p)
 		get_parent().add_child(p)
@@ -772,6 +772,7 @@ func _throw_lantern() -> void:
 	p.pierce_terrain = true
 	p.floor_y = ground_y
 	p.look = "knight_lantern"   # 이펙트 리뉴얼 F2: 등불 그림
+	p.use_art_hit_radius()   # v1.1.0 통합: 판정 = 도는 등불이 그리는 원
 	get_parent().add_child(p)
 	p.global_position = global_position + Vector2(facing * 80.0, -170.0)
 	# 가까우면 느리게 던진다 (속력이 일정한 투사체라 820 으로는 꼭대기에서 수평으로 멀리 미끄러져 300px 넘게 지나쳤다)
@@ -787,13 +788,15 @@ func _throw_lantern() -> void:
 ## v1.1.0 (기획자 요청 4): 보스 투사체는 지형을 뚫고 지나간다. 바닥 아래(아무도 맞을 수 없는 곳)로 내려가면 사라진다.
 func _pierce(p: Projectile) -> void:
 	p.pierce_terrain = true
+	p.use_art_hit_radius()   # v1.1.0 통합: 판정 = 보이는 그림 (그림 묶음의 hit_r)
 	p.floor_y = ground_y + p.hit_radius() + 4.0
 
 
 ## 불꽃(파도·고리·불기둥) 그림: 기사 몸과 같은 주황이라 바닥을 달리는 작은 초승달이 몸에 섞여 안 보였다 (2026-10-19 검수)
 ## → 밝은 노란 테두리와 발광. v1.1.0 (명세 3.6): 예전엔 그림을 1.6배(불기둥 1.3배) 키웠으나, 보이는 그림 = 판정 반경 ±20% 로
 ## 맞추며 그림 크기는 그림 묶음(fx_art.gd 의 knight_flame·knight_pillar)이 정한다.
-func _flame_look(p: Projectile) -> void:
+func _flame_look(p: Projectile, glow_k: float) -> void:
+	p.draw_scale = glow_k   # 발광 원 배율 (그림 크기는 fx_art.gd)
 	p.outline_color = Color(1.0, 0.95, 0.6, 1.0)
 	p.glow = 1.2
 
@@ -876,7 +879,7 @@ func _spawn_pillar(at: Vector2, mark: Node) -> void:
 	pillar.lifetime = 0.8
 	pillar.size = Vector2(90, 160)
 	pillar.color = Color(1.0, 0.55, 0.2)
-	_flame_look(pillar)
+	_flame_look(pillar, 1.3)
 	pillar.look = "knight_pillar"   # 이펙트 리뉴얼 F2: 불기둥 그림
 	pillar.pierce_terrain = true
 	Fx.spawn("fire_pillar_burst", at)

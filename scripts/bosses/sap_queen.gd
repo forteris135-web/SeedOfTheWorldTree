@@ -663,6 +663,7 @@ func _scatter_dust() -> void:
 	for i in count:
 		var p: SapProjectile = SAP_PROJECTILE.instantiate()
 		p.sap_kind = "dust"
+		p.look = "queen_dust"   # (SapProjectile 이 _ready 에서 정하던 것을 미리 — _pierce 가 판정 반지름을 읽는다)
 		p.kind = Projectile.Kind.FEATHER
 		p.speed = _rng.randf_range(300.0, 440.0) if phase == 1 else _rng.randf_range(340.0, 500.0)
 		p.damage = dust_damage
@@ -716,6 +717,7 @@ func _release_butterflies() -> void:
 func _spawn_butterfly(index: int, count: int) -> void:
 	var p: SapProjectile = SAP_PROJECTILE.instantiate()
 	p.sap_kind = "butterfly"
+	p.look = "queen_butterfly"
 	p.kind = Projectile.Kind.FEATHER
 	p.speed = butterfly_speed if phase == 1 else butterfly_speed * 1.15
 	p.damage = butterfly_damage
@@ -738,6 +740,7 @@ func _spawn_butterfly(index: int, count: int) -> void:
 ## v1.1.0 (기획자 요청 4): 보스 투사체는 지형(디딤돌·섬·가지)을 뚫고 지나간다. 호수 바닥(가장 낮은 디딤) 아래로 내려가면 사라진다.
 func _pierce(p: Projectile) -> void:
 	p.pierce_terrain = true
+	p.use_art_hit_radius()   # v1.1.0 통합: 판정 = 보이는 그림 (그림 묶음의 hit_r)
 	var bed := ground_y + 120.0
 	var room := get_parent()
 	var lake_bed := room.get_node_or_null("Terrain/LakeBed") as Node2D if room else null

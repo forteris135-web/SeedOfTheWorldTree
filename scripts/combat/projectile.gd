@@ -46,8 +46,11 @@ var floor_y := INF
 @export var fall_gravity := 0.0
 ## 추적 세기 (0 = 직진). 소녀 쪽으로 천천히 휜다.
 @export var homing := 0.0
-## 그림·판정의 기준 크기 (가로, 세로). 판정 원 반지름 = size.y*0.6 (최소 10).
+## 그림·판정의 기준 크기 (가로, 세로). 판정 원 반지름 = size.y*0.6 (최소 10) — hit_r 를 주면 그 값.
 @export var size := Vector2(70, 14)
+## 판정 원 반지름을 직접 준다 (0 = size 기준). v1.1.0 통합 (기획자 요청 4 '예고 = 판정'): 다섯 지역 보스의 투사체는
+## 2026-10-19 에 키운 그림 크기를 그대로 두고, 판정을 보이는 그림 반경에 맞춘다 — 보스 _pierce 가 그림 묶음의 hit_r 를 넣는다.
+@export var hit_r := 0.0
 @export var color := Color(0.75, 0.78, 0.8)
 
 @export_group("가시성")
@@ -156,9 +159,19 @@ func _uses_base_look() -> bool:
 	return sc == null or sc.resource_path == BASE_SCRIPT_PATH
 
 
-## 판정 원 반지름 (size 기준; draw_scale 과 무관).
+## 판정 원 반지름 (hit_r 가 있으면 그 값, 없으면 size 기준; draw_scale 과 무관).
 func hit_radius() -> float:
+	if hit_r > 0.0:
+		return hit_r
 	return maxf(size.y * 0.6, 10.0)
+
+
+## 그림 묶음(look)에 보스 판정 반지름(hit_r)이 있으면 그것을 쓴다 — 다섯 지역 보스가 쏘기 전에 부른다 (v1.1.0 통합).
+## 몹이 같은 그림을 써도 이 함수를 부르지 않으므로 몹 판정은 그대로다.
+func use_art_hit_radius() -> void:
+	var hr := FxArtTable.hit_r(look)
+	if hr > 0.0:
+		hit_r = hr
 
 
 ## 몸통 그림의 범위 (자기 좌표; 테두리·발광·꼬리 제외). probe 가 예전 그림 크기와 비교한다.

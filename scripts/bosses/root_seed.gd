@@ -4,7 +4,8 @@ class_name RootSeed
 ## 떨어질 자리에 주황빛 점(가드 가능한 예고 색) + 하늘에서 내려오는 가는 선이 먼저 뜨고, 땅에 닿으면 가시가 터진다(짧은 판정).
 ## 생기면 바로 떨어지기 시작한다(delay 가 있으면 그동안 떠서 기다린다). 떨어지는 시간 ≈ FALL_HEIGHT / speed = 0.9초.
 ## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 빛 꼬리를 단 가시 씨앗(art/fx/seed_fall)이 떨어지고,
-## 땅에 닿으면 씨앗이 터지는 빛(Fx "seed_land")이 솟는다. 주황 바닥 예고는 코드 그림 그대로. 판정은 그대로.
+## 땅에 닿으면 씨앗이 터지는 빛(Fx "seed_land")이 솟는다. 주황 바닥 예고는 코드 그림 그대로.
+## v1.1.0 통합 (요청 4 '예고 = 판정'): 떨어지는 씨앗의 판정 원은 보이는 씨앗 그림에 맞춰 HIT_R (예전 SEED_R 28).
 
 var damage := 16.0
 var speed := 1100.0
@@ -23,10 +24,12 @@ const FALL_HEIGHT := 1000.0
 ## 그림: 씨앗 몸(UV y)이 판정 가운데에 오게, 배율
 const ART := "seed_fall"
 const ART_SEED_V := 0.8
-const ART_SCALE := 0.62   # v1.1.0: 보이는 반경 ≈ 판정 SEED_R ×1.1 (예전 0.78 은 1.41배)
+const ART_SCALE := 0.78
 const BURST := 0.35
 const BURST_RADIUS := 70.0
 const SEED_R := 28.0
+## 떨어지는 동안의 판정 원 반지름 = 보이는 씨앗 그림 반경(≈39.6) ÷ 1.05. 그림 배율을 바꾸면 함께 고친다 (probe_boss_melee)
+const HIT_R := 38.0
 ## 바닥 주황 점(예고)의 반폭: 터짐 판정(반지름 BURST_RADIUS)보다 조금 넓게 — 점 밖이면 안 맞는다
 const MARK_RX := BURST_RADIUS + 10.0
 const MARK_RY := 18.0
@@ -39,7 +42,7 @@ func _ready() -> void:
 	collision_mask = 8
 	_shape = CollisionShape2D.new()
 	var c := CircleShape2D.new()
-	c.radius = SEED_R
+	c.radius = HIT_R
 	_shape.shape = c
 	add_child(_shape)
 	_art = Sprite2D.new()

@@ -285,7 +285,7 @@ func _shot_rules(label: String, b: Node, spawn: Callable, need_floor := true) ->
 			txt = "달빛 구슬: 지형 검사 없음, 바닥선 %.0f" % p.ground_y
 			# 그림(_art)은 진행 방향으로 돈다 → 그 반대로 돌려 진행 방향 좌표로
 			var m := ArtMeasure.metric(ArtMeasure.sprite_points(p._art, -p._art.rotation), "dir")
-			var r: float = p.radius * 0.85
+			var r: float = p.hit_radius()
 			m["r"] = r
 			m["ratio"] = m["vis"] / r
 			m["ratio_min"] = m["ratio"]
@@ -407,7 +407,7 @@ func _projectile_rules() -> void:
 	r = await _load_room("abyss_boss")
 	var rk: Node2D = r["boss"]
 	await _shot_rules("뿌리지기 달빛 구슬", rk, func() -> void: rk._spawn_orb(0.0))
-	# 씨앗 비: 떨어지는 동안 판정 원 SEED_R — 그림(아래로 떨어진다: 진행 방향 = +y 를 +x 로 돌려서)
+	# 씨앗 비: 떨어지는 동안 판정 원 HIT_R — 그림(아래로 떨어진다: 진행 방향 = +y 를 +x 로 돌려서)
 	var sd_before := get_tree().get_nodes_in_group("projectile").duplicate()
 	rk._spawn_seed(rk.global_position.x - 300.0)
 	await _frames(2)
@@ -418,8 +418,8 @@ func _projectile_rules() -> void:
 	_check(not seeds.is_empty(), "뿌리지기 씨앗 비가 생겼다")
 	if not seeds.is_empty():
 		var sm := ArtMeasure.metric(ArtMeasure.sprite_points(seeds[0]._art, -PI / 2.0), "dir")
-		sm["r"] = RootSeed.SEED_R
-		sm["ratio"] = sm["vis"] / RootSeed.SEED_R
+		sm["r"] = RootSeed.HIT_R
+		sm["ratio"] = sm["vis"] / RootSeed.HIT_R
 		sm["ratio_min"] = sm["ratio"]
 		_check(ArtMeasure.fits(sm), "뿌리지기 씨앗 비: 보이는 그림 반경 = 판정 반경 ±20%% — %s" % ArtMeasure.describe(sm))
 	# 뿌리 가시: 예고 바닥 폭 = 판정 폭 (110)
@@ -432,8 +432,8 @@ func _projectile_rules() -> void:
 	# 검기 그림 vs 판정 상자 (가로 = 진행 방향): 보이는 세로 반폭·앞 끝이 판정 상자의 반높이·반너비 ±20%
 	var wv: SwordWave = load("res://scenes/bosses/sword_wave.tscn").instantiate()
 	add_child(wv)
-	var box_h := wv.size.y * 0.85 * 0.5
-	var box_w := wv.size.x * 0.5 * 0.5
+	var box_h := wv.hit_box_size().y * 0.5
+	var box_w := wv.hit_box_size().x * 0.5
 	var wm := ArtMeasure.metric(ArtMeasure.sprite_points(wv._art), "dir")
 	var ok_w: bool = wm["perp"] >= box_h * 0.8 and wm["perp"] <= box_h * 1.2 and wm["front"] >= box_w * 0.8 and wm["front"] <= box_w * 1.2
 	_check(ok_w, "기사 검기: 보이는 그림 세로 반폭 %.1f / 판정 %.1f = %.2f배, 앞 끝 %.1f / 판정 %.1f = %.2f배 (±20%%)" % [wm["perp"], box_h, wm["perp"] / box_h, wm["front"], box_w, wm["front"] / box_w])

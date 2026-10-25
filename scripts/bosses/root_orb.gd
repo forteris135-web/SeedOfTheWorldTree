@@ -4,7 +4,8 @@ class_name RootOrb
 ## HOMING: 소녀를 천천히 쫓는다(지형에 막힘). ORBIT: 뿌리지기 둘레를 돌며 고리가 서서히 넓어진다('달빛 고리').
 ## 고리 구슬은 땅 아래로 내려간 동안 보이지 않고 맞지도 않는다 (타원 궤도의 아랫부분).
 ## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 꼬리 달린 물방울(art/fx/bubble_trail)을 달빛 팔레트로 —
-## 꼬리가 날아온 쪽을 향하게 움직이는 방향으로 돈다. 뒤에 옅은 달빛 발광. 판정 원(반지름 radius×0.85)은 그대로.
+## 꼬리가 날아온 쪽을 향하게 움직이는 방향으로 돈다. 뒤에 옅은 달빛 발광.
+## v1.1.0 통합 (요청 4 '예고 = 판정'): 그림은 2026-10-19 크기 그대로, 판정 원을 보이는 물방울 몸에 맞춰 radius×0.85 → radius×HIT_PER_R.
 
 enum Mode { HOMING, ORBIT }
 
@@ -35,7 +36,14 @@ var _last_pos := Vector2.INF
 ## 그림: 물방울 몸의 가운데(UV x)와 배율 (몸 지름 ≈ 판정 지름보다 조금 크게)
 const ART := "bubble_trail"
 const ART_HEAD_U := 0.79
-const ART_SCALE_PER_R := 0.0148   # v1.1.0: 보이는 반경 ≈ 판정 반경(radius×0.85) ×1.12 (예전 0.021 은 1.59배)
+const ART_SCALE_PER_R := 0.021
+## 판정 원 반지름 = radius × 이 값 (보이는 물방울 반경 ≈ radius×1.35 ÷ 1.05). 그림 배율을 바꾸면 함께 고친다 (probe_boss_melee)
+const HIT_PER_R := 1.29
+
+
+## 판정 원 반지름
+func hit_radius() -> float:
+	return radius * HIT_PER_R
 
 
 func _ready() -> void:
@@ -45,7 +53,7 @@ func _ready() -> void:
 	collision_mask = 8
 	var shape := CollisionShape2D.new()
 	var c := CircleShape2D.new()
-	c.radius = radius * 0.85
+	c.radius = hit_radius()
 	shape.shape = c
 	add_child(shape)
 	_art = Sprite2D.new()

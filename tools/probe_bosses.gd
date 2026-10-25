@@ -1,4 +1,5 @@
 extends Node
+const FxArt := preload("res://scripts/fx/fx_art.gd")
 const ArtMeasure := preload("res://tools/shot_art_measure.gd")
 ## 보스 그림 움직임 수치 검사 (화면 없이).
 ## 보스 씬을 띄우되 엔진의 자동 처리는 끄고, 내가 1/60초씩 _physics_process / _process 를 직접 불러
@@ -1293,7 +1294,8 @@ func _bird_shots(boss: Node, vis: Node2D) -> void:
 	if feathers.size() > 0:
 		var p: Projectile = feathers[0]
 		# 예전 깃털 그림: 가로 size.x, 세로 size.y×0.9 (위 반 + 아래 반×0.8)
-		_check_shot(p, "깃털", Vector2(76, 16), 10.0, Vector2(76.0, 16.0 * 0.9))
+		# v1.1.0 통합: 판정 반지름 = 그림 묶음 hit_r (보이는 깃털 부채에 맞춤 — 예전 10)
+		_check_shot(p, "깃털", Vector2(76, 16), FxArt.hit_r("bird_feather"), Vector2(76.0, 16.0 * 0.9))
 		_ok(p.core_color.r > 0.9 and p.core_color.g < 0.4, "깃털 심이 붉다 %s" % p.core_color)
 		_ok(p.reflectable, "깃털은 되받을 수 있다")
 		# 꼬리: 몇 프레임 날아가면 잔상이 쌓인다
@@ -1323,7 +1325,7 @@ func _bird_shots(boss: Node, vis: Node2D) -> void:
 	if leaves.size() > 0:
 		var p: Projectile = leaves[0]
 		# 예전 잎 그림: 마름모 가로 size.x, 세로 size.x×0.55 (size.y 는 안 썼다)
-		_check_shot(p, "잎", Vector2(46, 20), 12.0, Vector2(46.0, 46.0 * 0.55))
+		_check_shot(p, "잎", Vector2(46, 20), FxArt.hit_r("bird_leaf"), Vector2(46.0, 46.0 * 0.55))   # (예전 12)
 		_ok(p.fade_in > 0.05, "잎은 생길 때 서서히 나타난다 (fade_in %.2f)" % p.fade_in)
 		_ok(p.outline_color.a > 0.0 and p.outline_color.r > 0.9 and p.outline_color.g > 0.9, "잎 테두리가 희다 %s" % p.outline_color)
 	_run(boss, vis, func() -> bool: return boss.rain_warn < 0.05, 2.0)
@@ -1462,7 +1464,7 @@ func _check_shot(p: Projectile, label: String, base_size: Vector2, base_radius: 
 	var ratio_y := body.size.y / old_draw.y
 	print("[probe]    %s: size %s, 그림 배율 %.2f → 몸 %.1f × %.1f (예전 그림 %.1f × %.1f 대비 %.2f×, %.2f×; 테두리까지 %.1f × %.1f), 판정 반지름 %.1f (모양 %.1f), 테두리 %s, 발광 %.1f, 꼬리 %d" % [
 		label, p.size, p.draw_scale, body.size.x, body.size.y, old_draw.x, old_draw.y, ratio_x, ratio_y, full.size.x, full.size.y, p.hit_radius(), shape_r, p.outline_color, p.glow, p.trail_count])
-	_ok(p.size == base_size and absf(p.hit_radius() - base_radius) < 0.01 and absf(shape_r - base_radius) < 0.01, "%s 판정은 그대로 (반지름 %.0f)" % [label, base_radius])
+	_ok(p.size == base_size and base_radius > 0.0 and absf(p.hit_radius() - base_radius) < 0.01 and absf(shape_r - base_radius) < 0.01, "%s 판정 반지름 %.0f (그림 묶음 hit_r — 판정 = 보이는 그림), size 그대로" % [label, base_radius])
 	if p.has_art():
 		# 2026-10-19 이펙트 리뉴얼 F2: 코드 그림 대신 기획자 그림(그림 묶음 look). 예전 다각형 크기·테두리 규칙은 코드 그림에만 해당한다.
 		# v1.1.0 (기획자 요청 4, 명세 3.6): 예전엔 '그림이 판정보다 크게(긴 쪽 ≥ 판정 지름 ×3)' 였으나 이제 보이는 그림 반경 = 판정 반경 ±20%

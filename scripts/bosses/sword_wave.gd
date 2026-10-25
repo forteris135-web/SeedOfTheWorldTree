@@ -8,7 +8,7 @@ class_name SwordWave
 ## 구르기(무적)로 지나가면 사라지지 않고 계속 날아간다 — 한 번 판정한 상대는 다시 맞추지 않는다.
 ## Projectile 과 달리 판정이 세로로 긴 초승달이라 서서 가드하거나 점프로 넘기게 된다(땅 검기는 낮게 깔린다).
 ## 그림 (2026-10-19 이펙트 리뉴얼 F2): 기획자 이펙트 시트의 물 초승달(art/fx/water_crescent_big)을 불꽃 팔레트로 칠한 것 +
-## 뒤따르는 옅은 그림자 한 겹 + 불씨 입자. 되받으면 금빛. 판정 상자는 그대로 (size 기준).
+## 뒤따르는 옅은 그림자 한 겹 + 불씨 입자. 되받으면 금빛. 판정 상자 = size × HIT_BOX_K (v1.1.0 통합: 보이는 초승달에 맞춤).
 
 signal reflected(wave: SwordWave)
 
@@ -31,13 +31,21 @@ var _embers: CPUParticles2D
 var _trail: Array[Vector2] = []
 var _art: Sprite2D
 var _echo: Sprite2D
-## 그림: 물 초승달(볼록한 쪽이 앞) — 배율·자리. v1.1.0 (명세 3.6 '보이는 그림 = 판정 ±20%'): 판정 상자 75×110 에 맞춘다 —
-## 보이는 세로 반폭 ≈ 58 (판정 55), 볼록한 앞 끝 ≈ +40 (판정 앞 37.5). 예전 (0.6, 0.72)·(-30, 0) 은 세로 96·앞 50 으로 1.75배였다.
+## 그림: 물 초승달(볼록한 쪽이 앞) — 배율·자리 (2026-10-19 크기 그대로: 보이는 세로 반폭 ≈ 96, 볼록한 앞 끝 ≈ +50).
+## v1.1.0 통합 (요청 4 '예고 = 판정', 명세 3.6 '보이는 그림 = 판정 ±20%'): 그림은 줄이지 않고 판정 상자를 그림에 맞춰 키웠다 —
+## 예전 상자 75×110.5 (size × (0.5, 0.85)) → size × HIT_BOX_K ≈ 95×183 (세로 반폭 91.5, 앞 끝 47.6).
 const ART := "water_crescent_big"
-const ART_SCALE := Vector2(0.3625, 0.435)
-const ART_OFFSET := Vector2(-8.0, 0.0)
+const ART_SCALE := Vector2(0.6, 0.72)
+const ART_OFFSET := Vector2(-30.0, 0.0)
+## 판정 상자 = size × 이 값 (그림 배율·자리를 바꾸면 함께 고친다 — probe_boss_melee 가 ±20% 를 확인)
+const HIT_BOX_K := Vector2(0.635, 1.405)
 ## 뒤따르는 그림자의 자리 (그림 뒤로)
-const ECHO_BACK := 24.0
+const ECHO_BACK := 40.0
+
+
+## 판정 상자 크기 (가로 = 진행 방향)
+func hit_box_size() -> Vector2:
+	return size * HIT_BOX_K
 
 
 func _ready() -> void:
@@ -46,7 +54,7 @@ func _ready() -> void:
 	_update_mask()
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(size.x * 0.5, size.y * 0.85)
+	rect.size = hit_box_size()
 	shape.shape = rect
 	add_child(shape)
 	monitoring = true
@@ -119,7 +127,7 @@ func _physics_process(delta: float) -> void:
 	if _art:
 		# 살짝 일렁이고 그림자가 뒤에서 따라온다
 		_art.scale = ART_SCALE * Vector2(1.0, 1.0 + 0.05 * sin(_time * 28.0))
-		_echo.position = ART_OFFSET + Vector2(-ECHO_BACK - 7.0 * sin(_time * 16.0), 0.0)
+		_echo.position = ART_OFFSET + Vector2(-ECHO_BACK - 12.0 * sin(_time * 16.0), 0.0)
 	if _time > lifetime:
 		_vanish()
 		return

@@ -59,7 +59,7 @@ signal slammed
 @export var spray_damage := 14.0
 @export var spray_speed := 700.0
 ## 빨아들이기: 소녀를 끌어당기는 빠르기(px/s, 위치를 직접 옮긴다)와 길이(초), 끝의 물기 피해.
-## 가만히 서 있으면 2초에 약 440px 끌리고, 반대로 달리거나(640) 구르면(980) 벗어난다.
+## 가만히 서 있으면 2초에 약 440px 끌리고, 반대로 달리거나(640 — v1.1.0 초반에 오면 얕은 수액이라 0.85배 ≈ 544) 구르면(980, 얕은 수액 0.9배) 벗어난다.
 @export var suck_pull := 250.0
 @export var suck_time := 2.0
 @export var bite_damage := 22.0
@@ -234,7 +234,7 @@ func _physics_process(delta: float) -> void:
 			if attack_phase == "active" and player:
 				if _timer > 0.25:
 					# 관이 소녀를 끌어당긴다: 위치를 직접 옮긴다 (바람(apply_wind)은 소녀의 감속에 거의 지워져 끌리지 않았다).
-					# 반대로 달리거나(640px/s) 구르면(980px/s) 끌어당김(suck_pull)보다 빨라 벗어난다.
+					# 반대로 달리거나(640px/s, 얕은 수액 위 0.85배 ≈ 544) 구르면(980px/s, 얕은 수액 0.9배) 끌어당김(suck_pull 250)보다 빨라 벗어난다.
 					_pull_player(delta)
 				elif not _bit:
 					_bit = true
@@ -444,6 +444,7 @@ func _slam() -> void:
 ## v1.1.0 (기획자 요청 4): 보스 투사체는 지형을 뚫고 지나간다. 바닥 아래(아무도 맞을 수 없는 곳)로 내려가면 사라진다.
 func _pierce(p: Projectile) -> void:
 	p.pierce_terrain = true
+	p.use_art_hit_radius()   # v1.1.0 통합: 판정 = 보이는 그림 (그림 묶음의 hit_r)
 	p.floor_y = ground_y + p.hit_radius() + 4.0
 
 

@@ -51,7 +51,7 @@ signal telegraph(kind: String)   # "wind" 등 붉은 예고
 @export var feather_warn_time := 0.3
 ## 탄막 바탕 그림·발광 배율 (판정은 그대로). 2026-10-19 기획자 요청으로 1.8 이었으나 v1.1.0 (요청 4 '예고 = 판정', 명세 3.6)에서
 ## 보이는 그림을 판정 반경 ±20% 로 맞추며 1.0 (그림 묶음 배율은 scripts/fx/fx_art.gd — 발광 원 크기만 이 값을 따른다)
-@export var shot_draw_scale := 1.0
+@export var shot_draw_scale := 1.8
 ## 잎이 생길 때 서서히 나타나는 시간 (화면 안에서 툭 생겨나 보이지 않게)
 @export var leaf_fade_in := 0.12
 @export var wind_telegraph := 0.8
@@ -511,6 +511,7 @@ func _spawn_feather(index: int, count: int) -> void:
 ## v1.1.0 (기획자 요청 4): 보스 투사체는 지형(가지·벽)을 뚫고 지나간다. 바닥 아래(아무도 맞을 수 없는 곳)로 내려가면 사라진다.
 func _pierce(p: Projectile) -> void:
 	p.pierce_terrain = true
+	p.use_art_hit_radius()   # v1.1.0 통합: 판정 = 보이는 그림 (그림 묶음의 hit_r)
 	p.floor_y = ground_y + p.hit_radius() + 4.0
 
 
