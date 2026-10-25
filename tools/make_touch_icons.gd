@@ -733,7 +733,7 @@ func _icon_grow() -> void:
 
 
 func _icon_map() -> void:
-	# 접힌 지도: 세 쪽 병풍 + 점선 길 + 표시
+	# 접힌 지도: 세 쪽 병풍 + 길(실선 — v1.1.0 기획자 요청으로 점선을 없앰) + 표시
 	var p1 := PackedVector2Array([Vector2(12, 26), Vector2(37, 18), Vector2(37, 76), Vector2(12, 84)])
 	var p2 := PackedVector2Array([Vector2(37, 18), Vector2(63, 26), Vector2(63, 84), Vector2(37, 76)])
 	var p3 := PackedVector2Array([Vector2(63, 26), Vector2(88, 18), Vector2(88, 76), Vector2(63, 84)])
@@ -744,8 +744,7 @@ func _icon_map() -> void:
 	_line(PackedVector2Array([Vector2(37, 18), Vector2(37, 76)]), 1.2, Color(GOLD_DEEP, 0.7))
 	_line(PackedVector2Array([Vector2(63, 26), Vector2(63, 84)]), 1.2, Color(GOLD_DEEP, 0.7))
 	var trail := _bez3(Vector2(20, 70), Vector2(30, 40), Vector2(52, 72), Vector2(72, 42), 40)
-	for i in range(0, trail.size() - 2, 5):
-		_line(PackedVector2Array([trail[i], trail[i + 2]]), 2.6, Color(GOLD_DEEP, 0.95))
+	_line(trail, 3.0, Color(GOLD_DEEP, 0.95))
 	var x := Vector2(76, 37)
 	_line(PackedVector2Array([x + Vector2(-5, -5), x + Vector2(5, 5)]), 3.0, Color(0.7, 0.2, 0.12))
 	_line(PackedVector2Array([x + Vector2(5, -5), x + Vector2(-5, 5)]), 3.0, Color(0.7, 0.2, 0.12))

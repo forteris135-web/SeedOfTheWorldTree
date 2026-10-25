@@ -3,6 +3,8 @@ extends CPUParticles2D
 
 @export var leaf_color := Color(0.78, 0.74, 0.46, 0.9)
 @export var count := 36
+## 정화된 지역의 잎 색 (푸른 잎 — 정화 연출 중에는 Purity.progress 를 따라 leaf_color 에서 서서히 바뀐다, v1.1.0 기획자 요청 5)
+const LEAF_ALIVE := Color(0.55, 0.80, 0.35, 0.9)
 
 
 func _ready() -> void:
@@ -33,8 +35,14 @@ func _ready() -> void:
 	curve.add_point(Vector2(1, -1))
 	tangential_accel_min = -20.0
 	tangential_accel_max = 20.0
-	color = leaf_color
 	material = preload("res://shaders/ash_purify.tres")
+	_on_purity(Purity.level)
+	Purity.progress.connect(_on_purity)
+
+
+## 정화 정도(0 잿빛 ~ 1 정화)에 맞춰 잎 색을 바꾼다 (잿빛일 때는 셰이더가 어차피 잿빛으로 칠한다)
+func _on_purity(v: float) -> void:
+	color = leaf_color.lerp(LEAF_ALIVE, clampf(v, 0.0, 1.0))
 
 
 func _make_leaf_texture() -> ImageTexture:

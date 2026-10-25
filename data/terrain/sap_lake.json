@@ -8,7 +8,7 @@
   "fill": {"top": 1.0, "deep": 0.62, "deep_px": 340, "rim": 0.7, "rim_px": 34, "wall": 0.72, "top_inset": 14},
   "lift": 2,
   "depth": {
-    "ash": {"haze": 0.3, "haze_color": "#d6dcdc", "contrast": 0.62, "sat": 0.8, "fore_value": 0.88, "fore_contrast": 1.1, "shadow": 0.6},
+    "ash": {"haze": 0.36, "haze_color": "#d6dcdc", "contrast": 0.56, "sat": 0.8, "fore_value": 0.88, "fore_contrast": 1.1, "shadow": 0.6},
     "alive": {"haze": 0.14, "haze_color": "#e8e4d8", "contrast": 0.82, "sat": 0.92, "fore_value": 0.96, "fore_contrast": 1.06, "shadow": 0.45},
     "shadow_lod": 4.5, "shadow_offset": [0, 9]
   },

@@ -48,7 +48,9 @@ const TUCK := 28.0
 const U_MIN := 0.85
 const U_MAX := 1.2
 const SX_MAX := 1.15
-## 한쪽 방향 발판 단서 (밑변을 따라 끊어진 빛 점선) — 옛 Platform 과 같은 값
+## 한쪽 방향 발판 단서 (밑변을 따라 끊어진 빛 점선) — 옛 Platform 과 같은 값.
+## v1.1.0 (기획자 요청 "맵에 나타난 점선 제거"): 점선은 더 그리지 않는다 (build_platform 이 _dashes 를 부르지 않음).
+## 함수와 값은 되살릴 때를 위해 남겨 둔다.
 const DASH_LEN := 10.0
 const DASH_GAP := 12.0
 const DASH_ALPHA := 0.55
@@ -706,18 +708,14 @@ func build_platform(p: Node2D, size: Vector2, thin: bool, one_way: bool, decorat
 		var right_free := not _covered(Vector2(size.x + OUT, size.y * 0.5)) and not _covered(Vector2(size.x + OUT, 2.0))
 		var flat := func(_x: float) -> float: return 0.0
 		branch_run(0.0, size.x, flat, left_free, right_free, one_way, size.y, not left_free, not right_free)
-		if one_way:
-			_dashes(size.x, size.y)
 	else:
 		var poly := PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size, Vector2(0, size.y)])
 		_own_poly = PackedVector2Array()
 		build_mass(poly, decorate, size.y > size.x * 1.6)
-		if one_way:
-			_dashes(size.x, size.y)
 	_finish(t0)
 
 
-## 한쪽 방향 단서: 밑변 바로 안쪽의 끊어진 빛 점선 (옛 발판과 같은 자리·간격; 그림 위에 얹힌다)
+## 한쪽 방향 단서: 밑변 바로 안쪽의 끊어진 빛 점선 (옛 발판과 같은 자리·간격; 그림 위에 얹힌다) — v1.1.0 부터 쓰지 않는다
 func _dashes(w: float, h: float) -> void:
 	var col := Color(1.0, 0.92, 0.7, DASH_ALPHA)
 	var half := Vector2(0, DASH_W * 0.5)

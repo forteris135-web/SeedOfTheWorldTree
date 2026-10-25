@@ -19,7 +19,7 @@ extends Node
 ##  8) 어두운 방(심연 두 곳)에서는 버섯 몇 무리가 실제 빛(PointLight2D)을 낸다. 밝은 방에는 없다.
 ##  9) 그림 조각 지형 — 그림 옷 지역(수관·마을·채굴장·잠긴 채굴장·심연·수액의 호수)의 방 41곳 전부를 같은 기준으로 (지역마다 다른 허용치는 그림 옷의 params.probe):
 ##     a) 그림 옷마다 역할별 조각·atlas(2048 이하)·몸통 결·금 간 벽 그림·걷는 구간, 단독 장식(decor)은 지형 역할에 섞이지 않음, room_skins 대상이 있다.
-##     b) 방마다: 지형·가시·비밀 벽이 모두 그림, 방에 맞는 그림 옷(room_skins), 충돌 모양 그대로, 한쪽 방향 발판의 빛 점선,
+##     b) 방마다: 지형·가시·비밀 벽이 모두 그림, 방에 맞는 그림 옷(room_skins), 충돌 모양 그대로, 한쪽 방향 발판의 빛 점선 없음(v1.1.0),
 ##        드러난 윗면마다 발밑 8px 이 그림으로 90% 넘게 덮이고 그림 윗선(빽빽한 윗면)이 충돌 윗면 −10~+10px (뒤 난간은 probe.rail, 윗면에 선 버섯·등불은 probe.deco 만큼 빼고),
 ##        드러난 충돌 끝 밖 발 높이에 그림이 OVERHANG_MAX 넘게 남지 않음, 몸통 결은 묶음 맨 아래 겹, 가시 그림이 판정을 덮고 끝이 0.5h 넘게 솟지 않음.
 ##        (그림 픽셀을 직접 찾아본다: 삼각형 → UV → atlas 알파)
@@ -265,7 +265,7 @@ func _has(c: Dictionary, k: String) -> bool:
 
 func _probe_region_decor() -> void:
 	var expect := {
-		"canopy": {"yes": ["꽃", "풀", "새싹", "잎묶음", "수염", "뿌리", "옹이", "홈", "결", "윗면빛", "덩굴", "가시", "점선", "돌", "모서리이끼", "옆혹"], "no": ["버섯", "금속판", "띠쇠", "반사빛", "방울", "녹물", "윤기"]},
+		"canopy": {"yes": ["꽃", "풀", "새싹", "잎묶음", "수염", "뿌리", "옹이", "홈", "결", "윗면빛", "덩굴", "가시", "돌", "모서리이끼", "옆혹"], "no": ["버섯", "금속판", "띠쇠", "반사빛", "방울", "녹물", "윤기", "점선"]},
 		"village": {"yes": ["반사빛", "꽃", "풀", "수염", "옹이"], "no": ["버섯", "금속판", "방울", "녹물"]},
 		"mine": {"yes": ["금속판", "띠쇠", "볼트", "사슬", "녹물", "옹이", "풀"], "no": ["꽃", "버섯", "방울", "반사빛", "수염", "새싹"]},
 		"abyss": {"yes": ["버섯", "뿌리", "수염", "옹이"], "no": ["꽃", "금속판", "방울", "반사빛"]},
@@ -299,7 +299,7 @@ func _probe_region_decor() -> void:
 	for k in extras:
 		if _has(c0, k):
 			leaked.append(k)
-	_check(leaked.is_empty() and _has(c0, "결") and _has(c0, "이끼") and _has(c0, "점선") and _has(c0, "가시") and _has(c0, "덩굴"), "detail=0: 옛 수준만 (결·이끼·점선·가시·덩굴 있음, 새 장식 없음 %s)" % [leaked])
+	_check(leaked.is_empty() and _has(c0, "결") and _has(c0, "이끼") and not _has(c0, "점선") and _has(c0, "가시") and _has(c0, "덩굴"), "detail=0: 옛 수준만 (결·이끼·가시·덩굴 있음, 점선 없음 — v1.1.0, 새 장식 없음 %s)" % [leaked])
 	# 벽(decorate=false)은 장식이 없다: 떨어진 벽 하나를 더해도 수가 같다
 	var with_wall := await _draw_set("canopy", 1, true)
 	var without := await _draw_set("canopy", 1, false)
@@ -929,8 +929,8 @@ func _probe_art_rooms(ids: Array) -> void:
 				depth_bad.append("%s 앞 지형 재질 아님" % nm)
 			if (art._bufs[TerrainArt.BUF_ATLAS]["idx"] as PackedInt32Array).size() >= 3 and art.has_shadow() != art.shadow_wanted():
 				depth_bad.append("%s 뒤 그림자 %s (있어야 하는가 %s)" % [nm, art.has_shadow(), art.shadow_wanted()])
-			# 한쪽 방향 발판의 빛 점선 단서
-			if t is Platform and t.one_way and (art._bufs[TerrainArt.BUF_PLAIN]["idx"] as PackedInt32Array).size() < 6:
+			# 한쪽 방향 발판의 빛 점선은 없앴다 (v1.1.0 기획자 요청) — 발판 그림에 색만 있는 사각형이 없다
+			if t is Platform and (art._bufs[TerrainArt.BUF_PLAIN]["idx"] as PackedInt32Array).size() > 0:
 				dash_bad.append(nm)
 			# 충돌 모양
 			if t is Platform:
@@ -1006,7 +1006,7 @@ func _probe_art_rooms(ids: Array) -> void:
 	_check(not_art.is_empty(), "방 %d곳: 지형·가시·비밀 벽·금 간 벽이 모두 그림 조각 (아닌 것 %s)" % [ids.size(), not_art.slice(0, 8)])
 	_check(wrong_skin.is_empty(), "방마다 맞는 그림 옷 (지역 그림 옷, room_skins 가 있으면 그것; 틀린 것 %s)" % [wrong_skin.slice(0, 6)])
 	_check(collider_bad.is_empty(), "방 %d곳: 충돌 모양이 그대로 (다른 것 %s)" % [ids.size(), collider_bad.slice(0, 8)])
-	_check(dash_bad.is_empty(), "한쪽 방향 발판마다 빛 점선 단서 (없는 것 %s)" % [dash_bad.slice(0, 6)])
+	_check(dash_bad.is_empty(), "한쪽 방향 발판 밑의 빛 점선 없음 (v1.1.0 — 남은 것 %s)" % [dash_bad.slice(0, 6)])
 	_check(tops_checked > 250 and feet_bad.is_empty(), "드러난 윗면 %d곳: 발밑(충돌 윗면 8px 아래)이 그림으로 90%% 넘게 덮임 (가장 낮은 %s %.0f%%) %s" % [tops_checked, worst_name, worst_cov * 100.0, feet_bad.slice(0, 6)])
 	tops_all.sort()
 	_check(top_bad.is_empty(), "드러난 윗면 %d곳: 그림 윗선(빽빽한 윗면)이 충돌 윗면 −10~+10px (뒤 난간 조각은 params.probe.rail, 선 장식은 params.probe.deco 만큼 뺌; 중앙값 %+.0fpx, 범위 %+.0f~%+.0f) %s" % [tops_checked, tops_all[tops_all.size() / 2] if not tops_all.is_empty() else 0.0, tops_all[0] if not tops_all.is_empty() else 0.0, tops_all[-1] if not tops_all.is_empty() else 0.0, top_bad.slice(0, 6)])

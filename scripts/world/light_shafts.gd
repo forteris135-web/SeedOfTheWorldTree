@@ -4,8 +4,11 @@ extends Node2D
 @export var count := 7
 @export var shaft_color := Color(1.0, 0.86, 0.55, 0.07)
 @export var seed := 11
+## 정화된 지역에서는 빛줄기가 이만큼 더 밝다 (정화 연출 중에는 Purity.level 을 따라 서서히 — v1.1.0 기획자 요청 5)
+const ENERGY_ALIVE := 1.35
 
 var _time := 0.0
+var _energy := 1.0
 var _shafts: Array = []  # [x, width, drift, phase, speed]
 
 
@@ -22,13 +25,14 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	_energy = lerpf(1.0, ENERGY_ALIVE, clampf(Purity.level, 0.0, 1.0))
 	queue_redraw()
 
 
 func _draw() -> void:
 	for s in _shafts:
 		var pulse: float = 0.6 + 0.4 * sin(_time * s[4] * TAU + s[3])
-		var c := Color(shaft_color.r, shaft_color.g, shaft_color.b, shaft_color.a * pulse)
+		var c := Color(shaft_color.r, shaft_color.g, shaft_color.b, shaft_color.a * pulse * _energy)
 		var x: float = s[0]
 		var w: float = s[1]
 		var drift: float = s[2]

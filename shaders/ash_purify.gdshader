@@ -29,6 +29,12 @@ uniform bool depth_on = false;
 uniform float ash_keep : hint_range(0.0, 1.0) = 0.0;
 
 const float ROWS = 8.0;
+// 정화 물결 테두리 색·세기·너비 (ash_purify_add 와 같은 값)
+const vec3 RING_COLOR = vec3(0.75, 1.0, 0.55);
+const float RING_STRENGTH = 0.7;
+// 고리 너비 (화면 높이 = 1; 고리 가운데에서 이만큼 떨어지면 0). 색이 번지는 경계(softness 0.3)보다 좁게 둬야 '고리'로 읽힌다 —
+// softness 와 같은 0.3 이면 고리가 화면 1/3 을 덮는 넓은 빛 물결이 되고 밝은 수관에서는 글로우로 하얗게 날아간다.
+const float RING_WIDTH = 0.12;
 
 vec3 rgb2hsv(vec3 c) {
 	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -74,8 +80,8 @@ void fragment() {
 	vec4 c = COLOR;
 	vec2 aspect = vec2(SCREEN_PIXEL_SIZE.y / SCREEN_PIXEL_SIZE.x, 1.0);
 	float d = distance(SCREEN_UV * aspect, center * aspect);
-	// 번지는 가장자리에 따뜻한 빛의 테두리
-	float edge = 1.0 - smoothstep(0.0, softness, abs(d - radius));
+	// 번지는 가장자리에 초록빛 금색 테두리 (v1.1.0: 옛 따뜻한 0.25 고리보다 진하게 — 정화가 지나가는 자리가 또렷이 보이게)
+	float edge = 1.0 - smoothstep(0.0, RING_WIDTH, abs(d - radius));
 	float spread = 1.0 - smoothstep(radius - softness, radius + softness, d);
 	float k = clamp(max(purity, spread), 0.0, 1.0);
 	vec3 col = c.rgb;
@@ -86,6 +92,6 @@ void fragment() {
 	if (depth_on) {
 		col = depth_of(col, k);
 	}
-	col += vec3(1.0, 0.85, 0.5) * edge * 0.25 * float(radius > 0.001 && radius < 3.0);
+	col += RING_COLOR * edge * RING_STRENGTH * float(radius > 0.001 && radius < 3.0);
 	COLOR = vec4(col, c.a);
 }

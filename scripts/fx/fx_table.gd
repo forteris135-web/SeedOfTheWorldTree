@@ -143,10 +143,19 @@ const EFFECTS := {
 	"heal": {"tex": "pillar_lily", "life": 0.85, "scale": [0.42, 0.48], "ease": 2.0, "fade_in": 0.12, "fade_out": 0.5,
 		"pivot": Vector2(0.5, 0.93), "color": Color(0.95, 1.0, 0.95, 1.0), "priority": 1,
 		"children": [["mote", 5, Vector2(36, 20), {"offset": Vector2(0, -30), "palette": "heal"}]]},
-	# 정화의 손길: 대상 위에 감아 오르는 금빛 기둥 + 별빛 + 떠오르는 알갱이
-	"purify": {"tex": "pillar_spiral", "life": 1.0, "scale": [0.5, 0.56], "ease": 2.0, "fade_in": 0.1, "fade_out": 0.5,
-		"pivot": Vector2(0.5, 0.92), "palette": "gold", "keep": 0.25, "color": Color(0.8, 0.78, 0.7, 1.0), "priority": 1,
-		"children": [["purify_flash", 1, Vector2.ZERO, {"offset": Vector2(0, -70)}], ["mote", 8, Vector2(46, 30), {"offset": Vector2(0, -60), "palette": "gold"}]]},
+	# 정화의 손길: 대상 위에 감아 오르는 초록 잎빛 기둥 + 금빛 별빛 + 떠오르는 알갱이 + 흩날리는 잎 6장
+	# (v1.1.0 기획자 요청 5: 금빛 팔레트로는 백합·잎 그림이 불꽃처럼 보여서 씨앗 팔레트로, 원래 색을 많이 남겨 그림이 보이게, 크기 ×1.15)
+	"purify": {"tex": "pillar_spiral", "life": 1.0, "scale": [0.575, 0.644], "ease": 2.0, "fade_in": 0.1, "fade_out": 0.5,
+		"pivot": Vector2(0.5, 0.92), "palette": "seed", "keep": 0.6, "color": Color(0.72, 0.84, 0.7, 1.0), "priority": 1,
+		"children": [["purify_flash", 1, Vector2.ZERO, {"offset": Vector2(0, -80)}], ["mote", 8, Vector2(52, 34), {"offset": Vector2(0, -69), "palette": "gold"}],
+			["purify_leaf", 3, Vector2(36, 50), {"offset": Vector2(0, -95)}], ["purify_leaf_b", 3, Vector2(36, 50), {"offset": Vector2(0, -95), "facing": -1.0}]]},
+	# 정화 기둥에서 흩날리는 잎 (두 가지 잎 그림, 한쪽씩 — 씨앗 팔레트로 푸른 잎)
+	"purify_leaf": {"tex": "leaf_c", "blend": "mix", "life": 1.4, "scale": [0.62, 0.42], "ease": 1.0, "fade_in": 0.08, "fade_out": 0.6,
+		"vel": Vector2(150, -200), "vel_rand": Vector2(90, 70), "gravity": 150.0, "drag": 1.1, "spin": 280.0, "rot_rand": 180.0,
+		"palette": "seed", "keep": 0.2, "priority": 0},
+	"purify_leaf_b": {"tex": "leaf_b", "blend": "mix", "life": 1.4, "scale": [0.7, 0.48], "ease": 1.0, "fade_in": 0.08, "fade_out": 0.6,
+		"vel": Vector2(150, -200), "vel_rand": Vector2(90, 70), "gravity": 150.0, "drag": 1.1, "spin": 280.0, "rot_rand": 180.0,
+		"palette": "seed", "keep": 0.2, "priority": 0},
 	"purify_flash": {"tex": "crystal_burst", "life": 0.55, "scale": [0.35, 0.6], "ease": 3.0, "fade_out": 0.35, "palette": "gold", "keep": 0.2,
 		"energy": 1.0, "priority": 1},
 	# 떠오르는 작은 빛 알갱이 (회복·정화·줍기)
