@@ -4,8 +4,10 @@
 
 하는 일 (마을 · 등불 골목 village_02):
   - 골목 왼쪽 구석(x 720, 바닥 1400 — 입구 포탈 Exit1(190) 오른쪽)에 **숨은 포탈**(scenes/world/hidden_portal.tscn)
-    Exits/ToHiddenDescent 를 둔다: 처음엔 어두운 틈으로만 보이고(지도에도 없음) 손길을 내밀면 "어둠이 너무 짙다…",
-    등불(lantern)을 가진 채 가까이 가면 등불이 틈을 비춰 포탈이 드러난다(깃발 seen_hidden_descent).
+    Exits/ToHiddenDescent 를 둔다: 처음엔 어두운 틈으로만 보이고(지도에도 없음), 등불이 없어도 700px 안에선 옅은 청록빛이 맥동한다.
+    v1.1.0(기획자 요청 19): 등불과 상관없이 400px 안에 오면 '본 것'(깃발 seen_hidden_descent — 지도 ◆, 잠긴 포탈 모양).
+    들어가는 조건은 그대로 등불(lantern) — 없이 손길을 내밀면 "깊은 틈 아래에서 수액 냄새가 올라온다… 등불 없이는 내려갈 수 없다".
+    등불을 가진 채 드러나면 "등불이 어두운 틈을 비춘다…" (scripts/world/hidden_portal.gd).
     건너가는 곳: hidden_descent 의 Markers/FromVillage. (지도: hidden_descent 의 map_offset 이 이 자리 바로 아래로 맞춰져 있다)
     2026-10-19 검토: 예전 자리(x 2330)는 큰길 한가운데(계단 선반 아래)라 '한구석'이 아니었다 → 왼쪽 구석으로.
   - 숨은 내리막에서 되돌아올 자리 Markers/FromHiddenDescent (820, 1332).
@@ -26,7 +28,7 @@ PORTAL = (
     + 'target_scene = "res://scenes/rooms/hidden_descent.tscn"\n'
     + 'spawn_name = "FromVillage"\n'
     + 'requires_ability = "lantern"\n'
-    + 'locked_message = "어둠이 너무 짙다. 틈 너머가 보이지 않는다."\n'
+    + 'locked_message = "깊은 틈 아래에서 수액 냄새가 올라온다… 등불 없이는 내려갈 수 없다"\n'
     + 'reveal_message = "등불이 어두운 틈을 비춘다. 아래로 이어지는 길이 보인다."\n\n'
 )
 MARKER = '[node name="FromHiddenDescent" type="Marker2D" parent="Markers"]\nposition = Vector2(820, 1332)\n\n'

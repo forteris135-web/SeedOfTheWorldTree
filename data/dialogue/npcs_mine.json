@@ -38,7 +38,7 @@
     ]
    },
    {
-    "when": "boss_knight_defeated,has_tia_lantern,!owen_rescued,!tia_told_sap_crack,!boss_queen_defeated",
+    "when": "after_boss_knight_defeated,has_tia_lantern,!owen_rescued,!tia_told_sap_crack,!boss_queen_defeated",
     "priority": 3,
     "set": "tia_told_sap_crack",
     "lines": [
@@ -46,7 +46,7 @@
     ]
    },
    {
-    "when": "boss_knight_defeated,reunion_done,!tia_told_sap_crack,!boss_queen_defeated",
+    "when": "after_boss_knight_defeated,reunion_done,!tia_told_sap_crack,!boss_queen_defeated",
     "priority": 3,
     "set": "tia_told_sap_crack",
     "lines": [

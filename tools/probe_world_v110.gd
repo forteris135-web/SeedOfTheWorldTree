@@ -334,6 +334,12 @@ func _probe_third_lock() -> void:
 	Progress.set_flag("read_scripture_mine")
 	Progress.set_flag("boss_root_defeated")
 	_check(not EndingChoice.third_unlocked(), "조건: 사당 경전·훼손된 경전은 조각이 아니다")
+	# 화면 글은 데이터 파일에서 (코드의 대비 문장이 아니라)
+	var t_hint := EndingChoice.text("locked_hint", "-")
+	var t_look := EndingChoice.text("lantern_look", "-")
+	var t_rite := EndingChoice.text("third_ritual", "-")
+	_check(t_hint.contains("{n}") and t_hint.contains("{total}") and t_look != "-" and t_rite != "-" and EndingChoice.text("chosen", "-") != "-",
+		"장치 글은 data/dialogue/ending_devices.json 에서 ('%s' / '%s' / '%s')" % [t_hint, t_look, t_rite])
 	# 방에서: 잠긴 장치는 보이되 꺼져 있다
 	Progress.reset()
 	for f in ["boss_root_defeated", "after_boss_root_defeated", "looked_at_lantern", "read_scripture_1", "read_scripture_2"]:
@@ -352,6 +358,7 @@ func _probe_third_lock() -> void:
 	pump.interact(_player)
 	_check(Progress.ending == "" and _player.input_enabled, "잠긴 장치 손길: 거절 (엔딩 '%s')" % Progress.ending)
 	Progress.set_flag("read_scripture_3")
+	await get_tree().process_frame
 	await get_tree().physics_frame
 	_check(pump.is_locked() and pump._prompt.text == "경전의 조각이 모자라다 (3/4)", "경전 3/4: 아직 잠김 (%s)" % pump._prompt.text)
 	Progress.set_flag("read_scripture_4")
@@ -458,16 +465,20 @@ func _probe_hints() -> void:
 	await get_tree().process_frame
 	Progress.set_flag("has_tia_lantern")
 	var t0 := str(tia.pick_talk().get("when", ""))
+	# 기사를 쓰러뜨렸어도 회상에서 돌아와 등불을 받기 전(after 깃발 전)에는 힌트를 하지 않는다
 	Progress.set_flag("boss_knight_defeated")
+	var t_before := str(tia.pick_talk().get("set", ""))
+	Progress.set_flag("after_boss_knight_defeated")
 	var t1: Dictionary = tia.pick_talk()
 	var hint_line := str(t1.get("lines", [""])[0])
 	Progress.set_flag(str(t1.get("set", "")))
 	var t2 := str(tia.pick_talk().get("when", ""))
-	_check(t0 == "has_tia_lantern,!owen_rescued" and hint_line.begins_with("골목 끝 틈에서 수액 냄새가 났어") and t1.get("set", "") == "tia_told_sap_crack" and t2 == "has_tia_lantern,!owen_rescued",
-		"티아: 기사(등불) 뒤 한 번 '%s' → 다시 원래 대사" % hint_line)
+	_check(t0 == "has_tia_lantern,!owen_rescued" and t_before != "tia_told_sap_crack" and hint_line.begins_with("골목 끝 틈에서 수액 냄새가 났어") and t1.get("set", "") == "tia_told_sap_crack" and t2 == "has_tia_lantern,!owen_rescued",
+		"티아: 기사 정화 뒤 등불을 받기 전엔 힌트 없음, 받은 뒤(after 깃발) 한 번 '%s' → 다시 원래 대사" % hint_line)
 	Progress.reset()
 	Progress.set_flag("has_tia_lantern")
 	Progress.set_flag("boss_knight_defeated")
+	Progress.set_flag("after_boss_knight_defeated")
 	Progress.set_flag("owen_rescued")
 	_check(str(tia.pick_talk().get("when", "")) == "owen_rescued,!reunion_done", "티아: 오웬과의 재회가 남았으면 재회가 먼저")
 	Progress.set_flag("reunion_done")

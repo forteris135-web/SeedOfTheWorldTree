@@ -18,7 +18,7 @@ extends Node
 ## 12) 수액 방울 실제 비행: 무쇠 펌프·작은 펌프가 쏜 방울을 여러 거리에서 저스트 가드 → 되받은 방울이 쏜 쪽 몸통에 맞는다
 ##     (바닥에 떨어지지 않음), 작은 펌프는 사거리 끝에서도 방울이 소녀에게 닿는다
 ## 13) 피스톤 판정이 보이는 망치 자리(앞 150~370)에만: 300 에 서면 피스톤 28, 450 이면 피스톤 없음(충격파만)
-## 14) 빨아들이기 실제 물리(펌프 방): 가만히 서 있으면 300px 넘게 끌리고, 반대로 달리면 벗어난다
+## 14) 빨아들이기 실제 물리(펌프 방): 가만히 서 있으면 300px 넘게 끌리고, 반대로 달리면 벗어난다 — 수액 위 걷기로 한 번, 새 직후(수액 위 걷기 없이 얕은 수액 0.85배)로 한 번
 ## 15) 정화하는 순간 멈춘 펌프+싹이 펌프 자리에 나타나고 회상 뒤에도 같은 자리, 2페이즈 음악(곡은 그대로, 한 번 휘청 — Music.falter), 옛 저장 지도 바로잡기(MapOffsetFix)
 ## -- --linked : 통합 뒤(link_flooded_mine.py 를 돌린 뒤) 엄격 모드 — 기존 방에 잠긴 채굴장 입구·벽장·등장 자리가 없으면 실패.
 ##    (이 묶음의 브랜치에는 기존 방을 기준판 그대로 두었으므로 기본 모드에서는 '연결 전' 으로 적고 넘어간다)
@@ -841,18 +841,32 @@ func _probe_piston_reach() -> void:
 
 
 # ---------- 14) 빨아들이기 실제 물리 ----------
+## v1.1.0(D14): 펌프 던전은 새 직후(이단 점프·바람만) 올 수 있다 — 수액 위 걷기 없이 얕은 수액(0.85배) 위에서도
+## 반대로 달리면 빨아들이기에서 벗어나는지 함께 본다 (보스 자동 시험 --bosstest 는 예전처럼 수액 위 걷기를 주고 돈다).
 func _probe_suck_real() -> void:
+	for setup in ["sap_walk", "early"]:
+		await _probe_suck_once(setup)
+
+
+func _probe_suck_once(setup: String) -> void:
 	Progress.reset()
-	Progress.gain_ability("sap_walk")
+	if setup == "sap_walk":
+		Progress.gain_ability("sap_walk")
+	else:
+		Progress.gain_ability("double_jump")
+		Progress.gain_ability("wind")
+		Progress.set_flag("boss_bird_defeated")
 	Progress.next_spawn = "FromFlooded02"
 	var room = load("res://scenes/rooms/flooded_mine_boss.tscn").instantiate()
 	add_child(room)
 	await _frames(3)
 	var player: Player = room.player
 	var boss: IronPump = room.boss
+	var sap: SapPool = room.get_node("Hazards/SapFloor")
 	player._invuln_timer = 9999.0
 	player.global_position = Vector2(1500, 1430)
 	var res: Array = []
+	var in_sap := true
 	for mode in ["stand", "run_away"]:
 		# 다음 빨아들이기 예고가 시작될 때 소녀를 펌프 앞 520 에 세운다
 		var t := 0.0
@@ -871,11 +885,16 @@ func _probe_suck_real() -> void:
 		while boss.state == IronPump.State.SUCK and boss.attack_phase == "active" and boss._timer > 0.25:
 			player._invuln_timer = 9999.0
 			await get_tree().physics_frame
+			if mode == "run_away" and not sap._players_in.has(player):
+				in_sap = false
 		Input.action_release(away)
 		var toward := (player.global_position.x - x0) * -boss.facing   # + 면 펌프 쪽으로 끌림
 		res.append(toward)
 		await _frames(2)
-	_check(res.size() == 2 and res[0] > 300.0 and res[1] < -150.0, "빨아들이기 실제 물리: 가만히 서면 펌프 쪽으로 %.0fpx 끌림, 반대로 달리면 %.0fpx (벗어남)" % [res[0] if res.size() > 0 else 0.0, res[1] if res.size() > 1 else 0.0])
+	var tag := "수액 위 걷기" if setup == "sap_walk" else "새 직후(수액 위 걷기 없음, 얕은 수액 0.85배)"
+	if setup == "early":
+		_check(not Progress.has_ability("sap_walk") and sap.shallow and in_sap, "펌프 방 초반 조건: 수액 위 걷기 없음 (시험 플래그 없이 방을 열면 주지 않음), 바닥 수액은 얕음, 벗어나는 동안 수액 속")
+	_check(res.size() == 2 and res[0] > 300.0 and res[1] < -150.0, "빨아들이기 실제 물리 [%s]: 가만히 서면 펌프 쪽으로 %.0fpx 끌림, 반대로 달리면 %.0fpx (벗어남)" % [tag, res[0] if res.size() > 0 else 0.0, res[1] if res.size() > 1 else 0.0])
 	room.queue_free()
 	await _frames(3)
 	for p in get_tree().get_nodes_in_group("projectile"):

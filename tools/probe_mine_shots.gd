@@ -3,7 +3,7 @@ extends Node
 ## 실행: godot --path . res://tools/probe_mine_shots.tscn      (--headless 로 돌리면 아무것도 찍지 않고 끝난다)
 ##  - 금 간 벽 (기존 방에 link_flooded_mine.py 가 적용돼 있을 때만): 잠김 → 맞아서 붉게 번쩍 → 벽 부수기 뒤 따뜻한 빛 → 부서짐 → 열린 벽장
 ##  - 잠긴 채굴장 방 셋 + 숨겨진 방 몇 개, 지도(새 방 모두 가 본 것으로), 클리어(제3의 길) 타이틀, 제3의 길 엔딩 씬
-##  - 마지막: 심연 '정원의 끝'의 세 선택지와 제3의 길 연출(다섯 빛 구슬) — 연출이 엔딩 씬으로 넘어가기 전에 끝낸다
+##  - 마지막: 심연 '정원의 끝'의 제3의 길 장치(경전 네 장을 다 읽은 상태)와 연출(다섯 빛 구슬) — 연출이 엔딩 씬으로 넘어가기 전에 끝낸다
 ## 진행·저장 파일은 건드리지 않는다 (엔딩 씬은 last_grass 를 비워 저장하지 않게 한다).
 
 const DT := 1.0 / 60.0
@@ -175,18 +175,21 @@ func _ending_shot() -> void:
 	Progress.reset()
 
 
-## 심연 '정원의 끝': 뿌리지기를 정화한 뒤(after 깃발) 다섯 영혼이 있으면 세 선택지. 세 번째를 고르면 다섯 빛 구슬 연출.
+## 심연 '정원의 끝': 뿌리지기를 정화한 뒤(after 깃발) 경전의 조각 네 장(scripture_1~4)을 다 읽었으면 제3의 길 장치가 깨어 있다
+## (v1.1.0 D16 — 일반 엔딩 둘은 새 방 '두 갈래 길'로 옮겨 이 방엔 장치 하나). 고르면 다섯 빛 구슬 연출.
 func _third_way_shots() -> void:
 	Progress.reset()
 	for a in ["double_jump", "wind", "light", "lantern", "sap_walk", "wall_break"]:
 		Progress.gain_ability(a)
-	for f in ["boss_root_defeated", "after_boss_root_defeated", "looked_at_lantern"]:
+	for f in ["boss_root_defeated", "after_boss_root_defeated", "looked_at_lantern",
+			"read_scripture_1", "read_scripture_2", "read_scripture_3", "read_scripture_4"]:
 		Progress.set_flag(f)
 	await _load("abyss_boss")
 	var pump: EndingChoice = _room.get_node("Choices/Pump")
 	_place(Vector2(pump.global_position.x - 260.0, pump.global_position.y))
 	await _wait(2.2)
 	await _shot("debug_mine_third_choices.png")
+	print("[샷] 제3의 길 장치 잠김: %s (false 여야 연출이 찍힌다)" % pump.is_locked())
 	pump.interact(_room.player)
 	await _wait(1.3)
 	await _shot("debug_mine_third_ritual_1.png")

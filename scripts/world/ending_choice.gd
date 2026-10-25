@@ -5,7 +5,8 @@ class_name EndingChoice
 ## 확장판(EXPANSION.md 7장) — 세 번째 행동 "심연의 거대한 펌프를 거꾸로 돌린다"(third).
 ## v1.1.0(기획자 요청 27, D16): 제3의 길 조건 = 뿌리지기 정화 + **경전의 잃어버린 조각 네 장(scripture_1~4)을 모두 읽음**.
 ##   (사당 경전·훼손된 경전은 조건이 아니다. 예전의 '다섯 영혼(네 능력)' 조건은 없앴다.)
-##   조건이 모자라면 장치는 **보이되 꺼져 있다**: 잿빛, 빛·회전 멈춤, 손길 거절, 가까이 가면 "경전의 조각이 모자라다 (n/4)".
+##   조건이 모자라면 장치는 **보이되 꺼져 있다**: 잿빛, 빛·회전 멈춤, 손길 거절, 가까이 가면 "경전의 조각이 모자라다 (n/4)"
+##   (화면 글은 모두 data/dialogue/ending_devices.json).
 ##   조건이 차면 깃발 five_souls(티아의 마지막 말이 열린다)를 세우고 평소처럼 고를 수 있다.
 ## 고르면 다섯 빛 구슬이 모여 물레방아를 거꾸로 돌리는 빛 소용돌이(3초) 뒤 엔딩 "third" 로 간다.
 ## v1.1.0 번외: 세 장치 모두 기획자 그림(ending/뿌리.png·관.png·진엔딩.png → tools/cut_ending_devices.gd → art/objects/object_choice_*.png).
@@ -17,8 +18,10 @@ class_name EndingChoice
 
 const ROOT_FLAG := "boss_root_defeated"
 const SOUL_COLORS := [Color(0.75, 1.0, 0.85), Color(1.0, 0.85, 0.45), Color(0.45, 0.85, 0.95), Color(1.0, 0.55, 0.3), Color(0.8, 0.65, 1.0)]
-## 제3의 길이 잠겼을 때 가까이 가면 뜨는 안내 (%d = 읽은 조각 수)
-const LOCKED_HINT := "경전의 조각이 모자라다 (%d/4)"
+## 화면에 띄우는 글은 data/dialogue/ending_devices.json (기획자가 고친다). 아래는 파일이 없을 때만 쓰는 대비 문장.
+const TEXT_PATH := "res://data/dialogue/ending_devices.json"
+## 제3의 길이 잠겼을 때 가까이 가면 뜨는 안내 ({n} = 읽은 조각 수, {total} = 모두)
+const LOCKED_HINT := "경전의 조각이 모자라다 ({n}/{total})"
 ## 잠긴 장치의 색
 const LOCKED_TINT := Color(0.45, 0.45, 0.5, 1.0)
 ## 밑동을 땅에 묻는 깊이 (px)
@@ -63,8 +66,11 @@ var _fx: Node2D       # 의식 연출을 그림 위에 그린다
 var _top := -340.0    # 그림 윗끝 (안내 글자 자리)
 var _center := Vector2(0, -190)   # 의식 연출의 중심 (제3의 길 = 바퀴 중심)
 
+var _locked_text := ""   # 잠겼을 때의 안내 (깃발이 바뀔 때만 다시 만든다)
+
 static var _glow_tex: GradientTexture2D
 static var _add_mat: CanvasItemMaterial
+static var _texts: Dictionary   # ending_devices.json (한 번만 읽는다)
 
 
 ## 제3의 길 조건: 뿌리지기 정화 + 경전의 잃어버린 조각 네 장(scripture_1~4)을 모두 읽음.
@@ -75,6 +81,20 @@ static func third_unlocked() -> bool:
 ## 옛 이름 (호환): 제3의 길이 열렸는가
 static func has_five_souls() -> bool:
 	return third_unlocked()
+
+
+## 화면 글 (data/dialogue/ending_devices.json 의 key, 없으면 fallback)
+static func text(key: String, fallback: String) -> String:
+	if _texts.is_empty():
+		_texts = DialogueData.load_dialogue(TEXT_PATH)
+		if _texts.is_empty():
+			_texts = {"_": true}   # 파일이 없어도 매번 다시 읽지 않게
+	return str(_texts.get(key, fallback))
+
+
+## 잠긴 장치의 안내: "경전의 조각이 모자라다 (n/4)"
+static func locked_hint() -> String:
+	return text("locked_hint", LOCKED_HINT).replace("{n}", str(Progress.scripture_count())).replace("{total}", str(Progress.SCRIPTURES.size()))
 
 
 func _ready() -> void:
@@ -127,6 +147,7 @@ func _on_flag_changed(_flag: String, _value: bool) -> void:
 func _refresh_lock() -> void:
 	var was := _locked
 	_locked = not third_unlocked()
+	_locked_text = locked_hint() if _locked else ""
 	visible = true
 	_art.modulate = LOCKED_TINT if _locked else Color.WHITE
 	for g in _glows:
@@ -151,7 +172,7 @@ func _on_enter(b: Node) -> void:
 		b.velocity = Vector2.ZERO
 		var hud := get_tree().current_scene.get_node_or_null("CombatHUD")
 		if hud:
-			hud.show_message("셀레니아는 허리의 작은 등불을 내려다보았다.", 3.0)
+			hud.show_message(text("lantern_look", "셀레니아는 허리의 작은 등불을 내려다보았다."), 3.0)
 		await get_tree().create_timer(3.0).timeout
 		if is_instance_valid(b):
 			b.input_enabled = true
@@ -184,7 +205,7 @@ func _process(delta: float) -> void:
 	var show := _near != null and _ritual < 0.0 and (_locked or _near.input_enabled)
 	_prompt.visible = show
 	if show:
-		_prompt.text = LOCKED_HINT % Progress.scripture_count() if _locked else "%s  %s" % [InputDevice.prompt("interact"), label]
+		_prompt.text = _locked_text if _locked else "%s  %s" % [InputDevice.prompt("interact"), label]
 
 
 func interact(by: Player) -> void:
@@ -198,7 +219,7 @@ func interact(by: Player) -> void:
 		# 다섯 영혼이 함께 물레방아를 거꾸로 돌린다 (3초 연출)
 		_ritual = 0.0
 		if hud:
-			hud.show_message("다섯 영혼이 함께 손을 얹었다.", 3.0)
+			hud.show_message(text("third_ritual", "다섯 영혼이 함께 손을 얹었다."), 3.0)
 		Sfx.play("soul", 0.0, 0.0)
 		Juice.rumble(0.3, 0.6, 0.6)
 		await get_tree().create_timer(1.6).timeout
@@ -208,7 +229,7 @@ func interact(by: Player) -> void:
 		Game.go_to("res://scenes/ui/ending_scene.tscn", 2.2, 1.5)
 		return
 	if hud:
-		hud.show_message("…", 1.0)
+		hud.show_message(text("chosen", "…"), 1.0)
 	Juice.rumble(0.3, 0.6, 0.6)
 	await get_tree().create_timer(1.2).timeout
 	Game.go_to("res://scenes/ui/ending_scene.tscn", 2.2, 1.5)
