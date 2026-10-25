@@ -9,7 +9,8 @@ extends Node
 ## 2026-10-19 이펙트 리뉴얼 F1: 바람 = 초승달 검기(판정 = 초승달 머리), 빛 = 레이저(벽에서 멈춤, 여러 적 한 번씩) 로 시험을 바꿈.
 ##   보호막·씨앗 베기 초승달 크기는 이제 그림(보호막 dome, 큰 초승달 slash_big)의 실제 범위로 잰다.
 ## v1.1.0 (명세 §2.8): 일반 공격 판정 앞끝 270 과 칼자국 그림 끝(±20, 세로 띠 ±40, 새순 0·3단계), 씨앗 앞끝 374, 바람 120·빛 95.2,
-##   낙하 공격 이펙트 범위 vs 판정(기본·수액의 맥동, 각 변 ±25), 일반 공격 불꽃·칼자국 청록 (_test_v110_geometry).
+##   낙하 공격 이펙트 범위 vs 판정(기본·수액의 맥동, 각 변 ±25), 일반 공격 불꽃·칼자국 청록,
+##   사거리 실측(옛 끝 225 로는 안 닿던 앞끝 ~255 의 적은 맞고, 270 너머는 안 맞음) (_test_v110_geometry).
 ## 실행: godot --headless --path . res://tools/probe_player.tscn
 ## 첫 방(canopy_01)을 통째로 띄워 진짜 소녀를 Input.action_press 로 조종한다. 마지막 줄 "[probe] 끝: 실패 N".
 
@@ -1163,8 +1164,41 @@ func _test_v110_geometry() -> void:
 					teal_spark = true
 		if teal_spark:
 			break
-	_check(e.hp < hp0 and teal_spark, "일반 공격이 판정 끝 가까이(+160)의 적을 맞히고 불꽃이 청록이다 (%.0f → %.0f)" % [hp0, e.hp])
+	_check(e.hp < hp0 and teal_spark, "일반 공격이 몸 앞(+160)의 적을 맞히고 불꽃이 청록이다 (%.0f → %.0f)" % [hp0, e.hp])
 	e.queue_free()
+	await _frames(40)
+	# (7) 사거리가 정말 +20%: 맞는 영역 앞끝이 옛 판정 끝(225)보다 멀고 새 끝(270) 안인 적은 맞고, 새 끝 너머의 적은 안 맞는다.
+	#     약공격은 바닥에서 앞으로 조금 나가므로(light_lunge) 거리는 '맞은 그 순간'의 소녀 자리에서 잰다.
+	var e_in := _spawn_dummy_enemy(400.0 + 258.0 + 34.0)    # 맞는 영역(반지름 34) 앞끝이 처음 자리에서 +258
+	var e_out := _spawn_dummy_enemy(400.0 + 311.0 + 34.0)   # 앞끝 +311 (앞으로 나가도 270 밖)
+	var r_in: float = e_in.hurt_radius
+	var r_out: float = e_out.hurt_radius
+	_teleport(Vector2(400, FLOOR1_Y - 68.0), 1)
+	await _frames(3)
+	var reach_log := {"in_gap": -1.0, "out_hit": false, "max_px": _player.global_position.x}
+	var on_reach := func(res: String, t: Node) -> void:
+		if t == e_in and float(reach_log["in_gap"]) < 0.0:
+			reach_log["in_gap"] = (e_in.global_position.x - r_in) - _player.global_position.x
+		if t == e_out:
+			reach_log["out_hit"] = true
+	_player.hitbox.landed.connect(on_reach)
+	var in_hp0 := e_in.hp
+	var out_hp0 := e_out.hp
+	await _tap("attack_light")
+	for i in 40:
+		await get_tree().physics_frame
+		if _player.state == Player.State.ATTACK and _player.attack_phase in ["startup", "active"]:
+			reach_log["max_px"] = maxf(float(reach_log["max_px"]), _player.global_position.x)
+		elif _player.state != Player.State.ATTACK:
+			break
+	_player.hitbox.landed.disconnect(on_reach)
+	var in_gap := float(reach_log["in_gap"])
+	var out_gap := (e_out.global_position.x - r_out) - float(reach_log["max_px"])
+	print("[probe] 사거리: 앞끝이 맞은 순간 소녀에게서 %.1f px 인 적 → 체력 %.0f → %.0f / 판정이 켜진 동안 가장 앞에서도 %.1f px 인 적 → %.0f → %.0f (맞음 %s)" % [in_gap, in_hp0, e_in.hp, out_gap, out_hp0, e_out.hp, reach_log["out_hit"]])
+	_check(e_in.hp < in_hp0 and in_gap > 225.0 + 5.0 and in_gap <= 270.0, "옛 판정 끝(225)으로는 닿지 않던 적(앞끝 %.1f px)을 새 판정(270)이 맞힌다" % in_gap)
+	_check(not bool(reach_log["out_hit"]) and is_equal_approx(e_out.hp, out_hp0) and out_gap > 270.0, "판정 끝(270) 너머(%.1f px)의 적은 맞지 않는다" % out_gap)
+	e_in.queue_free()
+	e_out.queue_free()
 	await _frames(40)
 
 

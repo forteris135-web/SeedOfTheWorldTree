@@ -9,7 +9,8 @@ extends Node
 ##  (e) 후딜레이 동안 Engine.time_scale 1.0 (게임 전체가 멈추지 않는다)
 ##  (f) 수액의 맥동: 3타가 적 둘을 맞혀도 +12 한 번, 1·2타·막힘은 0 / 낙하 공격 피해 ×1.3·판정 ×1.15
 ##  (g) 최대 스태미너 새순 0~3단계 → 100/103/106/109, _apply_abilities 뒤에도 그대로, HUD 막대 길이 1.09배
-##  (h) 새순 단계 배율: 일반 공격·씨앗·바람·빛의 피해·범위·쿨다운
+##  (h) 새순 단계 배율: 일반 공격·씨앗·바람·빛의 피해·범위·쿨다운 (바람·빛도 실제로 쏴서 과녁이 잃은 체력)
+##  (i) 1·2·3타 휘두름 소리 음높이 1.0 / 1.08 / 0.92 — 소녀 자기 소리 플레이어(SFX 버스)로, Sfx 안쪽을 건드리지 않는다
 
 var _fail := 0
 var _room: Node
@@ -105,6 +106,7 @@ func _run() -> void:
 	await _test_sap_pulse()
 	await _test_max_stamina()
 	await _test_token_mults()
+	await _test_swing_pitch()
 
 
 ## 공격 버튼을 눌러 그 타가 시작되기를 기다린다. 시작되면 그 순간의 스태미너를 돌려준다 (-1 = 시작 안 됨)
@@ -379,6 +381,11 @@ func _test_combo_lock() -> void:
 
 
 # ---------- (e) 게임 전체는 멈추지 않는다 ----------
+## (e1) 아무것도 안 맞힌 3타: 후딜레이 내내 Engine.time_scale 1.0.
+## (e2) 과녁을 세워 1·2·3타가 실제로 맞게 한다: 맞힌 순간의 짧은 히트스톱(Juice.hitstop, 실제 시간 0.05초)은 타격 연출(hit_impact)
+##      때만 걸리고, 후딜레이 자체는 time_scale 을 낮추지 않는다 — 후딜레이 동안 느려진 화면 프레임은 모두 바로 앞 타격 연출
+##      0.12초(실제 시간) 안에 있어야 하고, 그 히트스톱이 풀린 뒤로는 1.0 이다. 화면 프레임(process_frame)마다 잰다
+##      (히트스톱 중에는 물리 틱이 거의 돌지 않아 물리 프레임으로는 놓친다).
 func _test_time_scale() -> void:
 	await _reset()
 	await _combo_to_lock()
@@ -387,6 +394,52 @@ func _test_time_scale() -> void:
 		min_ts = minf(min_ts, Engine.time_scale)
 		await get_tree().physics_frame
 	_check(_approx(min_ts, 1.0, 0.0001), "후딜레이 동안 Engine.time_scale 은 1.0 그대로 (최소 %.3f)" % min_ts)
+	await _wait(1.0)
+	# (e2) 진짜로 맞히는 콤보
+	var e := _spawn_dummy(STAND.x + 160.0)
+	await _frames(3)
+	await _reset()
+	e.hp = e.max_hp
+	var rec := {"hit3": 0, "impacts": [], "pre_min": 10.0, "lock_frames": 0, "lock_slow": 0, "unexplained": 0, "lock_min": 10.0, "after_lock": false}
+	var on_land := func(res: String, t: Node) -> void:
+		if t == e and res == "hit" and _player.attack_step == 3:
+			rec["hit3"] += 1
+	var on_impact := func(res: String, _t) -> void:
+		if res == "hit":
+			(rec["impacts"] as Array).append(Time.get_ticks_usec())
+	var sampler := func() -> void:
+		var ts := Engine.time_scale
+		if _player.combo_lock_left() > 0.0:
+			rec["after_lock"] = true
+			rec["lock_frames"] += 1
+			rec["lock_min"] = minf(float(rec["lock_min"]), ts)
+			if ts < 1.0:
+				rec["lock_slow"] += 1
+				var now := Time.get_ticks_usec()
+				var explained := false
+				for u in rec["impacts"]:
+					if now - int(u) <= 120000:
+						explained = true
+				if not explained:
+					rec["unexplained"] += 1
+		elif not bool(rec["after_lock"]):
+			rec["pre_min"] = minf(float(rec["pre_min"]), ts)
+	_player.hitbox.landed.connect(on_land)
+	_player.hit_impact.connect(on_impact)
+	get_tree().process_frame.connect(sampler)
+	await _combo_to_lock()
+	while _player.combo_lock_left() > 0.0:
+		await get_tree().process_frame
+	await get_tree().process_frame
+	get_tree().process_frame.disconnect(sampler)
+	_player.hitbox.landed.disconnect(on_land)
+	_player.hit_impact.disconnect(on_impact)
+	var lost := e.max_hp - e.hp
+	print("[probe] 맞히는 콤보: 과녁 잃은 체력 %.0f, 3타 적중 %d, 타격 연출 %d번, 후딜레이 전 최소 time_scale %.3f, 후딜레이 화면 프레임 %d (느림 %d, 최소 %.3f, 타격 연출로 설명 안 되는 느림 %d), 끝난 뒤 %.3f" % [lost, rec["hit3"], (rec["impacts"] as Array).size(), rec["pre_min"], rec["lock_frames"], rec["lock_slow"], rec["lock_min"], rec["unexplained"], Engine.time_scale])
+	_check(int(rec["hit3"]) == 1 and (rec["impacts"] as Array).size() >= 3 and minf(float(rec["pre_min"]), float(rec["lock_min"])) < 1.0, "과녁을 1·2·3타가 실제로 맞혔고 맞힌 순간 히트스톱이 걸렸다 (시험이 헛돌지 않는다)")
+	_check(int(rec["lock_frames"]) > 0 and int(rec["unexplained"]) == 0, "3타를 맞혀도 후딜레이 자체는 time_scale 을 낮추지 않는다 (느린 프레임은 모두 타격 히트스톱 0.05초 안)")
+	_check(_approx(Engine.time_scale, 1.0, 0.0001), "후딜레이가 끝나면 time_scale 1.0")
+	e.queue_free()
 	await _wait(1.0)
 
 
@@ -541,9 +594,42 @@ func _test_token_mults() -> void:
 	await _wait(0.8)
 	var lost_s := e.max_hp - e.hp
 	_check(_approx(lost_s, 40.0 * 1.3 * mult, 0.05), "씨앗 3단계 피해 40 × 1.3 = %.1f (실제 %.2f)" % [40.0 * 1.3 * mult, lost_s])
+	# 바람·빛도 실제로 쏴서: 바람 120 × 1.3 = 156, 빛 95.2 × 1.25 = 119 (_cast_wind/_cast_laser 의 새순 피해 배율)
+	for s in [["wind", 120.0, 1.3], ["light", 95.2, 1.25]]:
+		e.hp = e.max_hp
+		await _reset()
+		_player.soul = s[0]
+		Progress.soul = s[0]
+		await _tap("soul_ability")
+		await _wait(1.0)
+		var lost_k := e.max_hp - e.hp
+		var want: float = float(s[1]) * float(s[2]) * mult
+		_check(_approx(lost_k, want, 0.05), "%s 3단계 피해 %.1f × %.2f = %.1f, 한 번만 맞는다 (실제 %.2f)" % [s[0], s[1], s[2], want, lost_k])
+	_player.soul = "seed"
+	Progress.soul = "seed"
 	e.queue_free()
 	for t in ["normal", "seed", "wind", "light"]:
 		Progress.upgrades.erase("tok_" + t)
 	Progress.ability_gained.emit("upgrade")
 	await get_tree().physics_frame
 	_check(_approx(_player.light_box().end.x, 270.0) and _approx(_player.seed_slash_box().end.x, 374.0), "단계를 지우면 판정이 기본으로 (270 / 374)")
+
+
+# ---------- (i) 휘두름 소리 음높이 ----------
+func _test_swing_pitch() -> void:
+	await _reset()
+	var swing: AudioStream = load(Sfx.DIR + "swing.wav")
+	var got := []
+	var ok := true
+	for step in [1, 2, 3]:
+		await _press_until_step(step)
+		var ap := _player.last_pitched_player()
+		var want: float = Player.SWING_PITCH[step - 1]
+		var p := ap.pitch_scale if ap else -1.0
+		got.append("%.3f" % p)
+		ok = ok and ap != null and ap.bus == Sfx.BUS and ap.stream == swing and absf(p - want) <= want * 0.031
+		while _player.attack_phase != "recovery":
+			await get_tree().physics_frame
+	print("[probe] 휘두름 음높이 1·2·3타: %s (기대 1.0 / 1.08 / 0.92 ±3%%), 소녀 소리 플레이어 %d개" % [got, _player._pitched_players.size()])
+	_check(ok and _player._pitched_players.size() == Player.PITCHED_PLAYERS, "1·2·3타 휘두름 소리가 SFX 버스의 소녀 플레이어에서 1.0 / 1.08 / 0.92 음높이로 난다 (플레이어는 둘만 만든다)")
+	await _wait(1.2)

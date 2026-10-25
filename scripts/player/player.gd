@@ -800,17 +800,46 @@ func combo_lock_left() -> float:
 	return _combo_lock_timer
 
 
-## 소리 하나를 정한 음높이로 (Sfx.play 는 음높이를 받지 않아서, 막 쓴 플레이어의 음높이를 바꾼다)
+## 음높이를 정해 트는 소리 (1·2·3타 휘두름). Sfx.play 는 음높이를 받지 않으므로 소녀가 자기 플레이어 둘을 번갈아 쓴다.
+## Sfx 안쪽은 건드리지 않고, Sfx 주석의 약속대로 bus = Sfx.BUS 라서 설정의 효과음 음량을 그대로 따른다.
+## 플레이어는 처음 틀 때 한 번만 만들고 소리 파일은 한 번 읽어 둔다 (휘두를 때마다 새로 만들지 않는다).
+const PITCHED_PLAYERS := 2
+var _pitched_players: Array[AudioStreamPlayer] = []
+var _pitched_next := 0
+var _pitched_streams := {}
+
+
 func _play_pitched(sfx_name: String, volume_db: float, pitch: float) -> void:
-	Sfx.play(sfx_name, volume_db, 0.0)
-	var players = Sfx.get("_players")
-	if players is Array and not players.is_empty():
-		var n: int = players.size()
-		var i: int = (int(Sfx.get("_next")) - 1 + n) % n
-		var ap = players[i]
-		var streams = Sfx.get("_streams")
-		if ap is AudioStreamPlayer and streams is Dictionary and ap.stream == streams.get(sfx_name):
-			ap.pitch_scale = pitch * (1.0 + randf_range(-0.03, 0.03))
+	var st: AudioStream = _pitched_streams.get(sfx_name)
+	if st == null:
+		var path: String = Sfx.DIR + sfx_name + ".wav"
+		if not ResourceLoader.exists(path):
+			return
+		st = load(path)
+		if st == null:
+			return
+		_pitched_streams[sfx_name] = st
+	if _pitched_players.is_empty():
+		for i in PITCHED_PLAYERS:
+			var p := AudioStreamPlayer.new()
+			p.name = "PitchedSfx%d" % i
+			p.bus = Sfx.BUS
+			p.process_mode = Node.PROCESS_MODE_ALWAYS   # Sfx 의 플레이어처럼 멈춤 화면이 떠도 끝까지 울린다
+			add_child(p)
+			_pitched_players.append(p)
+	var ap := _pitched_players[_pitched_next]
+	_pitched_next = (_pitched_next + 1) % _pitched_players.size()
+	ap.stream = st
+	ap.volume_db = volume_db
+	ap.pitch_scale = pitch * (1.0 + randf_range(-0.03, 0.03))
+	ap.play()
+
+
+## 시험용: 가장 최근에 음높이를 정해 튼 소리 플레이어 (아직 없으면 null)
+func last_pitched_player() -> AudioStreamPlayer:
+	if _pitched_players.is_empty():
+		return null
+	return _pitched_players[(_pitched_next - 1 + _pitched_players.size()) % _pitched_players.size()]
 
 
 func _start_light(step: int) -> void:
