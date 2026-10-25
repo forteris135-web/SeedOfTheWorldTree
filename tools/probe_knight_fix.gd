@@ -3,7 +3,7 @@ extends Node
 ##  A. 2페이즈 '검기 → 돌진' 중 멀리서 날아온 검기를 저스트 가드: 돌진은 끊기지 않고(박힘까지 감), 기사 흐트러짐은 되받은 검기의 +40 만
 ##  B. 기사가 쓰러지면 날아가던 검기·불꽃이 거둬지고, 그 뒤 소녀가 쓰러져도 보스가 되살아나지 않는다
 ##  C. 2페이즈 찌르기를 저스트 가드로 튕기면 연계(검기) 없이 행진으로
-##  D. 안개 문 앞에서 쓴 검기가 문 너머에서 생기지 않는다
+##  D. (v1.1.0 바뀜: 보스 투사체는 지형을 뚫는다) 안개 문 앞에서 쓴 검기도 늘 생기고, 문을 뚫고 지나간다
 ##  E. 높은 가지(Branch3) 위에서 버티면 1페이즈에도 검기가 소녀 쪽으로 올라온다 (30초에 두 번 넘게 맞는다)
 ##  F. 공격 없이 몸만 틀 때 궤적(빛의 띠) 점이 생기지 않는다
 ##  G. 창끝이 땅에 파묻히지 않는다(3연격 둘째·셋째 타, 돌진), 찌르기 창끝이 판정 끝에서 크게 벗어나지 않는다
@@ -138,7 +138,7 @@ func _c() -> void:
 	await _calm()
 
 
-## D. 왼쪽 안개 문(x 670~730) 바로 앞에서 쓴 검기는 문 안쪽에서 생긴다
+## D. 왼쪽 안개 문(x 670~730) 바로 앞에서 쓴 검기도 생기고 문을 뚫고 지나간다 (v1.1.0 기획자 요청 4 — 예전엔 문 앞으로 당기거나 거렀다)
 func _d() -> void:
 	await _calm()
 	_boss.phase = 1
@@ -152,12 +152,13 @@ func _d() -> void:
 	await _until(func() -> bool: return _boss.attack_phase == "recovery", 3.0)
 	var xs: Array = []
 	for w in get_tree().get_nodes_in_group("projectile"):
-		xs.append(roundf(w.global_position.x))
-	var ok := true
+		if w is SwordWave and not w._dead:
+			xs.append(roundf(w.global_position.x))
+	var ok := not xs.is_empty()
 	for x in xs:
-		if x < 730.0:
-			ok = false
-	_check(ok, "D 문 앞 검기: 기사 x %.0f, 검기 생긴 자리 %s (문 오른쪽 끝 730 이상이거나 아예 안 생김)" % [_boss.global_position.x, xs])
+		if x > 670.0:
+			ok = false   # 문(670~730)을 지나 왼쪽으로 날아가 있어야 한다
+	_check(ok, "D 문 앞 검기: 기사 x %.0f, 살아 있는 검기 자리 %s (생기고, 문 왼쪽 끝 670 너머로 뚫고 지나감)" % [_boss.global_position.x, xs])
 	_player._invuln_timer = 0.0
 	await _calm()
 

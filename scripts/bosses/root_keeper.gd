@@ -23,9 +23,21 @@ const TELEGRAPH_BLINK_HZ := 2.5
 ## 휘두르기 판정 사각형 (바라보는 방향 기준, Hitbox 노드 기준 — 노드는 발밑에서 y -60). 그림의 붉은 부채꼴도 이 값을 읽는다.
 const SWEEP_BOX := Rect2(-60, -200, 380, 230)
 const SWEEP2_BOX := Rect2(-80, -220, 400, 250)
-## 휘두를 때 앞으로 미끄러지는 첫 속도 (부채꼴이 이만큼 더 앞을 덮는다)
+## 휘두를 때 앞으로 미끄러지는 첫 속도 (공격 범위 예고가 이만큼 더 앞을 덮는다)
 const SWEEP_SLIDE := 300.0
 const SWEEP2_SLIDE := 200.0
+## 휘두르기 감속과 판정 길이 (예고가 미끄러지는 거리를 계산한다)
+const SWEEP_DECEL := 2000.0
+const SWEEP_ACTIVE := 0.2
+## 지팡이 내려찍기·뿌리 벽 판정 (바라보는 쪽 기준, Hitbox 노드 기준). v1.1.0: 공격 범위 예고·이펙트가 이 값을 그대로 쓴다.
+const STOMP_BOX := Rect2(-130, -130, 260, 150)
+const WALL_BOX := Rect2(0, -260, 200, 290)
+const WALL_SPEED := 1100.0
+const WALL_ACTIVE := 0.6
+## 맞딜 방지 계량기 (v1.1.0): 이 거리 안에 붙어 있으면 쌓이고, 다 차면 지팡이 내려찍기
+const CROWD_RANGE := 260.0
+## 2페이즈 쉬는 시간 배수 (v1.1.0 맞딜 방지 사다리 4단계: 2페이즈 공격 사이 쉬는 시간 −15%)
+const P2_REST_MULT := 0.85
 
 signal hp_changed(hp: float, max_hp: float)
 signal poise_changed(poise: float, max_poise: float)
@@ -107,6 +119,17 @@ var _registered := false
 var _home := Vector2.ZERO
 var _red := false
 var debug_log := false
+## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
+var _tel: RangeTelegraph
+var crowd := CrowdMeter.new(CROWD_RANGE)
+## 지금 공격이 맞딜 응징인가 (응징 공격이 끝날 때까지 흐트러짐이 쌓이지 않는다 — 두들겨 끊거나 되돌림에 무너뜨릴 수 없다)
+var punishing := false
+## 뿌리 벽: 판정이 켜진 자리와 벽까지 갈 수 있는 거리 (예고·이펙트가 쓴다)
+var _wall_from := Vector2.ZERO
+## 뿌리 벽 돌진 거리 기억 (_wall_travel): 출발 자리·방향·거리. 새 뿌리 벽을 시작할 때 비운다
+var _wall_run_from := Vector2(INF, INF)
+var _wall_run_face := 0
+var _wall_run := 0.0
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -121,6 +144,9 @@ const WALL_FX := preload("res://scenes/bosses/root_wall.tscn")
 func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/root_keeper_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
+	_tel = RangeTelegraph.attach(self)
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
+	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
 	_home = global_position
 	visible = false
@@ -150,6 +176,9 @@ func reset_fight() -> void:
 	_last_attack = -1
 	_chain = -1
 	_red = false
+	_spike_wave = false
+	crowd.reset()
+	_tel.clear()
 	global_position = _home
 	_set_state(State.WAIT)
 	hp_changed.emit(hp, max_hp)
@@ -174,6 +203,10 @@ func _physics_process(delta: float) -> void:
 	_tick_events()
 	_face_hold = maxf(_face_hold - delta, 0.0)
 	stagger = maxf(stagger - delta / stagger_len, 0.0)
+	if player:
+		# 맞딜 방지: 공격할 수 있는 동안 몸 가까이 붙어 있으면 쌓인다 (무너짐·일어서기 = 빈틈에는 쌓이지 않는다)
+		# (응징 공격 동안에도 쌓인다 — 내려찍기를 맞고도 계속 붙어 있으면 또 내려찍는다. 구르기로 빠지면 식는다)
+		crowd.tick(delta, global_position, player.global_position, state == State.STANCE or state in ATTACK_STATES, facing)
 	if _hint_timer > 0.0:
 		_hint_timer -= delta
 		if _hint_timer <= 0.0:
@@ -207,19 +240,19 @@ func _physics_process(delta: float) -> void:
 			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
 			_phase_step(delta, startup_len, 0.3, 1.0 * fast, func() -> void: _raise_spikes())
 		State.SWEEP:
-			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
-			_phase_step(delta, startup_len, 0.2, 0.8 * fast, func() -> void:
+			velocity.x = move_toward(velocity.x, 0.0, SWEEP_DECEL * delta)
+			_phase_step(delta, startup_len, SWEEP_ACTIVE, 0.8 * fast, func() -> void:
 				var hit := HitData.make(sweep_damage, 0.0, self, Vector2(560, -220))
 				hitbox.set_box(SWEEP_BOX, facing)
-				hitbox.activate(hit, 0.2)
+				hitbox.activate(hit, SWEEP_ACTIVE)
 				velocity.x = facing * SWEEP_SLIDE
 				Sfx.play("staff_swing", -2.0, 0.1))
 		State.SWEEP2:
-			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
-			_phase_step(delta, startup_len, 0.2, 0.7 * fast, func() -> void:
+			velocity.x = move_toward(velocity.x, 0.0, SWEEP_DECEL * delta)
+			_phase_step(delta, startup_len, SWEEP_ACTIVE, 0.7 * fast, func() -> void:
 				var hit := HitData.make(sweep2_damage, 0.0, self, Vector2(520, -260))
 				hitbox.set_box(SWEEP2_BOX, facing)
-				hitbox.activate(hit, 0.2)
+				hitbox.activate(hit, SWEEP_ACTIVE)
 				velocity.x = facing * SWEEP2_SLIDE
 				Sfx.play("staff_swing", -1.0, 0.1))
 		State.ORBS:
@@ -231,12 +264,13 @@ func _physics_process(delta: float) -> void:
 					var off := i - (n - 1) / 2.0
 					_queue(i * gap, func() -> void: _spawn_orb(off)))
 		State.WALL:
-			_phase_step(delta, startup_len, 0.6, 1.3, func() -> void:
+			_phase_step(delta, startup_len, WALL_ACTIVE, 1.3, func() -> void:
 				var hit := HitData.make(wall_damage, 0.0, self, Vector2(760, -340))
 				hit.guardable = false
-				hitbox.set_box(Rect2(0, -260, 200, 290), facing)
-				hitbox.activate(hit, 0.6)
-				velocity.x = facing * 1100.0
+				_wall_from = global_position
+				hitbox.set_box(WALL_BOX, facing)
+				hitbox.activate(hit, WALL_ACTIVE)
+				velocity.x = facing * WALL_SPEED
 				Juice.shake(10.0)
 				Sfx.play("root_wall", 0.0, 0.08)
 				var wall: RootWall = WALL_FX.instantiate()
@@ -303,7 +337,7 @@ func _physics_process(delta: float) -> void:
 				var hit := HitData.make(stomp_slam_damage, 0.0, self, Vector2(620, -380))
 				hit.guardable = false
 				hit.hitstop = 0.08
-				hitbox.set_box(Rect2(-130, -130, 260, 150), 1)
+				hitbox.set_box(STOMP_BOX, 1)
 				hitbox.activate(hit, 0.25)
 				Juice.shake(14.0)
 				Juice.rumble(0.7, 1.0, 0.3)
@@ -330,6 +364,9 @@ func _physics_process(delta: float) -> void:
 			velocity.x = 0.0
 			_update_interactable()
 	move_and_slide()
+	# 공격 범위 예고는 예비동작 동안 판정이 덮을 자리를 따라간다
+	if attack_phase == "startup" and _tel.is_showing():
+		_tel.update_rect(melee_reach())
 
 
 func _phase_step(delta: float, startup: float, active: float, recovery: float, on_active: Callable) -> void:
@@ -340,6 +377,7 @@ func _phase_step(delta: float, startup: float, active: float, recovery: float, o
 				attack_phase = "active"
 				_timer = active
 				active_len = active
+				_tel.end()
 				on_active.call()
 		"active":
 			if _timer <= 0.0:
@@ -372,7 +410,7 @@ func _end_attack() -> void:
 				_chain = _pick_chain(c, absf(dx))
 			return
 	_set_state(State.STANCE)
-	_timer = (0.7 if phase == 1 else 0.4) + randf() * 0.3
+	_timer = (0.7 + randf() * 0.3) if phase == 1 else (0.4 + randf() * 0.3) * P2_REST_MULT
 
 
 ## 지금 공격 단계의 진행도 (0→1). 그림이 세 박자 곡선(예비→타격→되돌림)을 그리는 기준.
@@ -395,6 +433,60 @@ func _begin(st: State, startup: float) -> void:
 	windup_progress = 0.0
 	_timer = startup
 	startup_len = startup
+	# v1.1.0: 근접 공격(휘두르기·내려찍기·뿌리 벽)은 판정과 같은 사각형으로 공격 범위를 예고한다 (가시·손·씨앗·구슬은 각자의 예고)
+	if st == State.WALL:
+		_wall_run_from = Vector2(INF, INF)   # 새 돌진: 안개 문·벽 자리를 다시 잰다
+	if st in [State.SWEEP, State.SWEEP2, State.STOMP, State.WALL]:
+		_tel.show_rect(melee_reach(), st in RED_STATES, startup)
+
+
+## 지금 근접 공격의 판정이 덮을 월드 사각형 (미끄러짐·돌진은 판정이 켜진 동안 쓸고 갈 구간 전체). 근접 판정이 없는 상태면 빈 사각형.
+## 공격 범위 예고·이펙트·시험이 같은 값을 쓴다.
+func melee_reach() -> Rect2:
+	match state:
+		State.SWEEP:
+			return RangeTelegraph.box_world(hitbox, SWEEP_BOX, facing, RangeTelegraph.slide_distance(SWEEP_SLIDE, SWEEP_DECEL, SWEEP_ACTIVE),
+				RangeTelegraph.slide_first(SWEEP_SLIDE, SWEEP_DECEL))
+		State.SWEEP2:
+			return RangeTelegraph.box_world(hitbox, SWEEP2_BOX, facing, RangeTelegraph.slide_distance(SWEEP2_SLIDE, SWEEP_DECEL, SWEEP_ACTIVE),
+				RangeTelegraph.slide_first(SWEEP2_SLIDE, SWEEP_DECEL))
+		State.STOMP:
+			return RangeTelegraph.box_world(hitbox, STOMP_BOX, 1)
+		State.WALL:
+			var from := global_position if attack_phase == "startup" else _wall_from
+			var r := RangeTelegraph.box_world(hitbox, WALL_BOX, facing)
+			r.position += from - global_position
+			var step := WALL_SPEED / 60.0   # 판정이 켜지는 틱에 한 걸음 나간 뒤부터 겹침을 본다
+			var travel := _wall_travel(from)
+			var a := Rect2(r.position + Vector2(minf(step, travel) * facing, 0.0), r.size)
+			return a.merge(Rect2(r.position + Vector2(travel * facing, 0.0), r.size))
+	return Rect2()
+
+
+## 뿌리 벽 돌진이 갈 수 있는 거리: 판정이 마지막으로 닿을 때까지 (WALL_SPEED × (판정 길이 - 한 틱)),
+## 그 사이에 벽(안개 문·지형 벽)이 있으면 몸이 벽에 닿는 데까지.
+## 한 번 잰 값을 출발 자리·방향이 같으면 다시 쓴다 (예고가 매 틱 부르므로 — 매 프레임 광선 질의를 새로 만들지 않게, 아이폰)
+func _wall_travel(from: Vector2) -> float:
+	if facing == _wall_run_face and from.distance_squared_to(_wall_run_from) < 1.0:
+		return _wall_run
+	var run := WALL_SPEED * (WALL_ACTIVE - 1.0 / 60.0)
+	var half := 60.0
+	var cs := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if cs and cs.shape:
+		half = cs.shape.get_rect().size.x * 0.5 * absf(cs.global_scale.x)
+	var y := from.y - 60.0
+	var space := get_world_2d().direct_space_state
+	var ray := PhysicsRayQueryParameters2D.create(Vector2(from.x, y), Vector2(from.x + facing * (run + half + 4.0), y), collision_mask)
+	ray.exclude = [get_rid()]
+	var hit := space.intersect_ray(ray)
+	if not hit.is_empty():
+		var c = hit.get("collider")
+		if not (c is Platform and (c as Platform).one_way):
+			run = minf(run, maxf(absf(float(hit["position"].x) - from.x) - half, 0.0))
+	_wall_run_from = from
+	_wall_run_face = facing
+	_wall_run = run
+	return run
 
 
 # ---------- 예약된 일 ----------
@@ -430,6 +522,13 @@ func _choose(dist: float) -> void:
 		if want_face != facing:
 			facing = want_face
 			_face_hold = face_hold
+	if crowd.ready():
+		# 맞딜 방지 (v1.1.0): 몸에 붙어 버티는 소녀에게 지팡이 내려찍기 (붉은 예고·가드 불가 — 양쪽으로 충격파도 달린다)
+		crowd.consume()
+		_chain = -1
+		_start_attack(State.STOMP)
+		punishing = true
+		return
 	if dist < 330.0:
 		cands = [[State.SWEEP, 50], [State.HAND, 20], [State.RING, 15], [State.SPIKES, 10]]
 		if phase == 2:
@@ -614,21 +713,21 @@ func _spawn_orb(offset: float) -> void:
 	o.lifetime = 4.5
 	o.homing = 1.6 if phase == 1 else 2.0
 	o.radius = 36.0
+	o.ground_y = ground_y   # 지형은 뚫고 바닥 아래로 가면 사라진다 (v1.1.0)
 	get_parent().add_child(o)
 	o.global_position = orb_origin() + Vector2(0.0, offset * 30.0)   # 예고 고리(반지름 80) 안에서 생긴다
 	var dir := Vector2(facing, -0.15 + offset * 0.22).normalized()
 	o.launch(dir, self)
 
 
-## 휘두르기(SWEEP/SWEEP2) 판정이 덮는 자리 (발밑 기준, 바라보는 쪽 = +x). 그림의 붉은 부채꼴은 이 사각형을 반드시 덮는다.
-## 휘두르며 앞으로 미끄러지는 거리(첫 속도에서 감속 2000 으로 멈출 때까지) + 여유 30px 만큼 앞을 더 본다.
+## 휘두르기(SWEEP/SWEEP2) 판정이 덮는 자리 (발밑 기준, 바라보는 쪽 = +x): 판정 상자 + 판정이 켜진 동안 앞으로 미끄러지는 거리.
+## v1.1.0: 공격 범위 예고(RangeTelegraph)·이펙트와 같은 사각형 (melee_reach 의 발밑 기준판).
 func sweep_reach(st: State) -> Rect2:
 	var two := st == State.SWEEP2
 	var box: Rect2 = SWEEP2_BOX if two else SWEEP_BOX
-	var slide: float = SWEEP2_SLIDE if two else SWEEP_SLIDE
-	var extra := slide * slide / (2.0 * 2000.0) + 30.0
+	var slide := RangeTelegraph.slide_distance(SWEEP2_SLIDE if two else SWEEP_SLIDE, SWEEP_DECEL, SWEEP_ACTIVE)
 	var hy: float = hitbox.position.y if hitbox else -60.0
-	return Rect2(box.position.x, hy + box.position.y, box.size.x + extra, box.size.y)
+	return Rect2(box.position.x, hy + box.position.y, box.size.x + slide, box.size.y)
 
 
 ## 구슬이 생기는 자리 = 그림의 지팡이 머리 (예고 고리가 뜨는 곳). 그림이 없으면 머리 위 앞쪽.
@@ -682,6 +781,8 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 	# 슈퍼아머·무너짐 뒤 면역은 보통 공격에만 (저스트 가드로 되받은 구슬 등은 기술의 보상이라 그대로)
 	if _poise_immune <= 0.0 or hit.reflected:
 		var pm := attack_poise_multiplier if (not hit.reflected and state in ATTACK_STATES and attack_phase in ["startup", "active"]) else 1.0
+		if punishing and not hit.reflected:
+			pm = 0.0   # 맞딜 응징(내려찍기)은 끝날 때까지 두들겨 무너뜨릴 수 없다 — 구르기로 빠져야 한다
 		_add_poise(hit.poise * pm)
 	if hp <= 0.0:
 		_fall()
@@ -794,8 +895,11 @@ func _set_state(new_state: State) -> void:
 	state = new_state
 	anim_hint = ""
 	_hint_timer = 0.0
+	punishing = false
 	if new_state not in ATTACK_STATES:
 		attack_phase = ""
+	if _tel:
+		_tel.end()   # 공격이 바뀌거나 끊기면 예고는 걷힌다 (새 근접 공격은 _begin 이 다시 띄운다)
 	state_changed.emit(new_state)
 
 

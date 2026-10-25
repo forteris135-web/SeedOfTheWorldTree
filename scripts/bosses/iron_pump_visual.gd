@@ -543,6 +543,22 @@ func _pose_now(st: IronPump.State, info: Dictionary) -> Dictionary:
 			return _spray_pose(info)
 		IronPump.State.SUCK:
 			return _suck_pose(info)
+		IronPump.State.VENT:
+			# 김 분출 (v1.1.0 맞딜 응징): 예고 동안 몸을 웅크리며 떨고(김이 샌다) → 몸을 펴며 사방으로 김을 뿜는다 → 출렁이며 제자리
+			var kv := boss.phase_progress()
+			info["beat"] = 0.4
+			match boss.attack_phase:
+				"startup":
+					info["drive"] = RigMotion.Drive.SOFT
+					info["tremble"] = 0.2 + 0.6 * kv
+					info["core"] = 0.6 + 0.7 * kv
+					return motion.mix(motion.pose("idle"), motion.pose("broken"), 0.35 * kv)
+				"active":
+					info["drive"] = RigMotion.Drive.QUICK
+					info["core"] = 1.4
+					return motion.pose("stagger")
+			info["drive"] = RigMotion.Drive.SETTLE
+			return motion.mix(motion.pose("stagger"), motion.pose("idle"), Motion.settle(kv, 1.5, 3.0))
 		IronPump.State.STAGGER:
 			# 휘청: 앞 30% 동안 홱 젖혀진 채(팔이 튀어 오름) → 출렁이며 제자리
 			var k := boss.state_progress(boss.stagger_len)
@@ -949,7 +965,7 @@ func _after_update(delta: float, st: IronPump.State, info: Dictionary) -> void:
 		_stream.queue_redraw()   # 켜져 있거나 막 꺼진 프레임만 다시 그린다
 	_stream_on = suck_on
 	# 김·수액
-	_vent.emitting = st == IronPump.State.BROKEN or st == IronPump.State.STAGGER or (st == IronPump.State.FALLEN and _state_t > FALL_CRASH)
+	_vent.emitting = st == IronPump.State.BROKEN or st == IronPump.State.STAGGER or st == IronPump.State.VENT or (st == IronPump.State.FALLEN and _state_t > FALL_CRASH)
 	_drips.emitting = boss.phase == 2 and not down
 	# 점빛 (보스 장면의 Light): 핵 자리를 따라간다
 	if _light:

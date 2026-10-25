@@ -108,11 +108,41 @@ var _wave_aim_up := false
 var _high_time := 0.0
 var _last_attack: int = -1
 var debug_log := false
+## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
+var _tel: RangeTelegraph
+var crowd := CrowdMeter.new(CROWD_RANGE)
+## 지금 공격이 맞딜 응징인가 (응징 공격이 끝날 때까지 흐트러짐이 쌓이지 않는다 — 두들겨 끊거나 되돌림에 무너뜨릴 수 없다)
+var punishing := false
+## 내려찍기: 떨어질 자리 (도약하는 순간 정해진다). 돌진: 판정이 켜진 자리.
+var _slam_x := NAN
+var _slam_y := 0.0
+var _charge_from := Vector2.ZERO
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
 const PROJECTILE := preload("res://scenes/combat/projectile.tscn")
 const SWORD_WAVE := preload("res://scenes/bosses/sword_wave.tscn")
+
+## 근접 판정 (바라보는 쪽 기준, Hitbox 노드(발밑 y -60) 기준). v1.1.0: 공격 범위 예고·이펙트가 이 값을 그대로 쓴다.
+## 앞 450 은 그림의 창끝 자리. 뒤끝은 몸 안쪽(-20)까지 — 몸에 바짝 붙으면 안전하던 자리를 없앤다 (2026-10-19 검수)
+const THRUST_BOX := Rect2(-20, -150, 470, 110)
+const COMBO_BOXES := [Rect2(-20, -150, 470, 110), Rect2(-40, -240, 380, 270), Rect2(0, -330, 320, 350)]
+const WAVE_BOX := Rect2(0, -290, 360, 310)
+const SLAM_BOX := Rect2(-300, -120, 600, 150)
+const SPIN_BOX := Rect2(-230, -330, 460, 350)
+const CHARGE_BOX := Rect2(40, -170, 380, 130)
+## 찌르기·돌진의 움직임 (판정이 켜진 동안 쓸고 가는 거리를 예고가 미리 계산한다)
+const THRUST_SPEED := 380.0
+const THRUST_DECEL := 1800.0
+const THRUST_ACTIVE := 0.18
+## 3연격: 각 타가 시작될 때의 속도, 타격 중 밀고 들어가는 속도와 가속
+const COMBO_KICK := [320.0, 0.0, 200.0]
+const COMBO_PUSH := 240.0
+const COMBO_PUSH_ACCEL := 2600.0
+## 돌진이 아레나 끝(벽 130px 앞)을 넘는 평균 거리 (한 틱 1250/60 의 절반) — 예고 앞끝에 더한다
+const CHARGE_OVERSHOOT := 10.0
+## 맞딜 방지 계량기 (v1.1.0): 이 거리 안에 붙어 있으면 쌓이고, 다 차면 내려찍기
+const CROWD_RANGE := 280.0
 
 ## 3연격 각 타의 예비 / 타격 / 되돌림 길이 (마지막 타는 붉은 예고)
 ## (마지막 올려치기 예비 0.5초: 가드 불가 붉은 예고는 공통 기준 0.45초 이상. 2페이즈에도 줄이지 않는다)
@@ -124,6 +154,9 @@ const COMBO_RECOVERY := [0.08, 0.08, 0.9]
 func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/knight_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
+	_tel = RangeTelegraph.attach(self)
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
+	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
 	_home = global_position
 	visible = false
@@ -155,6 +188,12 @@ func reset_fight() -> void:
 	_last_attack = -1
 	_high_time = 0.0
 	_wave_aim_up = false
+	combo_step = 0
+	rings_sent = 0
+	_leapt = false
+	_wave_sent = false
+	crowd.reset()
+	_tel.clear()
 	_set_state(State.WAIT)
 	hp_changed.emit(hp, max_hp)
 	poise_changed.emit(poise, max_poise)
@@ -180,6 +219,10 @@ func _physics_process(delta: float) -> void:
 		_high_time += delta
 	else:
 		_high_time = 0.0
+	if player:
+		# 맞딜 방지: 공격할 수 있는 동안 몸 가까이 붙어 있으면 쌓인다 (박힘·휘청·무너짐 = 빈틈에는 쌓이지 않는다)
+		# (응징 공격 동안에도 쌓인다 — 내려찍기를 맞고도 계속 붙어 있으면 또 내려찍는다. 구르기로 빠지면 식는다)
+		crowd.tick(delta, global_position, player.global_position, state in [State.MARCH] or state in ATTACK_STATES, facing)
 	var fast := 0.75 if phase == 2 else 1.0
 	match state:
 		State.INTRO:
@@ -199,10 +242,9 @@ func _physics_process(delta: float) -> void:
 		State.THRUST:
 			_phase_step(delta, 0.55 * fast, 0.18, 0.7 * fast, func() -> void:
 				var hit := HitData.make(thrust_damage, 0.0, self, Vector2(520, -160))
-				# 앞 450 은 그림의 창끝 자리. 뒤끝은 몸 안쪽(-20)까지 — 몸에 바짝 붙으면 안전하던 자리를 없앤다 (2026-10-19 검수)
-				hitbox.set_box(Rect2(-20, -150, 470, 110), facing)
-				hitbox.activate(hit, 0.18)
-				velocity.x = facing * 380.0
+				hitbox.set_box(THRUST_BOX, facing)
+				hitbox.activate(hit, THRUST_ACTIVE)
+				velocity.x = facing * THRUST_SPEED
 				Sfx.play("spear_whoosh", -4.0, 0.08),
 				func() -> void:
 					# 2페이즈 연계: 찌르기 → 검기 (저스트 가드로 창이 튕겼으면 연계 없이 행진 — 튕김 보상이 줄지 않게)
@@ -211,7 +253,7 @@ func _physics_process(delta: float) -> void:
 					else:
 						_to_march())
 			if attack_phase == "active":
-				velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
+				velocity.x = move_toward(velocity.x, 0.0, THRUST_DECEL * delta)
 			else:
 				velocity.x = move_toward(velocity.x, 0.0, 2500.0 * delta)
 		State.FLAME:
@@ -238,6 +280,8 @@ func _physics_process(delta: float) -> void:
 				if player:
 					target_x = clampf(player.global_position.x, arena.position.x + 150.0, arena.end.x - 150.0)
 				velocity = Vector2(clampf((target_x - global_position.x) / T, -720.0, 720.0), -gravity * T * 0.5)
+				_slam_x = global_position.x + velocity.x * T   # 떨어질 자리 (예고가 여기로 옮겨 굳는다)
+				_slam_y = global_position.y
 				Sfx.play("jump", -6.0, 0.1)
 			elif attack_phase == "startup" and _leapt and not is_on_floor():
 				pass   # 공중: 가로 속도 유지
@@ -247,7 +291,7 @@ func _physics_process(delta: float) -> void:
 				var hit := HitData.make(slam_damage, 0.0, self, Vector2(700, -320))
 				hit.guardable = false
 				hit.hitstop = 0.08
-				hitbox.set_box(Rect2(-300, -120, 600, 150), 1)
+				hitbox.set_box(SLAM_BOX, 1)
 				hitbox.activate(hit, 0.25)
 				if not is_on_floor():
 					velocity.y = maxf(velocity.y, 900.0)
@@ -263,7 +307,7 @@ func _physics_process(delta: float) -> void:
 			velocity.x = move_toward(velocity.x, 0.0, 2500.0 * delta)
 			_phase_step(delta, 0.65 * fast, 0.22, 0.8 * fast, func() -> void:
 				var hit := HitData.make(wave_damage, 0.0, self, Vector2(480, -200))
-				hitbox.set_box(Rect2(0, -290, 360, 310), facing)
+				hitbox.set_box(WAVE_BOX, facing)
 				hitbox.activate(hit, 0.2)
 				_wave_sent = false
 				Sfx.play("spear_whoosh", -4.0, 0.08),
@@ -281,8 +325,8 @@ func _physics_process(delta: float) -> void:
 				Sfx.play("sword_wave", -2.0, 0.06)
 		State.COMBO3:
 			# 타마다 조금씩 앞으로 밀고 들어간다
-			var push := 240.0 if attack_phase == "active" else 0.0
-			velocity.x = move_toward(velocity.x, facing * push, 2600.0 * delta)
+			var push := COMBO_PUSH if attack_phase == "active" else 0.0
+			velocity.x = move_toward(velocity.x, facing * push, COMBO_PUSH_ACCEL * delta)
 			var s := combo_step
 			_phase_step(delta, COMBO_STARTUP[s] * (fast if s == 0 else 1.0), COMBO_ACTIVE[s], COMBO_RECOVERY[s] * (fast if s == 2 else 1.0),
 				_combo_hit, _combo_next)
@@ -301,7 +345,8 @@ func _physics_process(delta: float) -> void:
 				_phase_step(delta, 0.75 * fast, 2.6, 0.5, func() -> void:
 					var hit := HitData.make(charge_damage, 0.0, self, Vector2(560, -220))
 					hit.hitstop = 0.06
-					hitbox.set_box(Rect2(40, -170, 380, 130), facing)
+					_charge_from = global_position
+					hitbox.set_box(CHARGE_BOX, facing)
 					hitbox.activate(hit, 2.6)
 					Sfx.play("charge_dash", -2.0, 0.05))
 		State.STUCK:
@@ -314,7 +359,7 @@ func _physics_process(delta: float) -> void:
 			velocity.x = move_toward(velocity.x, 0.0, 2500.0 * delta)
 			_phase_step(delta, 0.8 * fast, spin_active, 0.7 * fast, func() -> void:
 				var hit := HitData.make(spin_damage, 0.0, self, Vector2(420, -200))
-				hitbox.set_box(Rect2(-230, -330, 460, 350), 1)
+				hitbox.set_box(SPIN_BOX, 1)
 				hitbox.activate(hit, spin_active)
 				rings_sent = 0
 				Sfx.play("spear_whoosh", -3.0, 0.1))
@@ -342,6 +387,9 @@ func _physics_process(delta: float) -> void:
 			velocity.x = 0.0
 			_update_interactable()
 	move_and_slide()
+	# 공격 범위 예고는 예비동작 동안 판정이 덮을 자리를 따라간다 (뒤로 물러나는 돌진·도약하는 내려찍기 포함)
+	if attack_phase == "startup" and _tel.is_showing():
+		_tel.update_rect(melee_reach())
 
 
 ## 예고 → 실행 → 회복의 공통 흐름. on_active 는 실행 순간 한 번, on_done 은 회복이 끝날 때 한 번 불린다(없으면 행진으로).
@@ -353,6 +401,7 @@ func _phase_step(delta: float, startup: float, active: float, recovery: float, o
 				attack_phase = "active"
 				_timer = active
 				active_len = active
+				_tel.end()
 				on_active.call()
 		"active":
 			if _timer <= 0.0:
@@ -367,9 +416,13 @@ func _phase_step(delta: float, startup: float, active: float, recovery: float, o
 					_to_march()
 
 
+## 2페이즈 쉬는 시간 배수 (v1.1.0 맞딜 방지 사다리 4단계: 2페이즈 공격 사이 쉬는 시간 −15%)
+const P2_REST_MULT := 0.85
+
+
 func _to_march() -> void:
 	_set_state(State.MARCH)
-	_timer = (0.5 if phase == 1 else 0.3) + randf() * 0.3
+	_timer = (0.5 + randf() * 0.3) if phase == 1 else (0.3 + randf() * 0.3) * P2_REST_MULT
 
 
 ## 소녀 쪽으로 몸을 돌린다 — 데드존 + 최소 유지 시간 (바로 옆을 지나쳐도 매 프레임 뒤집히지 않게).
@@ -401,6 +454,74 @@ func _begin(st: State, startup: float) -> void:
 	_timer = startup
 	startup_len = startup
 	_leapt = false
+	_slam_x = NAN
+	_show_telegraph()
+
+
+## 근접 공격의 공격 범위 예고를 띄운다 (등불 휘두르기·던지기는 근접 판정이 없어 예고도 없다 — 불꽃·불기둥은 따로 알린다)
+func _show_telegraph() -> void:
+	if state in [State.FLAME, State.THROW]:
+		_tel.end()
+		return
+	_tel.show_rect(melee_reach(), is_red() or (state == State.COMBO3 and combo_step == 2) or state == State.SLAM, startup_len)
+
+
+## 지금 근접 공격의 판정이 덮을 월드 사각형 (움직이는 공격은 판정이 켜진 동안 쓸고 갈 구간 전체).
+## 공격 범위 예고·이펙트·시험이 같은 값을 쓴다. 근접 판정이 없는 상태면 빈 사각형.
+func melee_reach() -> Rect2:
+	match state:
+		State.THRUST:
+			return RangeTelegraph.box_world(hitbox, THRUST_BOX, facing, RangeTelegraph.slide_distance(THRUST_SPEED, THRUST_DECEL, THRUST_ACTIVE, true),
+				RangeTelegraph.slide_first(THRUST_SPEED, THRUST_DECEL, true))
+		State.COMBO3:
+			var s := clampi(combo_step, 0, 2)
+			return RangeTelegraph.box_world(hitbox, COMBO_BOXES[s], facing, _combo_slide(s), float(COMBO_KICK[s]) / 60.0)
+		State.WAVE:
+			return RangeTelegraph.box_world(hitbox, WAVE_BOX, facing)
+		State.SPIN:
+			return RangeTelegraph.box_world(hitbox, SPIN_BOX, 1)
+		State.SLAM:
+			var lx := _slam_x
+			if is_nan(lx):
+				lx = _predict_slam_x()
+			var r := RangeTelegraph.box_world(hitbox, SLAM_BOX, 1)
+			var dy := (_slam_y - global_position.y) if not is_nan(_slam_x) else 0.0
+			return Rect2(r.position + Vector2(lx - global_position.x, dy), r.size)
+		State.CHARGE:
+			var from := global_position if attack_phase == "startup" else _charge_from
+			var edge := (arena.end.x - 130.0) if facing > 0 else (arena.position.x + 130.0)
+			var dist := maxf((edge - from.x) * facing, 0.0) + CHARGE_OVERSHOOT
+			var r0 := RangeTelegraph.box_world(hitbox, CHARGE_BOX, facing)
+			r0.position += from - global_position
+			return r0.merge(Rect2(r0.position + Vector2(dist * facing, 0.0), r0.size))
+	return Rect2()
+
+
+## 돌진 판정 상자 (이펙트 관찰자가 창끝 불빛을 맞춘다)
+func charge_box() -> Rect2:
+	return CHARGE_BOX
+
+
+## 내려찍기의 떨어질 자리 예측 (도약 전): 도약은 예비 30% 에 남은 시간 T 동안 소녀 쪽으로 (가로 속도 최대 720).
+func _predict_slam_x() -> float:
+	var T := maxf(startup_len * 0.7, 0.2)
+	var target_x := global_position.x
+	if player:
+		target_x = clampf(player.global_position.x, arena.position.x + 150.0, arena.end.x - 150.0)
+	return global_position.x + clampf((target_x - global_position.x) / T, -720.0, 720.0) * T
+
+
+## 3연격 한 타가 판정이 켜진 동안 앞으로 밀고 들어가는 거리 (한 틱 순서 그대로: 타격 시작 틱엔 첫 속도, 그 뒤 COMBO_PUSH 로 가속;
+## 판정이 꺼지기 한 틱 전까지 — 판정이 마지막으로 닿는 자리)
+func _combo_slide(s: int) -> float:
+	var dt := 1.0 / 60.0
+	var v: float = COMBO_KICK[s]
+	var d := v * dt
+	var n := maxi(int(roundf(float(COMBO_ACTIVE[s]) / dt)) - 1, 1)
+	for i in n - 1:
+		v = move_toward(v, COMBO_PUSH, COMBO_PUSH_ACCEL * dt)
+		d += v * dt
+	return d
 
 
 ## 거리·페이즈별 가중치로 패턴을 고른다. 같은 패턴은 연속 2회 금지.
@@ -414,6 +535,12 @@ func _choose_attack(dist: float) -> void:
 		if want != facing:
 			facing = want
 			_face_hold = face_hold
+	if crowd.ready():
+		# 맞딜 방지 (v1.1.0): 몸에 붙어 버티는 소녀에게 내려찍기 (붉은 예고·가드 불가 — 구르기로 빠져야 한다)
+		crowd.consume()
+		_start_attack(State.SLAM)
+		punishing = true
+		return
 	if _high_time > high_time:
 		# 소녀가 높은 가지 위에서 버틴다: 검기를 소녀 쪽으로 올려 쏜다 (2페이즈는 등불 던지기도)
 		# (같은 패턴 연속 금지보다 우선 — 버티는 동안은 검기가 이어질 수 있다)
@@ -510,22 +637,22 @@ func _combo_hit() -> void:
 	match combo_step:
 		0:
 			var hit := HitData.make(dmg, 0.0, self, Vector2(420, -140))
-			hitbox.set_box(Rect2(-20, -150, 470, 110), facing)
+			hitbox.set_box(COMBO_BOXES[0], facing)
 			hitbox.activate(hit, COMBO_ACTIVE[0])
-			velocity.x = facing * 320.0
+			velocity.x = facing * COMBO_KICK[0]
 			Sfx.play("spear_whoosh", -5.0, 0.1)
 		1:
 			var hit := HitData.make(dmg, 0.0, self, Vector2(460, -200))
-			hitbox.set_box(Rect2(-40, -240, 380, 270), facing)
+			hitbox.set_box(COMBO_BOXES[1], facing)
 			hitbox.activate(hit, COMBO_ACTIVE[1])
 			Sfx.play("spear_whoosh", -3.0, 0.1)
 		2:
 			var hit := HitData.make(dmg, 0.0, self, Vector2(380, -560))
 			hit.guardable = false
 			hit.hitstop = 0.07
-			hitbox.set_box(Rect2(0, -330, 320, 350), facing)
+			hitbox.set_box(COMBO_BOXES[2], facing)
 			hitbox.activate(hit, COMBO_ACTIVE[2])
-			velocity.x = facing * 200.0
+			velocity.x = facing * COMBO_KICK[2]
 			_red = false
 			Juice.shake(9.0)
 			Juice.rumble(0.5, 0.9, 0.2)
@@ -545,6 +672,7 @@ func _combo_next() -> void:
 	if combo_step == 2:
 		_red = true
 		telegraph.emit("combo3")
+	_show_telegraph()
 
 
 ## 돌진 창이 아레나 끝(벽)에 박힌다: STUCK 동안 무방비.
@@ -568,8 +696,9 @@ func _spawn_flame_wave(dir: int) -> void:
 	p.lifetime = 2.2
 	p.size = Vector2(70, 48)
 	p.color = Color(1.0, 0.6, 0.25)
-	_flame_look(p, 1.6)
+	_flame_look(p)
 	p.look = "knight_flame"   # 이펙트 리뉴얼 F2: 불꽃 초승달 그림
+	_pierce(p)
 	get_parent().add_child(p)
 	p.global_position = global_position + Vector2(dir * 120.0, -30.0)
 	p.launch(Vector2(dir, 0), self, false)
@@ -577,7 +706,7 @@ func _spawn_flame_wave(dir: int) -> void:
 
 ## 검기: 1페이즈 한 갈래(땅을 따라), 2페이즈 세 갈래(땅 + 비스듬히 위 둘).
 ## 높은 곳 견제(_wave_aim_up)면 소녀 쪽으로 올려 쏜다 (2페이즈는 그 둘레로 세 갈래).
-## 생기는 자리가 벽·안개 문 너머면(기사→생기는 자리 사이가 지형에 막히면) 막힌 자리 앞에서 만들고, 그럴 틈도 없으면 쏘지 않는다.
+## v1.1.0 (기획자 요청 4): 보스 투사체는 지형을 뚫으므로 벽 앞으로 당기거나 거르지 않는다 (검기는 언제나 나간다).
 func _spawn_sword_waves() -> void:
 	var dirs: Array[Vector2] = []
 	var starts: Array[Vector2] = []
@@ -596,17 +725,8 @@ func _spawn_sword_waves() -> void:
 		for a in angles:
 			dirs.append(Vector2(facing, 0).rotated(float(a) * facing))
 			starts.append(Vector2(global_position.x + facing * 150.0, ground_y - 75.0 - (0.0 if a == 0.0 else 40.0)))
-	var space := get_world_2d().direct_space_state
 	for i in dirs.size():
 		var pos := starts[i]
-		# 기사 몸 → 생기는 자리 사이에 벽·문(한쪽 발판 말고)이 있으면 그 앞으로 당긴다
-		var ray := PhysicsRayQueryParameters2D.create(Vector2(global_position.x, pos.y), pos, 1)
-		ray.exclude = [get_rid()]
-		var hit := space.intersect_ray(ray)
-		if not hit.is_empty() and not SwordWave.passes_through(hit.get("collider")):
-			pos = hit["position"] - Vector2(facing * 50.0, 0)
-			if (pos.x - global_position.x) * facing < 10.0:
-				continue
 		var w: SwordWave = SWORD_WAVE.instantiate()
 		w.damage = wave_damage
 		w.speed = 760.0 if phase == 1 else 840.0
@@ -626,8 +746,9 @@ func _spawn_ring(i: int) -> void:
 		p.lifetime = 2.2
 		p.size = Vector2(84, 42)
 		p.color = Color(1.0, 0.55 + 0.1 * i, 0.2)
-		_flame_look(p, 1.6)
+		_flame_look(p)
 		p.look = "knight_flame"
+		_pierce(p)
 		get_parent().add_child(p)
 		p.global_position = Vector2(global_position.x + dir * 90.0, ground_y - 28.0)
 		p.launch(Vector2(dir, 0), self, false)
@@ -647,6 +768,9 @@ func _throw_lantern() -> void:
 	p.size = Vector2(44, 44)
 	p.color = Color(1.0, 0.7, 0.3)
 	p.pass_one_way = true   # 가운데 가지에 걸리지 않고 소녀 발밑 바닥까지 떨어진다
+	# v1.1.0: 가지·돌·벽을 모두 뚫고, 바닥(ground_y)에 닿는 순간 '내려앉아' landed → 불기둥
+	p.pierce_terrain = true
+	p.floor_y = ground_y
 	p.look = "knight_lantern"   # 이펙트 리뉴얼 F2: 등불 그림
 	get_parent().add_child(p)
 	p.global_position = global_position + Vector2(facing * 80.0, -170.0)
@@ -660,10 +784,16 @@ func _throw_lantern() -> void:
 	p.landed.connect(_on_lantern_landed)
 
 
+## v1.1.0 (기획자 요청 4): 보스 투사체는 지형을 뚫고 지나간다. 바닥 아래(아무도 맞을 수 없는 곳)로 내려가면 사라진다.
+func _pierce(p: Projectile) -> void:
+	p.pierce_terrain = true
+	p.floor_y = ground_y + p.hit_radius() + 4.0
+
+
 ## 불꽃(파도·고리·불기둥) 그림: 기사 몸과 같은 주황이라 바닥을 달리는 작은 초승달이 몸에 섞여 안 보였다 (2026-10-19 검수)
-## → 그림만 키우고(판정 그대로) 밝은 노란 테두리와 발광.
-func _flame_look(p: Projectile, scale_k: float) -> void:
-	p.draw_scale = scale_k
+## → 밝은 노란 테두리와 발광. v1.1.0 (명세 3.6): 예전엔 그림을 1.6배(불기둥 1.3배) 키웠으나, 보이는 그림 = 판정 반경 ±20% 로
+## 맞추며 그림 크기는 그림 묶음(fx_art.gd 의 knight_flame·knight_pillar)이 정한다.
+func _flame_look(p: Projectile) -> void:
 	p.outline_color = Color(1.0, 0.95, 0.6, 1.0)
 	p.glow = 1.2
 
@@ -701,18 +831,25 @@ func _aim_lantern(from: Vector2, target_x: float, grav: float, life: float) -> A
 const PILLAR_WARN := 0.3
 
 
-## 던진 등불이 지형에 닿았다: 바닥 같은 면이면 그 자리, 벽에 부딪혔으면 그 아래 바닥(싸움터 안)에 예고 → 불기둥.
+## 불기둥 판정 원의 반지름 (투사체 size 90×160 → 160×0.6) — 바닥 예고 타원의 반폭도 이 값 (v1.1.0: 예고 = 판정)
+const PILLAR_RADIUS := 96.0
+## 예고 타원이 0.6 → 1.25 배로 커지며 나타난다 (끝 크기 = PILLAR_RADIUS)
+const PILLAR_MARK_END_SCALE := 1.25
+
+
+## 던진 등불이 바닥에 닿았다 (v1.1.0: 등불은 가지·벽을 뚫고 바닥선 ground_y 에서 내려앉는다): 그 자리(싸움터 안)에 예고 → 불기둥.
 func _on_lantern_landed(pos: Vector2, normal: Vector2) -> void:
 	if state == State.FALLEN or state == State.PURIFIED or state == State.WAIT:
 		return
-	var at := pos
+	var at := Vector2(clampf(pos.x, arena.position.x + 60.0, arena.end.x - 60.0), pos.y)
 	if normal.y > -0.5:
-		at = Vector2(clampf(pos.x, arena.position.x + 60.0, arena.end.x - 60.0), ground_y)
+		at.y = ground_y
 	var mark := Polygon2D.new()
 	var pts := PackedVector2Array()
+	var rx := PILLAR_RADIUS / PILLAR_MARK_END_SCALE
 	for i in 20:
 		var a := TAU * i / 20.0
-		pts.append(Vector2(cos(a) * 62.0, sin(a) * 14.0))
+		pts.append(Vector2(cos(a) * rx, sin(a) * rx * 0.22))
 	mark.polygon = pts
 	# 불기둥은 가드할 수 있다 → 예고도 주황(불꽃) 빛. '진한 붉은빛 = 가드 불가' 원칙(기획서 8장)에 맞춘다 (2026-10-20 QA)
 	mark.color = Color(1.0, 0.55, 0.15, 0.0)
@@ -722,7 +859,7 @@ func _on_lantern_landed(pos: Vector2, normal: Vector2) -> void:
 	Fx.spawn("danger_ring", at, {"life": PILLAR_WARN + 0.1, "palette": "fire"})   # 이펙트 리뉴얼 F2: 예고 고리 (가드 가능 → 주황)
 	var tw := mark.create_tween()
 	tw.tween_property(mark, "color:a", 0.75, PILLAR_WARN * 0.6)
-	tw.parallel().tween_property(mark, "scale", Vector2(1.25, 1.25), PILLAR_WARN).from(Vector2(0.6, 0.6))
+	tw.parallel().tween_property(mark, "scale", Vector2(PILLAR_MARK_END_SCALE, PILLAR_MARK_END_SCALE), PILLAR_WARN).from(Vector2(0.6, 0.6))
 	get_tree().create_timer(PILLAR_WARN, false).timeout.connect(_spawn_pillar.bind(at, mark))
 
 
@@ -739,8 +876,9 @@ func _spawn_pillar(at: Vector2, mark: Node) -> void:
 	pillar.lifetime = 0.8
 	pillar.size = Vector2(90, 160)
 	pillar.color = Color(1.0, 0.55, 0.2)
-	_flame_look(pillar, 1.3)
+	_flame_look(pillar)
 	pillar.look = "knight_pillar"   # 이펙트 리뉴얼 F2: 불기둥 그림
+	pillar.pierce_terrain = true
 	Fx.spawn("fire_pillar_burst", at)
 	get_parent().add_child(pillar)
 	pillar.global_position = at + Vector2(0, -70.0)
@@ -762,6 +900,8 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 	# 슈퍼아머·무너짐 뒤 면역은 보통 공격에만 (저스트 가드로 되받은 검기·불꽃은 기술의 보상이라 그대로 들어간다)
 	if not hit.reflected and state in ATTACK_STATES and attack_phase in ["startup", "active"]:
 		poise_mult *= attack_poise_multiplier
+	if punishing and not hit.reflected:
+		poise_mult = 0.0   # 맞딜 응징(내려찍기)은 끝날 때까지 두들겨 무너뜨릴 수 없다 — 구르기로 빠져야 한다
 	hp = maxf(hp - hit.damage * mult, 0.0)
 	hp_changed.emit(hp, max_hp)
 	if _poise_immune <= 0.0 or hit.reflected:
@@ -900,9 +1040,12 @@ func _set_state(new_state: State) -> void:
 		print("[기사] %s → %s" % [State.keys()[state], State.keys()[new_state]])
 	state = new_state
 	anim_hint = ""
+	punishing = false
 	if new_state not in ATTACK_STATES:
 		attack_phase = ""
 		_red = false
+	if _tel:
+		_tel.end()   # 공격이 바뀌거나 끊기면 예고는 걷힌다 (새 공격은 _begin 이 다시 띄운다)
 	state_changed.emit(new_state)
 
 

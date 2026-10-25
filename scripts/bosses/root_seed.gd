@@ -23,7 +23,7 @@ const FALL_HEIGHT := 1000.0
 ## 그림: 씨앗 몸(UV y)이 판정 가운데에 오게, 배율
 const ART := "seed_fall"
 const ART_SEED_V := 0.8
-const ART_SCALE := 0.78
+const ART_SCALE := 0.62   # v1.1.0: 보이는 반경 ≈ 판정 SEED_R ×1.1 (예전 0.78 은 1.41배)
 const BURST := 0.35
 const BURST_RADIUS := 70.0
 const SEED_R := 28.0

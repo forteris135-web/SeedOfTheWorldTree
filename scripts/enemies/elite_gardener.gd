@@ -70,7 +70,7 @@ func _shoot() -> void:
 	get_parent().add_child(p)
 	var origin := shot_origin(global_position + Vector2(facing * 70.0 * EliteTraits.SIZE_MULT, -hurt_height * 0.55))   # 뼈대 대롱 끝
 	p.global_position = origin
-	var dir := (player.global_position + Vector2(0, -40) - origin).normalized()
+	var dir := _forward_aim((player.global_position + Vector2(0, -40) - origin).normalized())   # 등 뒤로는 쏘지 않는다 (v1.1.0)
 	p.launch(dir, self, false)
 	Fx.spawn("seed_muzzle", origin, {"rot": rad_to_deg(dir.angle()), "scale": 1.3})
 	_shot += 1

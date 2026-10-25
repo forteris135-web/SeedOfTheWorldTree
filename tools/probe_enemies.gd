@@ -32,6 +32,7 @@ func _ready() -> void:
 	_probe_fall_feet()
 	_probe_broken_feet()
 	_probe_fall_finish()
+	_probe_forward_aim()
 	print("[probe] 끝: 실패 %d" % _fail)
 	get_tree().quit(1 if _fail > 0 else 0)
 
@@ -585,3 +586,17 @@ func _probe_fall_finish() -> void:
 	for c in get_children():
 		if c is Node2D and not (c is EnemyBase):
 			c.free()
+
+
+## v1.1.0 쏘는 몹의 겨냥 (EnemyBase._forward_aim): 등 뒤로는 쏘지 않되, 앞쪽 거의 바로 위의 소녀는 위로 겨눈 그대로
+func _probe_forward_aim() -> void:
+	var e := _spawn("res://scenes/enemies/gardener.tscn")
+	e.facing = 1
+	var up := e._forward_aim(Vector2(0.05, -1.0).normalized())
+	var front := e._forward_aim(Vector2(0.8, -0.6))
+	var back := e._forward_aim(Vector2(-0.8, -0.6))
+	print("[probe] 겨냥: 앞 위 %s, 앞 비스듬히 %s, 등 뒤 %s" % [up, front, back])
+	_check(up.x >= 0.14 and up.y < -0.98, "앞쪽 거의 바로 위의 소녀: 위로 겨눈 그대로 (가로만 0.15) — 예전엔 24° 로 접혔다")
+	_check(front.is_equal_approx(Vector2(0.8, -0.6)), "앞쪽 비스듬한 겨냥은 그대로")
+	_check(back.x > 0.85 and absf(back.y) <= 0.45, "등 뒤 겨냥은 앞으로 곧게 접는다 (위아래 ±0.45)")
+	e.free()

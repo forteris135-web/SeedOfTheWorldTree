@@ -17,7 +17,14 @@ func _physics_process(delta: float) -> void:
 	# 바탕 상태 기계를 쓰되, 공격 판단만 바꾼다
 	if state == State.CHASE and player and _sees_player(notice_range * 1.4):
 		var dx := player.global_position.x - global_position.x
-		facing = 1 if dx > 0.0 else -1
+		# v1.1.0: 등 뒤로 간 소녀에게는 turn_delay(0.5초) 뒤에 돌아선다. 도는 동안은 멈칫 (물러나지도 쏘지도 않는다)
+		if _turn_toward_player(delta) != facing:
+			_tick_common(delta)
+			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+			if not is_on_floor():
+				velocity.y += gravity * delta
+			move_and_slide()
+			return
 		if absf(dx) < keep_distance and _can_walk(-facing):
 			# 뒤로 물러난다 (그림은 이동 방향·공중 여부를 보고 스스로 뒷걸음·폴짝 자세를 잡는다)
 			_tick_common(delta)
@@ -64,7 +71,7 @@ func _shoot() -> void:
 	get_parent().add_child(p)
 	var origin := shot_origin(global_position + Vector2(facing * 70.0, -hurt_height * 0.55))   # 뼈대 대롱 끝 (2026-10-20)
 	p.global_position = origin
-	var dir := (player.global_position + Vector2(0, -40) - origin).normalized()
+	var dir := _forward_aim((player.global_position + Vector2(0, -40) - origin).normalized())   # 등 뒤로는 쏘지 않는다 (v1.1.0)
 	p.launch(dir, self, false)
 	Fx.spawn("seed_muzzle", origin, {"rot": rad_to_deg(dir.angle())})
 	_shot += 1

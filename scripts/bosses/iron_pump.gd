@@ -14,8 +14,9 @@ class_name IronPump
 ## BossRoom 과 맞추는 약속: start_fight / reset_fight / arena / ground_y / fallen / purified / hp_changed / poise_changed
 ##   / phase_changed / telegraph(kind) / telegraph_label(kind) / state_name / debug_log / is_ground / receive_hit / hp / poise / phase / facing
 
-enum State { WAIT, INTRO, IDLE, PISTON, SPRAY, SUCK, STAGGER, BROKEN, FALLEN, PURIFIED }
-const ATTACK_STATES := [State.PISTON, State.SPRAY, State.SUCK]
+## VENT (v1.1.0 맞딜 방지): 몸에 붙어 버티는 소녀에게 몸 둘레로 김을 뿜는다 (가드 가능, 저스트 가드로 받아칠 수 없음).
+enum State { WAIT, INTRO, IDLE, PISTON, SPRAY, SUCK, STAGGER, BROKEN, FALLEN, PURIFIED, VENT }
+const ATTACK_STATES := [State.PISTON, State.SPRAY, State.SUCK, State.VENT]
 ## 1페이즈의 고정 순서
 const CYCLE := [State.PISTON, State.SPRAY, State.SUCK]
 ## 보스곡 한 박. 예고·쉼은 이 박의 배수 (재생 위치에 맞추지는 않고 길이만 곡의 박과 같게 — 여왕과 달리 박자 동기화는 없다).
@@ -41,6 +42,9 @@ signal slammed
 @export var poise_decay := 6.0
 @export var broken_time := 5.0
 @export var broken_damage_multiplier := 2.0
+## 장갑이 깨졌다 다시 닫힌 뒤 이 시간(초) 동안은 장갑 게이지가 쌓이지 않는다 (v1.1.0 맞딜 방지 — 기사·뿌리지기와 같은 규칙.
+## 되받은 분사는 기술의 보상이라 그대로)
+@export var poise_immune_after_broken := 2.5
 ## 약공격(흐트러짐 45 미만, 되받은 분사 아님)의 피해·장갑 비율
 @export var light_damage_ratio := 0.35
 @export var light_poise_ratio := 0.5
@@ -67,6 +71,17 @@ signal slammed
 @export var face_hold := 0.3
 
 const HEAVY_POISE := 45.0
+## 근접 판정 (바라보는 쪽 기준, Hitbox 노드(발밑 y -60) 기준). v1.1.0: 공격 범위 예고·이펙트가 이 값을 그대로 쓴다.
+## 피스톤: 보이는 망치 머리 자리(앞 약 220~340px). 그 너머는 양쪽으로 달리는 충격파(점프로 넘김)가 맡는다.
+const PISTON_BOX := Rect2(150, -190, 220, 220)
+const BITE_BOX := Rect2(40, -230, 320, 250)
+## 김 분출: 몸 가운데 둘레 (발밑 기준 x -260..260, y -300..0) — 몸 안쪽(앞 40 안)이 피스톤·물기의 사각이던 안전지대를 없앤다
+const VENT_BOX := Rect2(-260, -240, 520, 300)
+const VENT_DAMAGE := 20.0
+## 맞딜 방지 계량기 (v1.1.0): 이 거리 안에 붙어 있으면 쌓이고, 다 차면 김 분출
+const CROWD_RANGE := 320.0
+## 2페이즈 쉬는 시간 배수 (v1.1.0 맞딜 방지 사다리 4단계: 2페이즈 공격 사이 쉬는 시간 −15%)
+const P2_REST_MULT := 0.85
 const PROJECTILE := preload("res://scenes/combat/projectile.tscn")
 ## 빨아들이기의 끌림 기록 (시험용: 이번 빨아들이기에서 소녀를 끌어당긴 거리 px)
 var pulled := 0.0
@@ -107,6 +122,10 @@ var _shot_timer := 0.0
 var _bit := false
 var _spurts_pending := 0
 var _idle_gap := 2.0 * BEAT
+## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
+var _tel: RangeTelegraph
+var crowd := CrowdMeter.new(CROWD_RANGE)
+var _poise_immune := 0.0
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -115,6 +134,9 @@ var _idle_gap := 2.0 * BEAT
 func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/iron_pump_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
+	_tel = RangeTelegraph.attach(self)
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
+	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
 	_home = global_position
 	visible = false
@@ -142,6 +164,13 @@ func reset_fight() -> void:
 	global_position = _home
 	_cycle = 0
 	_spurts_pending = 0
+	_idle_gap = 2.0 * BEAT
+	_last_attack = State.WAIT
+	_shots_left = 0
+	_bit = false
+	_poise_immune = 0.0
+	crowd.reset()
+	_tel.clear()
 	_set_state(State.WAIT)
 	hp_changed.emit(hp, max_hp)
 	poise_changed.emit(poise, max_poise)
@@ -161,6 +190,11 @@ func _physics_process(delta: float) -> void:
 		velocity.y = 0.0
 	_timer -= delta
 	_face_hold = maxf(_face_hold - delta, 0.0)
+	_poise_immune = maxf(_poise_immune - delta, 0.0)
+	if player:
+		# 맞딜 방지: 공격할 수 있는 동안 몸 가까이 붙어 있으면 쌓인다 (휘청·장갑 깨짐 = 빈틈에는 쌓이지 않는다)
+		# 빨아들이기(소녀를 끌어당김 — 스스로 붙은 것이 아니다)와 김 분출(응징 자체) 동안은 쌓지 않는다
+		crowd.tick(delta, global_position, player.global_position, state in [State.IDLE, State.PISTON, State.SPRAY], facing)
 	match state:
 		State.INTRO:
 			velocity.x = 0.0
@@ -205,6 +239,9 @@ func _physics_process(delta: float) -> void:
 				elif not _bit:
 					_bit = true
 					_bite()
+		State.VENT:
+			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+			_phase_step(delta, 0.25, func() -> void: _vent())
 		State.STAGGER:
 			velocity.x = move_toward(velocity.x, 0.0, 900.0 * delta)
 			if _timer <= 0.0:
@@ -215,12 +252,16 @@ func _physics_process(delta: float) -> void:
 			if _timer <= 0.0:
 				poise = 0.0
 				poise_changed.emit(poise, max_poise)
+				_poise_immune = poise_immune_after_broken
 				_set_state(State.IDLE)
 				_timer = BEAT
 		State.FALLEN:
 			velocity.x = 0.0
 			_update_interactable()
 	move_and_slide()
+	# 공격 범위 예고는 예비동작(빨아들이기는 물기 직전까지) 동안 판정이 덮을 자리를 따라간다
+	if _tel.is_showing() and (attack_phase == "startup" or (state == State.SUCK and attack_phase == "active")):
+		_tel.update_rect(melee_reach())
 
 
 ## 빨아들이기: 소녀를 관 쪽으로 suck_pull px/s 만큼 옮긴다 (벽·지형에는 막힌다). 관 바로 앞(120px)까지만.
@@ -245,6 +286,8 @@ func _phase_step(delta: float, active: float, on_active: Callable) -> void:
 				attack_phase = "active"
 				_timer = active
 				active_len = active
+				if state != State.SUCK:
+					_tel.end()   # 빨아들이기의 물기 예고는 끌어당기는 동안 이어지다 물 때 걷힌다 (_bite)
 				on_active.call()
 		"active":
 			if _timer <= 0.0:
@@ -286,12 +329,60 @@ func _begin(st: State, startup: float, recovery: float) -> void:
 	_timer = startup
 	startup_len = startup
 	recovery_len = recovery
-	_last_attack = st
+	if st != State.VENT:
+		_last_attack = st
 	attack_log.append(State.keys()[st])
+	# v1.1.0: 근접 공격(피스톤·물기·김 분출)은 판정과 같은 사각형으로 공격 범위를 예고한다 (분사는 투사체라 따로)
+	match st:
+		State.PISTON:
+			_tel.show_rect(melee_reach(), true, startup)
+		State.SUCK:
+			_tel.show_rect(melee_reach(), false, startup + suck_time)
+		State.VENT:
+			_tel.show_rect(melee_reach(), false, startup)
+
+
+## 지금 근접 공격의 판정이 덮을 월드 사각형 (공격 범위 예고·이펙트·시험이 같은 값을 쓴다). 근접 공격이 아니면 빈 사각형.
+func melee_reach() -> Rect2:
+	match state:
+		State.PISTON:
+			return RangeTelegraph.box_world(hitbox, PISTON_BOX, facing)
+		State.SUCK:
+			return RangeTelegraph.box_world(hitbox, BITE_BOX, facing)
+		State.VENT:
+			return RangeTelegraph.box_world(hitbox, VENT_BOX, 1)
+	return Rect2()
+
+
+## 시험·연출용: 다음 공격을 고르지 않고 이 공격을 바로 건다 (PISTON / SPRAY / SUCK / VENT)
+func force_attack(st: State) -> void:
+	if state in [State.WAIT, State.INTRO, State.FALLEN, State.PURIFIED]:
+		return
+	hitbox.deactivate()
+	match st:
+		State.PISTON:
+			_red = true
+			telegraph.emit("piston")
+			_begin(st, 2.0 * BEAT, 2.0 * BEAT)
+		State.SPRAY:
+			telegraph.emit("spray")
+			_begin(st, 2.0 * BEAT, 1.5 * BEAT)
+		State.SUCK:
+			telegraph.emit("suck")
+			_begin(st, 1.5 * BEAT, 2.0 * BEAT)
+		State.VENT:
+			telegraph.emit("vent")
+			_begin(st, 2.0 * BEAT, 1.0 * BEAT)
 
 
 ## 다음 공격을 고른다. 1페이즈: 정해진 순서와 정해진 박. 2페이즈: 순서 무작위(같은 것 연속 없음)·예고 ±30%·피스톤 빨라짐.
 func _choose_attack() -> void:
+	if crowd.ready():
+		# 맞딜 방지 (v1.1.0): 몸에 붙어 버티는 소녀에게 김 분출 (예고 2박, 막을 수 있다 — 고정 순서는 그대로 이어진다)
+		crowd.consume()
+		_idle_gap = 2.0 * BEAT if phase == 1 else BEAT * randf_range(0.8, 2.0) * P2_REST_MULT
+		force_attack(State.VENT)
+		return
 	var st: State
 	var jitter := 1.0
 	if phase == 1:
@@ -303,7 +394,7 @@ func _choose_attack() -> void:
 		pool.erase(_last_attack)
 		st = pool[randi() % pool.size()]
 		jitter = randf_range(0.7, 1.3)
-		_idle_gap = BEAT * randf_range(0.8, 2.0)
+		_idle_gap = BEAT * randf_range(0.8, 2.0) * P2_REST_MULT
 	match st:
 		State.PISTON:
 			_red = true
@@ -319,7 +410,7 @@ func _choose_attack() -> void:
 
 ## BossRoom 이 예고 글자로 쓴다 (가드 불가는 붉은 빛이 알리고 글자는 공격 이름만).
 func telegraph_label(kind: String) -> String:
-	return {"piston": "피스톤!", "spray": "수액 분사!", "suck": "빨아들이기!"}.get(kind, "")
+	return {"piston": "피스톤!", "spray": "수액 분사!", "suck": "빨아들이기!", "vent": "김 분출!"}.get(kind, "")
 
 
 ## 피스톤이 땅을 친다: 앞쪽 판정(가드 불가) + 양쪽으로 달리는 땅 충격파.
@@ -327,8 +418,7 @@ func _slam() -> void:
 	var hit := HitData.make(piston_damage, 0.0, self, Vector2(720, -340))
 	hit.guardable = false
 	hit.hitstop = 0.08
-	# 판정은 보이는 망치 머리 자리(앞 약 220~340px)에 맞춘다. 그 너머는 양쪽으로 달리는 충격파(점프로 넘김)가 맡는다.
-	hitbox.set_box(Rect2(150, -190, 220, 220), facing)
+	hitbox.set_box(PISTON_BOX, facing)
 	hitbox.activate(hit, 0.3)
 	Juice.shake(14.0)
 	Juice.rumble(0.7, 1.0, 0.3)
@@ -344,10 +434,17 @@ func _slam() -> void:
 		p.size = Vector2(84, 50)
 		p.color = Color(0.95, 0.5, 0.25)
 		p.look = "pump_shock"   # 이펙트 리뉴얼 F2: 땅을 달리는 물 초승달
+		_pierce(p)
 		get_parent().add_child(p)
 		p.global_position = at + Vector2(dir * 40.0, -24.0)
 		p.launch(Vector2(dir, 0), self, false)
 	slammed.emit()
+
+
+## v1.1.0 (기획자 요청 4): 보스 투사체는 지형을 뚫고 지나간다. 바닥 아래(아무도 맞을 수 없는 곳)로 내려가면 사라진다.
+func _pierce(p: Projectile) -> void:
+	p.pierce_terrain = true
+	p.floor_y = ground_y + p.hit_radius() + 4.0
 
 
 ## 관에서 수액 덩어리 한 발 (소녀를 조금 앞질러 겨눈다). 저스트 가드로 되받으면 펌프에게 돌아온다.
@@ -357,6 +454,7 @@ func _spray() -> void:
 	var p := SapBlob.make(spray_speed, spray_damage, 44.0)
 	p.fall_gravity = 380.0
 	p.lifetime = 2.8
+	_pierce(p)
 	get_parent().add_child(p)
 	# 노즐은 앞 250px. 소녀가 그보다 가까우면 방울이 소녀 몸 위에서 생겨 저스트 가드할 틈이 없으므로 몸 쪽으로 당겨 쏜다.
 	var ahead := (player.global_position.x - global_position.x) * facing
@@ -371,12 +469,24 @@ func _spray() -> void:
 
 ## 빨아들이기의 끝: 관이 물어뜯는다 (가드 가능).
 func _bite() -> void:
+	_tel.end()
 	var hit := HitData.make(bite_damage, 0.0, self, Vector2(520, -260))
 	hit.hitstop = 0.06
-	hitbox.set_box(Rect2(40, -230, 320, 250), facing)
+	hitbox.set_box(BITE_BOX, facing)
 	hitbox.activate(hit, 0.25)
 	Juice.shake(6.0)
 	Sfx.play("hit", -2.0, 0.1)
+
+
+## 맞딜 응징: 몸 둘레로 김을 뿜는다 (가드 가능, 저스트 가드로 받아칠 수 없음 — 몸에서 나오는 김이라 되받을 것이 없다)
+func _vent() -> void:
+	var hit := HitData.make(VENT_DAMAGE, 0.0, self, Vector2(560, -260))
+	hit.parryable = false
+	hit.hitstop = 0.05
+	hitbox.set_box(VENT_BOX, 1)
+	hitbox.activate(hit, 0.25)
+	Juice.shake(7.0)
+	Sfx.play("gust", 0.0, 0.08)
 
 
 ## 2페이즈: 공격 뒤마다 사방에서 수액이 솟는다 (바닥 예고 0.6초 → 기둥).
@@ -415,6 +525,8 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		# 저스트 가드 순간에 이미 +45 를 받았다 (on_just_guarded) → 방울 자체의 흐트러짐(28) 대신 reflect_poise 만
 		armor = reflect_poise
 		dmg *= reflect_damage_multiplier
+	if (state == State.VENT or _poise_immune > 0.0) and not reflected:
+		armor = 0.0   # 맞딜 응징(김 분출)은 끝날 때까지 장갑을 깰 수 없다 — 몸에서 떨어져야 한다 (되받은 방울은 기술의 보상이라 그대로)
 	hp = maxf(hp - dmg, 0.0)
 	hp_changed.emit(hp, max_hp)
 	_add_poise(armor)
@@ -517,6 +629,8 @@ func _set_state(new_state: State) -> void:
 	anim_hint = ""
 	if new_state not in ATTACK_STATES:
 		attack_phase = ""
+	if _tel:
+		_tel.end()   # 공격이 바뀌거나 끊기면 예고는 걷힌다 (새 공격은 _begin 이 다시 띄운다)
 	state_changed.emit(new_state)
 
 

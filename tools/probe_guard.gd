@@ -2,14 +2,14 @@ extends Node
 ## Claude Code용 경비병(방패 돌진 적) 시험 (화면 없이 돈다).
 ## 실행: godot --headless --path . res://tools/probe_guard.tscn
 ## 진짜 물리 틱(60Hz)으로 돌린다: 바닥(StaticBody2D)을 깔고 소녀(player.tscn, 물리 끔)를 세워 두고 경비병을 추격시킨다.
-##  (a) 소녀가 등 뒤로 가면 facing 이 turn_delay(0.45초) 뒤에 바뀌는지, 바뀐 직후 그림이 아직 돌아서는 중일 때는 막지(blocked) 않는지
+##  (a) 소녀가 등 뒤로 가면 facing 이 turn_delay(0.5초, v1.1.0 모든 몹 공통) 뒤에 바뀌는지, 바뀐 직후 그림이 아직 돌아서는 중일 때는 막지(blocked) 않는지
 ##  (b) 정면에서 연속 block_limit(3)번 막은 뒤 네 번째는 방패가 들려 맞고 흐트러짐 +block_break_poise 인지, 잠깐 열렸다가 다시 막는지
 ##  (c) 돌진 속도·피해·길이, 박힘 길이, 박힘 뒤 쉬는 시간, 박힘 중 흐트러짐 2배
 ##  (d) 두 씬의 그림 방향 플래그와 능력치가 그림 판단·너프 값과 같은지
 ##  (e) 부위 뼈대 그림(GuardRigVisual)이면: 방패(weapon 뼈)가 그림이 보는 쪽(visible_facing)에 그려지는지 — 좌우 모두, 세 씬 모두
 
-const EXPECT_GUARD := {"max_hp": 100.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.45, "art_faces_right": true}
-const EXPECT_SAVABLE := {"max_hp": 110.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.45, "art_faces_right": false}
+const EXPECT_GUARD := {"max_hp": 100.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.5, "art_faces_right": true}
+const EXPECT_SAVABLE := {"max_hp": 110.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.5, "art_faces_right": false}
 const EXPECT_SCRIPT := {"charge_speed": 700.0, "charge_time": 0.55, "charge_damage": 14.0, "stuck_time": 2.4, "charge_chance": 0.35, "charge_cooldown": 1.2, "block_limit": 3, "block_reset_time": 1.5, "block_break_poise": 40.0}
 
 var _fail := 0

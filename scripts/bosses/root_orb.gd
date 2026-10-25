@@ -35,7 +35,7 @@ var _last_pos := Vector2.INF
 ## 그림: 물방울 몸의 가운데(UV x)와 배율 (몸 지름 ≈ 판정 지름보다 조금 크게)
 const ART := "bubble_trail"
 const ART_HEAD_U := 0.79
-const ART_SCALE_PER_R := 0.021
+const ART_SCALE_PER_R := 0.0148   # v1.1.0: 보이는 반경 ≈ 판정 반경(radius×0.85) ×1.12 (예전 0.021 은 1.59배)
 
 
 func _ready() -> void:
@@ -78,10 +78,9 @@ func _physics_process(delta: float) -> void:
 					direction = direction.slerp(want, clampf(homing * delta, 0.0, 1.0)).normalized()
 			var from := global_position
 			var to := from + direction * speed * delta + Vector2(sin(_t * 3.0 + _wobble) * 50.0, 0) * delta
-			var ray := PhysicsRayQueryParameters2D.create(from, to, 1)
-			var hit_terrain := get_world_2d().direct_space_state.intersect_ray(ray)
-			if not hit_terrain.is_empty():
-				global_position = hit_terrain["position"]
+			# v1.1.0 (기획자 요청 4): 보스 투사체라 지형(가지·벽)을 뚫고 지나간다. 바닥 아래(아무도 맞을 수 없는 곳)로 가면 사라진다.
+			if ground_y != 0.0 and to.y > ground_y + radius + 4.0:
+				global_position = to
 				_vanish()
 				return
 			global_position = to

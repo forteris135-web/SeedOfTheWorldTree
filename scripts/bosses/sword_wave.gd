@@ -31,10 +31,13 @@ var _embers: CPUParticles2D
 var _trail: Array[Vector2] = []
 var _art: Sprite2D
 var _echo: Sprite2D
-## 그림: 물 초승달(볼록한 쪽이 앞) — 배율·자리 (판정 상자 75×110 을 덮는다)
+## 그림: 물 초승달(볼록한 쪽이 앞) — 배율·자리. v1.1.0 (명세 3.6 '보이는 그림 = 판정 ±20%'): 판정 상자 75×110 에 맞춘다 —
+## 보이는 세로 반폭 ≈ 58 (판정 55), 볼록한 앞 끝 ≈ +40 (판정 앞 37.5). 예전 (0.6, 0.72)·(-30, 0) 은 세로 96·앞 50 으로 1.75배였다.
 const ART := "water_crescent_big"
-const ART_SCALE := Vector2(0.6, 0.72)
-const ART_OFFSET := Vector2(-30.0, 0.0)
+const ART_SCALE := Vector2(0.3625, 0.435)
+const ART_OFFSET := Vector2(-8.0, 0.0)
+## 뒤따르는 그림자의 자리 (그림 뒤로)
+const ECHO_BACK := 24.0
 
 
 func _ready() -> void:
@@ -69,7 +72,7 @@ func _ready() -> void:
 	_embers.material = add
 	add_child(_embers)
 	_echo = _make_art(Color(1, 1, 1, 0.3))
-	_echo.position = ART_OFFSET + Vector2(-40.0, 0.0)
+	_echo.position = ART_OFFSET + Vector2(-ECHO_BACK, 0.0)
 	_echo.scale = ART_SCALE * 0.9
 	_art = _make_art(Color(1.05, 1.02, 1.0, 1.0))
 
@@ -110,17 +113,13 @@ func _physics_process(delta: float) -> void:
 	_time += delta
 	var from := global_position
 	var to := from + direction * speed * delta
-	var ray := PhysicsRayQueryParameters2D.create(from, to, 1)
-	var hit_terrain := get_world_2d().direct_space_state.intersect_ray(ray)
-	if not hit_terrain.is_empty() and not passes_through(hit_terrain.get("collider")):
-		_vanish()
-		return
+	# v1.1.0 (기획자 요청 4): 보스 투사체라 지형(벽·가지)에 막히지 않는다 — 수명이 다하면 사라진다.
 	global_position = to
 	rotation = direction.angle()
 	if _art:
 		# 살짝 일렁이고 그림자가 뒤에서 따라온다
 		_art.scale = ART_SCALE * Vector2(1.0, 1.0 + 0.05 * sin(_time * 28.0))
-		_echo.position = ART_OFFSET + Vector2(-40.0 - 12.0 * sin(_time * 16.0), 0.0)
+		_echo.position = ART_OFFSET + Vector2(-ECHO_BACK - 7.0 * sin(_time * 16.0), 0.0)
 	if _time > lifetime:
 		_vanish()
 		return

@@ -119,7 +119,8 @@ func _physics_process(delta: float) -> void:
 			_tick += delta
 			if _tick >= 0.5:
 				_tick = 0.0
-				b.take_damage_over_time(dps * 0.5)
+				# v1.1.0: 포자 구름은 적의 공격 → 능력치 배율(1.45 × 던전 단계 × 난이도). 같은 길을 쓰는 수액 웅덩이(환경)는 배율 없음
+				b.take_damage_over_time(dps * 0.5 * Balance.atk_mult(Balance.region_of(self)))
 
 
 func _draw() -> void:

@@ -823,14 +823,14 @@ func _draw_marks() -> void:
 	if _burst > 0.0:
 		var r := RING_R + (1.0 - _burst) * 220.0
 		_marks.draw_arc(c, r, 0.0, TAU, 56, Color(0.9, 1.0, 1.0, 0.6 * _burst), RING_W * 2.0 * _burst + 1.0, true)
-	# 내려앉기 예고: 디딤돌 위에 빛 자국
+	# 내려앉기 예고: 내려앉을 자리 위에 빛 자국 — 착지 충격 판정 폭(±170)만 (v1.1.0: 예전엔 디딤돌 전체가 빛났다).
+	# 판정과 같은 사각형 예고는 보스의 RangeTelegraph 가 그리고, 이 띠는 디딤돌 윗면에 붙은 빛.
 	if st == SapQueen.State.LAND and _boss._land_stone and is_instance_valid(_boss._land_stone):
-		var s: Node2D = _boss._land_stone
-		var top := Vector2(s.global_position.x, s.global_position.y)
-		var w: float = s.size.x
+		var reach: Rect2 = _boss.melee_reach()
 		var p := _boss.windup_progress
 		var pulse := 0.5 + 0.5 * sin(_t * (8.0 + 20.0 * p))
-		_marks.draw_rect(Rect2(top + Vector2(0, -8), Vector2(w, 10)), Color(0.8, 1.0, 1.0, 0.2 + 0.4 * p * pulse))
+		var top_y: float = _boss._land_stone.global_position.y
+		_marks.draw_rect(Rect2(reach.position.x, top_y - 8.0, reach.size.x, 10.0), Color(0.8, 1.0, 1.0, 0.2 + 0.4 * p * pulse))
 	# 내리꽂기 꼬리: 지나온 자리를 옅은 수액빛 띠로
 	if _trail.size() >= 2:
 		for i in range(1, _trail.size()):

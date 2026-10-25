@@ -23,7 +23,8 @@ func _strike() -> void:
 	_timer = strike_time + 0.2
 	# 자기 주위와 소녀 쪽에 포자 구름
 	_spawn_cloud(global_position + Vector2(facing * 140.0, -40.0))
-	if player and absf(player.global_position.x - global_position.x) > 260.0:
+	# 멀리 있는 소녀 자리에도 하나 — 바라보는 쪽(앞)에 있을 때만 (v1.1.0: 등 뒤로는 뿌리지 않는다)
+	if player and absf(player.global_position.x - global_position.x) > 260.0 and _player_in_front():
 		_spawn_cloud(player.global_position + Vector2(0, -40.0))
 
 
@@ -42,7 +43,14 @@ func _physics_process(delta: float) -> void:
 		anim_hint = ""
 	if state == State.CHASE and player and _sees_player(notice_range * 1.4):
 		var dx := player.global_position.x - global_position.x
-		facing = 1 if dx > 0.0 else -1
+		# v1.1.0: 등 뒤로 간 소녀에게는 turn_delay(0.5초) 뒤에 돌아선다. 도는 동안은 멈칫
+		if _turn_toward_player(delta) != facing:
+			_tick_common(delta)
+			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+			if not is_on_floor():
+				velocity.y += gravity * delta
+			move_and_slide()
+			return
 		if absf(dx) < keep_distance and _can_walk(-facing):
 			# 뒤로 걷는다 (그림은 이동 방향을 보고 뒷걸음 자세를 잡는다)
 			_tick_common(delta)

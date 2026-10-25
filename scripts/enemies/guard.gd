@@ -4,7 +4,7 @@ class_name Guard
 ## 붉은 예고 뒤 **가드 불가 돌진**. 피하면 방패가 박혀 잠시 무방비(흐트러짐 2배). 방패 치기도 한다.
 ##
 ## 공략 길 (기획자 요청으로 너프):
-## - 몸이 무거워 늦게 돌아선다(turn_delay 0.45초): 구르기로 등 뒤로 가면 그동안 방패가 없다.
+## - 늦게 돌아선다(turn_delay 0.5초 — v1.1.0 부터 모든 몹 공통): 구르기로 등 뒤로 가면 그동안 방패가 없다.
 ## - 방패 판정은 **그림이 실제로 보는 방향** 기준이다 (그림이 저쪽을 보는데 튕기는 일 없음).
 ## - 정면에서 연속 block_limit(3)번 막으면 다음 한 대는 방패가 들려 맞고(흐트러짐 +block_break_poise), 잠깐 방패가 열린다.
 ## - 돌진이 박히면 stuck_time 동안 무방비, 풀린 뒤에도 charge_cooldown 동안 다음 공격을 못 한다.
@@ -144,11 +144,12 @@ func _hit_from_front(hit: HitData) -> bool:
 
 ## 확장판 · 벽 부수기(wall_break) 능력이 있으면 무거운 공격(씨앗 베기·낙하 공격, 흐트러짐 45 이상)은 방패를 깬다
 ## (막지 못하고 흐트러짐 +block_break_poise, 잠깐 방패가 열린다). EXPANSION.md 2장 "능력의 전투 활용".
+## v1.1.0: 벽 부수기가 초반 능력이 되어 전투 효과는 끈다 — Balance.WALL_BREAK_COMBAT (false = 탐색 전용, D15).
 const WALL_BREAK_POISE := 45.0
 
 
 func _shield_breaker(hit: HitData) -> bool:
-	return hit.from_player and hit.poise >= WALL_BREAK_POISE and Progress.has_ability("wall_break")
+	return Balance.WALL_BREAK_COMBAT and hit.from_player and hit.poise >= WALL_BREAK_POISE and Progress.has_ability("wall_break")
 
 
 ## 정면 방패: 무방비·무너짐·피격이 아닐 때 앞에서 온 공격은 튕긴다. 연속 block_limit 번까지만.

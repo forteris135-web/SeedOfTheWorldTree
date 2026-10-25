@@ -26,6 +26,13 @@ signal reflected(projectile: Projectile)
 signal landed(pos: Vector2, normal: Vector2)
 ## 한쪽 방향 가지(one_way 발판)는 막지 않고 지나간다 (등불 던지기 등)
 var pass_one_way := false
+## v1.1.0 (기획자 요청 4): 지형을 뚫고 지나간다 — 다섯 지역 보스의 투사체만 true (몹·중간 보스는 false, D7).
+## 지형에 막혀 보스 공격이 사라지는 일이 없다. 사라지는 건 수명이 다했을 때, 또는 아래 바닥선(floor_y)을 지났을 때뿐.
+var pierce_terrain := false
+## 지형을 뚫는 투사체의 바닥선 (월드 y). 몸 가운데가 이 아래로 내려가면 landed(그 자리, 위쪽) 를 알리고 사라진다
+## (싸움터의 가장 낮은 디딤 아래 = 아무도 맞을 수 없는 곳; 바닥 그림 위로 잎이 미끄러져 내려가 보이지 않게).
+## 등불 기사의 등불 던지기는 바닥(ground_y)을 주어 '바닥에 닿는 순간' 불기둥을 세운다. INF 면 바닥선 없음.
+var floor_y := INF
 
 @export var kind: Kind = Kind.FEATHER
 @export var speed := 900.0
@@ -88,6 +95,8 @@ var from_player := false
 var was_reflected := false
 var _time := 0.0
 var _wobble := randf() * TAU
+## 잎이 굴러가며 흔들리는 각도 폭 (라디안). 잎(LEAF)은 0.6, 그 밖은 0. 그림 묶음의 "wobble" 이 있으면 그 값 (_ready 에서 정한다)
+var _rot_wobble := 0.0
 var _dead := false
 var _trail: Array[Transform2D] = []   # 최근 것이 앞
 var _trail_last := Vector2(INF, INF)
@@ -128,6 +137,7 @@ func _ready() -> void:
 	monitoring = true
 	monitorable = false
 	rotation = direction.angle()
+	_rot_wobble = 0.6 if kind == Kind.LEAF else 0.0
 	if look != "" and FxArtTable.has(look):
 		_apply_look()
 	elif not _uses_base_look():
@@ -239,6 +249,16 @@ func _physics_process(delta: float) -> void:
 		wobble = Vector2(sin(_time * 3.0 + _wobble) * 60.0, 0) * delta
 	var from := global_position
 	var to := from + direction * speed * delta + wobble
+	if pierce_terrain:
+		# 보스 투사체: 지형 검사 없이 날아간다. 바닥선을 지나면 그 자리에 '내려앉고' 사라진다.
+		if to.y >= floor_y:
+			var k := clampf((floor_y - from.y) / maxf(to.y - from.y, 0.0001), 0.0, 1.0)
+			global_position = from.lerp(to, k)
+			landed.emit(global_position, Vector2.UP)
+			_vanish()
+			return
+		_move_to(to)
+		return
 	# 지형에 막힌다 (빠른 투사체가 얇은 발판을 건너뛰지 않게 선으로 검사)
 	var ray := PhysicsRayQueryParameters2D.create(from, to, 1)
 	var hit_terrain := get_world_2d().direct_space_state.intersect_ray(ray)
@@ -263,8 +283,13 @@ func _physics_process(delta: float) -> void:
 		landed.emit(global_position, hit_terrain.get("normal", Vector2.UP))
 		_vanish()
 		return
+	_move_to(to)
+
+
+## 한 프레임 날아간 뒤: 자리·회전·꼬리·발광, 수명, 맞는 영역 검사 (지형 검사를 지난 뒤 공통)
+func _move_to(to: Vector2) -> void:
 	global_position = to
-	rotation = direction.angle() + (sin(_time * 4.0 + _wobble) * 0.6 if kind == Kind.LEAF else 0.0)
+	rotation = direction.angle() + (sin(_time * 4.0 + _wobble) * _rot_wobble if _rot_wobble != 0.0 else 0.0)
 	_record_trail()
 	_update_glow()
 	if _time > lifetime:
@@ -658,6 +683,10 @@ func _apply_look() -> void:
 		_art_scale.x = -_art_scale.x
 	_art_rot = deg_to_rad(float(_art_def.get("rot", 0.0)))
 	var head: Vector2 = _art_def.get("head", Vector2(0.5, 0.5))
+	if bool(_art_def.get("flip_x", false)):
+		# head 는 '뒤집어 쓴 그림' 기준 자리다 (예: 수액 방울은 뒤집은 뒤 물방울 몸이 오른쪽 0.7). 뒤집기 전 그림 좌표로 바꾼다 —
+		# 예전엔 그대로 써서 물방울 몸이 판정보다 약 50px 앞에 그려졌다 (v1.1.0 판정 = 그림 검수)
+		head.x = 1.0 - head.x
 	var ts := _art_tex.get_size()
 	# 그림 안의 head 자리가 원점(판정 가운데)에 오게: 그림 픽셀 좌표에서 head 의 반대만큼 옮긴 뒤 배율·회전한다
 	_art_off = -Vector2((head.x - 0.5) * ts.x, (head.y - 0.5) * ts.y)
@@ -667,6 +696,8 @@ func _apply_look() -> void:
 		glow = float(_art_def["glow"])
 	if _art_def.has("trail"):
 		trail_count = int(_art_def["trail"])
+	if _art_def.has("wobble"):
+		_rot_wobble = float(_art_def["wobble"])
 	var pal := String(_art_def.get("palette", ""))
 	var add := bool(_art_def.get("add", false))
 	material = Fx.shared_material(pal, add, float(_art_def.get("keep", 0.0)))
@@ -713,6 +744,22 @@ func _draw_art() -> void:
 	draw_set_transform_matrix(_art_transform(1.0))
 	draw_texture_rect(_art_tex, rect, false, _art_color)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## 그림 픽셀(그림 가운데 기준) → 투사체 자기 좌표(+x = 날아가는 쪽) 변환 (도는 그림·날갯짓·맥동·흔들림은 빼고). 시험이 그림의
+## 보이는 픽셀(알파 ≥ 0.25)을 옮겨 판정 반경과 비교한다 (명세 3.6 '보이는 그림 반경 ≈ 판정 반경 ±20%').
+func art_transform_static() -> Transform2D:
+	return Transform2D(_art_rot, _art_scale, 0.0, Vector2.ZERO) * Transform2D(0.0, _art_off)
+
+
+## 그림이 진행 방향과 상관없이 도는가 (spin) 또는 똑바로 서는가 (upright) — 그러면 어느 쪽으로든 같은 거리까지 보인다
+func art_turns_freely() -> bool:
+	return float(_art_def.get("spin", 0.0)) != 0.0 or bool(_art_def.get("upright", false))
+
+
+## 잎이 굴러가며 흔들리는 각도 폭 (라디안)
+func rot_wobble() -> float:
+	return _rot_wobble
 
 
 ## 그림이 차지하는 범위 (자기 좌표, 도는 그림·맥동은 빼고). 시험이 판정과 비교한다.
