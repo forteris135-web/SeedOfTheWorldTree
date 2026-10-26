@@ -179,6 +179,7 @@ func _make_hit() -> HitData:
 	var h := HitData.make(damage, poise, player if is_instance_valid(player) else self, Vector2(260, -100))
 	h.from_player = true
 	h.hitstop = 0.04
+	h.soul = "light"
 	return h
 
 

@@ -27,20 +27,24 @@ extends Node
 ##               (씨앗 베기 > 바람·빛 — 바꾸기는 공짜·즉시, 영혼마다 쿨다운이 따로) + 그 사이 약공격.
 ##   soulrun     soulcycle 을 순간이동 없이: 목표 자리에서 250 넘게 멀면 달려가고(막히면 뛴다), 달리는 동안에도 보스 쪽을 보고 있으면
 ##               원거리 영혼(빛·바람)을 쿨마다 쏜다. 250 안이면 soulcycle 과 같다.
-## 목표 자리가 있는 방식: stand·plunge_*·wind·light·rolltank·airmix·airslash·plunge4·hitrun·soulcycle·soulrun (front/back/inside). 없는 방식: platform·range·range_air·punish_roll.
+##   soulplunge  영혼+낙하 (맞딜 검수 2 에 옮긴 검수자 봇): 땅 맞딜 + 영혼 돌려 쓰기 + 4.1초마다 낙하 공격 (공중에서도 준비된 영혼 기술).
+##   airsoul     공중 영혼 (맞딜 검수 2 에 옮긴 검수자 봇): airmix + 떠 있는 동안 매 틱 보스 쪽으로 돌기 + 모든 영혼 기술을 준비되는 대로.
+## 목표 자리가 있는 방식: stand·plunge_*·wind·light·rolltank·airmix·airslash·plunge4·hitrun·soulcycle·soulrun·soulplunge·airsoul (front/back/inside).
+##   없는 방식: platform·range·range_air·punish_roll.
 ## 성장: 그 보스를 만날 즈음의 예상치 (명세 3.8 표 — Progress.upgrades 를 직접 정한다).
 ##
 ## 합격 (오케스트레이터 결정, Normal 만, 기본 씨드 1–6 × 자리):
 ##   stand·soulcycle: 어느 보스도 봇이 한 판도 못 이긴다 (300초를 버텨도 FAIL — 보스 화력 부족).
 ##   그 밖의 방식: 보스·방식마다 봇이 이긴 판이 1판 이하, 이긴 판도 봇 체력이 50% 넘게 남으면 안 된다 (300초 무승부는 이긴 것이 아님).
-## --quick (전체 회귀용, 8분 아래 — 지금 약 1분 30초): stand 다섯 보스(front·inside × 씨드 1) + 위험했던 보스의 방식 몇 가지 (QUICK_PLAN, 36판 —
-##   영혼 돌려 쓰기 여왕·뿌리지기 포함).
-##   합격 규칙은 같다 (칸마다 2판 — 공중 맞딜 새 안쪽 씨드 1 은 전체 시험의 단 하나 봇 승(봇 체력 5%)이라 1/2 로 나온다).
+## --quick (전체 회귀용, 8분 아래 — 지금 약 1분 40초): stand 다섯 보스(front·inside × 씨드 1) + 위험했던 보스의 방식 몇 가지 (QUICK_PLAN, 54판 —
+##   영혼 돌려 쓰기·달리며 영혼·영혼+낙하 여왕·뿌리지기, 공중 영혼 다섯 보스 포함). 합격 규칙은 같다 (칸마다 2판).
 ## --diff easy 등: 결과만 출력 (합격 판정은 Normal 만).
 ## --good: '잘하는 사람' 봇 (전체 회귀에는 없음 — 보스를 고친 뒤 돌린다): 죽지 않게(매 틱 체력을 채움) 두고 패턴을 피한다 — 보스의 공격 범위 예고(RangeTelegraph)
 ##   안에 있으면 빠져나오고(달려 나갈 시간이 모자라면 가드 가능한 것은 저스트 가드, 가드 불가는 구르기), 다가오는 투사체는 저스트 가드(되받을 수 있는 것은 되받음),
-##   그 밖엔 다가가 약공격 3타·씨앗 베기·원거리 영혼(맞을 만할 때만 — _ranged_can_hit)·6초마다 낙하 공격, 하늘의 보스가 닿을 만하면 뛰어올라(이단 점프) 벤다.
-##   보스를 쓰러뜨리는 시간(초)을 씨드마다 재고 1985add 기준값(GOOD_BASELINE)과 견준다 (합격 기준: 어느 보스도 +20% 안).
+##   그 밖엔 다가가(턱에 막히면 뛰어오른다) 약공격 3타·씨앗 베기·원거리 영혼(맞을 만할 때만 — _ranged_can_hit)·6초마다 낙하 공격, 하늘의 보스가 닿을 만하면
+##   뛰어올라(이단 점프) 벤다.
+##   보스를 쓰러뜨리는 시간(초)을 씨드마다 재고 1985add 기준값(GOOD_BASELINE_SEEDS, 같은 씨드끼리)과 견준다 (합격 기준: 어느 보스도 +20% 안,
+##   씨드 8개 이상 — 기본 --good-seeds 8; 판마다 흔들림이 커서 4개로는 ±10%).
 ##   --good-roll-cost 0 처럼 구르기 비용을 바꿔 볼 수 있다.
 
 const TIME_LIMIT := 300.0
@@ -62,11 +66,11 @@ const PROFILES := [
 ]
 const TRACKS := ["normal", "seed", "wind", "light", "stamina"]
 const MODES := ["stand", "plunge_air", "plunge_land", "plunge_mix", "wind", "light", "platform", "rolltank", "airmix", "airslash",
-	"plunge4", "range", "range_air", "hitrun", "punish_roll", "soulcycle", "soulrun"]
+	"plunge4", "range", "range_air", "hitrun", "punish_roll", "soulcycle", "soulrun", "soulplunge", "airsoul"]
 const MODE_NAMES := {"stand": "땅 맞딜", "plunge_air": "공중 연속 낙하", "plunge_land": "착지 낙하", "plunge_mix": "낙하+씨앗 베기",
 	"wind": "바람 영혼", "light": "빛 영혼", "platform": "가지 진치기", "rolltank": "맞딜+구르기 끊기", "airmix": "공중 맞딜",
 	"airslash": "공중 베기", "plunge4": "4.1초 낙하", "range": "원거리", "range_air": "공중 원거리", "hitrun": "드나들기", "punish_roll": "빈틈 구르기",
-	"soulcycle": "영혼 돌려 쓰기", "soulrun": "달리며 영혼"}
+	"soulcycle": "영혼 돌려 쓰기", "soulrun": "달리며 영혼", "soulplunge": "영혼+낙하", "airsoul": "공중 영혼"}
 ## 옛 이름 (--mode ground,plunge 도 그대로 받는다)
 const MODE_ALIASES := {"ground": "stand", "plunge": "plunge_air", "rolltank2": "rolltank"}
 const PLUNGE_MODES := ["plunge_air", "plunge_land", "plunge_mix"]
@@ -85,12 +89,38 @@ const QUICK_PLAN := [
 	["plunge4", ["pump"], ["front", "inside"], [1]],
 	["platform", ["queen", "root"], ["-"], [1, 2]],
 	["soulcycle", ["queen", "root"], ["front", "inside"], [1]],
+	["soulrun", ["queen", "root"], ["front", "inside"], [1]],
+	["soulplunge", ["queen", "root"], ["front", "inside"], [1]],
+	["airsoul", ["bird", "pump", "knight", "queen", "root"], ["front", "inside"], [1]],
 ]
-## '잘하는 봇'의 1985add(맞딜 마무리 검수 앞) 기준 잡는 시간 (초, 씨드 1–4 평균, Normal; --good 이 % 차이를 출력한다).
-## 잘하는 봇 코드를 바꾸면 1985add 에서 다시 재야 한다 (이 파일을 그 판에 넣고 --good).
-## 영혼 함께 잠김 검수(2026-10-26): 원거리 영혼을 맞을 만할 때만 쏘게 바꾼 뒤 1985add 사본에서 다시 쟀다 — 새·펌프·기사·뿌리지기는 그대로,
-## 여왕만 75.8 → 82.0 (하늘에 뜬 여왕에게 가로로 쏘던 바람·빛을 안 쏜다).
-const GOOD_BASELINE := {"bird": 61.5, "pump": 45.8, "knight": 37.9, "queen": 82.0, "root": 51.0}
+## '잘하는 봇'의 1985add(맞딜 마무리 검수 앞) 기준 잡는 시간 (초, Normal; --good 이 % 차이를 출력한다). 씨드 1–12 를 씨드마다 적어 두고,
+## --good 이 돌린 씨드들의 기준 평균과 견준다 (같은 씨드끼리 — 12 넘는 씨드는 12개 평균). 잘하는 봇 코드를 바꾸면 1985add 에서 다시 재야 한다
+## (이 파일을 그 판의 사본에 넣고 --good --good-seeds 12).
+## 영혼 함께 잠김 검수(2026-10-26): 원거리 영혼을 맞을 만할 때만 쏘게 바꾼 뒤 다시 쟀다 (여왕 75.8 → 82.0, 씨드 1–4).
+## 맞딜 검수 2(2026-10-26): 턱에 막히면 뛰어오르게 바꾼 뒤 1985add 사본에서 씨드 1–12 로 다시 쟀다 — 여왕만 크게 바뀜 (82.0 → 39.5:
+## 예전 봇은 2페이즈에 디딤돌이 가라앉으면 섬에 오르지 못해 46~184초로 갈렸다), 새·펌프·기사·뿌리지기는 씨드 1–4 평균이 거의 그대로.
+const GOOD_BASELINE_SEEDS := {
+	"bird": [53.4, 67.7, 62.0, 63.0, 54.1, 55.0, 61.7, 76.0, 55.7, 69.6, 58.5, 66.3],
+	"pump": [45.9, 46.0, 45.9, 45.2, 43.3, 45.9, 46.2, 45.1, 45.8, 44.6, 46.6, 47.8],
+	"knight": [35.6, 39.3, 36.1, 40.6, 42.1, 40.4, 39.0, 43.6, 34.7, 35.0, 41.3, 38.8],
+	"queen": [44.5, 34.5, 36.3, 35.8, 35.0, 44.4, 32.0, 45.2, 45.1, 40.8, 39.1, 41.8],
+	"root": [61.9, 50.5, 55.7, 46.8, 45.4, 48.6, 54.0, 49.1, 54.6, 40.5, 59.2, 42.3],
+}
+
+
+## 기준 평균 (돌린 씨드들의 1985add 값 평균; 12 넘는 씨드는 12개 평균으로 친다)
+func _good_baseline(id: String, seeds: Array) -> float:
+	var arr: Array = GOOD_BASELINE_SEEDS.get(id, [])
+	if arr.is_empty():
+		return -1.0
+	var all := 0.0
+	for v in arr:
+		all += float(v)
+	all /= arr.size()
+	var sum := 0.0
+	for sd in seeds:
+		sum += float(arr[int(sd) - 1]) if int(sd) >= 1 and int(sd) <= arr.size() else all
+	return sum / maxf(seeds.size(), 1)
 
 var _fail := 0
 var _diff := "normal"
@@ -272,7 +302,7 @@ func _open_room(prof: Dictionary, mode: String) -> Array:
 	if _roll_cost >= 0.0:
 		player.roll_stamina_cost = _roll_cost
 	if _soul_lock >= 0.0:
-		player.soul_shared_lockout = _soul_lock
+		player.set("soul_shared_lockout", _soul_lock)   # (옛 판에는 이 값이 없다 — 기준을 다시 잴 때 이 파일을 1985add 사본에서 돌린다)
 	for k in _boss_set:
 		if k in boss:
 			boss.set(k, _boss_set[k])
@@ -839,6 +869,71 @@ func _bot(mode: String, spot: String, player: Player, boss: Node2D, arena: Rect2
 						_try_ranged(player)
 		"soulcycle", "soulrun":
 			_bot_soul(mode, spot, player, boss, arena, gy, do_move, tick, gdt, on_floor)
+		"soulplunge":
+			# 영혼+낙하 (마지막 검수의 새 봇): 땅 맞딜 + 영혼 돌려 쓰기(soulcycle) + 4.1초마다 낙하 공격 (공중에서도 준비된 영혼 기술을 쓴다). 패턴은 보지 않는다.
+			if do_move and on_floor and player.state in Player.LOCOMOTION:
+				var tx := _spot_x(boss, spot, arena)
+				if absf(player.global_position.x - tx) > MOVE_TOL:
+					_teleport(player, tx, gy)
+			_face_boss(player, boss)
+			if tick % 2 == 1:
+				return
+			if _need_heal(player):
+				Input.action_press("heal")
+				return
+			var plunge_ok: bool = _b["now"] - _b["last_plunge_hit"] >= PLUNGE_GAP
+			if not on_floor:
+				_jump_logic(player, on_floor)
+				if plunge_ok and not _b["plunged_air"] and player.state in Player.LOCOMOTION and player.velocity.y > -150.0:
+					Input.action_press("plunge")
+					return
+				if _try_slash(player):
+					return
+				_try_ranged(player)
+				return
+			if _try_slash(player):
+				return
+			if _try_ranged(player):
+				return
+			if plunge_ok and player.state in Player.LOCOMOTION:
+				Input.action_press("jump")
+				_b["jump_hold"] = 30
+				return
+			Input.action_press("attack_light")
+		"airsoul":
+			# 공중 영혼 (마지막 검수의 새 봇): 공중 맞딜(airmix) + 떠 있는 동안 매 틱 보스 쪽으로 돌기 + 모든 영혼 기술을 준비되는 대로
+			# (씨앗 베기 > 바람·빛) + 4.1초 낙하 + 공중 약공격. 패턴은 보지 않는다.
+			if do_move and on_floor and player.state in Player.LOCOMOTION:
+				var tx := _spot_x(boss, spot, arena)
+				if absf(player.global_position.x - tx) > MOVE_TOL:
+					_teleport(player, tx, gy)
+			if do_move:
+				_face_boss(player, boss)
+			if tick % 2 == 1:
+				return
+			if _need_heal(player):
+				Input.action_press("heal")
+				return
+			if on_floor and player.state in Player.LOCOMOTION:
+				Input.action_press("jump")
+				_b["jump_hold"] = 30
+				return
+			_jump_logic(player, on_floor)
+			if not on_floor:
+				_face_boss(player, boss)
+				if _try_slash(player):
+					return
+				if _try_ranged(player):
+					return
+				if _b["now"] - _b["last_plunge_hit"] >= PLUNGE_GAP and player.state in Player.LOCOMOTION \
+						and player.velocity.y > -150.0 and not _b["plunged_air"]:
+					Input.action_press("plunge")
+					return
+				if player.velocity.y > 0.0 and player._jumps_left > 0 and player.state in Player.LOCOMOTION:
+					Input.action_press("jump")
+					return
+				if _can_act(player):
+					_press_light(player)
 
 
 ## 영혼 돌려 쓰기 (soulcycle·soulrun; 마지막 검수 봇을 옮김): 패턴을 보지 않는 땅 맞딜인데 쿨이 끝난 영혼 기술을 모두 준비되는 대로 쓴다
@@ -982,7 +1077,7 @@ func _summary() -> void:
 # ---------------- '잘하는 사람' 봇 (--good) ----------------
 
 func _good_all(args: PackedStringArray, only: Array) -> void:
-	var seeds := _parse_seeds(_arg(args, "--good-seeds", "4"))
+	var seeds := _parse_seeds(_arg(args, "--good-seeds", "8"))
 	var grc := _arg(args, "--good-roll-cost", "")
 	if grc != "":
 		_roll_cost = float(grc)
@@ -1014,19 +1109,19 @@ func _good_all(args: PackedStringArray, only: Array) -> void:
 			avg += v
 		avg /= maxf(ts.size(), 1)
 		var cmp := ""
-		if GOOD_BASELINE.has(prof["id"]):
-			var base: float = GOOD_BASELINE[prof["id"]]
-			cmp = " (1985add %.1f초 대비 %+.1f%%)" % [base, 100.0 * (avg - base) / base]
+		var base := _good_baseline(prof["id"], seeds)
+		if base > 0.0:
+			cmp = " (1985add 같은 씨드 %.1f초 대비 %+.1f%%)" % [base, 100.0 * (avg - base) / base]
 		print("[probe] 잘하는 봇 요약 %s: 평균 %.1f초%s, 판당 맞음 %.1f·저스트 가드 %.1f·구르기 %.1f·무너짐 %.1f" % [prof["id"], avg, cmp,
 			float(hits) / seeds.size(), float(jg) / seeds.size(), float(rolls) / seeds.size(), float(breaks) / seeds.size()])
-		if GOOD_BASELINE.has(prof["id"]) and _diff == "normal":
-			_check(avg <= float(GOOD_BASELINE[prof["id"]]) * 1.2, "잘하는 봇 %s: 1985add 보다 20%% 넘게 느려지지 않는다 (%.1f / %.1f초)" % [prof["id"], avg, GOOD_BASELINE[prof["id"]]])
+		if base > 0.0 and _diff == "normal":
+			_check(avg <= base * 1.2, "잘하는 봇 %s: 1985add 보다 20%% 넘게 느려지지 않는다 (%.1f / %.1f초, 씨드 %d개)" % [prof["id"], avg, base, seeds.size()])
 
 
 func _good_run(prof: Dictionary, sd: int) -> Dictionary:
 	seed(9100 + sd * 7 + PROFILES.find(prof) * 31 + 5000)
 	_b = {"teleports": 0, "now": 0.0, "guard_hold": 0.0, "last_plunge": -99.0, "plunging": false, "plunged": false, "jump_hold": 0,
-		"proj_prev": {}, "rolls": 0, "air": false}
+		"proj_prev": {}, "rolls": 0, "air": false, "stuck_t": 0.0}
 	var opened: Array = await _open_room(prof, "stand")
 	var room: Node = opened[0]
 	var player: Player = opened[1]
@@ -1247,9 +1342,22 @@ func _good_bot(player: Player, boss: Node2D, arena: Rect2, gy: float, tick: int,
 	if not grounded:
 		want = clampf(boss.global_position.x + side * 120.0, arena.position.x + 40.0, arena.end.x - 40.0)
 	var far := absf(want - me.x) > 50.0
+	_jump_logic(player, on_floor)   # 턱을 넘으려 뛴 점프를 끝까지 (짧은 점프로 끊기지 않게)
 	if far and player.state in Player.LOCOMOTION:
 		Input.action_press("move_right" if want > me.x else "move_left")
+		# 턱(여왕 방의 섬·디딤돌 120px 등)에 막혀 있으면 뛰어오른다 — 사람은 낮은 턱 앞에서 멈춰 서 있지 않는다
+		# (v1.1.0 맞딜 검수 2: 예전 봇은 여왕 2페이즈에 디딤돌이 가라앉으면 섬에 오르지 못해 수액 속에서 1분 가까이 거의 못 때렸다 —
+		#  여왕 잡는 시간이 46~184초로 갈려 보스를 고친 효과보다 길 찾기 운이 더 컸다)
+		if on_floor and absf(player.velocity.x) < 60.0:
+			_b["stuck_t"] += gdt
+		else:
+			_b["stuck_t"] = 0.0
+		if on_floor and _b["stuck_t"] > 0.2 and tick % 2 == 0:
+			_b["stuck_t"] = 0.0
+			Input.action_press("jump")
+			_b["jump_hold"] = 30
 	else:
+		_b["stuck_t"] = 0.0
 		_face_boss(player, boss)
 	if tick % 2 == 1:
 		return

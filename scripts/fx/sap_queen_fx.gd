@@ -10,6 +10,7 @@ const BODY := Vector2(0, -120)
 ## 2026-10-20 통합: 나비 떼를 풀어 놓는 고리는 뼈대 그림의 두 손(vis_point "hands"), 날개가루는 두 날개 가운데를 따른다.
 
 var _prev_spawned := 0
+var _prev_burst := 0
 
 
 func _on_state(old: int, _new: int) -> void:
@@ -41,6 +42,12 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 func _tick(delta: float) -> void:
 	var st := state_name()
 	var body := boss.global_position + BODY
+	# v1.1.0 맞딜 검수 2: 수액 터뜨리기 (내려앉은 채로 몸 둘레를 친다) — 물보라 = 판정 사각형 그대로
+	var bc := int(val("burst_count", 0))
+	if bc != _prev_burst:
+		if bc > _prev_burst and boss.has_method("burst_reach"):
+			fit_fx("queen_land", boss.call("burst_reach"), 1)
+		_prev_burst = bc
 	match st:
 		"DUST":
 			# 2페이즈: 반 박 뒤 한 번 더 흩뿌린다 (_spawned 1 → 2)

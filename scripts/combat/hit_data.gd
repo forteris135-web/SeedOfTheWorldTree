@@ -29,6 +29,9 @@ var plunge := false
 ## 소녀 쪽 공중 연속 감쇠가 이미 곱한 비율 (피해 0.6^k, 흐트러짐 0 또는 1). PlungeDecay 가 두 규칙을 곱하지 않고 센 쪽 하나만 쓰려고 읽는다.
 var plunge_chain_damage := 1.0
 var plunge_chain_poise := 1.0
+## 소녀의 영혼 기술이면 그 영혼 ("seed" 씨앗 베기 / "wind" 바람 / "light" 빛), 아니면 "". v1.1.0 맞딜 검수 2: 보스가 영혼 기술을
+## 따로 셀 때 읽는다 (잿빛 잎새의 새: 공중에서 맞은 씨앗 베기는 지침을 덜 쌓는다).
+var soul := ""
 
 
 static func make(p_damage: float, p_poise: float, p_source: Node2D, p_knockback := Vector2(300, -120)) -> HitData:

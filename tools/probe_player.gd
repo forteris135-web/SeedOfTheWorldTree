@@ -3,7 +3,7 @@ extends Node
 ## 검토 지적분(같은 날): 터치 스틱 세기 문턱 / 이단 점프 없을 때 튕김 / 튕김 뒤 잠금·기억 / 고른 영혼이 방·세이브를 건너 남음 /
 ##   착지 신호 한 번만 / 옛 키맵 파일 살리기 / 3연타 → 베기 연계 / 끊긴 베기는 쿨다운 없음 / 보호막·초승달 크기.
 ## 2026-10-19 기획자 요청분: 바람·빛 파격 상향(피해 ×4, 크기, 사거리, 쿨 5/7초), 낙하 공격 버튼(동작 plunge: 공중에서만), '공격' 이름.
-## 같은 날 검토 지적분: 영혼마다 따로 세는 쿨다운(빛 뒤 씨앗 베기 — v1.1.0 맞딜 검수부터는 함께 잠김 1.5초 뒤, 호가 멈추지 않음) / 쿨다운 글자 '0' 없음 /
+## 같은 날 검토 지적분: 영혼마다 따로 세는 쿨다운(빛 뒤 씨앗 베기 바로 — 함께 잠김을 켜 두면 그 뒤, v1.1.0 맞딜 검수 2 부터 기본 꺼짐; 호가 멈추지 않음) / 쿨다운 글자 '0' 없음 /
 ##   땅에서 낙하+공격 같은 프레임 → 공격 / 공중 공격 중 낙하 버튼 기억 / 맞으면 기억 버림 / 흐트러짐 그대로(기계 35%) /
 ##   투사체가 등 뒤 적을 안 맞힘 / 벽에 붙어 쏘면 사이에 낀 적을 한 번만 맞힘.
 ## 2026-10-19 이펙트 리뉴얼 F1: 바람 = 초승달 검기(판정 = 초승달 머리), 빛 = 레이저(벽에서 멈춤, 여러 적 한 번씩) 로 시험을 바꿈.
@@ -830,8 +830,8 @@ func _cast_now(soul: String) -> void:
 
 
 func _test_review_fixes() -> void:
-	# (1) 쿨다운은 영혼마다 + 함께 잠김 (v1.1.0 맞딜 검수): 빛(7초)을 쏜 뒤 씨앗으로 바꾸면 1.5초 함께 잠김이 풀리자마자
-	#     씨앗 베기를 쓰고(빛의 7초를 기다리지 않는다), 빛의 호는 제 길이로 멈추지 않고 차오른다
+	# (1) 쿨다운은 영혼마다: 빛(7초)을 쏜 뒤 씨앗으로 바꾸면 씨앗 베기를 바로 쓰고(빛의 7초를 기다리지 않는다), 빛의 호는 제 길이로
+	#     멈추지 않고 차오른다. 함께 잠김(soul_shared_lockout — v1.1.0 맞딜 검수 2 부터 기본 0)을 켜 두면 그 잠김이 풀리자마자 쓴다.
 	_teleport(Vector2(400, FLOOR1_Y - 68.0), 1)
 	await _frames(3)
 	await _cast_now("light")
@@ -853,9 +853,14 @@ func _test_review_fixes() -> void:
 	var slash_state := _player.state_name()
 	print("[probe] 빛을 쏜 뒤(쿨 %.2f) 씨앗으로 전환: 영혼 %s, 씨앗 보이는 쿨 %.2f(제 쿨 %.2f), 글자 '%s', 바로 누르면 '%s', %d프레임 뒤 '%s'" % [light_cd, _player.soul, seed_left, seed_own, seed_text, locked_state, waited, slash_state])
 	var lock_frames := int(_player.soul_shared_lockout * 60.0)
-	_check(light_cd > 6.9 and _player.soul == "seed" and seed_own == 0.0 and seed_left > _player.soul_shared_lockout - 0.2 and seed_text == "2" and locked_state != "씨앗 베기",
-		"빛을 쏜 직후 씨앗으로 바꾸면 씨앗 제 쿨은 0 이지만 함께 잠김(%.2f초)이 보이고 아직 안 나간다" % _player.soul_shared_lockout)
-	_check(slash_state == "씨앗 베기" and waited <= lock_frames + 4 and waited >= lock_frames - 12, "함께 잠김이 풀리면(빛의 7초가 아니라 약 %.2f초 뒤) 씨앗 베기가 나간다 (%d프레임)" % [_player.soul_shared_lockout, waited])
+	if _player.soul_shared_lockout <= 0.0:
+		# v1.1.0 맞딜 검수 2: 함께 잠김 기본값 0 (꺼짐) — 빛을 쏜 뒤 씨앗으로 바꾸면 씨앗 베기를 바로 쓴다 (쿨다운은 영혼마다)
+		_check(light_cd > 6.9 and _player.soul == "seed" and seed_left == 0.0 and seed_text == "" and locked_state == "씨앗 베기" and waited == 0,
+			"빛을 쏜 뒤 씨앗으로 바꾸면 씨앗 베기를 바로 쓴다 (쿨다운은 영혼마다, 함께 잠김 꺼짐)")
+	else:
+		_check(light_cd > 6.9 and _player.soul == "seed" and seed_own == 0.0 and seed_left > _player.soul_shared_lockout - 0.2 and seed_text == "2" and locked_state != "씨앗 베기",
+			"빛을 쏜 직후 씨앗으로 바꾸면 씨앗 제 쿨은 0 이지만 함께 잠김(%.2f초)이 보이고 아직 안 나간다" % _player.soul_shared_lockout)
+		_check(slash_state == "씨앗 베기" and waited <= lock_frames + 4 and waited >= lock_frames - 12, "함께 잠김이 풀리면(빛의 7초가 아니라 약 %.2f초 뒤) 씨앗 베기가 나간다 (%d프레임)" % [_player.soul_shared_lockout, waited])
 	await _frames(60)
 	var r1 := _player.soul_cooldown_ratio("light")
 	var seed_cd := _player.soul_own_cooldown_left("seed")
@@ -863,7 +868,7 @@ func _test_review_fixes() -> void:
 	var r2 := _player.soul_cooldown_ratio("light")
 	print("[probe] 베기 뒤: 씨앗 제 쿨 %.2f, 빛 남은 쿨 %.2f, 빛 비율 %.3f → 0.5초 뒤 %.3f, 바람 제 쿨 %.2f" % [seed_cd, _player.soul_cooldown_left("light"), r1, r2, _player.soul_own_cooldown_left("wind")])
 	_check(seed_cd > 0.0 and seed_cd <= 1.4 and r1 < 1.0 and r2 < r1 - 0.05 and _player.soul_own_cooldown_left("wind") == 0.0, "씨앗은 제 쿨(1.4초), 빛의 비율은 멈추지 않고 줄고, 바람의 제 쿨은 0")
-	await _frames(int(_player.soul_shared_lockout * 60.0) - 90 + 6)   # 베기의 함께 잠김(누른 뒤 soul_shared_lockout 초)이 끝날 때까지 (앞에서 90프레임 기다렸다)
+	await _frames(maxi(int(_player.soul_shared_lockout * 60.0) - 90 + 6, 0))   # 베기의 함께 잠김(켜 두었다면 — 누른 뒤 soul_shared_lockout 초)이 끝날 때까지 (앞에서 90프레임 기다렸다)
 	await _tap("soul_next")   # 씨앗 → 바람
 	await get_tree().physics_frame
 	_check(_player.soul == "wind" and _player.soul_cooldown_text() == "" and _player.soul_cooldown_text("light") != "", "잠김이 끝난 뒤 바람으로 바꾸면 바람은 준비됨, 빛은 따로 남은 초 '%s'" % _player.soul_cooldown_text("light"))

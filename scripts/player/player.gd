@@ -279,8 +279,11 @@ signal stamina_pulsed(amount: float)
 ## 바람·빛은 쏜 순간부터, 씨앗 베기는 누른 순간(예비동작 시작)부터 센다 — 씨앗만 쓰면 누름 사이가 예비 0.28 + 제 쿨 1.4 = 1.68 초라
 ## 1.65 보다 길어 리듬이 그대로다 (1.68 을 넘기면 씨앗만 쓰는 사람도 느려진다).
 ## 예비동작 중에 맞아 끊긴 베기·모으는 중에 끊긴 빛은 쿨다운처럼 잠김도 돌려준다. HUD 영혼 원·터치 영혼 버튼의 쿨다운 호와 남은 초에 함께 보인다.
-## 대가: '잘하는 봇'(tools/probe_facetank --good)도 영혼을 바꿔 가며 쓰므로 느려진다 (기사·뿌리지기 약 +25%, 여왕 +40% — 기획자 결정 대기).
-@export var soul_shared_lockout := 1.65
+## 대가: '잘하는 봇'(tools/probe_facetank --good)도 영혼을 바꿔 가며 쓰므로 느려졌다 (기사·뿌리지기 약 +25%, 여왕 +40%).
+## → v1.1.0 맞딜 검수 2: **0 (꺼짐)**. 그 대신 보스 쪽에서 패턴을 무시하고 붙어 버티는 소녀만 응징한다 (각 보스 스크립트: 뿌리지기 두 번
+## 내려찍기·뿌리 창, 기사 두 번 내려찍기, 펌프 두 번 김 분출, 여왕 수액 터뜨리기·기술 없이 무너뜨린 무너짐은 1.6초, 새 공중 씨앗 베기 지침 1·
+## 잎 삼키기 끊기는 내려앉음마다 한 번). 잠그는 길(코드)은 조절용으로 남긴다 (0 보다 크게 하면 위 규칙 그대로; 시험 probe_stamina (k)).
+@export var soul_shared_lockout := 0.0
 
 ## 영혼마다의 이름·설명·색 (HUD·터치 버튼·전환 알림이 함께 쓴다). 색: 씨앗 연둣빛 / 바람 민트 / 빛 금빛.
 const SOUL_INFO := {
@@ -927,6 +930,7 @@ func _tick_soul_slash(delta: float) -> void:
 				var hit := HitData.make(slash_damage * attack_multiplier * Progress.skill_damage_mult("seed"), slash_poise, self, slash_knockback)
 				hit.from_player = true
 				hit.hitstop = 0.08
+				hit.soul = "seed"
 				hitbox.set_box(seed_slash_box(), facing)
 				hitbox.activate(hit, slash_active)
 				Juice.shake(3.0)

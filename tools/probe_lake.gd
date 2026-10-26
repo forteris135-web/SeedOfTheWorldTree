@@ -14,6 +14,8 @@ extends Node
 ##  6) 여왕 박자: 히트스톱 10번·일시정지 1초 뒤에도 보스곡과 맞고, 일시정지를 풀자마자 공격이 들어오지 않는다(예정이 마디 단위로 밀림)
 ##  7) 여왕 나비 되받기(실제 경로: 가드 → 저스트 가드 → 되받은 나비가 여왕에게 맞음): 한 마리 = 45 + 28 + REFLECT_POISE, 두 마리로는 안 무너짐
 ##  8) 무너진 채 2페이즈로 넘어가면 흐트러짐이 0 으로 돌아간다 (갈라짐 뒤 한 대에 또 무너지지 않음)
+##  8b) 무너짐 길이 (v1.1.0 맞딜 검수 2): 기술 없이(약공격·영혼 기술만) 무너뜨리면 brute_broken_time(1.6초)·피해 배수 1.0,
+##      흐트러짐의 4분의 1 이상이 기술(저스트 가드 한 번 45 = 0.26)이면 온전한 무너짐(5초·1.6배)
 ##  9) 회상에서 돌아온 보스 방: 호수 수액이 처음엔 잿빛이었다가(깜빡이지 않고) 정화 번짐과 함께 차오른다
 ## 10) (`-- --hidden` 또는 village_02 에 숨은 입구가 있을 때) 숨은 입구: 멀리선 틈(지도에 없음) → v1.1.0: 등불이 없어도 가까이(400) 가면
 ##     '본 것'(깃발·지도 ◆·잠긴 포탈 — 들어가지는 못함) → 등불을 얻으면 들어간다.
@@ -41,6 +43,7 @@ func _ready() -> void:
 	await _probe_queen_sync()
 	await _probe_queen_reflect()
 	await _probe_queen_phase2_from_broken()
+	await _probe_queen_break_kinds()
 	await _probe_lake_after_memory()
 	await _probe_hidden_portal_shots()
 	await _close()
@@ -725,7 +728,8 @@ func _probe_queen_reflect() -> void:
 # ---------- 8) 무너진 채 2페이즈 ----------
 func _probe_queen_phase2_from_broken() -> void:
 	var boss := await _start_queen_fight()
-	boss.receive_hit(HitData.make(1.0, 400.0, _player), null)
+	# 기술(저스트 가드)로 무너뜨린다 — 온전한 무너짐(5초)이라 섬에 내려앉은 채 2페이즈로 넘어간다 (기술 없는 무너짐은 1.6초라 그 전에 날아오른다 — 8b)
+	boss.on_just_guarded(_player, 400.0)
 	_check(boss.state == SapQueen.State.BROKEN, "흐트러짐 가득 → BROKEN (%s)" % boss.state_name())
 	await _until(func(): return boss.is_ground(), 4.0)
 	boss.hp = boss.max_hp * 0.5 + 5.0
@@ -736,6 +740,29 @@ func _probe_queen_phase2_from_broken() -> void:
 	await _wait(0.3)
 	boss.receive_hit(HitData.make(12.0, 20.0, _player), null)
 	_check(boss.state != SapQueen.State.BROKEN, "갈라짐 뒤 약공격 한 대로 다시 무너지지 않는다 (%s, 흐트러짐 %.0f)" % [boss.state_name(), boss.poise])
+	Game._busy = false
+	Progress.reset()
+
+
+# ---------- 8b) 무너짐 길이: 기술 없이 / 기술 몫 4분의 1 이상 ----------
+func _probe_queen_break_kinds() -> void:
+	var boss := await _start_queen_fight()
+	boss.receive_hit(HitData.make(1.0, 400.0, _player), null)
+	var len_brute: float = boss._timer
+	var mult_brute: float = boss._broken_mult
+	print("[probe] 여왕 기술 없는 무너짐: %.2f초, 피해 배수 %.2f" % [len_brute, mult_brute])
+	_check(boss.state == SapQueen.State.BROKEN and absf(len_brute - boss.brute_broken_time) < 0.02 and absf(mult_brute - boss.brute_broken_damage_multiplier) < 0.001,
+		"기술 없이 무너뜨리면 %.1f초·피해 ×%.1f (지금 %.2f초·×%.2f)" % [boss.brute_broken_time, boss.brute_broken_damage_multiplier, len_brute, mult_brute])
+	await _until(func(): return boss.state != SapQueen.State.BROKEN, 4.0)
+	await _wait(boss.poise_immune_after_broken + 0.3)
+	boss.on_just_guarded(_player, _player.just_guard_poise)
+	var st_after_jg: String = boss.state_name()
+	boss.receive_hit(HitData.make(1.0, 400.0, _player), null)
+	var len_skill: float = boss._timer
+	var mult_skill: float = boss._broken_mult
+	print("[probe] 여왕 저스트 가드 한 번(%.0f) + 그냥 때려 무너뜨림: %.2f초, 피해 배수 %.2f (저스트 가드 뒤 상태 %s)" % [_player.just_guard_poise, len_skill, mult_skill, st_after_jg])
+	_check(boss.state == SapQueen.State.BROKEN and absf(len_skill - boss.broken_time) < 0.02 and absf(mult_skill - boss.broken_damage_multiplier) < 0.001,
+		"흐트러짐의 4분의 1 이상이 기술(저스트 가드 한 번)이면 온전한 무너짐 %.1f초·×%.1f (지금 %.2f초·×%.2f)" % [boss.broken_time, boss.broken_damage_multiplier, len_skill, mult_skill])
 	Game._busy = false
 	Progress.reset()
 

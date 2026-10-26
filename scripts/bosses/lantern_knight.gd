@@ -119,6 +119,10 @@ var crowd := CrowdMeter.new(CROWD_RANGE)
 var plunge_decay := PlungeDecay.new()
 ## 지금 공격이 맞딜 응징인가 (응징 공격이 끝날 때까지 흐트러짐이 쌓이지 않는다 — 두들겨 끊거나 되돌림에 무너뜨릴 수 없다)
 var punishing := false
+## 응징 내려찍기 횟수 (시험이 --boss-set 으로 바꿀 수 있게 실수) / 남은 둘째 타격 수 / 다음 _begin 이 응징인가
+@export var punish_slams := 2.0
+var _slams_left := 0
+var _punish_start := false
 ## 내려찍기: 떨어질 자리 (도약하는 순간 정해진다). 돌진: 판정이 켜진 자리.
 var _slam_x := NAN
 var _slam_y := 0.0
@@ -149,6 +153,17 @@ const COMBO_PUSH_ACCEL := 2600.0
 const CHARGE_OVERSHOOT := 10.0
 ## 맞딜 방지 계량기 (v1.1.0): 이 거리 안에 붙어 있으면 쌓이고, 다 차면 내려찍기
 const CROWD_RANGE := 280.0
+## 계량기가 '붙어 있다'로 세는 소녀의 높이 (보스 발밑에서 소녀 가운데까지, px). v1.1.0 맞딜 검수 2: 몸 둘레에서 제자리 점프·이단 점프로
+## 떠 있으며 영혼 기술을 쏟는 소녀(공중 영혼 봇 — 함께 잠김을 걷은 뒤 18판 중 6판 승)도 센다 (기본 300 은 점프 꼭대기를 놓쳤다).
+const CROWD_MAX_UP := 520.0
+## 맞딜 응징 내려찍기 (v1.1.0 맞딜 검수 2 — 영혼 기술 함께 잠김을 걷고 그 대신): 몸에 붙어 버티는 소녀에게만 오는 내려찍기는
+##  - 판정·예고·이펙트가 땅에서 등불 불길이 솟는 높은 사각형 PUNISH_SLAM_BOX (가로 ±300 그대로, 땅에서 위로 400 — 몸 둘레에 떠 있는 소녀도 맞는다)
+##  - 첫 타격 뒤에도 소녀가 계량기 자리(CrowdMeter.covers) 안에 남아 있으면 한 번 더: 첫 타격(0.25초) 뒤 PUNISH_RESLAM 초 동안 같은 사각형에
+##    붉은 예고가 다시 차오르고 둘째 타격 (첫 타격에서 0.55초 — 맞은 뒤 무적 0.5초가 끝난 뒤라 맞고도 그 자리에 머무는 소녀는 또 맞는다).
+##    둘 다 가드 불가(붉은 예고), 구르기·달려 나가기로 피한다. 예고를 보고 빠진 소녀에게는 둘째 타격이 오지 않는다.
+## 보통 내려찍기(공격 후보)는 그대로 (SLAM_BOX, 한 번).
+const PUNISH_SLAM_BOX := Rect2(-300, -400, 600, 430)
+const PUNISH_RESLAM := 0.3
 
 ## 3연격 각 타의 예비 / 타격 / 되돌림 길이 (마지막 타는 붉은 예고)
 ## (마지막 올려치기 예비 0.5초: 가드 불가 붉은 예고는 공통 기준 0.45초 이상. 2페이즈에도 줄이지 않는다)
@@ -161,6 +176,7 @@ func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/knight_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	_tel = RangeTelegraph.attach(self)
+	crowd.max_up = CROWD_MAX_UP
 	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
 	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
@@ -280,6 +296,16 @@ func _physics_process(delta: float) -> void:
 					else:
 						_to_march())
 		State.SLAM:
+			if attack_phase == "active" and _timer <= 0.0 and _slams_left > 0 and player and crowd.covers(global_position, player.global_position):
+				# 응징 내려찍기의 둘째 타격 (첫 타격 뒤에도 붙어 있으면): 같은 사각형에 붉은 예고가 다시 차오른다
+				# (첫 타격에서 0.25 + PUNISH_RESLAM 초, 도약은 다시 하지 않는다)
+				_slams_left -= 1
+				attack_phase = "startup"
+				_timer = PUNISH_RESLAM
+				startup_len = PUNISH_RESLAM
+				windup_progress = 0.0
+				_red = true
+				_tel.show_rect(melee_reach(), true, PUNISH_RESLAM)
 			# 예비 30% 지점에서 소녀 쪽으로 도약: 남은 예비 시간에 꼭 맞게 떨어지도록 속도를 계산한다
 			if attack_phase == "startup" and not _leapt and windup_progress >= 0.3 and is_on_floor():
 				_leapt = true
@@ -295,11 +321,11 @@ func _physics_process(delta: float) -> void:
 				pass   # 공중: 가로 속도 유지
 			else:
 				velocity.x = move_toward(velocity.x, 0.0, 2500.0 * delta)
-			_phase_step(delta, 1.0 * fast, 0.25, 1.2 * fast, func() -> void:
+			_phase_step(delta, startup_len, 0.25, 1.2 * fast, func() -> void:
 				var hit := HitData.make(slam_damage, 0.0, self, Vector2(700, -320))
 				hit.guardable = false
 				hit.hitstop = 0.08
-				hitbox.set_box(SLAM_BOX, 1)
+				hitbox.set_box(PUNISH_SLAM_BOX if punishing else SLAM_BOX, 1)
 				hitbox.activate(hit, 0.25)
 				if not is_on_floor():
 					velocity.y = maxf(velocity.y, 900.0)
@@ -458,6 +484,10 @@ func state_progress(length: float) -> float:
 
 func _begin(st: State, startup: float) -> void:
 	_set_state(st)
+	if _punish_start:
+		# 응징 공격: 예고 사각형(melee_reach)이 응징 판정을 쓰도록 먼저 켠다
+		_punish_start = false
+		punishing = true
 	attack_phase = "startup"
 	windup_progress = 0.0
 	_timer = startup
@@ -493,7 +523,7 @@ func melee_reach() -> Rect2:
 			var lx := _slam_x
 			if is_nan(lx):
 				lx = _predict_slam_x()
-			var r := RangeTelegraph.box_world(hitbox, SLAM_BOX, 1)
+			var r := RangeTelegraph.box_world(hitbox, PUNISH_SLAM_BOX if punishing else SLAM_BOX, 1)
 			var dy := (_slam_y - global_position.y) if not is_nan(_slam_x) else 0.0
 			return Rect2(r.position + Vector2(lx - global_position.x, dy), r.size)
 		State.CHARGE:
@@ -547,8 +577,9 @@ func _choose_attack(dist: float) -> void:
 	if crowd.ready():
 		# 맞딜 방지 (v1.1.0): 몸에 붙어 버티는 소녀에게 내려찍기 (붉은 예고·가드 불가 — 구르기로 빠져야 한다)
 		crowd.consume()
+		_punish_start = true
 		_start_attack(State.SLAM)
-		punishing = true
+		_slams_left = maxi(int(punish_slams) - 1, 0)
 		return
 	if _high_time > high_time:
 		# 소녀가 높은 가지 위에서 버틴다: 검기를 소녀 쪽으로 올려 쏜다 (2페이즈는 등불 던지기도)
@@ -1055,6 +1086,7 @@ func _set_state(new_state: State) -> void:
 	state = new_state
 	anim_hint = ""
 	punishing = false
+	_slams_left = 0
 	if new_state not in ATTACK_STATES:
 		attack_phase = ""
 		_red = false

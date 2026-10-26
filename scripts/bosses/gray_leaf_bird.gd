@@ -33,6 +33,11 @@ signal telegraph(kind: String)   # "wind" 등 붉은 예고
 ## 무너졌다 일어선 뒤 이 시간(초) 동안은 흐트러짐이 쌓이지 않는다 (v1.1.0 맞딜 방지 — 기사·뿌리지기와 같은 규칙.
 ## 공격 버튼만 두들겨 무너짐을 잇따라 만드는 '샌드백'을 막는다. 되받은 깃털은 기술의 보상이라 그대로)
 @export var poise_immune_after_broken := 2.5
+## 공중의 새가 소녀의 영혼 기술(씨앗 베기)에 맞았을 때 쌓이는 지침 (v1.1.0 맞딜 검수 2 — 영혼 기술 함께 잠김을 걷고 그 대신):
+## 예전엔 흐트러짐 25 넘는 공격이라 무거운 공격(2)으로 셌다 → 점프 약공격과 같은 1. 제자리 점프로 떠 있으며 베기만 거듭하는 봇
+## (공중 영혼 — 18판 중 3판 승, 이긴 판 봇 체력 63%)이 두 번 베면 새가 지쳐 내려와, 잎 삼키기를 끊어 5초 무너짐을 거듭 받았다.
+## 기획서 6장 '깃털 반사(지침 +2)·점프 공격 네 번'의 길은 그대로.
+@export var slash_fatigue := 1.0
 
 @export_group("하늘")
 @export var hover_speed := 5.0            # 목표 지점으로 다가가는 빠르기
@@ -92,7 +97,7 @@ var piles: Array = []
 
 var _timer := 0.0
 var _air_timer := 0.0
-var _fatigue := 0
+var _fatigue := 0.0
 var _pattern_index := 0
 var _hover_target := Vector2.ZERO
 var _spawn_accum := 0.0
@@ -120,6 +125,8 @@ var _perch_pos := Vector2.ZERO
 ## 지금 공격이 맞딜 응징인가 (응징 공격은 흐트러짐이 쌓이지 않는다 — 두들겨 끊을 수 없다. 구르기로 피해야 한다)
 var punishing := false
 var _poise_immune := 0.0
+## 이번 내려앉음에 잎 삼키기를 이미 끊었나 (끊은 흐트러짐 +eat_interrupt_poise 는 내려앉음마다 한 번만 — v1.1.0 맞딜 검수 2)
+var _eat_cut := false
 
 ## 그림이 읽는 공개 값들 (기사·뿌리지기와 같은 약속)
 var attack_phase := ""          # SWEEP/PECK 의 startup / active / recovery (아니면 "")
@@ -219,9 +226,10 @@ func reset_fight() -> void:
 	hp = max_hp
 	poise = 0.0
 	phase = 1
-	_fatigue = 0
+	_fatigue = 0.0
 	_air_timer = 0.0
 	_pattern_index = 0
+	_eat_cut = false
 	visible = false
 	velocity = Vector2.ZERO
 	set_collision_mask_value(1, false)
@@ -358,6 +366,7 @@ func _physics_process(delta: float) -> void:
 				_set_state(State.GROUND_IDLE)
 				_ground_timer = ground_time if phase == 1 else ground_time * 0.78
 				_ground_actions = 0
+				_eat_cut = false
 				_timer = 0.5
 				Juice.shake(6.0)
 				_landing_gust()
@@ -408,7 +417,7 @@ func _physics_process(delta: float) -> void:
 				_set_state(State.HOVER)
 				_timer = _rest()
 				_air_timer = 0.0
-				_fatigue = 0
+				_fatigue = 0.0
 		State.BROKEN:
 			_settle_to_ground(delta)
 			velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
@@ -457,7 +466,7 @@ func _settle_to_ground(delta: float) -> void:
 
 func _should_descend() -> bool:
 	var need := descend_fatigue if phase == 1 else maxi(descend_fatigue - 1, 2)
-	return _fatigue >= need or _air_timer >= air_time_max
+	return _fatigue >= float(need) - 0.001 or _air_timer >= air_time_max
 
 
 func _next_pattern() -> void:
@@ -571,7 +580,7 @@ func _spawn_feather(index: int, count: int) -> void:
 	var spread := (index - (count - 1) / 2.0) * 0.12
 	var dir := (player.global_position + Vector2(0, -40) - origin).normalized().rotated(spread)
 	p.launch(dir, self, false)
-	p.reflected.connect(func(_pr): _fatigue += 2)
+	p.reflected.connect(func(_pr): _fatigue += 2.0)
 
 
 ## v1.1.0 (기획자 요청 4): 보스 투사체는 지형(가지·벽)을 뚫고 지나간다. 바닥 아래(아무도 맞을 수 없는 곳)로 내려가면 사라진다.
@@ -772,14 +781,19 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 	hp_changed.emit(hp, max_hp)
 	var gained := hit.poise
 	if state == State.EAT:
-		gained += eat_interrupt_poise   # 잎 삼키기를 끊었다
+		if not _eat_cut:
+			gained += eat_interrupt_poise   # 잎 삼키기를 끊었다 (내려앉음마다 한 번만 — 다시 삼키다 끊겨도 움찔만)
+			_eat_cut = true
 		hitbox.deactivate()
 		_set_state(State.GROUND_IDLE)
 		_timer = 1.2
 		stagger = 1.0   # 뒤로 움찔 (그림)
 		Juice.shake(5.0)
 	elif state in AIR_STATES:
-		_fatigue += 1 if not raw.from_player or raw.poise < 25.0 else 2
+		if raw.from_player and raw.soul != "":
+			_fatigue += slash_fatigue   # 공중에서 맞은 영혼 기술(씨앗 베기)은 점프 약공격만큼 지친다
+		else:
+			_fatigue += 1.0 if not raw.from_player or raw.poise < 25.0 else 2.0
 	if not is_ground() and not (hit.from_player and hit.source == self):
 		gained *= AIR_POISE_RATIO   # 하늘(내려오기·날아오르기 포함)에서는 흐트러짐 0.7배 (되받은 깃털은 온전히)
 	if (punishing or _poise_immune > 0.0) and not (hit.from_player and hit.source == self):

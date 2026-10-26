@@ -6,6 +6,8 @@ extends Node
 ##      응징 중엔 흐트러짐이 쌓이지 않음(되받은 나비는 그대로), 디딤돌 위 소녀에게는 계량기가 차지 않는다
 ##  (c) 뿌리지기: 가지(발밑 위 380) 위 소녀 → 계량기가 차면 큰 뿌리 가시 — 공격 범위 예고 = 소녀 발밑 가시 판정 기둥(±2px), 가시 끝이 소녀 발보다 140 넘게 위,
 ##      가시 판정이 소녀 맞는 영역과 겹친다(가지를 뚫고 닿는다), 2페이즈는 가시 둘, 땅의 소녀에게는 계량기가 차지 않는다, 보통 가시는 그대로 390
+##  (c2) 뿌리지기 맞딜 응징 (맞딜 검수 2): 멀리(300) 선 소녀 → 뿌리 창(큰 가시 둘 높이 600, 예비 동안 발밑을 따라감, 0.55초 뒤 하나 더, 주황),
+##      가까이(100) 선 소녀 → 두 번 내려찍기(높은 사각형, 붉은 예고)
 ##  (d) 새: 내려앉는 동안 앉을 자리에 날개바람 예고, 앉는 순간 판정 = 예고 = landing_reach (가드 가능, 피해 16, 몸 높이 180..460 — 땅에 선 소녀는 안 맞음)
 ##      / 하늘의 새 + 높은 자리 소녀 → 계량기가 차면 깃털 세례 (깃털 3+2 발, 새는 소녀 머리 위에서 쏜다), 땅의 소녀에게는 안 찬다
 ##  (e) 무쇠 펌프 장갑: 240, 되받은 방울 셋(저스트 가드 45 + 35 씩) = 240 → 깨짐, 둘이면 안 깨짐, 씨앗 베기는 ×0.4, 깨진 시간 10박
@@ -165,7 +167,8 @@ func _test_root() -> void:
 	var t_branch := b.perch.t
 	print("[probe] 뿌리지기 계량기: 땅 2.5초 %.2f / 가지(위 %.0f) 2.5초 %.2f" % [t_ground, gy - br.global_position.y, t_branch])
 	_check(t_ground < 0.01 and t_branch >= b.perch.trigger, "땅에선 안 차고, 가지 위에선 2.5초 안에 찬다")
-	# 공격을 고르게 한다 → 큰 가시
+	# 공격을 고르게 한다 → 큰 가시 (맞딜 계량기는 비운다 — 가지 위 소녀도 뿌리지기 400 안이면 붙어 있는 것으로 세어 뿌리 창이 먼저 나간다)
+	b.crowd.reset()
 	b._timer = 0.0
 	var tel_last := Rect2()
 	var spike: RootSpike = null
@@ -173,6 +176,7 @@ func _test_root() -> void:
 	var overlap := false
 	for i in 200:
 		_stand(p, bx, br.global_position.y)
+		b.crowd.reset()   # 이 시험은 높은 자리 응징만 본다 (가지 위 소녀도 400 안이면 맞딜 계량기가 차 뿌리 창이 끼어든다 — (c2) 에서 따로)
 		var tel: RangeTelegraph = b.get_node_or_null("RangeTelegraph")
 		if tel and tel.is_showing():
 			tel_last = tel.rect
@@ -218,6 +222,54 @@ func _test_root() -> void:
 	b.force_pattern("SPIKES")
 	_check(b.spike_heights.is_empty(), "보통 가시는 높이 기록 없음 (390 그대로)")
 	await _frames(120)
+	# (c2) 맞딜 검수 2: 계량기(400 안)가 찼을 때 — 땅에 선 소녀가 몸 가까이(175 안)면 두 번 내려찍기(높은 사각형), 멀거나 떠 있으면 뿌리 창
+	b._set_state(RootKeeper.State.STANCE)
+	b._timer = 999.0
+	b.perch.reset()
+	_stand(p, b.global_position.x - 300.0, gy)
+	await _frames(6)
+	b.crowd.t = b.crowd.trigger
+	b._choose(300.0)
+	var lance_ok: bool = b.state == RootKeeper.State.SPIKES and b._lance and b.punishing and b.spike_marks.size() == 2 \
+		and is_equal_approx(float(b.spike_heights[0]), RootKeeper.LANCE_HEIGHT)
+	_check(lance_ok, "멀리(300) 선 소녀: 뿌리 창 — 큰 가시 둘(높이 %.0f), 응징 (%s, 표시 %s, 높이 %s)" % [RootKeeper.LANCE_HEIGHT, b.state_name(), b.spike_marks, b.spike_heights])
+	_check(not b._tel.unguardable and b._tel.is_showing(), "뿌리 창 예고는 주황 기둥 (가드 가능)")
+	# 예비 60% 까지 소녀 발밑을 따라간다
+	_stand(p, b.global_position.x - 420.0, gy)
+	await _frames(12)
+	var follow := absf(float(b.spike_marks[0]) - p.global_position.x)
+	var spikes_before: Array = []
+	for n in get_tree().get_nodes_in_group("root_effect"):
+		if n is RootSpike:
+			spikes_before.append(n)
+	var waited := 0
+	while b.attack_phase == "startup" and waited < 120:
+		await get_tree().physics_frame
+		waited += 1
+	await _frames(2)
+	var new_spikes: Array = []
+	for n in get_tree().get_nodes_in_group("root_effect"):
+		if n is RootSpike and not (n in spikes_before):
+			new_spikes.append(n)
+	var delays: Array = []
+	var has_follow := false
+	for sp in new_spikes:
+		delays.append(snappedf(sp.delay, 0.01))
+		has_follow = has_follow or absf(sp.delay - RootKeeper.LANCE_FOLLOW) < 0.005
+	print("[probe] 뿌리 창: 따라감 오차 %.0f px, 새로 생긴 가시 %d, 기다림 %s" % [follow, new_spikes.size(), delays])
+	_check(follow < 30.0, "뿌리 창은 예비 동안 소녀 발밑을 따라간다 (오차 %.0f)" % follow)
+	_check(new_spikes.size() == 3 and has_follow, "뿌리 창: 큰 가시 둘 + %.2f초 뒤 소녀 자리에 하나 더 (스스로 기둥 예고)" % RootKeeper.LANCE_FOLLOW)
+	await _frames(150)
+	b._set_state(RootKeeper.State.STANCE)
+	b._timer = 999.0
+	_stand(p, b.global_position.x - 100.0, gy)
+	await _frames(6)
+	b.crowd.t = b.crowd.trigger
+	b._choose(100.0)
+	var stomp_rect: Rect2 = b.melee_reach()
+	_check(b.state == RootKeeper.State.STOMP and b.punishing and b._stomps_left == 1 and stomp_rect.size.y > 400.0 and b._tel.unguardable,
+		"가까이(100) 선 소녀: 두 번 내려찍기 — 응징, 둘째 하나 남음, 판정·예고 높이 %.0f (땅에서 위로 400 + 발밑 아래 20), 붉은 예고" % stomp_rect.size.y)
+	await _frames(200)
 	await _unload(r)
 
 

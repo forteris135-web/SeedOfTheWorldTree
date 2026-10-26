@@ -521,6 +521,19 @@ func _knight() -> void:
 	await _frames(110)
 	Fx.log_spawns = false
 	_check(not ("lantern_arc" in Fx.spawn_log), "기사 FLAME: 근접 판정이 없으니 근접 호 이펙트(lantern_arc)도 없다 (띄운 이펙트 %s)" % str(Fx.spawn_log.slice(0, 8)))
+	# 맞딜 응징 내려찍기 (v1.1.0 맞딜 검수 2): 높은 사각형(땅에서 위로 400) × 두 번 — 첫 타격 뒤에도 붙어 있으면 둘째 (예고가 다시 차오른다)
+	b.phase = 1
+	b.global_position = Vector2(b.arena.get_center().x + 300, b.ground_y)
+	b.velocity = Vector2.ZERO
+	b._set_state(b.State.MARCH)
+	b._timer = 99.0
+	await _frames(6)
+	p.global_position = b.global_position + Vector2(-120, -4)
+	b.facing = -1
+	await _measure("기사 응징 내려찍기(두 번)", r, func() -> void:
+		b.facing = -1
+		b.crowd.t = b.crowd.trigger
+		b._choose_attack(120.0), 220, ["knight_slam"], true, [0, 1])
 	await _unload(r)
 
 
@@ -545,6 +558,22 @@ func _root() -> void:
 			b._chain = -1
 			b.force_pattern(nm), 170, c[1], c[2])
 		b._chain = -1
+	# 맞딜 응징 내려찍기 (v1.1.0 맞딜 검수 2): 몸 둘레 높은 사각형(땅에서 위로 400) × 두 번 — 땅에 선 소녀가 몸 가까이(175 안)일 때
+	b.phase = 1
+	b.global_position = Vector2(b.arena.get_center().x + 300, b.ground_y)
+	b.velocity = Vector2.ZERO
+	b._set_state(b.State.STANCE)
+	b._timer = 99.0
+	await _frames(6)
+	p.global_position = b.global_position + Vector2(-100, -4)
+	await _frames(4)
+	await _measure("뿌리지기 응징 내려찍기(두 번)", r, func() -> void:
+		b.facing = -1
+		b._chain = -1
+		b.crowd.t = b.crowd.trigger
+		b._choose(100.0), 200, ["root_stomp"], false, [0, 1])
+	_check(b.get("punishing") == false or b.state != b.State.STOMP, "응징 내려찍기가 끝나면 punishing 꺼짐")
+	b._chain = -1
 	await _unload(r)
 
 
@@ -559,6 +588,24 @@ func _queen() -> void:
 		b._land_stone = b._pick_stone()
 		b._diving = false
 		b._begin(b.State.LAND, b._clock, beat * 2.0, beat, 0.0), 160, ["queen_land"], false)
+	# 수액 터뜨리기 (v1.1.0 맞딜 검수 2): 내려앉은 몸에 붙어 버티면 앉은 채로 몸 둘레를 두 번 친다 (예고 = 판정 = 물보라)
+	var p: Player = r["player"]
+	await _frames(60)
+	var stone: Node2D = b._pick_stone()
+	b._set_state(b.State.LANDED)
+	b.global_position = b._stone_top_center(stone)
+	b.velocity = Vector2.ZERO
+	b._phase_end = b._clock + 99.0
+	# 앞 시험(내려앉기) 동안 소녀가 곁에 서 있어 계량기가 차 이미 시작된 터뜨리기를 지운다 (이미 LANDED 면 _set_state 가 아무것도 안 한다)
+	b.crowd.reset()
+	b._burst_left = 0
+	b._burst_done = false   # 터뜨리기는 내려앉음마다 한 번 — 앞 시험 동안 이미 터뜨렸으면 이 내려앉음엔 다시 안 한다
+	b.hitbox.deactivate()
+	b._tel.clear()
+	await _frames(4)
+	p.global_position = b.global_position + Vector2(-120, -70)
+	await _measure("여왕 수액 터뜨리기(두 번)", r, func() -> void:
+		b.crowd.set("t", b.crowd.trigger), 200, ["queen_land"], false, [0, 1])
 	await _unload(r)
 
 
@@ -580,4 +627,12 @@ func _pump() -> void:
 	await _measure("펌프 VENT", r, func() -> void:
 		b.facing = -1
 		b.force_attack(b.State.VENT), 130, ["pump_vent"], false)
+	await _frames(40)
+	# 맞딜 응징 김 분출 (v1.1.0 맞딜 검수 2): 첫 분출 뒤에도 몸에 붙어 있으면 2박 뒤 한 번 더 (예고가 다시 차오른다)
+	p.global_position = b.global_position + Vector2(-150, -4)
+	await _frames(4)
+	await _measure("펌프 김 분출(두 번)", r, func() -> void:
+		b.facing = -1
+		b.crowd.t = b.crowd.trigger
+		b._choose_attack(), 200, ["pump_vent"], false, [0, 1])
 	await _unload(r)

@@ -69,14 +69,22 @@ const LAND_MIN_WIDTH := 300.0
 const WAVE_DIP := 170.0
 ## 내려앉기 착지 충격 판정 (Hitbox 노드 = 발밑 기준, 좌우 같음). v1.1.0: 공격 범위 예고·이펙트가 이 값을 그대로 쓴다.
 const LAND_BOX := Rect2(-170, -70, 340, 90)
-## 맞딜 방지 계량기 (v1.1.0): 내려앉은 동안 이 거리 안에 붙어 있으면 쌓이고, 다 차면 곧바로 날아올라 수액 물결.
-## 다 찬 채 하늘에 있으면 다음 패턴은 소녀에게 가장 가까운 돌로 내려앉기.
+## 맞딜 방지 계량기 (v1.1.0): 내려앉은 동안 이 거리 안에 붙어 있으면 쌓인다 (다 차면 아래 수액 터뜨리기).
+## 다 찬 채 하늘에 있으면 다음 패턴은 소녀에게 가장 가까운 돌로 내려앉기 (지금은 내려앉은 동안만 쌓이고 차는 즉시 터뜨려 거의 오지 않는다).
 const CROWD_RANGE := 280.0
-## 여왕만 쌓임 한도 2.5초 (명세 3.7 기본값; 다른 보스는 사다리 2단계 1.8초): 내려앉은 동안(6박 = 2.6초)이 소녀의 반격 기회다
-## (EXPANSION 3장, probe_lake '반격 창 ≥ 2.5초'). 1.8초로 하면 앞 내려앉음에서 남은 계량기 때문에 마지막 마디 첫 박(1.74초)에 물결이
-## 나가 반격 창이 1.9초로 잘렸다. 우연을 고정한 맞딜 시험(스태미너 없는 지금 소녀 그대로)에서 1.8초와 2.5초의 결과는 같았다 —
-## 진 판(안쪽 씨드 1)은 내려앉은 여왕이 계량기가 차기 전에 무너진 판이라 계량기로는 못 막는다. 스태미너(P 묶음)를 흉내 내면 6판 모두 봇이 진다.
-const CROWD_TRIGGER := 2.5
+## 쌓임 한도 (초). v1.1.0 에서는 2.5초(내려앉음 6박 = 2.61초의 끝에 걸려 응징이 거의 나오지 않았고, 응징은 날아올라 수액 물결 —
+## 반격 창을 잘랐다). v1.1.0 맞딜 검수 2 (영혼 기술 함께 잠김을 걷고 그 대신): 1.5초 — 다음 박에 '수액 터뜨리기'(앉은 채로 몸 둘레
+## BURST_BOX 를 두 번 친다, 왈츠에 맞춰 하나·둘 예고 → 셋에 첫 번째, 두 박 뒤 두 번째; 가드·저스트 가드 가능, 예고 사각형 = 판정 = 물보라).
+## 그동안 여왕은 앉아 있다 (땅에서 때릴 수 있는 반격 창은 그대로 — 내려앉음은 두 번째 터뜨림 한 박 뒤까지 늘어난다).
+## 터뜨리기는 내려앉음마다 한 번 (_burst_done — 곁에 붙어 있으면 터뜨리기를 거듭하며 땅에 눌러앉았다).
+const LANDED_CROWD_TRIGGER := 1.5
+## 계량기가 '붙어 있다'로 세는 소녀의 높이 (여왕 발밑에서 소녀 가운데까지, px). v1.1.0 맞딜 검수 2: 내려앉은 몸 둘레에서 제자리 점프·이단 점프로
+## 떠 있으며 영혼 기술을 쏟는 소녀(공중 영혼 봇)도 센다 — 기본 300 은 점프 꼭대기를 놓쳐 그 봇에게는 터뜨리기가 거의 오지 않았다 (기사·뿌리지기와 같은 520).
+const CROWD_MAX_UP := 520.0
+## 수액 터뜨리기 판정 (Hitbox 노드 = 발밑 기준, 좌우 같음): 몸 둘레 ±320 (계량기 범위 280 + 소녀 몸 절반), 발밑에서 위로 560 —
+## 계량기가 세는 높이(소녀 가운데 520)의 소녀 몸에 닿는다 (몸 둘레에 떠 있는 소녀도). 예고·물보라 이펙트가 이 사각형을 그대로 쓴다.
+const BURST_BOX := Rect2(-320, -560, 640, 580)
+const BURST_PULSES := 2
 ## 높은 자리 계량기 (v1.1.0 맞딜 검수, PerchMeter): 소녀가 디딤돌 위 200 넘게 높은 곳(가지 위·그 높이의 공중)에 PERCH_TRIGGER 초 머물면
 ## 다음 패턴은 '가지 나비 떼' — 여왕이 소녀 머리 위 비스듬한 자리(가로 PERCH_SIDE, 위 PERCH_ABOVE)로 올라가 나비를 PERCH_EXTRA 마리 더 풀어
 ## 내려보낸다. 박자·예고(하나·둘 → 셋)는 보통 나비 떼와 같고, 나비 판정 = 보이는 그림, 전부 가드 가능 — **저스트 가드로 되받으면** 보통 나비처럼
@@ -97,6 +105,18 @@ const PERCH_EXTRA := 2
 ## 무너졌다 날아오른 뒤 이 시간(초) 동안은 흐트러짐이 쌓이지 않는다 (v1.1.0 맞딜 방지 — 기사·뿌리지기와 같은 규칙.
 ## 되받은 나비는 기술의 보상이라 그대로)
 @export var poise_immune_after_broken := 2.5
+## 그냥 때려서 무너뜨렸을 때의 무너짐 길이 (초). v1.1.0 맞딜 검수 2 (영혼 기술 함께 잠김을 걷고 그 대신): 흐트러짐의 skill_break_share
+## (4분의 1) 이상이 되받은 나비·저스트 가드(기술)에서 왔으면 broken_time(5초)·피해 1.6배 그대로, 아니면(씨앗·바람·빛·약공격만 쏟아
+## 무너뜨림) 이 길이·brute_broken_damage_multiplier. 저스트 가드 한 번(45)이면 기술 몫 4분의 1(42.5)을 넘는다 — 나비를 되받거나 공격을
+## 저스트 가드로 받아 내는 사람은 온전한 무너짐을 받고, 패턴을 무시하고 맞으며 쏟기만 하는 길은 짧은 비틀거림만 받는다.
+## (영혼을 쏟는 봇이 내려앉은 여왕을 0.3초 만에 무너뜨리고 5초 × 1.6배를 두 번 받아 18판 중 6~11판, 공중 영혼 봇이 2.6초로도 2판을 이겼다.
+##  1.6초 + 기술 몫 4분의 1: 공중 영혼 1판(봇 체력 27%) — 잘하는 봇은 기술 몫 절반 규칙일 때보다 빨라졌다)
+@export var brute_broken_time := 1.6
+## 그냥 때려서 무너뜨렸을 때 무너진 동안 받는 피해 배수 (기술로 무너뜨리면 broken_damage_multiplier 1.6 그대로).
+## 내려앉자마자 바람·빛·씨앗을 한꺼번에 쏟는 봇은 무너진 첫 0.5초에 1.6배 × 세 기술로 여왕 체력의 3분의 1을 깎았다.
+@export var brute_broken_damage_multiplier := 1.0
+## 이번 무너짐의 피해 배수 (무너질 때 정한다)
+var _broken_mult := 1.6
 
 @export_group("패턴")
 @export var dust_damage := 14.0
@@ -166,7 +186,14 @@ var _rng := RandomNumberGenerator.new()
 var debug_log := false
 ## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
 var _tel: RangeTelegraph
-var crowd := CrowdMeter.new(CROWD_RANGE, CROWD_TRIGGER)
+var crowd := CrowdMeter.new(CROWD_RANGE, LANDED_CROWD_TRIGGER)
+## 수액 터뜨리기: 다음 터뜨림 시각(박자 시계) / 남은 횟수 / 지금까지 터뜨린 횟수(이펙트 관찰자가 센다)
+var _burst_at := -1.0
+var _burst_left := 0
+var burst_count := 0
+## 이번 내려앉음에 이미 수액 터뜨리기를 했나 (내려앉음마다 한 번 — 곁에 붙어 서 있으면 터뜨리기를 거듭하며 땅에 눌러앉던 것을 막는다:
+## 저스트 가드로 터뜨리기를 받아 내며 땅의 여왕을 끝없이 때릴 수 있었다. 터뜨린 뒤 남은 내려앉음엔 계량기가 쌓이지 않는다)
+var _burst_done := false
 ## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 앞 낙하 공격 뒤 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n; scripts/combat/plunge_decay.gd)
 var plunge_decay := PlungeDecay.new()
 ## 높은 자리 계량기 (v1.1.0 맞딜 검수) / 지금 나비 떼가 가지 나비 떼(높은 자리 응징)인가 / 그때 여왕이 머무는 자리
@@ -176,6 +203,11 @@ var _perch_pos := Vector2.ZERO
 ## 지금 공격이 맞딜 응징인가 (응징 공격 동안은 흐트러짐이 쌓이지 않는다 — 되받은 나비는 그대로)
 var punishing := false
 var _poise_immune := 0.0
+## 지금 흐트러짐 가운데 기술(되받은 나비·저스트 가드)에서 온 몫. 흐트러짐이 줄면 함께 줄어든다 (넘지 않게).
+var _skill_poise := 0.0
+## 흐트러짐 가운데 기술 몫이 이 비율 이상이면 온전한 무너짐(broken_time·1.6배), 아니면 brute_broken_time·brute_broken_damage_multiplier.
+## (절반이던 때 잘하는 봇의 무너짐 48번 가운데 39번이 기술 몫 0.26~0.46 이라 짧은 무너짐을 받아 잡는 시간이 +16% 였다 → 4분의 1)
+var skill_break_share := 0.25
 var _state_started_ms := 0
 
 @onready var sprite: Sprite2D = $Sprite
@@ -187,6 +219,7 @@ const SAP_WAVE := preload("res://scenes/combat/sap_wave.tscn")
 
 
 func _ready() -> void:
+	crowd.max_up = CROWD_MAX_UP
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/sap_queen_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	_tel = RangeTelegraph.attach(self)
@@ -243,6 +276,7 @@ func reset_fight() -> void:
 	_unregister()
 	hp = max_hp
 	poise = 0.0
+	_skill_poise = 0.0
 	phase = 1
 	crack_amount = 0.0
 	dive_amount = 0.0
@@ -254,6 +288,7 @@ func reset_fight() -> void:
 	set_collision_mask_value(1, false)
 	hitbox.deactivate()
 	crowd.reset()
+	_burst_done = false
 	perch.reset()
 	_perch_volley = false
 	plunge_decay.reset()
@@ -372,6 +407,7 @@ func _physics_process(delta: float) -> void:
 	_poise_hold = maxf(_poise_hold - delta, 0.0)
 	if _poise_hold <= 0.0 and poise > 0.0 and state not in [State.BROKEN, State.FALLEN, State.CRACK]:
 		poise = maxf(poise - poise_decay * delta, 0.0)
+		_skill_poise = minf(_skill_poise, poise)
 		poise_changed.emit(poise, max_poise)
 	_timer -= delta
 	_bob_t += delta
@@ -381,7 +417,7 @@ func _physics_process(delta: float) -> void:
 		telegraph_amount = maxf(telegraph_amount - delta * 4.0, 0.0)
 	if player:
 		# 맞딜 방지: 내려앉은 동안(땅에서 때릴 수 있을 때)만 쌓인다
-		crowd.tick(delta, global_position, player.global_position, state == State.LANDED, facing)
+		crowd.tick(delta, global_position, player.global_position, state == State.LANDED and not _burst_done, facing)
 		# 높은 자리: 공격할 수 있는 동안(하늘·패턴·내려앉음) 소녀가 가지 높이에 머물면 쌓인다 (무너짐·갈라짐·가지 나비 떼 중은 아님)
 		perch.tick(delta, ground_y, player, state in [State.HOVER, State.DUST, State.WAVE, State.BUTTERFLIES, State.LANDED, State.TAKEOFF, State.LAND] \
 			and not _perch_volley)
@@ -429,13 +465,28 @@ func _physics_process(delta: float) -> void:
 		State.LANDED:
 			_ground(delta)
 			velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
-			# 맞딜 방지 (v1.1.0): 내려앉은 몸에 붙어 버티는 소녀에게 — 다음 마디 첫 박에 날아올라 수액 물결 (점프로 넘긴다).
-			# 박자 규칙(패턴은 마디 첫 박에서)을 지킨다: 내려앉음이 그 마디 전에 끝나면 물결 대신 계량기를 하늘로 가져가 '소녀 쪽 돌로 내려앉기'로 응징.
-			var bar := _next_bar_after(_clock)
-			if crowd.ready() and bar < _phase_end - 0.01 and _clock + delta >= bar:
+			# 맞딜 방지: 내려앉은 몸에 붙어 버티는 소녀에게 수액 터뜨리기 (v1.1.0 의 '날아올라 수액 물결'은 맞딜 검수 2 에서 바꿈 — 반격 창을 잘랐다).
+			# 박자 규칙: 터뜨림은 박 위에서 (하나·둘 예고 → 셋), 둘째는 두 박 뒤.
+			if _burst_left > 0:
+				if _clock >= _burst_at:
+					_sap_burst()
+					_burst_left -= 1
+					if _burst_left > 0:
+						_burst_at += BEAT * 2.0
+						_tel.show_rect(burst_reach(), false, BEAT * 2.0)
+					else:
+						punishing = false   # 응징이 끝났다 — 남은 내려앉음은 다시 무너뜨릴 수 있는 빈틈
+			elif crowd.ready() and not _burst_done:
+				# 맞딜 방지 (v1.1.0 맞딜 검수 2): 내려앉은 몸에 붙어 버티는 소녀에게 — 다음 박부터 하나·둘 예고, 셋에 수액 터뜨리기 (내려앉음마다 한 번)
 				crowd.consume()
-				_punish_wave(bar)
+				_burst_done = true
+				_burst_at = ceilf(_clock / BEAT - 0.0001) * BEAT + BEAT * 2.0
+				_burst_left = BURST_PULSES
 				punishing = true
+				telegraph.emit("burst")
+				_tel.show_rect(burst_reach(), false, maxf(_burst_at - _clock, 0.05))
+				# 반격 창이 터뜨림에 먹히지 않게: 마지막 터뜨림 한 박 뒤까지 앉아 있다
+				_phase_end = maxf(_phase_end, _burst_at + BEAT * 2.0 * (BURST_PULSES - 1) + BEAT)
 			elif _left() <= 0.0:
 				_begin_takeoff()
 		State.TAKEOFF:
@@ -457,6 +508,7 @@ func _physics_process(delta: float) -> void:
 			_settle(delta)
 			if _timer <= 0.0:
 				poise = 0.0
+				_skill_poise = 0.0
 				poise_changed.emit(poise, max_poise)
 				_poise_immune = poise_immune_after_broken
 				_begin_takeoff()
@@ -656,6 +708,7 @@ func _touch_down() -> void:
 	dive_amount = 0.0
 	attack_phase = ""
 	_set_state(State.LANDED)
+	_burst_done = false
 	# 셋째 박(예정 시각)부터 LANDED_BEATS 박
 	_phase_end = maxf(_phase_end, _clock - BEAT * 0.5) + BEAT * LANDED_BEATS
 	var hit := HitData.make(land_damage, 0.0, self, Vector2(420, -260))
@@ -673,19 +726,26 @@ func melee_reach() -> Rect2:
 		var top := _stone_top_center(_land_stone)
 		return Rect2(top + hitbox.position + LAND_BOX.position, LAND_BOX.size)
 	if state == State.LANDED:
+		if _burst_left > 0:
+			return burst_reach()
 		return RangeTelegraph.box_world(hitbox, LAND_BOX, 1)
 	return Rect2()
 
 
-## 맞딜 응징: 내려앉은 채로 (마디 첫 박 t0 에) 수면 가까이 떠올라 셋째 박에 물결 (가드·점프로 피한다)
-func _punish_wave(t0: float) -> void:
-	hitbox.deactivate()
-	set_collision_mask_value(1, false)
-	_landed_touch = false
-	_hover_target = _random_hover()
-	_spawned = 0
-	telegraph.emit("wave")
-	_begin(State.WAVE, t0, BEAT * 2.0, BEAT, BEAT * 2.0)
+## 수액 터뜨리기의 판정이 덮을 월드 사각형 (예고·이펙트·시험이 같은 값)
+func burst_reach() -> Rect2:
+	return RangeTelegraph.box_world(hitbox, BURST_BOX, 1)
+
+
+## 수액 터뜨리기 한 번: 앉은 채로 몸 둘레를 친다 (가드 가능 — 저스트 가드면 흐트러짐이 쌓인다)
+func _sap_burst() -> void:
+	var hit := HitData.make(wave_damage, 0.0, self, Vector2(520, -300))
+	hit.hitstop = 0.05
+	hitbox.set_box(BURST_BOX, 1)
+	hitbox.activate(hit, 0.2)
+	burst_count += 1
+	Juice.shake(6.0)
+	Sfx.play("land", 0.0, 0.08)
 
 
 func _begin_takeoff() -> void:
@@ -840,7 +900,7 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		gained += REFLECT_POISE
 		reflected_count += 1
 	elif state == State.BROKEN:
-		dmg *= broken_damage_multiplier
+		dmg *= _broken_mult
 	elif not is_ground():
 		dmg *= AIR_DAMAGE_RATIO
 		gained *= AIR_POISE_RATIO
@@ -848,7 +908,7 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		gained = 0.0   # 맞딜 응징 중·무너졌다 날아오른 직후에는 무너뜨릴 수 없다
 	hp = maxf(hp - dmg, 0.0)
 	hp_changed.emit(hp, max_hp)
-	_add_poise(gained)
+	_add_poise(gained, reflected)
 	if hp <= 0.0:
 		_fall()
 		return "hit"
@@ -862,17 +922,28 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 
 func on_just_guarded(_by: Player, amount: float) -> void:
 	_flash = 1.0
-	_add_poise(amount)
+	_add_poise(amount, true)
 	if poise >= max_poise and state != State.BROKEN:
 		_break()
 
 
-func _add_poise(amount: float) -> void:
+## skill: 되받은 나비·저스트 가드에서 온 흐트러짐 (무너짐 길이를 고른다 — brute_broken_time)
+func _add_poise(amount: float, skill := false) -> void:
 	if amount <= 0.0:
 		return
+	var before := poise
 	poise = minf(poise + amount, max_poise)
+	if skill:
+		_skill_poise += poise - before
 	_poise_hold = 2.5
 	poise_changed.emit(poise, max_poise)
+
+
+## 이번 무너짐의 길이: 흐트러짐의 skill_break_share(4분의 1) 이상이 기술(되받은 나비·저스트 가드)이면 broken_time, 아니면 brute_broken_time
+func broken_length() -> float:
+	if poise <= 0.0 or _skill_poise / poise >= skill_break_share:
+		return broken_time
+	return minf(brute_broken_time, broken_time)
 
 
 func _break() -> void:
@@ -882,8 +953,9 @@ func _break() -> void:
 	dive_amount = 0.0
 	_glide_target = _island_top()
 	_landed_touch = state == State.LANDED
+	_timer = broken_length()
+	_broken_mult = broken_damage_multiplier if _timer >= broken_time else brute_broken_damage_multiplier
 	_set_state(State.BROKEN)
-	_timer = broken_time
 	Juice.hitstop(0.1, 0.05)
 	Juice.shake(8.0)
 	Sfx.play("broke", -2.0)
@@ -907,6 +979,7 @@ func _enter_phase2() -> void:
 	velocity = Vector2(0, -200)
 	# 무너진(BROKEN) 채 넘어와도 흐트러짐은 비운다 (안 비우면 갈라짐 뒤 한 대에 또 무너진다 — 2026-10-19 검토)
 	poise = 0.0
+	_skill_poise = 0.0
 	_poise_hold = 0.0
 	poise_changed.emit(poise, max_poise)
 	_set_state(State.CRACK)
@@ -970,6 +1043,7 @@ func _set_state(new_state: State) -> void:
 		print("[여왕] %s %.2f초 → %s (박 %d, 시계 %.2f)" % [State.keys()[state], (Time.get_ticks_msec() - _state_started_ms) / 1000.0, State.keys()[new_state], beat_index(), _clock])
 	_state_started_ms = Time.get_ticks_msec()
 	state = new_state
+	_burst_left = 0
 	if new_state not in [State.LAND, State.WAVE]:
 		punishing = false   # 응징(내려앉기, 또는 물결)이 끝나면 꺼진다 — 내려앉은 뒤(LANDED)는 다시 무너뜨릴 수 있는 빈틈
 	_perch_volley = false   # 가지 나비 떼는 그 나비 떼 동안만 (_next_pattern 이 _begin 뒤에 다시 켠다)
@@ -1010,6 +1084,7 @@ func telegraph_label(kind: String) -> String:
 	match kind:
 		"wave": return "수액 물결!"
 		"butterflies": return "나비 떼!"
+		"burst": return "수액 터뜨리기!"
 	return ""
 
 

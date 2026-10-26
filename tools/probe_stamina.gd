@@ -13,7 +13,8 @@ extends Node
 ##  (i) 1·2·3타 휘두름 소리 음높이 1.0 / 1.08 / 0.92 — 소녀 자기 소리 플레이어(SFX 버스)로, Sfx 안쪽을 건드리지 않는다
 ##  (j) 구르기 스태미너 15 (v1.1.0 맞딜 검수): 100 → 85, 구르는 동안 회복 0 → 끝난 뒤 0.5초 0 → 찬다, 14 면 구르지 않고 stamina_refused,
 ##      딱 15 면 구르고 0, 터치 회피 버튼은 15 미만이면 꺼짐(어둡게)
-##  (k) 영혼 기술 함께 잠김 1.65초 (v1.1.0 맞딜 검수 — 영혼 돌려 쓰기 막기): 씨앗 누름 → 바람·빛도 잠김(제 쿨은 0), 바꾸기는 즉시,
+##  (k) 영혼 기술 함께 잠김 — v1.1.0 맞딜 검수 2 부터 기본값 0(꺼짐: 씨앗 누름 뒤 바람·빛 바로 쓸 수 있음). 조절용으로 남긴 잠그는 길을 1.65초로 켜고 본다
+##      (v1.1.0 맞딜 검수 — 영혼 돌려 쓰기 막기): 씨앗 누름 → 바람·빛도 잠김(제 쿨은 0), 바꾸기는 즉시,
 ##      바꾼 영혼의 HUD 원·터치 버튼에 꽉 찬 호와 남은 초·버튼 꺼짐, 씨앗 → 바람 → 빛 → 씨앗이 1.65초 간격, 씨앗만 쓰면 리듬 그대로(1.68초),
 ##      예비동작 중 끊긴 베기·모으는 중 끊긴 빛은 잠김도 돌려줌, 쏴도 스태미너는 그대로(비용 0)
 
@@ -716,9 +717,6 @@ func _test_soul_lock() -> void:
 	Progress.gain_ability("light")
 	await get_tree().process_frame
 	var touch := _room.get_node_or_null("TouchControls")
-	var lock_len := _player.soul_shared_lockout
-	_check(_approx(lock_len, 1.65), "영혼 기술 함께 잠김 %.2f초 (Player.soul_shared_lockout 1.65)" % lock_len)
-	_check(lock_len < _player.slash_startup + _player.slash_cooldown, "함께 잠김(%.2f)이 씨앗만 거듭 쓸 때의 누름 사이(예비 + 제 쿨 = %.2f)보다 짧다 — 씨앗 리듬은 그대로" % [lock_len, _player.slash_startup + _player.slash_cooldown])
 	var ev := {"seed": 0, "wind": 0, "light": 0, "seed_t": -1.0, "wind_t": -1.0, "light_t": -1.0}
 	var on_seed := func():
 		ev["seed"] += 1
@@ -732,6 +730,23 @@ func _test_soul_lock() -> void:
 	_player.soul_slash_started.connect(on_seed)
 	_player.gust_cast.connect(on_wind)
 	_player.laser_charge_started.connect(on_light)
+	# 0) v1.1.0 맞딜 검수 2: 기본값은 0 (꺼짐) — 영혼 돌려 쓰기 맞딜은 보스 쪽 응징으로 막는다 (잘하는 플레이가 느려지지 않게).
+	#    씨앗 베기를 누른 바로 다음 틱에 바람으로 바꿔 쏠 수 있다 (바람의 제 쿨 0, 잠김 0).
+	_check(_approx(_player.soul_shared_lockout, 0.0), "영혼 기술 함께 잠김 기본값 0 (꺼짐, %.2f)" % _player.soul_shared_lockout)
+	await _reset()
+	_player.soul = "seed"
+	Progress.soul = "seed"
+	var ok_off := await _press_soul_until(ev, "seed", 0.2)
+	var lock_off := _player.soul_lock_left()
+	var wind_off := _player.soul_cooldown_left("wind")
+	var light_off := _player.soul_cooldown_left("light")
+	print("[probe] 잠김 꺼짐: 씨앗 누름 → 잠김 %.3f, 바람 보이는 쿨 %.3f, 빛 %.3f" % [lock_off, wind_off, light_off])
+	_check(ok_off and lock_off == 0.0 and wind_off == 0.0 and light_off == 0.0, "잠김이 꺼져 있으면 씨앗 베기를 눌러도 바람·빛은 잠기지 않는다")
+	await _wait(1.0)
+	# 아래는 잠그는 길(조절용으로 남긴 코드)이 여전히 맞게 도는지 — 예전 값 1.65초로 켜고 본다 (끝나면 0 으로 되돌린다)
+	_player.soul_shared_lockout = 1.65
+	var lock_len := _player.soul_shared_lockout
+	_check(lock_len < _player.slash_startup + _player.slash_cooldown, "(켰을 때) 함께 잠김(%.2f)이 씨앗만 거듭 쓸 때의 누름 사이(예비 + 제 쿨 = %.2f)보다 짧다 — 씨앗 리듬은 그대로" % [lock_len, _player.slash_startup + _player.slash_cooldown])
 	# 1) 씨앗 베기를 누르는 순간 바람·빛도 함께 잠긴다 (바람·빛의 제 쿨은 0 그대로, 쓴 스태미너도 0)
 	await _reset()
 	_player.soul = "seed"
@@ -820,6 +835,8 @@ func _test_soul_lock() -> void:
 	_player.soul_slash_started.disconnect(on_seed)
 	_player.gust_cast.disconnect(on_wind)
 	_player.laser_charge_started.disconnect(on_light)
+	_player.soul_shared_lockout = 0.0
+	_player._soul_cooldowns.clear()
 	_player.soul = "seed"
 	Progress.soul = "seed"
 	await _wait(1.0)

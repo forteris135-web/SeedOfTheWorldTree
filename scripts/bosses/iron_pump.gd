@@ -89,6 +89,11 @@ const BITE_BOX := Rect2(40, -230, 320, 250)
 ## 예고(범위 사각형)·김 이펙트는 이 사각형을 그대로 쓴다.
 const VENT_BOX := Rect2(-330, -700, 660, 760)
 const VENT_DAMAGE := 20.0
+## 김 분출 뒤에도 몸에 붙어 있으면 한 번 더 (v1.1.0 맞딜 검수 2 — 영혼 기술 함께 잠김을 걷고 그 대신): 첫 분출이 끝날 때 소녀가 계량기 자리
+## (CrowdMeter.covers — 가로 320) 안에 남아 있으면 첫 분출 2박 뒤 같은 사각형에서 한 번 더 (그 사이 예고가 다시 차오른다 — 첫 분출 판정 0.25초
+## + VENT_REPUFF). 맞은 뒤 무적 0.5초가 끝난 뒤라, 맞고도 몸에 붙어 있는 소녀는 또 맞는다. 예고를 보고 몸에서 떨어진 소녀에게는 오지 않는다.
+## (제자리 점프로 떠 있으며 영혼 기술을 쏟는 봇이 18판 중 8판 이겼다.)
+const VENT_REPUFF := 2.0 * BEAT - 0.25
 ## 맞딜 방지 계량기 (v1.1.0): 이 거리 안에 붙어 있으면 쌓이고, 다 차면 김 분출
 const CROWD_RANGE := 320.0
 ## 계량기의 위쪽 세로 한도 (발밑 기준 px): 몸 위 공중·가운데 가지 위에서 뛰는 소녀도 '붙어 있다'로 센다
@@ -143,6 +148,9 @@ var _idle_gap := 2.0 * BEAT
 ## 공격 범위 예고 / 맞딜 방지 계량기 (v1.1.0)
 var _tel: RangeTelegraph
 var crowd := CrowdMeter.new(CROWD_RANGE)
+## 김 분출 횟수 (맞딜 응징, 시험이 --boss-set 으로 바꿀 수 있게 실수) / 이번 김 분출에 남은 둘째 분출 수
+@export var vent_puffs := 2.0
+var _vents_left := 0
 ## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 앞 낙하 공격 뒤 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n; scripts/combat/plunge_decay.gd)
 var plunge_decay := PlungeDecay.new()
 var _poise_immune := 0.0
@@ -266,6 +274,14 @@ func _physics_process(delta: float) -> void:
 					_bite()
 		State.VENT:
 			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+			if attack_phase == "active" and _timer <= 0.0 and _vents_left > 0 and player and crowd.covers(global_position, player.global_position):
+				# 둘째 분출 (첫 분출 뒤에도 붙어 있으면): 같은 사각형에 예고가 다시 차오른다 (첫 분출 2박 뒤)
+				_vents_left -= 1
+				attack_phase = "startup"
+				_timer = VENT_REPUFF
+				startup_len = VENT_REPUFF
+				windup_progress = 0.0
+				_tel.show_rect(melee_reach(), false, VENT_REPUFF)
 			_phase_step(delta, 0.25, func() -> void: _vent())
 		State.STAGGER:
 			velocity.x = move_toward(velocity.x, 0.0, 900.0 * delta)
@@ -407,6 +423,7 @@ func _choose_attack() -> void:
 		crowd.consume()
 		_idle_gap = 2.0 * BEAT if phase == 1 else BEAT * randf_range(0.8, 2.0) * P2_REST_MULT
 		force_attack(State.VENT)
+		_vents_left = maxi(int(vent_puffs) - 1, 0)
 		return
 	var st: State
 	var jitter := 1.0
@@ -660,6 +677,7 @@ func _set_state(new_state: State) -> void:
 		print("[펌프] %s → %s" % [State.keys()[state], State.keys()[new_state]])
 	state = new_state
 	anim_hint = ""
+	_vents_left = 0
 	if new_state not in ATTACK_STATES:
 		attack_phase = ""
 	if _tel:

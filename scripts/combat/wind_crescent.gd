@@ -83,6 +83,8 @@ func _hit(area: Hurtbox) -> void:
 	hit.from_player = from_player
 	hit.reflected = was_reflected
 	hit.hitstop = 0.04
+	if from_player and not was_reflected:
+		hit.soul = "wind"
 	var result: String = area.receive(hit)
 	if result == "ignored":
 		return

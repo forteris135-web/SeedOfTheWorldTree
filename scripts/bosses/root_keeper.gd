@@ -34,8 +34,32 @@ const STOMP_BOX := Rect2(-130, -130, 260, 150)
 const WALL_BOX := Rect2(0, -260, 200, 290)
 const WALL_SPEED := 1100.0
 const WALL_ACTIVE := 0.6
-## 맞딜 방지 계량기 (v1.1.0): 이 거리 안에 붙어 있으면 쌓이고, 다 차면 지팡이 내려찍기
-const CROWD_RANGE := 260.0
+## 맞딜 방지 계량기 (v1.1.0): 이 거리 안에 붙어 있으면 쌓이고, 다 차면 응징 (몸 가까이 땅이면 두 번 내려찍기, 떠 있거나 멀면 뿌리 창).
+## v1.1.0 은 260. v1.1.0 맞딜 검수 2: 400 — 뿌리지기는 가까우면(260 안) 뒷걸음질하므로, 쫓아가 지팡이 끝 거리(350~390)에 서서
+## 씨앗 베기(앞 340)·바람·빛을 쏟으며 패턴을 맞아 넘기는 소녀(달리며 영혼 봇 — 18판 중 3판 승, 봇 체력 54%)도 '붙어 있다'로 센다.
+const CROWD_RANGE := 400.0
+## 계량기가 '붙어 있다'로 세는 소녀의 높이 (보스 발밑에서 소녀 가운데까지, px). v1.1.0 맞딜 검수 2: 몸 둘레에서 제자리 점프·이단 점프로
+## 떠 있으며 영혼 기술을 쏟는 소녀(공중 영혼 봇 — 함께 잠김을 걷은 뒤 18판 중 13판 승)도 센다 (기본 300 은 점프 꼭대기를 놓쳤다).
+const CROWD_MAX_UP := 520.0
+## 맞딜 응징 내려찍기 (v1.1.0 맞딜 검수 2 — 영혼 기술 함께 잠김을 걷고 그 대신): 몸에 붙어 버티는 소녀에게만 오는 내려찍기는
+##  - 판정·예고·이펙트가 몸 둘레 높이까지 솟는 뿌리 분출 사각형 PUNISH_STOMP_BOX (가로 ±150, 땅에서 위로 400 — 몸 둘레에 떠 있는 소녀도 맞는다)
+##  - 첫 타격 뒤에도 소녀가 계량기 자리(CrowdMeter.covers) 안에 남아 있으면 한 번 더: 첫 타격(0.3초) 뒤 PUNISH_RESTOMP 초 동안 같은 사각형에
+##    붉은 예고가 다시 차오르고 둘째 타격 (첫 타격에서 0.55초 — 맞은 뒤 무적 0.5초가 끝난 뒤라, 맞고도 그 자리에 머무는 소녀는 또 맞는다.
+##    예고를 보고 빠진 소녀에게는 오지 않는다).
+##    둘째 충격파 쌍(0.55초)은 둘째 타격과 함께 나간다. 둘 다 가드 불가(붉은 예고), 구르기로 피한다.
+## 보통 내려찍기(2페이즈 후보)는 그대로 (STOMP_BOX, 한 번).
+const PUNISH_STOMP_BOX := Rect2(-150, -400, 300, 420)
+const PUNISH_RESTOMP := 0.25
+## 계량기가 찼을 때 소녀가 땅에 서서 몸 가까이(가로 PUNISH_STOMP_REACH 안)면 위의 두 번 내려찍기, 떠 있거나 그보다 멀면
+## (지팡이 끝 거리에서 영혼 기술을 쏟거나 제자리 점프로 떠 있는 소녀 — 뒷걸음질하는 뿌리지기를 쫓아 붙는다) '뿌리 창':
+## 소녀 밑을 따라오는 큰 뿌리 가시 둘 (예비 60% 까지 소녀 발밑·달리는 쪽 앞을 따라가다 굳는다, 높이 LANCE_HEIGHT —
+## 이단 점프 꼭대기까지 닿는다, 예고 기둥 = 판정, 주황, 가드 가능 — 높은 자리 응징의 큰 가시와 같은 가시).
+const PUNISH_STOMP_REACH := 175.0
+const LANCE_HEIGHT := 600.0
+const LANCE_GAP := 200.0
+## 뿌리 창이 솟는 순간 소녀가 있는 자리에 LANCE_FOLLOW 초 뒤 한 번 더 솟는 큰 가시 (스스로 기둥 예고를 그리며 기다린다 — 예고 = 판정).
+## 맞은 뒤 무적 0.5초가 끝난 뒤라, 맞고도 그 자리에 머무는 소녀는 또 맞는다. 옆으로 비키면 그만.
+const LANCE_FOLLOW := 0.55
 ## 2페이즈 쉬는 시간 배수 (v1.1.0 맞딜 방지 사다리 4단계: 2페이즈 공격 사이 쉬는 시간 −15%)
 const P2_REST_MULT := 0.85
 ## 높은 자리 응징 (v1.1.0 맞딜 검수, PerchMeter): 소녀가 바닥보다 200 넘게 높은 곳(가지 위·그 높이의 공중)에 2.5초 머물면
@@ -138,6 +162,14 @@ var perch := PerchMeter.new()
 var _perch_spikes := false
 ## 지금 공격이 맞딜 응징인가 (응징 공격이 끝날 때까지 흐트러짐이 쌓이지 않는다 — 두들겨 끊거나 되돌림에 무너뜨릴 수 없다)
 var punishing := false
+## 응징 내려찍기 횟수 (시험이 --boss-set 으로 바꿀 수 있게 실수) / 이번 내려찍기에 남은 둘째 타격 수 / 다음 _begin 이 응징인가
+@export var punish_stomps := 2.0
+var _stomps_left := 0
+var _slams := 0
+var _punish_start := false
+## 이번 가시가 맞딜 응징 '뿌리 창'인가 (소녀 밑을 따라온다) / 다음 _start_attack 이 뿌리 창인가
+var _lance := false
+var _lance_next := false
 ## 뿌리 벽: 판정이 켜진 자리와 벽까지 갈 수 있는 거리 (예고·이펙트가 쓴다)
 var _wall_from := Vector2.ZERO
 ## 뿌리 벽 돌진 거리 기억 (_wall_travel): 출발 자리·방향·거리. 새 뿌리 벽을 시작할 때 비운다
@@ -159,6 +191,7 @@ func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/root_keeper_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	_tel = RangeTelegraph.attach(self)
+	crowd.max_up = CROWD_MAX_UP
 	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
 	max_hp *= Balance.hp_mult(Balance.region_of(self))
 	hp = max_hp
@@ -258,6 +291,8 @@ func _physics_process(delta: float) -> void:
 				velocity.x = 0.0
 		State.SPIKES:
 			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+			if _lance and attack_phase == "startup" and windup_progress < 0.6:
+				_track_lance()
 			_phase_step(delta, startup_len, 0.3, 1.0 * fast, func() -> void: _raise_spikes())
 		State.SWEEP:
 			velocity.x = move_toward(velocity.x, 0.0, SWEEP_DECEL * delta)
@@ -352,21 +387,33 @@ func _physics_process(delta: float) -> void:
 				Sfx.play("ring_hum", -4.0, 0.05))
 		State.STOMP:
 			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+			if attack_phase == "active" and _timer <= 0.0 and _stomps_left > 0 and player and crowd.covers(global_position, player.global_position):
+				# 응징 내려찍기의 둘째 타격 (첫 타격 뒤에도 붙어 있으면): 같은 사각형에 붉은 예고가 다시 차오른다 (첫 타격에서 0.3 + PUNISH_RESTOMP 초)
+				_stomps_left -= 1
+				attack_phase = "startup"
+				windup_progress = 0.0
+				_timer = PUNISH_RESTOMP
+				startup_len = PUNISH_RESTOMP
+				_red = true
+				_tel.show_rect(melee_reach(), true, PUNISH_RESTOMP)
 			_phase_step(delta, startup_len, 0.3, 1.2, func() -> void:
 				_red = false
 				var hit := HitData.make(stomp_slam_damage, 0.0, self, Vector2(620, -380))
 				hit.guardable = false
 				hit.hitstop = 0.08
-				hitbox.set_box(STOMP_BOX, 1)
+				hitbox.set_box(PUNISH_STOMP_BOX if punishing else STOMP_BOX, 1)
 				hitbox.activate(hit, 0.25)
 				Juice.shake(14.0)
 				Juice.rumble(0.7, 1.0, 0.3)
 				Sfx.play("stomp", 0.0, 0.06)
-				_spawn_shockwaves()
-				_queue(0.55, func() -> void:
-					Juice.shake(6.0)
-					Sfx.play("stomp", -5.0, 0.06)
-					_spawn_shockwaves()))
+				_slams += 1
+				if _slams == 1:
+					# 첫 타격: 충격파 양쪽 + 0.55초 뒤 한 쌍 더 (응징의 둘째 타격은 그 둘째 쌍과 함께 — 충격파를 더 내지 않는다)
+					_spawn_shockwaves()
+					_queue(0.55, func() -> void:
+						Juice.shake(6.0)
+						Sfx.play("stomp", -5.0, 0.06)
+						_spawn_shockwaves()))
 		State.RISE:
 			velocity.x = 0.0
 			if _timer <= 0.0:
@@ -449,6 +496,10 @@ func state_progress(length: float) -> float:
 
 func _begin(st: State, startup: float) -> void:
 	_set_state(st)
+	if _punish_start:
+		# 응징 공격: 예고 사각형(melee_reach)이 응징 판정을 쓰도록 먼저 켠다
+		_punish_start = false
+		punishing = true
 	attack_phase = "startup"
 	windup_progress = 0.0
 	_timer = startup
@@ -471,7 +522,7 @@ func melee_reach() -> Rect2:
 			return RangeTelegraph.box_world(hitbox, SWEEP2_BOX, facing, RangeTelegraph.slide_distance(SWEEP2_SLIDE, SWEEP_DECEL, SWEEP_ACTIVE),
 				RangeTelegraph.slide_first(SWEEP2_SLIDE, SWEEP_DECEL))
 		State.STOMP:
-			return RangeTelegraph.box_world(hitbox, STOMP_BOX, 1)
+			return RangeTelegraph.box_world(hitbox, PUNISH_STOMP_BOX if punishing else STOMP_BOX, 1)
 		State.SPIKES:
 			# 높은 자리 응징의 큰 가시: 소녀 발밑 가시가 솟아 덮을 기둥 (바닥 ~ 가시 끝, 판정 폭). 보통 가시는 각자의 바닥 예고.
 			if not spike_heights.is_empty() and not spike_marks.is_empty():
@@ -551,8 +602,15 @@ func _choose(dist: float) -> void:
 		# 맞딜 방지 (v1.1.0): 몸에 붙어 버티는 소녀에게 지팡이 내려찍기 (붉은 예고·가드 불가 — 양쪽으로 충격파도 달린다)
 		crowd.consume()
 		_chain = -1
-		_start_attack(State.STOMP)
-		punishing = true
+		if player and player.is_on_floor() and absf(player.global_position.x - global_position.x) <= PUNISH_STOMP_REACH:
+			_punish_start = true
+			_start_attack(State.STOMP)
+			_stomps_left = maxi(int(punish_stomps) - 1, 0)
+		else:
+			# 떠 있거나 지팡이 끝 거리: 소녀 밑을 따라오는 큰 뿌리 가시 둘 (뿌리 창)
+			_lance_next = true
+			_start_attack(State.SPIKES)
+			punishing = true
 		return
 	if perch.ready():
 		# 높은 자리 응징 (v1.1.0 맞딜 검수): 소녀 발밑에서 가지 높이까지 솟는 큰 뿌리 가시 (주황 기둥 예고 = 판정, 가드 가능)
@@ -619,6 +677,8 @@ func _pick_chain(st: State, dist: float) -> int:
 ## 패턴 하나를 시작한다 (예고 자리·붉은 빛·예고 글자·예비 길이).
 func _start_attack(st: State) -> void:
 	var fast := 0.7 if phase == 2 else 1.0
+	_lance = _lance_next and st == State.SPIKES   # 뿌리 창은 맞딜 응징으로 고른 가시만 (그 밖의 새 공격은 늘 끈다)
+	_lance_next = false
 	_last_attack = st
 	_red = st in RED_STATES
 	match st:
@@ -684,6 +744,13 @@ func _mark_spikes() -> void:
 	if player == null:
 		return
 	var px := player.global_position.x
+	if _lance:
+		# 맞딜 응징 '뿌리 창': 소녀 발밑 + 달리는 쪽(서 있으면 보스 반대쪽) 앞에 큰 가시 둘 (예비 60% 까지 따라간다 — _track_lance)
+		spike_marks = [px, px]
+		spike_delays = [0.0, 0.08]
+		spike_heights = [LANCE_HEIGHT, LANCE_HEIGHT]
+		_track_lance()
+		return
 	if perch_mode:
 		# 높은 자리 응징: 소녀 발밑(2페이즈는 소녀가 달리는 쪽, 서 있으면 보스 반대쪽에 하나 더)에 소녀 발 높이 + 150 까지 솟는 큰 가시
 		var h := clampf(PerchMeter.height_of(player, ground_y) + PERCH_SPIKE_OVER, RootSpike.HEIGHT, PERCH_SPIKE_MAX)
@@ -717,6 +784,18 @@ func _mark_spikes() -> void:
 		spike_marks[i] = _clamp_x(spike_marks[i])
 
 
+## 뿌리 창 자리: 소녀 발밑과 달리는 쪽(서 있으면 보스 반대쪽) LANCE_GAP 앞
+func _track_lance() -> void:
+	if player == null or spike_marks.size() < 2:
+		return
+	var px := player.global_position.x
+	var lead := signf(player.velocity.x) if absf(player.velocity.x) > 40.0 else signf(px - global_position.x)
+	if lead == 0.0:
+		lead = float(-facing)
+	spike_marks[0] = _clamp_x(px)
+	spike_marks[1] = _clamp_x(px + lead * LANCE_GAP)
+
+
 func _clamp_x(x: float) -> float:
 	if arena.size.x <= 0.0:
 		return x
@@ -724,6 +803,11 @@ func _clamp_x(x: float) -> float:
 
 
 func _raise_spikes() -> void:
+	if _lance and player:
+		# 뿌리 창의 뒤따르는 가시: 지금 소녀 자리에 LANCE_FOLLOW 초 뒤 (스스로 기둥 예고)
+		spike_marks.append(_clamp_x(player.global_position.x))
+		spike_delays.append(LANCE_FOLLOW)
+		spike_heights.append(LANCE_HEIGHT)
 	for i in spike_marks.size():
 		var sp: RootSpike = SPIKE.instantiate()
 		sp.damage = spike_damage
@@ -954,6 +1038,10 @@ func _set_state(new_state: State) -> void:
 	anim_hint = ""
 	_hint_timer = 0.0
 	punishing = false
+	_stomps_left = 0
+	_slams = 0
+	if new_state != State.SPIKES:
+		_lance = false
 	if new_state not in ATTACK_STATES:
 		attack_phase = ""
 	if _tel:

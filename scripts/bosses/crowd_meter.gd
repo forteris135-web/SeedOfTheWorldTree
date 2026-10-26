@@ -3,7 +3,8 @@ extends RefCounted
 ## 근접 압박 계량기 (v1.1.0 기획자 요청 8 마지막 문장: "보스의 공격 패턴을 무시하고 맞으면서 공격하는 방식으로 쉽게 승리할 수 없게").
 ## 보스마다 하나. 소녀가 보스 몸 가까이(|dx| ≤ range, |dy| < 300)에 붙어 있는 동안 시간이 쌓이고,
 ## 떨어지면 절반 빠르기로 식는다. trigger 초가 쌓이면(ready) 보스는 다음 공격으로 '응징 공격'(몸 둘레를 치는 공격)을 고르고 비운다(consume).
-## 응징 공격: 새 SWEEP(땅에서) · 기사 SLAM · 뿌리지기 STOMP · 여왕 WAVE(내려앉은 동안)/LAND(공중) · 펌프 VENT.
+## 응징 공격: 새 날개 털기(땅에서) · 기사 SLAM · 뿌리지기 STOMP/뿌리 창 · 여왕 수액 터뜨리기(내려앉은 동안) · 펌프 VENT
+## (맞딜 검수 2: 기사·뿌리지기·펌프는 첫 타격 뒤에도 소녀가 이 자리 안에 남아 있으면 둘째 — covers()).
 ## 패턴을 읽고 빠졌다 들어오는 소녀(붙어 있는 시간 < trigger)는 응징을 받지 않는다.
 
 ## 기본 쌓임 한도(초). 맞딜 승인 시험(tools/probe_facetank)이 통과하지 못하면 1.8 로 (명세 3.7 사다리 2단계).
@@ -45,6 +46,15 @@ func tick(delta: float, boss_pos: Vector2, player_pos: Vector2, grounded_boss: b
 		t += delta * mult
 	else:
 		t = maxf(t - 0.5 * delta, 0.0)
+
+
+## 소녀가 지금 '붙어 있다'의 자리 안인가 (가로 range_px, 세로 위 max_up·아래 MAX_DY — tick 과 같은 자리, 보스 상태는 보지 않는다).
+## v1.1.0 맞딜 검수 2: 응징 공격의 둘째 타격(뿌리지기 두 번 내려찍기·기사 두 번 내려찍기·펌프 두 번 김 분출)은 첫 타격 뒤에도
+## 소녀가 이 자리 안에 남아 있을 때만 — 예고를 보고 빠진 소녀에게는 오지 않는다.
+func covers(boss_pos: Vector2, player_pos: Vector2) -> bool:
+	var dx := player_pos.x - boss_pos.x
+	var dy := player_pos.y - boss_pos.y
+	return absf(dx) <= range_px and dy < MAX_DY and -dy < max_up
 
 
 func ready() -> bool:
