@@ -2,7 +2,7 @@ extends Node
 ## 맞딜 승인 시험 (v1.1.0 기획자 요청 8 마지막 문장: "보스의 공격 패턴을 무시하고 맞으면서 공격하는 방식으로 쉽게 승리할 수 없도록").
 ## 실행: godot --headless --fixed-fps 60 --path . res://tools/probe_facetank.tscn -- [--quick] [--mode stand,platform|all] [--only pump,queen]
 ##       [--spots front,back] [--seeds 6 (= 1..6) | 1,3 | 2-4] [--diff normal] [--trace] [--no-strict-face] [--roll-cost 15]
-##       [--good [--good-seeds 4] [--good-roll-cost 0]] [--list (계획만 출력)]
+##       [--soul-lock 1.5 (영혼 기술 함께 잠김을 바꿔 본다)] [--boss-set 이름=값,이름=값 / --player-set 이름=값 (보스·소녀 노드의 값을 바꿔 본다)] [--good [--good-seeds 4] [--good-roll-cost 0]] [--list (계획만 출력)]
 ## 마지막 줄 "[probe] 끝: 실패 N". 판마다 한 줄, 끝에 보스 × 방식 표.
 ##
 ## 봇 방식 (--mode, 쉼표로 여럿 또는 all; 기본 = 전부). 모든 봇은 가드·저스트 가드를 하지 않고(구르기는 rolltank·hitrun·punish_roll 만),
@@ -23,18 +23,23 @@ extends Node
 ##   range_air   range 와 같은데 뛰어오른 꼭대기에서 쏜다.
 ##   hitrun      박자 없이 드나들기: 목표 자리로 들어가 1.3초 몰아치기(베기 > 4.1초 낙하 > 약공격 둘) → 굴러 빠져 520 에서 2초 원거리 → 반복.
 ##   punish_roll 380 앞에서 기다리다 보스가 되돌림·무너짐·쉼이면 굴러 들어가 때리고, 새 예비동작이면 굴러 나온다.
-## 목표 자리가 있는 방식: stand·plunge_*·wind·light·rolltank·airmix·airslash·plunge4·hitrun (front/back/inside). 없는 방식: platform·range·range_air·punish_roll.
+##   soulcycle   영혼 돌려 쓰기 (마지막 검수의 새 봇): stand 처럼 목표 자리에 서서 맞으며, 쿨이 끝난 영혼 기술을 모두 준비되는 대로 쓴다
+##               (씨앗 베기 > 바람·빛 — 바꾸기는 공짜·즉시, 영혼마다 쿨다운이 따로) + 그 사이 약공격.
+##   soulrun     soulcycle 을 순간이동 없이: 목표 자리에서 250 넘게 멀면 달려가고(막히면 뛴다), 달리는 동안에도 보스 쪽을 보고 있으면
+##               원거리 영혼(빛·바람)을 쿨마다 쏜다. 250 안이면 soulcycle 과 같다.
+## 목표 자리가 있는 방식: stand·plunge_*·wind·light·rolltank·airmix·airslash·plunge4·hitrun·soulcycle·soulrun (front/back/inside). 없는 방식: platform·range·range_air·punish_roll.
 ## 성장: 그 보스를 만날 즈음의 예상치 (명세 3.8 표 — Progress.upgrades 를 직접 정한다).
 ##
 ## 합격 (오케스트레이터 결정, Normal 만, 기본 씨드 1–6 × 자리):
-##   stand: 어느 보스도 봇이 한 판도 못 이긴다 (300초를 버텨도 FAIL — 보스 화력 부족).
+##   stand·soulcycle: 어느 보스도 봇이 한 판도 못 이긴다 (300초를 버텨도 FAIL — 보스 화력 부족).
 ##   그 밖의 방식: 보스·방식마다 봇이 이긴 판이 1판 이하, 이긴 판도 봇 체력이 50% 넘게 남으면 안 된다 (300초 무승부는 이긴 것이 아님).
-## --quick (전체 회귀용, 8분 아래 — 지금 약 1분 30초): stand 다섯 보스(front·inside × 씨드 1) + 위험했던 보스의 방식 몇 가지 (QUICK_PLAN, 32판).
+## --quick (전체 회귀용, 8분 아래 — 지금 약 1분 30초): stand 다섯 보스(front·inside × 씨드 1) + 위험했던 보스의 방식 몇 가지 (QUICK_PLAN, 36판 —
+##   영혼 돌려 쓰기 여왕·뿌리지기 포함).
 ##   합격 규칙은 같다 (칸마다 2판 — 공중 맞딜 새 안쪽 씨드 1 은 전체 시험의 단 하나 봇 승(봇 체력 5%)이라 1/2 로 나온다).
 ## --diff easy 등: 결과만 출력 (합격 판정은 Normal 만).
 ## --good: '잘하는 사람' 봇 (전체 회귀에는 없음 — 보스를 고친 뒤 돌린다): 죽지 않게(매 틱 체력을 채움) 두고 패턴을 피한다 — 보스의 공격 범위 예고(RangeTelegraph)
 ##   안에 있으면 빠져나오고(달려 나갈 시간이 모자라면 가드 가능한 것은 저스트 가드, 가드 불가는 구르기), 다가오는 투사체는 저스트 가드(되받을 수 있는 것은 되받음),
-##   그 밖엔 다가가 약공격 3타·씨앗 베기·원거리 영혼·6초마다 낙하 공격, 하늘의 보스가 닿을 만하면 뛰어올라(이단 점프) 벤다.
+##   그 밖엔 다가가 약공격 3타·씨앗 베기·원거리 영혼(맞을 만할 때만 — _ranged_can_hit)·6초마다 낙하 공격, 하늘의 보스가 닿을 만하면 뛰어올라(이단 점프) 벤다.
 ##   보스를 쓰러뜨리는 시간(초)을 씨드마다 재고 1985add 기준값(GOOD_BASELINE)과 견준다 (합격 기준: 어느 보스도 +20% 안).
 ##   --good-roll-cost 0 처럼 구르기 비용을 바꿔 볼 수 있다.
 
@@ -57,13 +62,16 @@ const PROFILES := [
 ]
 const TRACKS := ["normal", "seed", "wind", "light", "stamina"]
 const MODES := ["stand", "plunge_air", "plunge_land", "plunge_mix", "wind", "light", "platform", "rolltank", "airmix", "airslash",
-	"plunge4", "range", "range_air", "hitrun", "punish_roll"]
+	"plunge4", "range", "range_air", "hitrun", "punish_roll", "soulcycle", "soulrun"]
 const MODE_NAMES := {"stand": "땅 맞딜", "plunge_air": "공중 연속 낙하", "plunge_land": "착지 낙하", "plunge_mix": "낙하+씨앗 베기",
 	"wind": "바람 영혼", "light": "빛 영혼", "platform": "가지 진치기", "rolltank": "맞딜+구르기 끊기", "airmix": "공중 맞딜",
-	"airslash": "공중 베기", "plunge4": "4.1초 낙하", "range": "원거리", "range_air": "공중 원거리", "hitrun": "드나들기", "punish_roll": "빈틈 구르기"}
+	"airslash": "공중 베기", "plunge4": "4.1초 낙하", "range": "원거리", "range_air": "공중 원거리", "hitrun": "드나들기", "punish_roll": "빈틈 구르기",
+	"soulcycle": "영혼 돌려 쓰기", "soulrun": "달리며 영혼"}
 ## 옛 이름 (--mode ground,plunge 도 그대로 받는다)
 const MODE_ALIASES := {"ground": "stand", "plunge": "plunge_air", "rolltank2": "rolltank"}
 const PLUNGE_MODES := ["plunge_air", "plunge_land", "plunge_mix"]
+## 땅 맞딜 줄: 한 판도 이기면 안 되는 방식 (무승부도 FAIL)
+const ZERO_WIN_MODES := ["stand", "soulcycle"]
 ## 목표 자리가 없는 방식
 const SPOTLESS := ["platform", "range", "range_air", "punish_roll"]
 const ALL_SPOTS := ["front", "back", "inside"]
@@ -76,10 +84,13 @@ const QUICK_PLAN := [
 	["airmix", ["pump", "bird", "queen"], ["front", "inside"], [1]],
 	["plunge4", ["pump"], ["front", "inside"], [1]],
 	["platform", ["queen", "root"], ["-"], [1, 2]],
+	["soulcycle", ["queen", "root"], ["front", "inside"], [1]],
 ]
 ## '잘하는 봇'의 1985add(맞딜 마무리 검수 앞) 기준 잡는 시간 (초, 씨드 1–4 평균, Normal; --good 이 % 차이를 출력한다).
 ## 잘하는 봇 코드를 바꾸면 1985add 에서 다시 재야 한다 (이 파일을 그 판에 넣고 --good).
-const GOOD_BASELINE := {"bird": 61.5, "pump": 45.8, "knight": 37.9, "queen": 75.8, "root": 51.0}
+## 영혼 함께 잠김 검수(2026-10-26): 원거리 영혼을 맞을 만할 때만 쏘게 바꾼 뒤 1985add 사본에서 다시 쟀다 — 새·펌프·기사·뿌리지기는 그대로,
+## 여왕만 75.8 → 82.0 (하늘에 뜬 여왕에게 가로로 쏘던 바람·빛을 안 쏜다).
+const GOOD_BASELINE := {"bird": 61.5, "pump": 45.8, "knight": 37.9, "queen": 82.0, "root": 51.0}
 
 var _fail := 0
 var _diff := "normal"
@@ -87,6 +98,9 @@ var _accel := 1
 var _strict_face := true
 var _trace := false
 var _roll_cost := -1.0
+var _soul_lock := -1.0
+var _boss_set := {}
+var _player_set := {}
 var _results: Array = []
 ## 판마다의 봇 상태
 var _b := {}
@@ -111,6 +125,17 @@ func _ready() -> void:
 	var rc := _arg(args, "--roll-cost", "")
 	if rc != "":
 		_roll_cost = float(rc)
+	var sl := _arg(args, "--soul-lock", "")
+	if sl != "":
+		_soul_lock = float(sl)
+	for kv in _arg(args, "--boss-set", "").split(",", false):
+		var p := kv.split("=")
+		if p.size() == 2:
+			_boss_set[p[0]] = float(p[1])
+	for kv in _arg(args, "--player-set", "").split(",", false):
+		var p := kv.split("=")
+		if p.size() == 2:
+			_player_set[p[0]] = float(p[1])
 	var only: Array = []
 	if _arg(args, "--only", "") != "":
 		only = Array(_arg(args, "--only", "").split(","))
@@ -158,8 +183,11 @@ func _ready() -> void:
 				for spot in spots:
 					for sd in seeds:
 						plan.append([mode, prof, spot, sd])
-	print("[probe] 맞딜 시험 시작 (난이도 %s, %s, %d판, 물리 %d틱/초 × 시간 %d배, 돌아서기 %s, 구르기 비용 %s)" % [_diff, "빠른 판" if quick else "전체",
-		plan.size(), Engine.physics_ticks_per_second, _accel, "사람처럼" if _strict_face else "자유", "기본" if _roll_cost < 0.0 else str(_roll_cost)])
+	print("[probe] 맞딜 시험 시작 (난이도 %s, %s, %d판, 물리 %d틱/초 × 시간 %d배, 돌아서기 %s, 구르기 비용 %s, 영혼 함께 잠김 %s)" % [_diff, "빠른 판" if quick else "전체",
+		plan.size(), Engine.physics_ticks_per_second, _accel, "사람처럼" if _strict_face else "자유", "기본" if _roll_cost < 0.0 else str(_roll_cost),
+		"기본" if _soul_lock < 0.0 else str(_soul_lock)])
+	if not _boss_set.is_empty() or not _player_set.is_empty():
+		print("[probe] 값 바꿈: 보스 %s, 소녀 %s" % [_boss_set, _player_set])
 	if "--list" in args:
 		for p in plan:
 			print("[probe]   %s %s %s %d" % [p[0], p[1]["id"], p[2], p[3]])
@@ -243,6 +271,14 @@ func _open_room(prof: Dictionary, mode: String) -> Array:
 	var boss := room.get_node("Boss") as Node2D
 	if _roll_cost >= 0.0:
 		player.roll_stamina_cost = _roll_cost
+	if _soul_lock >= 0.0:
+		player.soul_shared_lockout = _soul_lock
+	for k in _boss_set:
+		if k in boss:
+			boss.set(k, _boss_set[k])
+	for k in _player_set:
+		if k in player:
+			player.set(k, _player_set[k])
 	var arena: Rect2 = boss.arena
 	player.global_position = Vector2(arena.get_center().x - 300.0, float(boss.ground_y) - 80.0)
 	player.velocity = Vector2.ZERO
@@ -265,7 +301,7 @@ func _close_room(room: Node) -> void:
 func _run(prof: Dictionary, spot: String, sd: int, mode: String) -> void:
 	seed(9100 + sd * 7 + PROFILES.find(prof) * 31 + (ALL_SPOTS + ["-"]).find(spot) * 3 + MODES.find(mode) * 101)
 	_b = {"jump_hold": 0, "phase": "in", "phase_t": 0.0, "last_plunge_hit": -99.0, "plunged_air": false, "off_t": 0.0,
-		"burst_hits": 0, "dropping": false, "roll_side": 1, "teleports": 0, "now": 0.0}
+		"burst_hits": 0, "dropping": false, "roll_side": 1, "teleports": 0, "now": 0.0, "stuck_t": 0.0}
 	var opened: Array = await _open_room(prof, mode)
 	var room: Node = opened[0]
 	var player: Player = opened[1]
@@ -440,10 +476,13 @@ func _can_act(player: Player) -> bool:
 
 
 ## 쿨이 끝난 원거리 영혼을 쏜다 (먼저 그 영혼으로 바꾼다 — 바꾸기는 공짜). 눌렀으면 true.
-func _try_ranged(player: Player) -> bool:
+## aim_at 을 주면 맞을 만할 때만 쏜다 (_ranged_can_hit — 잘하는 봇).
+func _try_ranged(player: Player, aim_at: Node2D = null) -> bool:
 	if not _can_act(player):
 		return false
 	for s in _owned_ranged(player):
+		if aim_at != null and not _ranged_can_hit(player, aim_at, s):
+			continue
 		if player.soul_cooldown_left(s) <= 0.0:
 			if player.soul != s:
 				player.soul = s
@@ -451,6 +490,41 @@ func _try_ranged(player: Player) -> bool:
 			Input.action_press("soul_ability")
 			return true
 	return false
+
+
+## 원거리 영혼이 맞을 만한가: 보고 있는 쪽이고, 보스 맞는 영역(사각형)이 쏘는 줄(소녀 가슴 높이 ± 판정 높이의 절반)과 겹치며 사거리 안이다.
+## 잘하는 사람은 하늘 높이 뜬 보스에게 가로로 나가는 빛줄기·초승달을 쏘지 않는다 (v1.1.0 맞딜 검수: 영혼 기술 함께 잠김이 생긴 뒤로는
+## 헛쏜 한 발이 1.5초 동안 씨앗 베기를 막는다 — 예전 잘하는 봇은 하늘의 여왕에게 쏜 바람·빛 40여 발이 거의 다 빗나갔다).
+func _ranged_can_hit(player: Player, boss: Node2D, s: String) -> bool:
+	var r := _hurt_rect(boss)
+	if r.size == Vector2.ZERO:
+		return true
+	var me := player.global_position
+	var cx := r.get_center().x
+	if absf(cx - me.x) > 30.0 and signf(cx - me.x) != float(player.facing):
+		return false
+	var y := me.y - 20.0
+	var half := (player.gust_size.y if s == "wind" else player.light_shot_size.y) * 0.9 * 0.5
+	if r.end.y < y - half or r.position.y > y + half:
+		return false
+	var reach := player.gust_speed * player.gust_range_time + 100.0 if s == "wind" else player.light_beam_range()
+	var near := r.position.x - me.x if player.facing > 0 else me.x - r.end.x
+	return near <= reach
+
+
+## 보스 맞는 영역(Hurtbox 의 모양들)을 세상 좌표 사각형 하나로 (없으면 빈 사각형)
+func _hurt_rect(boss: Node2D) -> Rect2:
+	var out := Rect2()
+	var first := true
+	var stack: Array = [boss]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		if n is CollisionShape2D and n.get_parent() is Hurtbox and n.shape != null and not n.disabled:
+			var gr: Rect2 = n.global_transform * (n.shape as Shape2D).get_rect()
+			out = gr if first else out.merge(gr)
+			first = false
+	return out
 
 
 func _try_slash(player: Player) -> bool:
@@ -763,6 +837,52 @@ func _bot(mode: String, spot: String, player: Player, boss: Node2D, arena: Rect2
 					else:
 						_face_boss(player, boss)
 						_try_ranged(player)
+		"soulcycle", "soulrun":
+			_bot_soul(mode, spot, player, boss, arena, gy, do_move, tick, gdt, on_floor)
+
+
+## 영혼 돌려 쓰기 (soulcycle·soulrun; 마지막 검수 봇을 옮김): 패턴을 보지 않는 땅 맞딜인데 쿨이 끝난 영혼 기술을 모두 준비되는 대로 쓴다
+## (씨앗 베기 > 바람·빛 > 약공격). 쿨·잠김은 소녀가 보여 주는 값(soul_cooldown_left — HUD·터치 버튼과 같은 값)만 본다.
+func _bot_soul(mode: String, spot: String, player: Player, boss: Node2D, arena: Rect2, gy: float, do_move: bool, tick: int, gdt: float, on_floor: bool) -> void:
+	if mode == "soulrun":
+		# 사람처럼 달려 다닌다: 자리에서 250 넘게 멀면 달려가되(막혀 있으면 뛴다), 달리는 중에도 원거리 영혼은 쿨마다 쏜다
+		var off := _spot_x(boss, spot, arena) - player.global_position.x
+		_jump_logic(player, on_floor)
+		if absf(off) > 250.0 and player.state in Player.LOCOMOTION:
+			if absf(player.velocity.x) < 60.0:
+				_b["stuck_t"] += gdt
+			else:
+				_b["stuck_t"] = 0.0
+			Input.action_press("move_right" if off > 0.0 else "move_left")
+			if on_floor and _b["stuck_t"] > 0.25 and tick % 2 == 0:
+				Input.action_press("jump")
+				_b["jump_hold"] = 30
+				_b["stuck_t"] = 0.0
+			# 달리며 원거리 영혼 (보스 쪽을 보고 있을 때만 — 돌아서지 않는다)
+			var bdx := boss.global_position.x - player.global_position.x
+			if signf(bdx) == float(player.facing) and tick % 2 == 0:
+				for s in _owned_ranged(player):
+					if player.soul_cooldown_left(s) <= 0.0:
+						player.soul = s
+						Progress.soul = s
+						Input.action_press("soul_ability")
+						break
+			return
+	elif do_move:
+		var tx := _spot_x(boss, spot, arena)
+		if absf(player.global_position.x - tx) > MOVE_TOL:
+			_teleport(player, tx, gy)
+	_face_boss(player, boss)
+	if tick % 2 == 1:
+		return
+	if _need_heal(player):
+		Input.action_press("heal")
+		return
+	if _try_slash(player):
+		return
+	if _try_ranged(player):
+		return
+	Input.action_press("attack_light")
 
 
 ## 처음 여섯 방식 (stand·wind·light·plunge_air·plunge_land·plunge_mix): 0.25초마다 목표 자리로 순간이동, 짝수 틱에 누르고 홀수 틱에 뗀다.
@@ -852,7 +972,7 @@ func _summary() -> void:
 		var b: Dictionary = by[k]
 		var mk: Array = k.split("|")
 		var mode: String = mk[0]
-		if mode == "stand":
+		if mode in ZERO_WIN_MODES:
 			_check(b["won"] == 0 and b["draw"] == 0, "[%s] %s: 땅 맞딜 봇 승 %d/%d, 무승부 %d (0 이어야 함)" % [MODE_NAMES.get(mode, mode), mk[1], b["won"], b["n"], b["draw"]])
 		else:
 			_check(b["won"] <= 1 and b["worst_bot"] <= 50.0, "[%s] %s: 봇 승 %d/%d (1 이하), 이긴 판 봇 체력 최고 %.0f%% (50%% 이하), 무승부 %d" % [
@@ -866,7 +986,10 @@ func _good_all(args: PackedStringArray, only: Array) -> void:
 	var grc := _arg(args, "--good-roll-cost", "")
 	if grc != "":
 		_roll_cost = float(grc)
-	print("[probe] 잘하는 봇 (난이도 %s, 죽지 않음, 패턴 피하기·저스트 가드·모든 기술, 씨드 %s, 구르기 비용 %s)" % [_diff, seeds, "기본" if _roll_cost < 0.0 else str(_roll_cost)])
+	print("[probe] 잘하는 봇 (난이도 %s, 죽지 않음, 패턴 피하기·저스트 가드·모든 기술, 씨드 %s, 구르기 비용 %s, 영혼 함께 잠김 %s)" % [_diff, seeds,
+		"기본" if _roll_cost < 0.0 else str(_roll_cost), "기본" if _soul_lock < 0.0 else str(_soul_lock)])
+	if not _boss_set.is_empty():
+		print("[probe] 보스 값 바꿈: %s" % _boss_set)
 	for prof in PROFILES:
 		if not only.is_empty() and not prof["id"] in only:
 			continue
@@ -882,8 +1005,10 @@ func _good_all(args: PackedStringArray, only: Array) -> void:
 			breaks += r["breaks"]
 			jg += r["jg"]
 			rolls += r["rolls"]
-			print("[probe] (참고) 잘하는 봇 %s 씨드 %d: %s %.1f초, 맞음 %d, 저스트 가드 %d, 구르기 %d, 보스 무너짐 %d" % [prof["id"], sd,
-				"잡음" if r["won"] else "못 잡음", r["t"], r["hits"], r["jg"], r["rolls"], r["breaks"]])
+			var dl: Dictionary = r["dealt"]
+			print("[probe] (참고) 잘하는 봇 %s 씨드 %d: %s %.1f초, 맞음 %d, 저스트 가드 %d, 구르기 %d, 보스 무너짐 %d, 영혼 기술 씨앗 %d·바람 %d·빛 %d, 준 피해 베기 %.0f·원거리 %.0f·약공격 %.0f·낙하 %.0f" % [prof["id"], sd,
+				"잡음" if r["won"] else "못 잡음", r["t"], r["hits"], r["jg"], r["rolls"], r["breaks"], r["casts"]["seed"], r["casts"]["wind"], r["casts"]["light"],
+				dl["slash"], dl["ranged"], dl["light"], dl["plunge"]])
 		var avg := 0.0
 		for v in ts:
 			avg += v
@@ -919,6 +1044,25 @@ func _good_run(prof: Dictionary, sd: int) -> Dictionary:
 	var jg := [0]
 	player.just_guarded.connect(func(_s) -> void: jg[0] += 1)
 	player.roll_started.connect(func() -> void: _b["rolls"] += 1)
+	# 영혼 기술을 몇 번 썼나 (씨앗 베기 / 바람 / 빛) — 함께 잠김이 얼마나 막는지 보려고
+	var casts := {"seed": 0, "wind": 0, "light": 0}
+	player.soul_slash_started.connect(func() -> void: casts["seed"] += 1)
+	player.gust_cast.connect(func() -> void: casts["wind"] += 1)
+	player.laser_charge_started.connect(func() -> void: casts["light"] += 1)
+	# 보스에게 준 피해를 길별로 (씨앗 베기 / 낙하 / 약공격 / 원거리 = 그 밖 — 바람·빛)
+	var dealt := {"slash": 0.0, "plunge": 0.0, "light": 0.0, "ranged": 0.0}
+	var bhp_prev := [float(boss.hp)]
+	boss.hp_changed.connect(func(h: float, _m: float) -> void:
+		if h < bhp_prev[0] and is_instance_valid(player):
+			var k := "ranged"
+			if player.state == Player.State.PLUNGE:
+				k = "plunge"
+			elif player.state == Player.State.SOUL_SLASH:
+				k = "slash"
+			elif player.state == Player.State.ATTACK:
+				k = "light"
+			dealt[k] += bhp_prev[0] - h
+		bhp_prev[0] = h)
 	var breaks := [0]
 	if boss.has_signal("state_changed"):
 		boss.state_changed.connect(func(_a = null) -> void:
@@ -946,7 +1090,7 @@ func _good_run(prof: Dictionary, sd: int) -> Dictionary:
 		if player.state == Player.State.DEAD:
 			break
 		_good_bot(player, boss, arena, gy, tick, gdt)
-	var out := {"t": t if won else TIME_LIMIT, "won": won, "hits": hits[0], "jg": jg[0], "rolls": _b["rolls"], "breaks": breaks[0]}
+	var out := {"t": t if won else TIME_LIMIT, "won": won, "hits": hits[0], "jg": jg[0], "rolls": _b["rolls"], "breaks": breaks[0], "casts": casts, "dealt": dealt}
 	await _close_room(room)
 	return out
 
@@ -1113,7 +1257,7 @@ func _good_bot(player: Player, boss: Node2D, arena: Rect2, gy: float, tick: int,
 	# 원거리 영혼: 멀거나 보스가 하늘에 있을 때
 	if (adx > 300.0 or not grounded) and adx < 1100.0 and not _owned_ranged(player).is_empty():
 		_face_boss(player, boss)
-		if _try_ranged(player):
+		if _try_ranged(player, boss):
 			return
 	if adx < 380.0 and reach_y and _try_slash(player):
 		return

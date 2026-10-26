@@ -13,6 +13,9 @@ extends Node
 ##  (i) 1·2·3타 휘두름 소리 음높이 1.0 / 1.08 / 0.92 — 소녀 자기 소리 플레이어(SFX 버스)로, Sfx 안쪽을 건드리지 않는다
 ##  (j) 구르기 스태미너 15 (v1.1.0 맞딜 검수): 100 → 85, 구르는 동안 회복 0 → 끝난 뒤 0.5초 0 → 찬다, 14 면 구르지 않고 stamina_refused,
 ##      딱 15 면 구르고 0, 터치 회피 버튼은 15 미만이면 꺼짐(어둡게)
+##  (k) 영혼 기술 함께 잠김 1.65초 (v1.1.0 맞딜 검수 — 영혼 돌려 쓰기 막기): 씨앗 누름 → 바람·빛도 잠김(제 쿨은 0), 바꾸기는 즉시,
+##      바꾼 영혼의 HUD 원·터치 버튼에 꽉 찬 호와 남은 초·버튼 꺼짐, 씨앗 → 바람 → 빛 → 씨앗이 1.65초 간격, 씨앗만 쓰면 리듬 그대로(1.68초),
+##      예비동작 중 끊긴 베기·모으는 중 끊긴 빛은 잠김도 돌려줌, 쏴도 스태미너는 그대로(비용 0)
 
 var _fail := 0
 var _room: Node
@@ -69,6 +72,14 @@ func _reset(pos := STAND, stamina := -1.0) -> void:
 	_player._guard_regen_delay = 0.0
 
 
+## 게임 시계 (물리 delta 를 더한다 — 신호를 받은 순간의 시각을 적으려고)
+var _clk := 0.0
+
+
+func _physics_process(delta: float) -> void:
+	_clk += delta
+
+
 func _approx(a: float, b: float, eps := 0.01) -> bool:
 	return absf(a - b) <= eps
 
@@ -110,6 +121,7 @@ func _run() -> void:
 	await _test_token_mults()
 	await _test_swing_pitch()
 	await _test_roll()
+	await _test_soul_lock()
 
 
 ## 공격 버튼을 눌러 그 타가 시작되기를 기다린다. 시작되면 그 순간의 스태미너를 돌려준다 (-1 = 시작 안 됨)
@@ -680,4 +692,134 @@ func _test_roll() -> void:
 	await _frames(2)
 	_check(_player.state == Player.State.ROLL and _approx(_player.guard, 0.0) and touch_on, "스태미너가 딱 15 면 구르고 0 이 된다 (터치 회피 버튼 켜짐 %s)" % touch_on)
 	_player.stamina_refused.disconnect(cb)
+	await _wait(1.0)
+
+
+# ---------- (k) 영혼 기술 함께 잠김 ----------
+
+## 영혼 기술 버튼을 두 프레임에 한 번 누르며 ev[key] 횟수가 늘 때까지 (최대 max_sec 게임 초). 나갔으면 true.
+func _press_soul_until(ev: Dictionary, key: String, max_sec: float) -> bool:
+	var n0: int = ev[key]
+	var t0 := _clk
+	while _clk - t0 < max_sec:
+		Input.action_press("soul_ability")
+		await get_tree().physics_frame
+		Input.action_release("soul_ability")
+		if int(ev[key]) > n0:
+			return true
+		await get_tree().physics_frame
+	return false
+
+
+func _test_soul_lock() -> void:
+	Progress.gain_ability("wind")
+	Progress.gain_ability("light")
+	await get_tree().process_frame
+	var touch := _room.get_node_or_null("TouchControls")
+	var lock_len := _player.soul_shared_lockout
+	_check(_approx(lock_len, 1.65), "영혼 기술 함께 잠김 %.2f초 (Player.soul_shared_lockout 1.65)" % lock_len)
+	_check(lock_len < _player.slash_startup + _player.slash_cooldown, "함께 잠김(%.2f)이 씨앗만 거듭 쓸 때의 누름 사이(예비 + 제 쿨 = %.2f)보다 짧다 — 씨앗 리듬은 그대로" % [lock_len, _player.slash_startup + _player.slash_cooldown])
+	var ev := {"seed": 0, "wind": 0, "light": 0, "seed_t": -1.0, "wind_t": -1.0, "light_t": -1.0}
+	var on_seed := func():
+		ev["seed"] += 1
+		ev["seed_t"] = _clk
+	var on_wind := func():
+		ev["wind"] += 1
+		ev["wind_t"] = _clk
+	var on_light := func():
+		ev["light"] += 1
+		ev["light_t"] = _clk
+	_player.soul_slash_started.connect(on_seed)
+	_player.gust_cast.connect(on_wind)
+	_player.laser_charge_started.connect(on_light)
+	# 1) 씨앗 베기를 누르는 순간 바람·빛도 함께 잠긴다 (바람·빛의 제 쿨은 0 그대로, 쓴 스태미너도 0)
+	await _reset()
+	_player.soul = "seed"
+	Progress.soul = "seed"
+	var st0 := _player.guard
+	var ok_s0 := await _press_soul_until(ev, "seed", 0.2)
+	var lock0 := _player.soul_lock_left()
+	var wind_own := _player.soul_own_cooldown_left("wind")
+	var wind_left := _player.soul_cooldown_left("wind")
+	var light_left := _player.soul_cooldown_left("light")
+	print("[probe] 씨앗 누름 → 잠김 %.3f, 바람 제 쿨 %.2f / 보이는 쿨 %.3f, 빛 보이는 쿨 %.3f, 스태미너 %.1f → %.1f" % [lock0, wind_own, wind_left, light_left, st0, _player.guard])
+	_check(ok_s0 and lock0 > lock_len - 0.05 and lock0 <= lock_len and wind_own == 0.0 and _approx(wind_left, lock0) and _approx(light_left, lock0),
+		"씨앗 베기를 누르면 바람·빛도 함께 잠긴다 (제 쿨 0, 보이는 쿨 = 잠김 %.2f)" % lock0)
+	_check(_approx(_player.guard, st0), "영혼 기술은 여전히 스태미너를 쓰지 않는다")
+	# 2) 바꾸기는 즉시 — 바뀐 영혼의 HUD 원·터치 버튼이 잠김을 꽉 찬 호와 남은 초로 보이고 버튼은 꺼진다
+	await _tap("soul_next")
+	await get_tree().physics_frame   # 누른 것은 다음 물리 프레임에 잡힌다
+	var switched := _player.soul == "wind"
+	var r_full := _player.soul_cooldown_ratio()
+	var txt := _player.soul_cooldown_text()
+	var btn_off: bool = touch == null or not touch.button_enabled("soul")
+	print("[probe] 잠김 중 바람으로 바꿈: 영혼 %s, 비율 %.3f, 남은 초 '%s', 터치 버튼 꺼짐 %s (터치 %s)" % [_player.soul, r_full, txt, btn_off, touch != null])
+	_check(switched and r_full > 0.9 and txt == "2" and btn_off, "잠김 중에도 영혼 바꾸기는 즉시, 바람 원·버튼은 꽉 찬 호 · 남은 초 '2' · 터치 영혼 버튼 꺼짐")
+	while _clk - float(ev["seed_t"]) < lock_len * 0.5:
+		await get_tree().physics_frame
+	var r_half := _player.soul_cooldown_ratio()
+	_check(absf(r_half - 0.5) < 0.05 and _player.soul_cooldown_text() == "1", "잠김 절반이 지나면 호도 절반 (%.3f), 남은 초 '1'" % r_half)
+	# 3) 잠김이 풀릴 때까지 바람은 안 나가고, 풀리면 바로 나간다 (씨앗을 누른 뒤 lock_len 초)
+	var ok_w := await _press_soul_until(ev, "wind", 2.0)
+	var dt_w: float = float(ev["wind_t"]) - float(ev["seed_t"])
+	var seed_own := _player.soul_own_cooldown_left("seed")
+	var seed_left := _player.soul_cooldown_left("seed")
+	print("[probe] 바람: 씨앗 뒤 %.3f초에 나감, 그 순간 씨앗 제 쿨 %.3f / 보이는 쿨 %.3f" % [dt_w, seed_own, seed_left])
+	_check(ok_w and absf(dt_w - lock_len) <= 0.05, "바람은 씨앗을 누른 뒤 %.2f초에야 나간다 (%.3f초)" % [lock_len, dt_w])
+	_check(seed_own < 0.3 and seed_left > lock_len - 0.05, "바람을 쏘면 씨앗도 다시 잠긴다 (제 쿨 %.2f 는 거의 끝, 보이는 쿨 %.2f)" % [seed_own, seed_left])
+	# 4) 바꿔 가며 써도 lock_len 초에 하나: 바람 → 빛 → 씨앗
+	await _tap("soul_next")   # 바람 → 빛
+	var ok_l := await _press_soul_until(ev, "light", 2.0)
+	var dt_l: float = float(ev["light_t"]) - float(ev["wind_t"])
+	await _tap("soul_next")   # 빛 → 씨앗
+	var ok_s1 := await _press_soul_until(ev, "seed", 2.0)
+	var dt_s: float = float(ev["seed_t"]) - float(ev["light_t"])
+	print("[probe] 빛은 바람 뒤 %.3f초, 씨앗은 빛 뒤 %.3f초" % [dt_l, dt_s])
+	_check(ok_l and absf(dt_l - lock_len) <= 0.05 and ok_s1 and absf(dt_s - lock_len) <= 0.05, "세 영혼을 바꿔 가며 써도 %.2f초에 하나 (빛 %.3f · 씨앗 %.3f)" % [lock_len, dt_l, dt_s])
+	# 5) 씨앗만 거듭 쓰면 리듬은 그대로: 누름 사이 = 예비 0.28 + 제 쿨 1.4 (타격 순간부터) = 1.68 > 잠김 1.65
+	var s1: float = ev["seed_t"]
+	var ok_s2 := await _press_soul_until(ev, "seed", 2.5)
+	var dt_ss: float = float(ev["seed_t"]) - s1
+	var want_ss := _player.slash_startup + _player.slash_cooldown
+	print("[probe] 씨앗만 거듭: 누름 사이 %.3f초 (예비 + 제 쿨 = %.2f)" % [dt_ss, want_ss])
+	_check(ok_s2 and absf(dt_ss - want_ss) <= 0.05, "씨앗만 거듭 쓰면 리듬은 그대로 (%.3f초 ≈ %.2f)" % [dt_ss, want_ss])
+	await _wait(1.0)
+	# 6) 예비동작 중에 맞아 끊긴 씨앗 베기는 쿨다운처럼 잠김도 돌려준다 → 곧바로 바람을 쓴다
+	await _reset()
+	_player.soul = "seed"
+	Progress.soul = "seed"
+	await _press_soul_until(ev, "seed", 0.2)
+	await _frames(3)
+	var phase := _player.attack_phase
+	_player._invuln_timer = 0.0
+	var res: String = _player.receive_hit(HitData.make(5.0, 10.0, _player, Vector2(100, -50)), null)
+	var lock_after := _player.soul_lock_left()
+	_player._invuln_timer = 99999.0
+	print("[probe] 베기 예비동작(%s) 중 맞음 → %s, 잠김 %.3f, 씨앗 제 쿨 %.2f" % [phase, res, lock_after, _player.soul_own_cooldown_left("seed")])
+	_check(phase == "startup" and res == "hit" and lock_after == 0.0 and _player.soul_own_cooldown_left("seed") == 0.0, "예비동작 중 끊긴 씨앗 베기는 잠김도 쿨다운도 남기지 않는다")
+	while _player.state == Player.State.HIT:
+		await get_tree().physics_frame
+	await _tap("soul_next")   # 씨앗 → 바람
+	var ok_w2 := await _press_soul_until(ev, "wind", 0.1)
+	_check(ok_w2, "끊긴 베기 뒤 바람은 곧바로 나간다")
+	await _wait(1.5)
+	# 7) 모으는 중에 맞아 끊긴 빛도 잠김을 돌려준다
+	await _reset()
+	_player.soul = "light"
+	Progress.soul = "light"
+	await _press_soul_until(ev, "light", 0.2)
+	await _frames(2)
+	var lock_charge := _player.soul_lock_left()
+	_player._invuln_timer = 0.0
+	_player._set_state(Player.State.HIT)
+	_player._hit_timer = 0.3
+	await _frames(15)
+	_player._invuln_timer = 99999.0
+	print("[probe] 빛 모으는 중 맞음: 잠김 %.3f → %.3f, 빛 제 쿨 %.2f" % [lock_charge, _player.soul_lock_left(), _player.soul_own_cooldown_left("light")])
+	_check(lock_charge > 1.4 and _player.soul_lock_left() == 0.0 and _player.soul_own_cooldown_left("light") == 0.0, "모으는 중에 끊긴 빛은 쿨다운과 함께 잠김도 돌려준다")
+	_player.soul_slash_started.disconnect(on_seed)
+	_player.gust_cast.disconnect(on_wind)
+	_player.laser_charge_started.disconnect(on_light)
+	_player.soul = "seed"
+	Progress.soul = "seed"
 	await _wait(1.0)

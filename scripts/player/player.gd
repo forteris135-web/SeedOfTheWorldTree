@@ -30,6 +30,9 @@ const LIGHT_BOX_H := 112.0
 const SWING_PITCH := [1.0, 1.08, 0.92]
 ## 쿨다운이 이보다 적게 남으면 끝난 것으로 본다 (부동소수 찌꺼기)
 const COOLDOWN_EPS := 0.001
+## 영혼 기술 함께 잠김(soul_shared_lockout)의 남은 시간을 담는 칸 — 영혼별 쿨다운 사전(Progress.soul_cooldowns)에 같이 넣어
+## 저절로 줄고(_physics_process), 사전을 비우는 곳(부활·러시·시험 도구)에서 함께 지워진다.
+const SOUL_LOCK_KEY := "_lock"
 ## 바람·빛 투사체 판정이 소녀 가운데보다 뒤로 나가는 최대 거리 (px). 이보다 뒤(등 뒤)의 적은 맞지 않는다.
 const SHOT_BACK_REACH := 15.0
 
@@ -268,6 +271,17 @@ signal stamina_pulsed(amount: float)
 @export var light_beam_time := 0.42
 @export var light_beam_active := 0.08
 
+@export_group("영혼 기술 함께 잠김")
+## v1.1.0 맞딜 검수(영혼 돌려 쓰기): 어느 영혼 기술이든 쓰면 **모든** 영혼 기술이 이만큼(초) 함께 잠긴다.
+## 영혼마다의 쿨다운(씨앗 1.4 · 바람 5 · 빛 7)은 그대로, 영혼 바꾸기도 그대로 즉시 — 세 쿨다운을 겹쳐 바꿔 가며 몰아 쓰지 못하게 할 뿐이다
+## (패턴을 무시하고 맞으며 씨앗 → 바람 → 빛을 준비되는 대로 쏘던 봇이 여왕 18판 중 6판·뿌리지기 5판, 달려 다니며 쏘면 여왕 11판을 이겼다).
+## 1.5 에서는 달려 다니는 봇이 여왕 2판·뿌리지기 3판(봇 체력 78%)을 이겨 1.65 로 올렸다 (오케스트레이터 사다리 1.5 → 최대 2.5).
+## 바람·빛은 쏜 순간부터, 씨앗 베기는 누른 순간(예비동작 시작)부터 센다 — 씨앗만 쓰면 누름 사이가 예비 0.28 + 제 쿨 1.4 = 1.68 초라
+## 1.65 보다 길어 리듬이 그대로다 (1.68 을 넘기면 씨앗만 쓰는 사람도 느려진다).
+## 예비동작 중에 맞아 끊긴 베기·모으는 중에 끊긴 빛은 쿨다운처럼 잠김도 돌려준다. HUD 영혼 원·터치 영혼 버튼의 쿨다운 호와 남은 초에 함께 보인다.
+## 대가: '잘하는 봇'(tools/probe_facetank --good)도 영혼을 바꿔 가며 쓰므로 느려진다 (기사·뿌리지기 약 +25%, 여왕 +40% — 기획자 결정 대기).
+@export var soul_shared_lockout := 1.65
+
 ## 영혼마다의 이름·설명·색 (HUD·터치 버튼·전환 알림이 함께 쓴다). 색: 씨앗 연둣빛 / 바람 민트 / 빛 금빛.
 const SOUL_INFO := {
 	"seed": {"name": "씨앗", "title": "씨앗의 영혼", "source": "세계수의 씨앗", "desc": "넓은 베기 — 앞·위·아래를 한 번에 벤다", "color": Color(0.85, 1.0, 0.75)},
@@ -350,6 +364,8 @@ var _soul_cooldown: float:
 		return float(_soul_cooldowns.get(soul, 0.0))
 	set(v):
 		_soul_cooldowns[soul] = maxf(v, 0.0)
+## 씨앗 베기를 누르기 전의 함께 잠김 남은 시간 (예비동작 중에 끊기면 이 값으로 돌려준다)
+var _slash_lock_prev := 0.0
 var _interact_buffer := 0.0
 var _drop_timer := 0.0
 var _drop_body: Node = null
@@ -895,6 +911,8 @@ func _start_soul_slash() -> void:
 		if absf(axis) > 0.3:
 			facing = 1 if axis > 0.0 else -1
 	_set_state(State.SOUL_SLASH)
+	# 함께 잠김은 누른 순간부터 (영혼별 쿨다운은 아래 타격 순간에 — 끊기면 둘 다 돌려준다)
+	_slash_lock_prev = _set_soul_lock()
 	soul_slash_started.emit()
 
 
@@ -1122,21 +1140,55 @@ func soul_cooldown_total(s := "") -> float:
 
 
 ## 남은 쿨다운 (초). 0 이면 쓸 수 있다. 비우면 지금 고른 영혼 (쿨다운은 영혼마다 따로 센다).
+## 영혼별 쿨다운과 함께 잠김(soul_shared_lockout) 가운데 긴 쪽 — HUD·터치 버튼·입력이 모두 이 값을 본다.
 func soul_cooldown_left(s := "") -> float:
+	if s == "":
+		s = soul
+	return maxf(float(_soul_cooldowns.get(s, 0.0)), soul_lock_left())
+
+
+## 그 영혼 자신의 남은 쿨다운만 (함께 잠김 빼고).
+func soul_own_cooldown_left(s := "") -> float:
 	if s == "":
 		s = soul
 	return float(_soul_cooldowns.get(s, 0.0))
 
 
-## 남은 비율 (1 = 방금 씀, 0 = 준비됨). 그 영혼 자신의 쿨다운 길이로 나누므로 호가 멈추지 않고 차오른다.
+## 함께 잠김 남은 시간 (초). 0 이면 잠기지 않았다.
+func soul_lock_left() -> float:
+	return float(_soul_cooldowns.get(SOUL_LOCK_KEY, 0.0))
+
+
+## 영혼 기술을 썼다: 모든 영혼 기술을 soul_shared_lockout 초 함께 잠근다. 앞의 남은 값을 돌려준다 (끊겼을 때 되돌리려고).
+func _set_soul_lock() -> float:
+	var prev := soul_lock_left()
+	_soul_cooldowns[SOUL_LOCK_KEY] = maxf(prev, soul_shared_lockout)
+	return prev
+
+
+## 쓰다 끊긴 기술의 함께 잠김을 돌려준다 (prev = 걸기 전 남은 값; 그 사이 흐른 시간만큼은 prev 도 줄어 있다).
+func _refund_soul_lock(prev: float) -> void:
+	var set_to := maxf(prev, soul_shared_lockout)
+	var restored := soul_lock_left() - (set_to - prev)
+	_soul_cooldowns[SOUL_LOCK_KEY] = restored if restored > COOLDOWN_EPS else 0.0
+
+
+## 남은 비율 (1 = 방금 씀, 0 = 준비됨). 그 영혼 자신의 쿨다운이 남았으면 제 길이로 나누므로 호가 멈추지 않고 차오르고,
+## 함께 잠김이 더 길면 잠김 길이(soul_shared_lockout)로 나눠 꽉 찬 호가 짧게 줄어든다. 씨앗 베기를 휘두르는 중(예비동작)에는 꽉 찬 호
+## (타격 순간에 제 쿨 1.4초가 걸린다 — 그 사이 잠김 호가 줄었다 다시 차오르지 않게).
 func soul_cooldown_ratio(s := "") -> float:
 	if s == "":
 		s = soul
+	if s == "seed" and state == State.SOUL_SLASH and attack_phase == "startup":
+		return 1.0
+	var own := soul_own_cooldown_left(s)
+	var lock := soul_lock_left()
+	if lock > own and soul_shared_lockout > 0.0:
+		return clampf(lock / soul_shared_lockout, 0.0, 1.0)
 	var total := soul_cooldown_total(s)
-	var left := soul_cooldown_left(s)
-	if total <= 0.0 or left <= 0.0:
+	if total <= 0.0 or own <= 0.0:
 		return 0.0
-	return clampf(left / total, 0.0, 1.0)
+	return clampf(own / total, 0.0, 1.0)
 
 
 ## 터치 버튼·HUD 에 보이는 남은 초: "7", "6", … "1". 준비됐으면 "" ('0' 은 나오지 않는다).
@@ -1202,6 +1254,7 @@ func _cast_projectile() -> void:
 func _cast_wind() -> void:
 	var p: Projectile = WIND_CRESCENT.new()
 	_soul_cooldowns["wind"] = soul_cooldown_total("wind")
+	_set_soul_lock()
 	_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_shot)   # 쏜 뒤 0.7초는 스태미너가 차지 않는다
 	p.speed = gust_speed
 	p.damage = gust_damage * attack_multiplier * Progress.skill_damage_mult("wind")
@@ -1245,6 +1298,7 @@ func _cast_wind() -> void:
 ## 빛의 영혼: 레이저 (SoulLaser). 쿨다운은 지금 건다 — 모으는 동안 끊기면 돌려준다.
 func _cast_laser() -> void:
 	_soul_cooldowns["light"] = soul_cooldown_total("light")
+	var lock_prev := _set_soul_lock()
 	_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_shot)   # 쏜 뒤 0.7초는 스태미너가 차지 않는다
 	var l: SoulLaser = SOUL_LASER.new()
 	l.player = self
@@ -1256,7 +1310,9 @@ func _cast_laser() -> void:
 	l.charge_time = light_charge_time
 	l.show_time = light_beam_time
 	l.active_time = light_beam_active
-	l.cancelled.connect(func(): _soul_cooldowns["light"] = 0.0)
+	l.cancelled.connect(func():
+		_soul_cooldowns["light"] = 0.0
+		_refund_soul_lock(lock_prev))
 	l.fired.connect(_on_laser_fired)
 	get_parent().add_child(l)
 	laser_charge_started.emit()
@@ -1448,6 +1504,9 @@ func _set_state(new_state: State) -> void:
 	if state in NO_REGEN_STATES and not (new_state in NO_REGEN_STATES):
 		# 공격·영혼 기술·낙하 공격·가드에서 벗어났다: 짧게 기다린 뒤부터 스태미너가 찬다
 		_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_action)
+	if state == State.SOUL_SLASH and attack_phase == "startup":
+		# 예비동작 중에 끊긴 씨앗 베기: 쿨다운이 아직 안 걸렸듯 함께 잠김도 돌려준다
+		_refund_soul_lock(_slash_lock_prev)
 	state = new_state
 	if not (new_state in ATTACK_STATES):
 		attack_step = 0

@@ -241,7 +241,7 @@ func _test_soul_button_and_notice() -> void:
 	await _tap("soul_ability")
 	await get_tree().physics_frame
 	_check(_player.soul_cooldown_left() > 4.9 and _touch._buttons()["soul"]["text"] == "바람", "바람을 쏘면 5초 쿨다운, 버튼 글자는 그대로 '바람'")
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 바람 쿨과 함께 잠김을 비운다
 	await _frames(90)
 
 

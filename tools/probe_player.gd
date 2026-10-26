@@ -3,7 +3,7 @@ extends Node
 ## 검토 지적분(같은 날): 터치 스틱 세기 문턱 / 이단 점프 없을 때 튕김 / 튕김 뒤 잠금·기억 / 고른 영혼이 방·세이브를 건너 남음 /
 ##   착지 신호 한 번만 / 옛 키맵 파일 살리기 / 3연타 → 베기 연계 / 끊긴 베기는 쿨다운 없음 / 보호막·초승달 크기.
 ## 2026-10-19 기획자 요청분: 바람·빛 파격 상향(피해 ×4, 크기, 사거리, 쿨 5/7초), 낙하 공격 버튼(동작 plunge: 공중에서만), '공격' 이름.
-## 같은 날 검토 지적분: 영혼마다 따로 세는 쿨다운(빛 뒤 씨앗 베기 바로 가능, 호가 멈추지 않음) / 쿨다운 글자 '0' 없음 /
+## 같은 날 검토 지적분: 영혼마다 따로 세는 쿨다운(빛 뒤 씨앗 베기 — v1.1.0 맞딜 검수부터는 함께 잠김 1.5초 뒤, 호가 멈추지 않음) / 쿨다운 글자 '0' 없음 /
 ##   땅에서 낙하+공격 같은 프레임 → 공격 / 공중 공격 중 낙하 버튼 기억 / 맞으면 기억 버림 / 흐트러짐 그대로(기계 35%) /
 ##   투사체가 등 뒤 적을 안 맞힘 / 벽에 붙어 쏘면 사이에 낀 적을 한 번만 맞힘.
 ## 2026-10-19 이펙트 리뉴얼 F1: 바람 = 초승달 검기(판정 = 초승달 머리), 빛 = 레이저(벽에서 멈춤, 여러 적 한 번씩) 로 시험을 바꿈.
@@ -153,7 +153,7 @@ func _test_seed_slash() -> void:
 	_teleport(wc.global_position + Vector2(-150, -10), 1)
 	await _frames(8)
 	_player.soul = "seed"
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	var hp0 := wc.hp
 	var states := {}
 	var active_time := 0.0   # 히트박스가 켜져 있던 게임 시간 (히트스톱 동안은 delta 가 줄어든다)
@@ -185,7 +185,7 @@ func _test_seed_slash() -> void:
 	var far_pos := wc.global_position
 	_teleport(far_pos + Vector2(-300, -10), 1)
 	await _frames(6)
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	hp0 = wc.hp
 	await _tap("soul_ability")
 	for i in 40:
@@ -197,7 +197,7 @@ func _test_seed_slash() -> void:
 	# 공중에서도 된다: 뛰어오른 채 누르면 상태가 들어간다
 	_teleport(Vector2(300, 2000), 1)
 	await _frames(3)
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	await _tap("soul_ability")
 	await _frames(2)
 	_check(_player.state == Player.State.SOUL_SLASH and not _player.is_on_floor(), "공중에서도 씨앗 베기가 나간다 (%s, 바닥 %s)" % [_player.state_name(), _player.is_on_floor()])
@@ -208,7 +208,7 @@ func _test_seed_slash() -> void:
 func _test_slash_after_combo() -> void:
 	_teleport(Vector2(400, 2132), 1)
 	await _frames(3)
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	await _tap("attack_light")
 	var saw_recovery := false
 	for i in 40:
@@ -229,7 +229,7 @@ func _test_slash_cooldown_on_interrupt() -> void:
 	_dummy.global_position = Vector2(300, 2132)
 	_teleport(Vector2(400, 2132), 1)
 	await _frames(3)
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	await _tap("soul_ability")
 	await _frames(3)   # 예비동작(0.28초) 한가운데
 	var phase := _player.attack_phase
@@ -725,7 +725,7 @@ func _test_projectiles() -> void:
 	_teleport(Vector2(150, 2200 - 67 - 1), 1)
 	await _frames(4)
 	_player.soul = "wind"
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	var before := get_tree().get_nodes_in_group("projectile").size()
 	await _tap("soul_ability")
 	await get_tree().physics_frame
@@ -762,7 +762,7 @@ func _test_projectiles() -> void:
 	_teleport(Vector2(150, 2200 - 67 - 1), 1)
 	await _frames(4)
 	_player.soul = "light"
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	var fired := {"n": -1}
 	var on_fired := func(n): fired["n"] = n
 	_player.laser_fired.connect(on_fired)
@@ -784,13 +784,14 @@ func _test_projectiles() -> void:
 	_check(is_equal_approx(_player.slash_cooldown, 1.4), "씨앗 베기 쿨다운은 1.4초 그대로")
 	# 쏜 직후 쿨다운이 걸리고, 쿨다운 글자가 7 → 1 로 내려간다 (HUD·터치 버튼이 같은 함수를 쓴다)
 	_player.soul = "light"
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	_teleport(Vector2(150, 2200 - 67 - 1), 1)
 	await _frames(3)
 	await _tap("soul_ability")
 	await get_tree().physics_frame
 	var cd_after := _player.soul_cooldown_left()
 	var ratio := _player.soul_cooldown_ratio()
+	_player._soul_cooldowns.erase(Player.SOUL_LOCK_KEY)   # 글자 확인은 빛 제 쿨만으로 (함께 잠김 1.5초는 probe_stamina (k))
 	var texts := []
 	for v in [7.0, 6.5, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.5, 0.0]:
 		_player._soul_cooldown = v
@@ -800,7 +801,7 @@ func _test_projectiles() -> void:
 	_check(texts == ["7", "7", "6", "5", "4", "3", "2", "1", "1", ""], "쿨다운 글자가 7 → 1 로 내려가고 끝나면 빈 글자")
 	_check(_player.soul_short_name("wind") == "바람" and _player.soul_title("light") == "빛의 영혼" and _player.soul_desc("wind").ends_with("/ 쿨 5초") and _player.soul_desc("seed").ends_with("/ 쿨 1.4초"), "영혼 이름·알림 글자: 바람 / 빛의 영혼 / '… / 쿨 5초' / '… / 쿨 1.4초' (%s)" % _player.soul_desc("wind"))
 	_check(_player.soul_color("seed").is_equal_approx(Color(0.85, 1.0, 0.75)) and Player.soul_color_of("light").is_equal_approx(Color(1.0, 0.9, 0.7)), "영혼 색: 씨앗 연둣빛, 빛 금빛")
-	_player._soul_cooldown = 0.0
+	_player._soul_cooldowns.clear()   # 영혼별 쿨다운과 함께 잠김을 모두 비운다
 	await _frames(100)   # 빛 투사체가 사라질 때까지
 	_player.soul = "seed"
 	Progress.soul = "seed"
@@ -829,7 +830,8 @@ func _cast_now(soul: String) -> void:
 
 
 func _test_review_fixes() -> void:
-	# (1) 쿨다운은 영혼마다: 빛(7초)을 쏜 뒤 씨앗으로 바꾸면 씨앗 베기를 바로 쓸 수 있고, 빛의 호는 제 길이로 차오른다
+	# (1) 쿨다운은 영혼마다 + 함께 잠김 (v1.1.0 맞딜 검수): 빛(7초)을 쏜 뒤 씨앗으로 바꾸면 1.5초 함께 잠김이 풀리자마자
+	#     씨앗 베기를 쓰고(빛의 7초를 기다리지 않는다), 빛의 호는 제 길이로 멈추지 않고 차오른다
 	_teleport(Vector2(400, FLOOR1_Y - 68.0), 1)
 	await _frames(3)
 	await _cast_now("light")
@@ -838,22 +840,33 @@ func _test_review_fixes() -> void:
 	await _tap("soul_next")   # 빛 → 씨앗 (목록 seed, wind, light)
 	await get_tree().physics_frame
 	var seed_left := _player.soul_cooldown_left()
+	var seed_own := _player.soul_own_cooldown_left()
 	var seed_text := _player.soul_cooldown_text()
 	await _tap("soul_ability")
 	await get_tree().physics_frame
+	var locked_state := _player.state_name()
+	var waited := 0
+	while _player.state != Player.State.SOUL_SLASH and waited < 120:
+		await _tap("soul_ability")
+		await get_tree().physics_frame
+		waited += 2
 	var slash_state := _player.state_name()
-	print("[probe] 빛을 쏜 뒤(쿨 %.2f) 씨앗으로 전환: 영혼 %s, 씨앗 남은 쿨 %.2f, 글자 '%s', 베기 시도 → '%s'" % [light_cd, _player.soul, seed_left, seed_text, slash_state])
-	_check(light_cd > 6.9 and _player.soul == "seed" and seed_left == 0.0 and seed_text == "" and slash_state == "씨앗 베기", "빛을 쏜 뒤 씨앗으로 바꾸면 씨앗 베기를 바로 쓴다 (쿨다운은 영혼마다)")
+	print("[probe] 빛을 쏜 뒤(쿨 %.2f) 씨앗으로 전환: 영혼 %s, 씨앗 보이는 쿨 %.2f(제 쿨 %.2f), 글자 '%s', 바로 누르면 '%s', %d프레임 뒤 '%s'" % [light_cd, _player.soul, seed_left, seed_own, seed_text, locked_state, waited, slash_state])
+	var lock_frames := int(_player.soul_shared_lockout * 60.0)
+	_check(light_cd > 6.9 and _player.soul == "seed" and seed_own == 0.0 and seed_left > _player.soul_shared_lockout - 0.2 and seed_text == "2" and locked_state != "씨앗 베기",
+		"빛을 쏜 직후 씨앗으로 바꾸면 씨앗 제 쿨은 0 이지만 함께 잠김(%.2f초)이 보이고 아직 안 나간다" % _player.soul_shared_lockout)
+	_check(slash_state == "씨앗 베기" and waited <= lock_frames + 4 and waited >= lock_frames - 12, "함께 잠김이 풀리면(빛의 7초가 아니라 약 %.2f초 뒤) 씨앗 베기가 나간다 (%d프레임)" % [_player.soul_shared_lockout, waited])
 	await _frames(60)
 	var r1 := _player.soul_cooldown_ratio("light")
-	var seed_cd := _player.soul_cooldown_left("seed")
+	var seed_cd := _player.soul_own_cooldown_left("seed")
 	await _frames(30)
 	var r2 := _player.soul_cooldown_ratio("light")
-	print("[probe] 베기 뒤: 씨앗 남은 쿨 %.2f, 빛 남은 쿨 %.2f, 빛 비율 %.3f → 0.5초 뒤 %.3f, 바람 %.2f" % [seed_cd, _player.soul_cooldown_left("light"), r1, r2, _player.soul_cooldown_left("wind")])
-	_check(seed_cd > 0.0 and seed_cd <= 1.4 and r1 < 1.0 and r2 < r1 - 0.05 and _player.soul_cooldown_left("wind") == 0.0, "씨앗은 제 쿨(1.4초), 빛의 비율은 멈추지 않고 줄고, 바람은 0")
+	print("[probe] 베기 뒤: 씨앗 제 쿨 %.2f, 빛 남은 쿨 %.2f, 빛 비율 %.3f → 0.5초 뒤 %.3f, 바람 제 쿨 %.2f" % [seed_cd, _player.soul_cooldown_left("light"), r1, r2, _player.soul_own_cooldown_left("wind")])
+	_check(seed_cd > 0.0 and seed_cd <= 1.4 and r1 < 1.0 and r2 < r1 - 0.05 and _player.soul_own_cooldown_left("wind") == 0.0, "씨앗은 제 쿨(1.4초), 빛의 비율은 멈추지 않고 줄고, 바람의 제 쿨은 0")
+	await _frames(int(_player.soul_shared_lockout * 60.0) - 90 + 6)   # 베기의 함께 잠김(누른 뒤 soul_shared_lockout 초)이 끝날 때까지 (앞에서 90프레임 기다렸다)
 	await _tap("soul_next")   # 씨앗 → 바람
 	await get_tree().physics_frame
-	_check(_player.soul == "wind" and _player.soul_cooldown_text() == "" and _player.soul_cooldown_text("light") != "", "바람으로 바꾸면 바람은 준비됨, 빛은 따로 남은 초 '%s'" % _player.soul_cooldown_text("light"))
+	_check(_player.soul == "wind" and _player.soul_cooldown_text() == "" and _player.soul_cooldown_text("light") != "", "잠김이 끝난 뒤 바람으로 바꾸면 바람은 준비됨, 빛은 따로 남은 초 '%s'" % _player.soul_cooldown_text("light"))
 	await _frames(60)
 
 	# (2) 쿨다운 글자에 '0' 이 끼지 않는다 (1/60 씩 줄어 생기는 부동소수 찌꺼기), 글자가 비면 정말 0
