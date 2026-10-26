@@ -6,7 +6,7 @@ const ArtMeasure := preload("res://tools/shot_art_measure.gd")
 ##  - 판정: 켜져 있던 동안 Hitbox 사각형의 합 (움직이는 공격은 쓸고 지나간 구간)
 ##  - 예고: 보스의 RangeTelegraph 가 예비동작 끝(타격 직전)에 그리던 사각형 — 판정과 ±2px (움직이는 공격 ±MOVE_TOL)
 ##  - 이펙트: 그 공격의 이펙트 그림(알파 0.25 이상 부분, 투명도 0.25 이상인 동안)의 합 — 각 변이 판정 변에서 ±max(40px, 그 치수의 15%)
-## 보스가 소녀를 맞히지 않게 소녀는 무적·입력 끔. 판정 숫자는 바꾸지 않는다(이펙트·예고를 판정에 맞춘다).
+## 새 내려앉기 날개바람(v1.1.0 맞딜 검수)도 같은 규칙으로 잰다. 보스가 소녀를 맞히지 않게 소녀는 무적·입력 끔. 판정 숫자는 바꾸지 않는다(이펙트·예고를 판정에 맞춘다).
 ## 보스 투사체 (명세 3.6): 지형 관통·바닥선, 그리고 보이는 그림 반경 = 판정 반경 ±20% (tools/shot_art_measure.gd 로 그림 픽셀을 잰다 —
 ## 새 잎·깃털, 기사 불꽃 파도·고리·등불·불기둥·검기, 여왕 가루·나비, 펌프 충격파·분사, 뿌리지기 달빛 구슬·씨앗 비).
 
@@ -464,6 +464,28 @@ func _bird() -> void:
 		await _measure("새 " + kind, r, func() -> void:
 			b.facing = -1
 			b.force_melee(kind), 110, ["wing_sweep"] if kind == "SWEEP" else ["peck_burst", "peck_streak"], kind == "PECK")
+	# 맞딜 응징 날개 털기 (v1.1.0 맞딜 검수): 몸 둘레(앞뒤·머리 위 460) — 예고 = 판정 = 잎 무더기
+	b.global_position = Vector2(b.arena.get_center().x, b.ground_y)
+	b.velocity = Vector2.ZERO
+	b.set_collision_mask_value(1, true)
+	b._set_state(b.State.GROUND_IDLE)
+	b._timer = 99.0
+	b._ground_actions = 1
+	await _frames(10)
+	p.global_position = b.global_position + Vector2(-600, -4)
+	await _measure("새 날개 털기(응징)", r, func() -> void:
+		b.crowd.t = b.crowd.trigger
+		b._pick_ground_action(), 110, ["bird_land"], false)
+	_check(b.get("flap") == false, "날개 털기가 끝나면 flap 꺼짐")
+	# 내려앉기 날개바람 (v1.1.0 맞딜 검수): 내려오는 동안 앉을 자리에 예고 → 앉는 순간 판정 = 잎 무더기
+	b.global_position = Vector2(b.arena.get_center().x, b.ground_y - 420.0)
+	b.velocity = Vector2.ZERO
+	b.set_collision_mask_value(1, false)
+	b._set_state(b.State.HOVER)
+	b._timer = 99.0
+	await _frames(4)
+	p.global_position = Vector2(b.arena.get_center().x - 900.0, b.ground_y - 4.0)
+	await _measure("새 내려앉기 날개바람", r, func() -> void: b._begin_descend(), 200, ["bird_land"], false)
 	await _unload(r)
 
 

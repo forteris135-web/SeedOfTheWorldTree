@@ -11,6 +11,8 @@ extends Node
 ##  (g) 최대 스태미너 새순 0~3단계 → 100/103/106/109, _apply_abilities 뒤에도 그대로, HUD 막대 길이 1.09배
 ##  (h) 새순 단계 배율: 일반 공격·씨앗·바람·빛의 피해·범위·쿨다운 (바람·빛도 실제로 쏴서 과녁이 잃은 체력)
 ##  (i) 1·2·3타 휘두름 소리 음높이 1.0 / 1.08 / 0.92 — 소녀 자기 소리 플레이어(SFX 버스)로, Sfx 안쪽을 건드리지 않는다
+##  (j) 구르기 스태미너 15 (v1.1.0 맞딜 검수): 100 → 85, 구르는 동안 회복 0 → 끝난 뒤 0.5초 0 → 찬다, 14 면 구르지 않고 stamina_refused,
+##      딱 15 면 구르고 0, 터치 회피 버튼은 15 미만이면 꺼짐(어둡게)
 
 var _fail := 0
 var _room: Node
@@ -107,6 +109,7 @@ func _run() -> void:
 	await _test_max_stamina()
 	await _test_token_mults()
 	await _test_swing_pitch()
+	await _test_roll()
 
 
 ## 공격 버튼을 눌러 그 타가 시작되기를 기다린다. 시작되면 그 순간의 스태미너를 돌려준다 (-1 = 시작 안 됨)
@@ -633,3 +636,48 @@ func _test_swing_pitch() -> void:
 	print("[probe] 휘두름 음높이 1·2·3타: %s (기대 1.0 / 1.08 / 0.92 ±3%%), 소녀 소리 플레이어 %d개" % [got, _player._pitched_players.size()])
 	_check(ok and _player._pitched_players.size() == Player.PITCHED_PLAYERS, "1·2·3타 휘두름 소리가 SFX 버스의 소녀 플레이어에서 1.0 / 1.08 / 0.92 음높이로 난다 (플레이어는 둘만 만든다)")
 	await _wait(1.2)
+
+
+# ---------- (j) 구르기 스태미너 15 ----------
+func _test_roll() -> void:
+	var got := {"n": 0}
+	var cb := func(): got["n"] += 1
+	_player.stamina_refused.connect(cb)
+	var touch := _room.get_node_or_null("TouchControls")
+	# 100 → 구르기 → 85, 구르는 동안 회복 0
+	await _reset()
+	_check(_approx(_player.roll_stamina_cost, 15.0), "구르기 스태미너 비용 15 (Player.roll_stamina_cost)")
+	await _tap("dodge")
+	await _frames(2)
+	var rolled := _player.state == Player.State.ROLL
+	var paid := _player.guard
+	var max_seen := paid
+	while _player.state == Player.State.ROLL:
+		await get_tree().physics_frame
+		max_seen = maxf(max_seen, _player.guard)
+	var g_045 := await _gain_over(0.45)
+	var g_more := await _gain_over(0.5)
+	print("[probe] 구르기: 굴렀나 %s, 낸 뒤 %.2f, 구르는 중 최대 %.2f, 끝난 뒤 0.45초 +%.2f, 그다음 0.5초 +%.2f, 거절 %d" % [rolled, paid, max_seen, g_045, g_more, got["n"]])
+	_check(rolled and _approx(paid, 85.0) and got["n"] == 0, "100 에서 구르면 85 (비용 15)")
+	_check(_approx(max_seen, paid), "구르는 동안 스태미너가 차지 않는다")
+	_check(_approx(g_045, 0.0) and g_more > 0.5 * 28.0 * 0.85, "구르기가 끝난 뒤 0.5초는 0, 그 뒤 찬다 (+%.1f)" % g_more)
+	await _wait(0.6)
+	# 14 → 구르지 않는다 (stamina_refused, 막대 붉은 번쩍임), 터치 회피 버튼 꺼짐
+	await _reset(STAND, 14.0)
+	_player._guard_regen_delay = 5.0
+	got["n"] = 0
+	var touch_off: bool = touch == null or not touch.button_enabled("dodge_r")
+	await _tap("dodge")
+	await _frames(2)
+	print("[probe] 14 남음 → 상태 %s, 스태미너 %.2f, 거절 %d, 터치 회피 꺼짐 %s" % [_player.state_name(), _player.guard, got["n"], touch_off])
+	_check(_player.state != Player.State.ROLL and _approx(_player.guard, 14.0) and got["n"] == 1, "스태미너 14 면 구르지 않고 stamina_refused 를 보낸다")
+	_check(touch_off, "스태미너 15 미만이면 터치 회피 버튼이 꺼진다(어둡게)")
+	# 딱 15 → 구르고 0
+	await _reset(STAND, 15.0)
+	_player._guard_regen_delay = 5.0
+	var touch_on: bool = touch == null or touch.button_enabled("dodge_r")
+	await _tap("dodge")
+	await _frames(2)
+	_check(_player.state == Player.State.ROLL and _approx(_player.guard, 0.0) and touch_on, "스태미너가 딱 15 면 구르고 0 이 된다 (터치 회피 버튼 켜짐 %s)" % touch_on)
+	_player.stamina_refused.disconnect(cb)
+	await _wait(1.0)

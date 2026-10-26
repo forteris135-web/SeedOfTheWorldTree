@@ -5,10 +5,11 @@ class_name IronPump
 ## 돌고 예고는 보스곡 124.5bpm 의 2박(0.96초)이라, 규칙을 읽으면 쉽다.
 ## 패턴: 피스톤 내려찍기(붉은 예고·가드 불가·땅 충격파 양쪽) / 수액 분사(관에서 수액 덩어리 3연속, 저스트 가드로 되받기)
 ##       / 관 빨아들이기(2초 동안 소녀를 초당 suck_pull px 씩 끌어당김 → 끝에 물기(가드 가능); 반대로 달리거나 구르면 벗어난다)
-## 장갑: 평소엔 약공격이 35% 만 먹힌다. 씨앗 베기·낙하 공격·되받은 분사가 장갑 게이지(=흐트러짐)를 채우면
-##       장갑이 깨져 핵이 드러난다 (BROKEN 5초, 피해 ×2, 약공격도 온전히).
-##       수액 방울 하나를 되받으면: 저스트 가드 자체가 +45(소녀 쪽 규칙) + 되받은 방울이 맞을 때 reflect_poise(15) = 60.
-##       세 발을 모두 되받으면 180 ≥ 160 이라 장갑이 깨지고, 두 발이면 120 (2026-10-19 검토: 두 발로 깨지던 것을 조정).
+## 장갑: 평소엔 약공격이 35% 만 먹힌다. 장갑 게이지(=흐트러짐, 240)를 채우면 장갑이 깨져 핵이 드러난다 (BROKEN 10박 ≈ 4.82초, 피해 ×2, 약공격도 온전히).
+##       장갑을 채우는 주된 길은 **되받은 분사·저스트 가드**: 수액 방울 하나를 되받으면 저스트 가드 자체가 +45(소녀 쪽 규칙) + 되받은 방울이
+##       맞을 때 reflect_poise(35) = 80 → 세 발을 모두 되받으면 240 이라 장갑이 깨지고, 두 발이면 160 (물기 저스트 가드 +45 를 더하면 깨진다).
+##       씨앗 베기·낙하 공격·약공격·바람·빛은 장갑을 hit_poise_ratio(0.4)배만 채운다 (v1.1.0 맞딜 검수: 예전 160·온전히·5초로는
+##       공격만 두들겨도 한 싸움에 3~4번 깨져 체력의 절반 가까이를 ×2 로 깎였다 — 18판 중 12판 봇 승. 이제 두들기기만으로는 40초에 한 번쯤).
 ## 2페이즈(체력 절반): 규칙이 무너진다 — 순서 무작위·예고 ±30%·피스톤 빨라짐, 공격 뒤마다 사방에서 수액이 솟는다(SapSpurt).
 ## 체력 0 → 쓰러짐 → 정화 → 회상 "memory_pump" → 벽 부수기(wall_break).
 ## BossRoom 과 맞추는 약속: start_fight / reset_fight / arena / ground_y / fallen / purified / hp_changed / poise_changed
@@ -37,11 +38,14 @@ signal shot
 signal slammed
 
 @export var max_hp := 1600.0
-## 장갑 게이지 (= 흐트러짐). 가득 차면 장갑이 깨진다.
-@export var max_poise := 160.0
+## 장갑 게이지 (= 흐트러짐). 가득 차면 장갑이 깨진다. v1.1.0 맞딜 검수: 160 → 240 (되받은 방울 세 발 = 240 그대로 깨지게 reflect_poise 15 → 35)
+@export var max_poise := 240.0
 @export var poise_decay := 6.0
-@export var broken_time := 5.0
+## 장갑이 깨진 시간: 보스곡 10박 (≈ 4.82초; v1.1.0 맞딜 검수 5초 → 10박 — 곡의 박에 맞춘 다른 길이들처럼)
+@export var broken_time := 10.0 * BEAT
 @export var broken_damage_multiplier := 2.0
+## 소녀 자신의 공격(씨앗 베기·낙하 공격·약공격·바람·빛)이 채우는 장갑 비율 (되받은 분사·저스트 가드는 온전히). v1.1.0 맞딜 검수.
+@export var hit_poise_ratio := 0.4
 ## 장갑이 깨졌다 다시 닫힌 뒤 이 시간(초) 동안은 장갑 게이지가 쌓이지 않는다 (v1.1.0 맞딜 방지 — 기사·뿌리지기와 같은 규칙.
 ## 되받은 분사는 기술의 보상이라 그대로)
 @export var poise_immune_after_broken := 2.5
@@ -52,8 +56,8 @@ signal slammed
 @export var light_damage_ratio := 0.35
 @export var light_poise_ratio := 0.5
 ## 되받은 분사가 맞을 때 더하는 장갑 게이지(방울 자체의 흐트러짐 대신 이 값)와 피해 배수.
-## 저스트 가드 순간에도 소녀 쪽 규칙으로 +45 가 들어가므로 방울 하나 = 45 + 이 값.
-@export var reflect_poise := 15.0
+## 저스트 가드 순간에도 소녀 쪽 규칙으로 +45 가 들어가므로 방울 하나 = 45 + 이 값 (35 → 80, 세 발 240 = 장갑 가득).
+@export var reflect_poise := 35.0
 @export var reflect_damage_multiplier := 1.5
 @export var crawl_speed := 90.0
 @export var gravity := 2600.0
@@ -550,8 +554,10 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		# 저스트 가드 순간에 이미 +45 를 받았다 (on_just_guarded) → 방울 자체의 흐트러짐(28) 대신 reflect_poise 만
 		armor = reflect_poise
 		dmg *= reflect_damage_multiplier
-	elif state in ATTACK_STATES and attack_phase in ["startup", "active"]:
-		armor *= attack_poise_multiplier   # 공격 도중엔 두들겨 끊기 어렵게 (슈퍼아머)
+	else:
+		armor *= hit_poise_ratio   # 소녀 자신의 공격은 장갑을 조금만 (장갑을 여는 길은 되받은 분사·저스트 가드)
+		if state in ATTACK_STATES and attack_phase in ["startup", "active"]:
+			armor *= attack_poise_multiplier   # 공격 도중엔 두들겨 끊기 어렵게 (슈퍼아머)
 	if (state == State.VENT or _poise_immune > 0.0) and not reflected:
 		armor = 0.0   # 맞딜 응징(김 분출)은 끝날 때까지 장갑을 깰 수 없다 — 몸에서 떨어져야 한다 (되받은 방울은 기술의 보상이라 그대로)
 	hp = maxf(hp - dmg, 0.0)

@@ -44,7 +44,12 @@ func _on_state(old: int, _new: int) -> void:
 				_hold(Fx.spawn("leaf_tornado", body_point(0.5), {"follow": boss, "offset": Vector2(0, -150), "life": life, "flip_v": true, "scale": 0.72, "rot": 90.0}))
 		"GROUND_IDLE":
 			if state_is(old) == "DESCEND":
-				Fx.spawn("bird_land", boss.global_position)
+				# v1.1.0 맞딜 검수: 내려앉기 날개바람 — 잎 무더기를 판정 사각형(예고와 같은 자리) 그대로 (딸린 먼지는 바닥에서)
+				var rr: Rect2 = boss.call("landing_reach") if boss.has_method("landing_reach") else Rect2()
+				if rr.size.x > 1.0:
+					fit_fx("bird_land", rr, 1, 0.0, {"ground_y": boss.global_position.y})
+				else:
+					Fx.spawn("bird_land", boss.global_position)
 
 
 func _hold(fx: FxSprite) -> void:
@@ -57,8 +62,12 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 		return
 	match state_name():
 		"SWEEP":
-			# v1.1.0: 날개 바람 초승달 = 판정 사각형 그대로 (예전엔 판정보다 110px 높고 56px 앞이었다)
-			fit_fx("wing_sweep", _reach(ahead(125.0, -90.0)), facing())
+			if bool(val("flap", false)):
+				# 맞딜 응징 날개 털기 (v1.1.0 맞딜 검수): 몸 둘레 잎 무더기 = 판정 사각형 (내려앉기 날개바람과 같은 그림·자리)
+				fit_fx("bird_land", _reach(ahead(0.0, -230.0)), 1, 0.0, {"ground_y": boss.global_position.y})
+			else:
+				# v1.1.0: 날개 바람 초승달 = 판정 사각형 그대로 (예전엔 판정보다 110px 높고 56px 앞이었다)
+				fit_fx("wing_sweep", _reach(ahead(125.0, -90.0)), facing())
 		"PECK":
 			# 부리 찍기: 앞으로 튀어 나가며 쓸고 가는 구간(판정·예고와 같은 사각형)에 잿빛 바람 줄기
 			_peck_rect = _reach(ahead(235.0, -95.0))

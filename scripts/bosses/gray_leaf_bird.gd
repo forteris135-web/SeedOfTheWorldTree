@@ -113,6 +113,10 @@ var _tel: RangeTelegraph
 var crowd := CrowdMeter.new(CROWD_RANGE)
 ## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 앞 낙하 공격 뒤 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n; scripts/combat/plunge_decay.gd)
 var plunge_decay := PlungeDecay.new()
+## 높은 자리 계량기 (v1.1.0 맞딜 검수) / 지금 깃털 화살이 깃털 세례(높은 자리 응징)인가 / 그때 머무는 자리
+var perch := PerchMeter.new(PERCH_TRIGGER)
+var _perch_volley := false
+var _perch_pos := Vector2.ZERO
 ## 지금 공격이 맞딜 응징인가 (응징 공격은 흐트러짐이 쌓이지 않는다 — 두들겨 끊을 수 없다. 구르기로 피해야 한다)
 var punishing := false
 var _poise_immune := 0.0
@@ -150,8 +154,35 @@ const PECK_SPEED := 520.0
 const PECK_DECEL := 900.0
 const PECK_ACTIVE := 0.3
 const SWEEP_ACTIVE := 0.22
-## 맞딜 방지 계량기 (v1.1.0): 땅에서 이 거리 안에 붙어 있으면 쌓이고, 다 차면 소녀 쪽으로 돌아 날개 휘두르기
+## 맞딜 방지 계량기 (v1.1.0): 땅에서 이 거리 안에 붙어 있으면 쌓이고, 다 차면 몸 둘레 날개 털기 (맞딜 마무리 검수 — 예전엔 앞만 치는 날개 휘두르기)
 const CROWD_RANGE := 280.0
+## 내려앉기 날개바람 (v1.1.0 맞딜 검수): 잎 더미로 내려앉는 순간 날개로 몸 높이 둘레를 친다 (Hitbox 노드 기준 — 바닥선 x ±300,
+## 높이 180..460 = 땅에 선 소녀(머리 134)는 맞지 않고, 내려앉을 자리 둘레에 **떠 있는** 소녀만; 땅에 선 새의 원점은 몸 충돌 캡슐 때문에
+## 바닥선보다 GROUND_REST 아래라 상자를 그만큼 올려 둔다). 내려오는 동안 앉을 자리에 이 사각형이 주황으로 차오른다 (예고 = 판정 = 잎 무더기
+## 이펙트, 가드 가능). 새가 내려앉을 자리 둘레에서 떠 있으며(점프·이단 점프) 베기만 거듭하는 소녀가 지쳐 내려온 새의 잎 삼키기를 곧바로
+## 끊어 무너뜨리던 것(공중 맞딜 봇 18판 중 8판 승)에. 땅에서 내려오는 새를 베는 길은 그대로 둔다 (잘하는 봇의 잡는 시간을 지키려고).
+const LANDING_BOX := Rect2(-300, -430, 600, 280)
+## 맞딜 응징 날개 털기 (몸 둘레, 땅부터 높이 460 — 땅 맞딜도 맞는다)
+const FLAP_BOX := Rect2(-300, -430, 600, 460)
+## 땅에 선 새의 원점 = 바닥선 + 이 값 (가로로 누운 몸 캡슐: 가운데 -140, 반지름 110 → 바닥이 원점 위 30). 내려앉는 순간 바로 이 자리에 둔다
+## (예전엔 바닥선에 두어 몇 프레임 동안 30px 떨어졌다 — 날개바람 판정이 함께 내려가 예고와 어긋났다)
+const GROUND_REST := 30.0
+const LANDING_DAMAGE := 16.0
+## 높은 자리 계량기 (v1.1.0 맞딜 검수, PerchMeter): 새가 하늘에 있는 동안 소녀가 바닥 위 200 넘게 높은 곳(가지 위·점프·이단 점프)에
+## PERCH_TRIGGER 초 머물면, 다음 하늘 패턴은 '깃털 세례' — 소녀 머리 위 비스듬한 자리(가로 PERCH_SIDE, 위 PERCH_ABOVE)로 올라가
+## 깃털을 PERCH_EXTRA 발 더 쏜다 (예고·붉은 점·깃털 판정 = 보이는 그림은 보통 깃털 화살과 같고 가드 가능 — **저스트 가드로 되받으면**
+## 보통처럼 새에게 돌아가 지침 +2). 땅에 내려와 있을 때 계량기가 차면 (땅 공격이 닿지 않는 머리 위에 떠 있는 소녀) 곧바로 날아오른다.
+## 제자리에서 뛰어 떠 있으며 새를 베기만 하던 봇(공중 맞딜 18판 중 4판 승)에.
+const PERCH_TRIGGER := 1.8
+const PERCH_SIDE := 300.0
+const PERCH_ABOVE := 420.0
+const PERCH_EXTRA := 2
+## 깃털 세례 동안 소녀 머리 위로 올라가는가 (false 면 보통 머무는 자리에서 쏜다)
+const PERCH_RISE := true
+## 하늘에서 받는 흐트러짐 배수 (되받은 깃털은 온전히) — v1.1.0 맞딜 검수, 수액의 여왕(SapQueen.AIR_POISE_RATIO)과 같은 규칙.
+## 하늘의 새를 무너뜨리는 길은 깃털 되받기와 '지치게 해서 내려온 새의 잎 삼키기 끊기'(기획서 6장). 떠 있으며 베기만 거듭해 하늘에서
+## 바로 무너뜨리던 공중 맞딜 봇에.
+const AIR_POISE_RATIO := 0.7
 ## 부리 끝 바로 앞 (오른쪽을 볼 때; 예전 한 장 그림의 부리 ≈ 몸 가운데에서 (+210, −70), 깃털 자세로 살짝 젖힘 — 깃털이 생기는 판정 출발점이라 그대로 둔다)
 const MUZZLE_OFFSET := Vector2(230.0, -235.0)
 ## 그림 가운데 (Sprite position)
@@ -198,6 +229,8 @@ func reset_fight() -> void:
 	global_position = _home
 	_clear_telegraphs()
 	crowd.reset()
+	perch.reset()
+	_perch_volley = false
 	plunge_decay.reset()
 	_tel.clear()
 	_poise_immune = 0.0
@@ -241,6 +274,8 @@ func _physics_process(delta: float) -> void:
 	if player:
 		# 맞딜 방지: 땅에 내려와 있을 때만 쌓인다 (하늘의 새에게 붙을 수는 없다)
 		crowd.tick(delta, global_position, player.global_position, state in GROUND_STATES, facing)
+		# 높은 자리: 새가 하늘에서 공격할 수 있는 동안 소녀가 높은 곳(가지·점프 꼭대기)에 머물면 쌓인다 (깃털 세례 중은 아님)
+		perch.tick(delta, ground_y, player, (state in AIR_STATES or state in GROUND_STATES) and not _perch_volley)
 	if player and state != State.FEATHERS and state in AIR_STATES + [State.INTRO, State.GROUND_IDLE, State.EAT]:
 		# 데드존 + 최소 유지 시간: 소녀가 바로 밑을 지나도 매 프레임 뒤집히지 않는다.
 		# 깃털 화살 동안은 고정 (시작할 때 한 번 소녀 쪽을 본다) — 붉은 점·깃털 출발점이 반대편으로 건너뛰지 않게.
@@ -282,8 +317,8 @@ func _physics_process(delta: float) -> void:
 				_timer = _rest()
 		State.FEATHERS:
 			_air_timer += delta
-			_fly_toward(_hover_target, delta, hover_speed * 0.3)
-			var count := feather_count if phase == 1 else feather_count + 2
+			_fly_toward(_perch_pos if _perch_volley and PERCH_RISE else _hover_target, delta, hover_speed * (0.8 if _perch_volley and PERCH_RISE else 0.3))
+			var count := _feather_total()
 			# 예고 0.6초 뒤 0.15초 간격으로 쏜다
 			var t_since := (0.6 + count * 0.15) - _timer
 			# 예고: 0.6초 동안 차오르고 쏘기 시작하면 0.3초에 걸쳐 사라진다
@@ -314,14 +349,18 @@ func _physics_process(delta: float) -> void:
 			if _target_pile:
 				target.x = _target_pile.global_position.x + facing * -120.0
 			_fly_toward(target, delta, 3.5)
+			if _tel.is_showing():
+				_tel.update_rect(landing_reach())
 			if absf(global_position.y - ground_y) < 12.0:
-				global_position.y = ground_y
+				global_position.y = ground_y + GROUND_REST
+				global_position.x = _descend_x()   # 예고한 자리에 정확히 앉는다 (남은 거리는 몇 px — 날개바람 판정 = 예고)
 				set_collision_mask_value(1, true)
 				_set_state(State.GROUND_IDLE)
 				_ground_timer = ground_time if phase == 1 else ground_time * 0.78
 				_ground_actions = 0
 				_timer = 0.5
 				Juice.shake(6.0)
+				_landing_gust()
 		State.GROUND_IDLE:
 			_ground(delta)
 			velocity.x = move_toward(velocity.x, 0.0, 1800.0 * delta)
@@ -424,7 +463,14 @@ func _should_descend() -> bool:
 func _next_pattern() -> void:
 	var order := [State.LEAF_RAIN, State.FEATHERS, State.WIND, State.FEATHERS] if phase == 1 else [State.LEAF_RAIN, State.FEATHERS, State.WIND, State.FEATHERS, State.LEAF_RAIN, State.WIND]
 	var next: State = order[_pattern_index % order.size()]
-	_pattern_index += 1
+	var perch_volley := false
+	if perch.ready() and player:
+		# 높은 자리 응징 (v1.1.0 맞딜 검수): 순서를 건너뛰지 않고 이번 패턴만 깃털 세례로
+		perch.consume()
+		next = State.FEATHERS
+		perch_volley = true
+	else:
+		_pattern_index += 1
 	# 다음 머무를 자리
 	if hover_points.size() > 0:
 		_hover_target = hover_points[randi() % hover_points.size()]
@@ -435,10 +481,18 @@ func _next_pattern() -> void:
 			_spawn_accum = 0.0
 		State.FEATHERS:
 			_set_state(State.FEATHERS)
+			if perch_volley:
+				_perch_volley = true
+				punishing = true
+				var side := signf(global_position.x - player.global_position.x)
+				if side == 0.0:
+					side = 1.0
+				_perch_pos = Vector2(clampf(player.global_position.x + side * PERCH_SIDE, arena.position.x + 160.0, arena.end.x - 160.0),
+					minf(_hover_target.y, maxf(player.global_position.y - PERCH_ABOVE, arena.position.y + 380.0)))
 			if player and absf(player.global_position.x - global_position.x) > 1.0:
 				facing = 1 if player.global_position.x > global_position.x else -1
 				_face_hold = face_hold
-			var count := feather_count if phase == 1 else feather_count + 2
+			var count := _feather_total()
 			_timer = 0.6 + count * 0.15
 			_spawned = 0
 			telegraph_amount = 0.0   # 예고는 telegraph_amount 로 (피격 번쩍임과 구분)
@@ -448,6 +502,14 @@ func _next_pattern() -> void:
 			_timer = wind_telegraph + wind_time
 			_wind_dir = 1 if (player and player.global_position.x > global_position.x) else -1
 			telegraph.emit("wind")
+
+
+## 이번 깃털 화살의 발 수 (2페이즈 +2, 깃털 세례 +PERCH_EXTRA)
+func _feather_total() -> int:
+	var n := feather_count if phase == 1 else feather_count + 2
+	if _perch_volley:
+		n += PERCH_EXTRA
+	return n
 
 
 func _spawn_leaf() -> void:
@@ -540,6 +602,31 @@ func _begin_descend() -> void:
 	_target_pile = _nearest_available_pile()
 	set_collision_mask_value(1, false)
 	_set_state(State.DESCEND)
+	# 내려앉기 날개바람의 공격 범위 예고: 앉을 자리에 판정 사각형. 차오르는 시간 ≈ 내려오는 시간(높이를 초당 3.5 배로 좁혀 가며 12px 안에서 앉음;
+	# 몸이 위아래로 18px 출렁여 조금 일찍 앉을 수 있으니 30px 기준으로 짧게 잡아, 늦게 차는 일 없이 앉기 전에 가득 찬다)
+	var dy := maxf(ground_y - global_position.y, 31.0)
+	_tel.show_rect(landing_reach(), false, clampf(log(dy / 30.0) / 3.5, 0.3, 2.0))
+
+
+## 내려앉을 자리 x (잎 더미 앞, 없으면 지금 x)
+func _descend_x() -> float:
+	if _target_pile and is_instance_valid(_target_pile):
+		return _target_pile.global_position.x + facing * -120.0
+	return global_position.x
+
+
+## 내려앉기 날개바람의 판정이 덮을 월드 사각형 (내려오는 중이면 앉을 자리, 앉은 뒤면 지금 자리). 예고·이펙트·시험이 같은 값을 쓴다.
+func landing_reach() -> Rect2:
+	var x := _descend_x() if state == State.DESCEND else global_position.x
+	return Rect2(Vector2(x, ground_y + GROUND_REST) + Vector2(0.0, hitbox.position.y) + LANDING_BOX.position, LANDING_BOX.size)
+
+
+## 내려앉는 순간: 날개로 몸 둘레를 내리친다 (가드 가능)
+func _landing_gust() -> void:
+	var hit := HitData.make(LANDING_DAMAGE, 0.0, self, Vector2(560, -300))
+	hit.hitstop = 0.05
+	hitbox.set_box(LANDING_BOX, 1)
+	hitbox.activate(hit, 0.2)
 
 
 func _nearest_available_pile() -> Node2D:
@@ -556,14 +643,25 @@ func _nearest_available_pile() -> Node2D:
 
 func _pick_ground_action() -> void:
 	_ground_timer -= 0.0
+	if _ground_actions >= (4 if phase == 1 else 5) + 2:
+		# 응징만 거듭하다 땅에 눌러앉지 않게 (v1.1.0 맞딜 검수: 등 뒤에 붙은 봇에게 날개 휘두르기만 16번 헛치며 날아오르지 않던 것)
+		_begin_takeoff()
+		return
 	if crowd.ready() and player:
-		# 맞딜 방지 (v1.1.0): 몸에 붙어 버티는 소녀에게는 잎 더미·날아오르기보다 먼저 — 소녀 쪽으로 돌아 날개 휘두르기
+		# 맞딜 방지 (v1.1.0): 몸에 붙어 버티는 소녀에게는 잎 더미·날아오르기보다 먼저 — 몸 둘레 날개 털기 (앞뒤·머리 위 460 까지;
+		# v1.1.0 맞딜 검수: 예전엔 소녀 쪽으로 돌아 앞만 치는 날개 휘두르기라, 예비동작 동안 등 뒤로 다시 돌아가면 늘 헛쳤다)
 		crowd.consume()
 		facing = 1 if player.global_position.x > global_position.x else -1
 		_face_hold = face_hold
 		_ground_actions += 1
+		flap = true
 		_start_melee(State.SWEEP)
 		punishing = true
+		return
+	if perch.ready() and player:
+		# 높은 자리 응징 (v1.1.0 맞딜 검수): 땅 공격이 닿지 않는 머리 위에 떠 있는 소녀 — 땅에 머물지 않고 날아오른다
+		# (계량기는 비우지 않는다 — 하늘에 오르면 다음 패턴이 깃털 세례)
+		_begin_takeoff()
 		return
 	if _ground_actions == 0 and _target_pile and is_instance_valid(_target_pile) and _target_pile.available:
 		_ground_actions += 1
@@ -603,6 +701,8 @@ func force_melee(kind: String) -> void:
 
 ## 지금 근접 공격의 판정이 덮을 월드 사각형 (부리 찍기는 앞으로 튀어 나가며 쓸고 갈 구간 전체). 예고·이펙트·시험이 같은 값을 쓴다.
 func melee_reach() -> Rect2:
+	if state == State.SWEEP and flap:
+		return RangeTelegraph.box_world(hitbox, FLAP_BOX, 1)
 	if state == State.PECK:
 		return RangeTelegraph.box_world(hitbox, PECK_BOX, facing, RangeTelegraph.slide_distance(PECK_SPEED, PECK_DECEL, PECK_ACTIVE),
 			RangeTelegraph.slide_first(PECK_SPEED, PECK_DECEL))
@@ -610,6 +710,8 @@ func melee_reach() -> Rect2:
 
 
 var _melee_stage := 0
+## 지금 날개 휘두르기가 몸 둘레 날개 털기(맞딜 응징)인가 — 판정·예고·이펙트가 FLAP_BOX (몸 둘레, 땅부터 높이 460)
+var flap := false
 func _melee_phase(kind: String) -> void:
 	if _melee_stage == 0:
 		# 예고 중 (공격 범위 예고는 보스가 미끄러져도 판정 자리를 따라간다)
@@ -621,7 +723,7 @@ func _melee_phase(kind: String) -> void:
 			_tel.end()
 			if kind == "sweep":
 				var hit := HitData.make(sweep_damage, 0.0, self, Vector2(520, -220))
-				hitbox.set_box(SWEEP_BOX, facing)
+				hitbox.set_box(FLAP_BOX if flap else SWEEP_BOX, 1 if flap else facing)
 				hitbox.activate(hit, SWEEP_ACTIVE)
 				_timer = SWEEP_ACTIVE
 			else:
@@ -678,6 +780,8 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 		Juice.shake(5.0)
 	elif state in AIR_STATES:
 		_fatigue += 1 if not raw.from_player or raw.poise < 25.0 else 2
+	if not is_ground() and not (hit.from_player and hit.source == self):
+		gained *= AIR_POISE_RATIO   # 하늘(내려오기·날아오르기 포함)에서는 흐트러짐 0.7배 (되받은 깃털은 온전히)
 	if (punishing or _poise_immune > 0.0) and not (hit.from_player and hit.source == self):
 		gained = 0.0   # 맞딜 응징 중·무너졌다 일어선 직후에는 무너뜨릴 수 없다 (되받은 깃털은 기술의 보상이라 그대로)
 	_add_poise(gained)
@@ -770,6 +874,9 @@ func _set_state(new_state: State) -> void:
 	_state_started_ms = Time.get_ticks_msec()
 	state = new_state
 	punishing = false   # 응징은 그 공격 한 번 (새 공격은 응징이 아니다 — _start_melee 뒤 응징이면 다시 켠다)
+	if new_state != State.SWEEP:
+		flap = false
+	_perch_volley = false   # 깃털 세례도 그 깃털 화살 동안만 (_next_pattern 이 _set_state 뒤에 다시 켠다)
 	if new_state != State.SWEEP and new_state != State.PECK:
 		attack_phase = ""
 		if _tel:

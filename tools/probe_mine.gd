@@ -511,7 +511,7 @@ func _probe_iron_pump() -> void:
 		"1페이즈 예고 길이 (박 %.4f초): %s" % [beat, startup_seen])
 	var moved := x_after_suck - x_before_suck
 	_check(suck_len > 1.5 and pulled_max > 300.0 and moved > 300.0, "빨아들이기: %.1f초 동안 소녀를 펌프 쪽으로 %.0fpx 옮김 (기록 %.0f)" % [suck_len, moved, pulled_max])
-	# 장갑: 약공격 35%·장갑 절반, 무거운 공격 온전히, 되받은 분사 ×1.5 + 장갑 +40
+	# 장갑: 약공격 35%·장갑 절반×hit_poise_ratio, 무거운 공격 피해 온전히, 되받은 분사 ×1.5 + 장갑 reflect_poise
 	await _wait_state(boss, IronPump.State.IDLE, 6.0)
 	boss.poise = 0.0
 	var hp0 := boss.hp
@@ -527,7 +527,7 @@ func _probe_iron_pump() -> void:
 	refl.from_player = true
 	boss.receive_hit(refl, null)
 	var reflected := hp0 - boss.hp
-	_check(is_equal_approx(light, 12.0 * 0.35) and is_equal_approx(armor_light, 10.0) and is_equal_approx(heavy, 32.0) and is_equal_approx(reflected, 14.0 * 1.6 * 1.5) and is_equal_approx(boss.poise - p_before, boss.reflect_poise),
+	_check(is_equal_approx(light, 12.0 * 0.35) and is_equal_approx(armor_light, 20.0 * boss.light_poise_ratio * boss.hit_poise_ratio) and is_equal_approx(heavy, 32.0) and is_equal_approx(reflected, 14.0 * 1.6 * 1.5) and is_equal_approx(boss.poise - p_before, boss.reflect_poise),
 		"장갑: 약공격 12 → %.1f(장갑 +%.0f), 씨앗 베기 32 → %.0f, 되받은 분사 22.4 → %.1f(장갑 +%.0f)" % [light, armor_light, heavy, reflected, boss.poise - p_before])
 	boss.poise = boss.max_poise - 1.0
 	boss.receive_hit(_hit(1.0, 60.0), null)
@@ -798,7 +798,7 @@ func _probe_reflect_flight() -> void:
 		var good: bool = r["blob"] and r["reflected"] and is_equal_approx(r["dmg"], 14.0 * 1.6 * 1.5)
 		ok = ok and good
 		lines.append("%d: 되받음 %s 피해 %.1f 장갑 %.0f" % [d, r["reflected"], r["dmg"], boss.poise])
-	_check(ok, "무쇠 펌프 방울 되받기 (거리별, 저스트 가드 45 + 되받은 방울 15): %s" % [lines])
+	_check(ok, "무쇠 펌프 방울 되받기 (거리별, 저스트 가드 45 + 되받은 방울 %.0f): %s" % [boss.reflect_poise, lines])
 	boss.queue_free()
 	await _frames(2)
 	var pump: SmallPump = load("res://scenes/enemies/small_pump.tscn").instantiate()

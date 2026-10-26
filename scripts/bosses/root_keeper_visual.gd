@@ -801,8 +801,10 @@ func _draw_marks() -> void:
 		RootKeeper.State.SPIKES:
 			# 바닥 사각형 + 맥동 테두리 + 금 가는 선 + 가시 높이(390)만큼 옅은 기둥 (가지 위에 서 있어도 닿는다는 것이 보이게)
 			var pulse := 0.5 + 0.5 * sin(_t * (10.0 + p * 30.0))
-			for x: float in _boss.spike_marks:
-				RootSpike.draw_telegraph(_marks, Vector2(x, g), p, _tg(1.0, guard), fade, pulse)
+			for i in _boss.spike_marks.size():
+				var x: float = _boss.spike_marks[i]
+				var hgt: float = _boss.spike_heights[i] if i < _boss.spike_heights.size() else RootSpike.HEIGHT
+				RootSpike.draw_telegraph(_marks, Vector2(x, g), p, _tg(1.0, guard), fade, pulse, hgt)
 		RootKeeper.State.SWEEP, RootKeeper.State.SWEEP2:
 			# v1.1.0: 휘두르기의 공격 범위 예고는 보스의 RangeTelegraph 가 판정과 같은 사각형으로 그린다 (예전 붉은 부채꼴은 판정보다 훨씬 컸다)
 			pass

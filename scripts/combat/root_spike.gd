@@ -33,6 +33,9 @@ const HOLD := 0.95
 const SINK := 0.4
 ## 다섯 갈래 (가운데가 가장 높다): x 오프셋, 높이 비율, 밑동 반폭
 const PRONGS := [[-44.0, 0.66, 15.0], [-22.0, 0.84, 19.0], [0.0, 1.0, 24.0], [22.0, 0.84, 19.0], [44.0, 0.66, 15.0]]
+## 솟는 높이 (기본 HEIGHT 390). 뿌리지기의 높은 자리 응징(큰 가시)은 소녀 발 높이 + 150 까지 — 그림은 세로로 그만큼 늘이고,
+## 판정·기다리는 동안의 기둥 예고도 이 높이를 쓴다 (v1.1.0 맞딜 검수).
+var spike_height := HEIGHT
 
 
 func _ready() -> void:
@@ -99,7 +102,7 @@ func _physics_process(delta: float) -> void:
 	var u := _t - delay
 	# 0~0.14초 솟음, 0.95초까지 서 있음(살짝 떨림), 1.35초까지 들어감
 	if u < RISE:
-		_h = ease(u / RISE, 0.4) * HEIGHT
+		_h = ease(u / RISE, 0.4) * spike_height
 		if not _rose:
 			_rose = true
 			_dirt.restart()
@@ -107,9 +110,9 @@ func _physics_process(delta: float) -> void:
 			Juice.shake(5.0)
 			Fx.spawn("root_burst_fx", global_position, {"scale": 0.7})
 	elif u < HOLD:
-		_h = HEIGHT + sin(u * 34.0) * 4.0 * (1.0 - u / HOLD)
+		_h = spike_height + sin(u * 34.0) * 4.0 * (1.0 - u / HOLD)
 	else:
-		_h = lerpf(HEIGHT, 0.0, (u - HOLD) / SINK)
+		_h = lerpf(spike_height, 0.0, (u - HOLD) / SINK)
 	if u > HOLD + SINK:
 		queue_free()
 		return
@@ -137,15 +140,17 @@ func _update_art() -> void:
 	if _art == null or _art.texture == null:
 		return
 	var ts := _art.texture.get_size()
-	var k := clampf(_h / HEIGHT, 0.0, 1.0)
+	var k := clampf(_h / spike_height, 0.0, 1.0)
 	_art.visible = k > 0.01
 	if not _art.visible:
 		return
 	var vis_h := ts.y * ART_BASE * k + ts.y * (1.0 - ART_BASE)
 	vis_h = minf(vis_h, ts.y)
 	_art.region_rect = Rect2(0, 0, ts.x, vis_h)
-	# 밑동(그림의 ART_BASE 자리, 드러난 부분에선 아래에서 (1-ART_BASE)*ts.y 위)이 땅에 오게
-	_art.position = Vector2(-ts.x * ART_SCALE * 0.5, -(vis_h - ts.y * (1.0 - ART_BASE)) * ART_SCALE)
+	# 밑동(그림의 ART_BASE 자리, 드러난 부분에선 아래에서 (1-ART_BASE)*ts.y 위)이 땅에 오게. 큰 가시는 세로로 spike_height/HEIGHT 배 늘인다
+	var sy := ART_SCALE * spike_height / HEIGHT
+	_art.scale = Vector2(ART_SCALE, sy)
+	_art.position = Vector2(-ts.x * ART_SCALE * 0.5, -(vis_h - ts.y * (1.0 - ART_BASE)) * sy)
 
 
 func _draw() -> void:
@@ -163,7 +168,7 @@ func _draw() -> void:
 		var hh: float = _h * pr[1]
 		var hw: float = pr[2]
 		# 살짝 휜 가시: 왼쪽/오른쪽 가장자리를 점으로
-		var bend := ox * 0.35 * (hh / HEIGHT)
+		var bend := ox * 0.35 * (hh / spike_height)
 		var pts := PackedVector2Array([Vector2(ox - hw, 0), Vector2(ox - hw * 0.55 + bend * 0.5, -hh * 0.55), Vector2(ox + bend, -hh), Vector2(ox + hw * 0.55 + bend * 0.5, -hh * 0.55), Vector2(ox + hw, 0)])
 		draw_colored_polygon(pts, body)
 		draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2]]), edge, 2.5, true)
@@ -180,12 +185,12 @@ func _draw_mark() -> void:
 	if _t >= delay:
 		return
 	var pulse := 0.5 + 0.5 * sin(_t * 40.0)
-	RootSpike.draw_telegraph(_mark, Vector2.ZERO, 1.0, TELEGRAPH_C, 1.0, pulse)
+	RootSpike.draw_telegraph(_mark, Vector2.ZERO, 1.0, TELEGRAPH_C, 1.0, pulse, spike_height)
 
 
 ## 가시 예고 (보스 그림과 기다리는 가시가 함께 쓴다): 바닥 띠(채움+맥동 테두리) + 위로 번지는 빛 + 금 가는 선
-## + 가시가 닿는 높이(HEIGHT)까지 판정 폭(WIDTH)의 옅은 기둥과 윗선. col 의 알파는 깜빡임 등 곱할 세기.
-static func draw_telegraph(ci: CanvasItem, pos: Vector2, p: float, col: Color, fade: float, pulse: float) -> void:
+## + 가시가 닿는 높이(hgt, 기본 HEIGHT)까지 판정 폭(WIDTH)의 옅은 기둥과 윗선. col 의 알파는 깜빡임 등 곱할 세기.
+static func draw_telegraph(ci: CanvasItem, pos: Vector2, p: float, col: Color, fade: float, pulse: float, hgt := HEIGHT) -> void:
 	var a := col.a * fade
 	var c := Color(col.r, col.g, col.b)
 	var w := WIDTH   # v1.1.0: 예고 바닥 폭 = 판정 폭 (예전엔 110 → 160 으로 커져 판정보다 넓었다)
@@ -200,7 +205,7 @@ static func draw_telegraph(ci: CanvasItem, pos: Vector2, p: float, col: Color, f
 		var hh := 20.0 + 70.0 * p * (1.0 if i == 2 else 0.7)
 		ci.draw_line(pos + Vector2(ox, -2), pos + Vector2(ox + (i - 2) * 6.0, -hh), Color(c, 0.7 * p * a), 2.0)
 	# 가시 높이까지 옅은 기둥 (예비 70% 에 다 자란다): 가지 위에 서 있어도 닿는다는 것이 보인다
-	var colh := HEIGHT * clampf(p / 0.7, 0.0, 1.0)
+	var colh := hgt * clampf(p / 0.7, 0.0, 1.0)
 	if colh > 20.0:
 		ci.draw_rect(Rect2(pos + Vector2(-WIDTH / 2.0, -colh), Vector2(WIDTH, colh - 14.0)), Color(c, 0.07 * a))
 		ci.draw_line(pos + Vector2(-WIDTH / 2.0, -colh), pos + Vector2(WIDTH / 2.0, -colh), Color(c, (0.35 + 0.25 * pulse) * a), 2.0)

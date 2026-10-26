@@ -20,7 +20,8 @@ const LOCOMOTION := [State.IDLE, State.WALK, State.RUN, State.JUMP, State.FALL]
 ## 히트박스를 쓰는 공격 상태들 (나가면 히트박스를 끈다)
 const ATTACK_STATES := [State.ATTACK, State.SOUL_SLASH, State.PLUNGE]
 ## 이 상태들에 있는 동안은 스태미너가 저절로 차지 않는다 (v1.1.0 기획자 요청 12). 벗어나면 stamina_regen_delay_after_action 뒤부터.
-const NO_REGEN_STATES := [State.ATTACK, State.SOUL_SLASH, State.PLUNGE, State.GUARD]
+## 스태미너가 자연 회복되지 않는 상태 (벗어나면 stamina_regen_delay_after_action 뒤부터 찬다). 구르기도 (v1.1.0 맞딜 검수: 구르기 15)
+const NO_REGEN_STATES := [State.ATTACK, State.SOUL_SLASH, State.PLUNGE, State.GUARD, State.ROLL]
 ## 일반 공격 판정 상자: 앞 30 부터 light_reach 까지, 위 90 · 아래 22 (소녀 가운데 기준, 오른쪽을 볼 때)
 const LIGHT_BOX_BACK := 30.0
 const LIGHT_BOX_TOP := -90.0
@@ -196,8 +197,11 @@ signal stamina_pulsed(amount: float)
 ## 스태미너는 가드 게이지 그대로다 (guard / max_guard, 읽기 별칭 stamina / max_stamina). 최대치는 Progress.max_stamina() (100/103/106/109).
 ## 약공격 1·2·3타가 쓰는 스태미너 (3타 합 37). 모자라면 그 공격을 시작하지 않는다. 낙하 공격·영혼 기술은 쓰지 않는다.
 @export var light_stamina_cost := [10.0, 12.0, 15.0]
-## 구르기가 쓰는 스태미너. 지금까지도 구르기는 스태미너를 쓰지 않아서 0 그대로 둔다 (기획자 결정 D1; 쓰게 하려면 권장 15).
-@export var roll_stamina_cost := 0.0
+## 구르기가 쓰는 스태미너 15 (v1.1.0 맞딜 검수 — 기획자 요청 10 "기존 방어 및 회피 행동의 스태미너 소모 기능은 유지":
+## 기획자는 회피가 스태미너를 쓴다고 본다 → 명세 D1 의 0 을 바꿈). 모자라면(15 미만) 구르지 않고 막대가 붉게 번쩍인다(stamina_refused).
+## 구르는 동안은 자연 회복이 없고(NO_REGEN_STATES), 끝난 뒤 0.5초 지나서 찬다 (공격·가드와 같은 규칙).
+## (공격 뒤 되돌림을 구르기로 끊으며 보스 몸을 뚫고 지나가기만 거듭하는 맞딜 — 펌프 18판 중 12판 봇 승 — 을 막는다)
+@export var roll_stamina_cost := 15.0
 ## 공격·영혼 기술·낙하 공격·가드에서 벗어난 뒤 자연 회복을 기다리는 시간 (초)
 @export var stamina_regen_delay_after_action := 0.5
 ## 바람·빛(상태가 따로 없는 영혼 기술)은 쏜 순간부터 이만큼 기다린다 (쏘는 0.2초 + 0.5초)
@@ -587,7 +591,7 @@ func _tick_timers(delta: float, on_floor: bool) -> void:
 		_drop_timer -= delta
 		if _drop_timer <= 0.0:
 			_end_drop_through()
-	# 스태미너 자연 회복: 공격·영혼 기술·낙하 공격·가드 중과 3타 후딜레이 동안은 없고, 벗어난 뒤 잠깐 기다렸다가 (_set_state 가 지연을 건다)
+	# 스태미너 자연 회복: 공격·영혼 기술·낙하 공격·가드·구르기 중과 3타 후딜레이 동안은 없고, 벗어난 뒤 잠깐 기다렸다가 (_set_state 가 지연을 건다)
 	if not (state in NO_REGEN_STATES) and _combo_lock_timer <= 0.0 and _guard_regen_delay <= 0.0 and guard < max_guard:
 		guard = minf(guard + stamina_regen_rate() * delta, max_guard)
 		guard_changed.emit(guard, max_guard)
@@ -1417,7 +1421,7 @@ func _try_roll(on_floor: bool) -> void:
 		or ((state == State.ATTACK or state == State.SOUL_SLASH) and attack_phase == "recovery")
 	if not can or not (on_floor or _coyote_timer > 0.0):
 		return
-	# 구르기 스태미너 (지금은 0 — 기획자 결정 D1. 값을 주면 모자랄 때 구르지 않는다)
+	# 구르기 스태미너 15: 모자라면 구르지 않는다 (막대 붉은 번쩍임 + 짧은 소리)
 	if roll_stamina_cost > 0.0:
 		if guard + 0.001 < roll_stamina_cost:
 			stamina_refused.emit()

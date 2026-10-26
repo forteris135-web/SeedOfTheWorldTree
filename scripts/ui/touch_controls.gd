@@ -120,14 +120,14 @@ func _process(_delta: float) -> void:
 
 
 ## 화면에 보이는 터치 버튼 상태 (이 값이 바뀌면 다시 그린다): 화면 크기·버튼 크기 설정·러시, 영혼(그림·색·다음 영혼·쿨다운 비율과 남은 초),
-## 낙하 켜짐, 상황 버튼(보임·그림·반짝임), 쉬는 중. 손가락(눌림·스틱)은 _dirty 로 따로.
+## 낙하 켜짐, 회피 켜짐(구르기 스태미너), 상황 버튼(보임·그림·반짝임), 쉬는 중. 손가락(눌림·스틱)은 _dirty 로 따로.
 func _view_state() -> Array:
 	var v: Array = [_canvas.size, Settings.touch_scale_factor(), BossRush.active]
 	if not _has_player():
 		v.append(null)
 		return v
 	var interact: bool = _player.can_interact
-	v.append_array([_player.soul, _player.next_soul(), button_enabled("plunge"), button_enabled("soul"),
+	v.append_array([_player.soul, _player.next_soul(), button_enabled("plunge"), button_enabled("soul"), button_enabled("dodge_r"),
 		snappedf(_player.soul_cooldown_ratio(), 1.0 / 96.0), _player.soul_cooldown_text(),
 		_player.state == Player.State.REST, interact])
 	if interact:
@@ -210,6 +210,9 @@ func button_enabled(name: String) -> bool:
 			or _player.state == Player.State.ATTACK or _player.state == Player.State.SOUL_SLASH)
 	if name == "soul":
 		return not _has_player() or _player.soul_cooldown_left() <= 0.0
+	if name == "dodge_r":
+		# 구르기 스태미너(15)가 모자라면 어둡게 (눌러도 구르지 않고 막대가 붉게 번쩍인다 — v1.1.0 맞딜 검수)
+		return not _has_player() or _player.guard + 0.001 >= _player.roll_stamina_cost
 	return true
 
 

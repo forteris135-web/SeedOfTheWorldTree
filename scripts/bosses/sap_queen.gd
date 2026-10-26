@@ -77,6 +77,16 @@ const CROWD_RANGE := 280.0
 ## 나가 반격 창이 1.9초로 잘렸다. 우연을 고정한 맞딜 시험(스태미너 없는 지금 소녀 그대로)에서 1.8초와 2.5초의 결과는 같았다 —
 ## 진 판(안쪽 씨드 1)은 내려앉은 여왕이 계량기가 차기 전에 무너진 판이라 계량기로는 못 막는다. 스태미너(P 묶음)를 흉내 내면 6판 모두 봇이 진다.
 const CROWD_TRIGGER := 2.5
+## 높은 자리 계량기 (v1.1.0 맞딜 검수, PerchMeter): 소녀가 디딤돌 위 200 넘게 높은 곳(가지 위·그 높이의 공중)에 PERCH_TRIGGER 초 머물면
+## 다음 패턴은 '가지 나비 떼' — 여왕이 소녀 머리 위 비스듬한 자리(가로 PERCH_SIDE, 위 PERCH_ABOVE)로 올라가 나비를 PERCH_EXTRA 마리 더 풀어
+## 내려보낸다. 박자·예고(하나·둘 → 셋)는 보통 나비 떼와 같고, 나비 판정 = 보이는 그림, 전부 가드 가능 — **저스트 가드로 되받으면** 보통 나비처럼
+## 여왕에게 돌아가 흐트러짐이 쌓인다(기술의 보상 그대로). 가지에서 내려와 디딤돌·섬에서 싸우면 오지 않는다.
+## (가지 위에서 원거리 영혼만 쏘는 봇이 6판 중 5~6판 이겼다 — 물결은 수면에만, 착지는 디딤돌에만 닿았다. 가지로 내려앉는 응징은
+##  여왕을 소녀 눈높이로 데려와 오히려 더 빨리 잡혔다 → 소녀의 수평 원거리 줄 밖(머리 위)에서 쏟는다)
+const PERCH_TRIGGER := 1.8
+const PERCH_SIDE := 260.0
+const PERCH_ABOVE := 360.0
+const PERCH_EXTRA := 2
 
 @export_group("능력치")
 @export var max_hp := 1300.0
@@ -159,6 +169,10 @@ var _tel: RangeTelegraph
 var crowd := CrowdMeter.new(CROWD_RANGE, CROWD_TRIGGER)
 ## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 앞 낙하 공격 뒤 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n; scripts/combat/plunge_decay.gd)
 var plunge_decay := PlungeDecay.new()
+## 높은 자리 계량기 (v1.1.0 맞딜 검수) / 지금 나비 떼가 가지 나비 떼(높은 자리 응징)인가 / 그때 여왕이 머무는 자리
+var perch := PerchMeter.new(PERCH_TRIGGER)
+var _perch_volley := false
+var _perch_pos := Vector2.ZERO
 ## 지금 공격이 맞딜 응징인가 (응징 공격 동안은 흐트러짐이 쌓이지 않는다 — 되받은 나비는 그대로)
 var punishing := false
 var _poise_immune := 0.0
@@ -240,6 +254,8 @@ func reset_fight() -> void:
 	set_collision_mask_value(1, false)
 	hitbox.deactivate()
 	crowd.reset()
+	perch.reset()
+	_perch_volley = false
 	plunge_decay.reset()
 	_tel.clear()
 	_poise_immune = 0.0
@@ -366,6 +382,9 @@ func _physics_process(delta: float) -> void:
 	if player:
 		# 맞딜 방지: 내려앉은 동안(땅에서 때릴 수 있을 때)만 쌓인다
 		crowd.tick(delta, global_position, player.global_position, state == State.LANDED, facing)
+		# 높은 자리: 공격할 수 있는 동안(하늘·패턴·내려앉음) 소녀가 가지 높이에 머물면 쌓인다 (무너짐·갈라짐·가지 나비 떼 중은 아님)
+		perch.tick(delta, ground_y, player, state in [State.HOVER, State.DUST, State.WAVE, State.BUTTERFLIES, State.LANDED, State.TAKEOFF, State.LAND] \
+			and not _perch_volley)
 	if player and state in [State.HOVER, State.DUST, State.BUTTERFLIES, State.LANDED, State.INTRO, State.TAKEOFF]:
 		var dx := player.global_position.x - global_position.x
 		var want := 1 if dx > 0.0 else -1
@@ -400,7 +419,10 @@ func _physics_process(delta: float) -> void:
 				_fly_toward(_hover_target, delta, 3.0)
 			_phase_step(delta, func() -> void: _launch_waves())
 		State.BUTTERFLIES:
-			_fly_toward(_hover_target + Vector2(0, 120), delta, hover_speed * 0.5)
+			if _perch_volley:
+				_fly_toward(_perch_pos, delta, hover_speed * 0.8)   # 가지 위 소녀의 머리 위 비스듬한 자리 (소녀의 수평 원거리 줄 밖)
+			else:
+				_fly_toward(_hover_target + Vector2(0, 120), delta, hover_speed * 0.5)
 			_phase_step(delta, func() -> void: _release_butterflies())
 		State.LAND:
 			_land_step(delta)
@@ -480,11 +502,17 @@ func _next_pattern() -> void:
 	var order: Array = [State.DUST, State.WAVE, State.BUTTERFLIES, State.LAND] if phase == 1 \
 		else [State.DUST, State.BUTTERFLIES, State.WAVE, State.DUST, State.BUTTERFLIES, State.LAND]
 	var next: State = order[_pattern_index % order.size()]
+	var perch_volley := false
 	if crowd.ready():
 		# 맞딜 방지 (v1.1.0): 계량기가 찬 채 하늘에 있다 → 소녀에게 가장 가까운 돌로 내려앉는다 (착지 충격)
 		crowd.consume()
 		next = State.LAND
 		punishing = true
+	elif perch.ready() and player:
+		# 높은 자리 응징 (v1.1.0 맞딜 검수): 가지 위 소녀의 머리 위로 올라가 나비를 더 풀어 내려보낸다 (가드·저스트 가드로 되받기)
+		perch.consume()
+		next = State.BUTTERFLIES
+		perch_volley = true
 	else:
 		_pattern_index += 1
 	_hover_target = _random_hover()
@@ -506,6 +534,14 @@ func _next_pattern() -> void:
 		State.BUTTERFLIES:
 			telegraph.emit("butterflies")
 			_begin(State.BUTTERFLIES, t0, startup, BEAT, BEAT)
+			if perch_volley:
+				_perch_volley = true
+				punishing = true
+				var side := signf(global_position.x - player.global_position.x)
+				if side == 0.0:
+					side = 1.0
+				_perch_pos = Vector2(clampf(player.global_position.x + side * PERCH_SIDE, arena.position.x + 150.0, arena.end.x - 150.0),
+					maxf(player.global_position.y - PERCH_ABOVE, arena.position.y + 160.0))
 		State.LAND:
 			_land_stone = _pick_stone()
 			_diving = false
@@ -716,6 +752,8 @@ func _launch_waves() -> void:
 
 func _release_butterflies() -> void:
 	var count := butterfly_count if phase == 1 else butterfly_count + 2
+	if _perch_volley:
+		count += PERCH_EXTRA   # 가지 나비 떼: 두 마리 더
 	for i in count:
 		get_tree().create_timer(i * 0.12).timeout.connect(func() -> void:
 			if state in [State.FALLEN, State.PURIFIED, State.WAIT, State.BROKEN]:
@@ -934,6 +972,7 @@ func _set_state(new_state: State) -> void:
 	state = new_state
 	if new_state not in [State.LAND, State.WAVE]:
 		punishing = false   # 응징(내려앉기, 또는 물결)이 끝나면 꺼진다 — 내려앉은 뒤(LANDED)는 다시 무너뜨릴 수 있는 빈틈
+	_perch_volley = false   # 가지 나비 떼는 그 나비 떼 동안만 (_next_pattern 이 _begin 뒤에 다시 켠다)
 	if new_state not in ATTACK_STATES:
 		attack_phase = ""
 	if _tel and new_state != State.LAND:

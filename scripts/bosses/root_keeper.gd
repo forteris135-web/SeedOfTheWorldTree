@@ -38,6 +38,14 @@ const WALL_ACTIVE := 0.6
 const CROWD_RANGE := 260.0
 ## 2페이즈 쉬는 시간 배수 (v1.1.0 맞딜 방지 사다리 4단계: 2페이즈 공격 사이 쉬는 시간 −15%)
 const P2_REST_MULT := 0.85
+## 높은 자리 응징 (v1.1.0 맞딜 검수, PerchMeter): 소녀가 바닥보다 200 넘게 높은 곳(가지 위·그 높이의 공중)에 2.5초 머물면
+## 다음 공격은 '큰 뿌리 가시' — 소녀 발밑(2페이즈는 옆 하나 더)에서 소녀 발 높이 + PERCH_SPIKE_OVER 까지 솟는 가시 (가지를 뚫는다).
+## 예고 = 판정 기둥(바닥에서 가시 끝까지, 주황, 가드 가능; 소녀 발밑 가시는 공격 범위 예고 사각형으로도), 예비 길이는 보통 가시와 같다.
+## 옆으로 한 걸음(80px) 비키거나 가지에서 내려오거나 구르면 피한다. (가지 위에서 원거리 영혼만 쏘는 봇이 6판 중 3판 이겼다)
+const PERCH_SPIKE_OVER := 150.0
+const PERCH_SPIKE_MAX := 760.0
+## 2페이즈 큰 가시 둘째 줄 간격 (px)
+const PERCH_SPIKE_GAP := 200.0
 
 signal hp_changed(hp: float, max_hp: float)
 signal poise_changed(poise: float, max_poise: float)
@@ -103,6 +111,7 @@ var _face_hold := 0.0
 ## 예고 자리들 (그림이 붉은 예고를 그린다)
 var spike_marks: Array = []     # 가시가 솟을 x
 var spike_delays: Array = []    # 가시마다 솟기 전 기다리는 시간 (물결)
+var spike_heights: Array = []   # 가시마다 솟는 높이 (비면 RootSpike.HEIGHT; 높은 자리 응징의 큰 가시만 더 높다)
 var hand_targets: Array = []    # 뿌리 손이 솟을 x (예비 60% 까지는 소녀를 따라간다)
 var _spike_wave := false
 ## 패턴 고르기: 직전 패턴(연속 금지), 예약된 연계
@@ -124,6 +133,9 @@ var _tel: RangeTelegraph
 var crowd := CrowdMeter.new(CROWD_RANGE)
 ## 낙하 공격 감쇠 시계 (v1.1.0 최종 검수 — 앞 낙하 공격 뒤 4초 안에 또 맞으면 피해 ×0.6^n·흐트러짐 ×0.5^n; scripts/combat/plunge_decay.gd)
 var plunge_decay := PlungeDecay.new()
+## 높은 자리 계량기 (v1.1.0 맞딜 검수) / 다음 가시가 높은 자리 응징(큰 가시)인가
+var perch := PerchMeter.new()
+var _perch_spikes := false
 ## 지금 공격이 맞딜 응징인가 (응징 공격이 끝날 때까지 흐트러짐이 쌓이지 않는다 — 두들겨 끊거나 되돌림에 무너뜨릴 수 없다)
 var punishing := false
 ## 뿌리 벽: 판정이 켜진 자리와 벽까지 갈 수 있는 거리 (예고·이펙트가 쓴다)
@@ -180,6 +192,8 @@ func reset_fight() -> void:
 	_red = false
 	_spike_wave = false
 	crowd.reset()
+	perch.reset()
+	_perch_spikes = false
 	plunge_decay.reset()
 	_tel.clear()
 	global_position = _home
@@ -211,6 +225,8 @@ func _physics_process(delta: float) -> void:
 		# 맞딜 방지: 공격할 수 있는 동안 몸 가까이 붙어 있으면 쌓인다 (무너짐·일어서기 = 빈틈에는 쌓이지 않는다)
 		# (응징 공격 동안에도 쌓인다 — 내려찍기를 맞고도 계속 붙어 있으면 또 내려찍는다. 구르기로 빠지면 식는다)
 		crowd.tick(delta, global_position, player.global_position, state == State.STANCE or state in ATTACK_STATES, facing)
+		# 높은 자리: 공격할 수 있는 동안 소녀가 가지 높이에 머물면 쌓인다 (큰 가시 응징 중에는 쌓지 않는다)
+		perch.tick(delta, ground_y, player, (state == State.STANCE or state in ATTACK_STATES) and not (state == State.SPIKES and punishing))
 	if _hint_timer > 0.0:
 		_hint_timer -= delta
 		if _hint_timer <= 0.0:
@@ -456,6 +472,11 @@ func melee_reach() -> Rect2:
 				RangeTelegraph.slide_first(SWEEP2_SLIDE, SWEEP_DECEL))
 		State.STOMP:
 			return RangeTelegraph.box_world(hitbox, STOMP_BOX, 1)
+		State.SPIKES:
+			# 높은 자리 응징의 큰 가시: 소녀 발밑 가시가 솟아 덮을 기둥 (바닥 ~ 가시 끝, 판정 폭). 보통 가시는 각자의 바닥 예고.
+			if not spike_heights.is_empty() and not spike_marks.is_empty():
+				var h: float = spike_heights[0]
+				return Rect2(float(spike_marks[0]) - RootSpike.WIDTH / 2.0, ground_y - h, RootSpike.WIDTH, h)
 		State.WALL:
 			var from := global_position if attack_phase == "startup" else _wall_from
 			var r := RangeTelegraph.box_world(hitbox, WALL_BOX, facing)
@@ -533,6 +554,14 @@ func _choose(dist: float) -> void:
 		_start_attack(State.STOMP)
 		punishing = true
 		return
+	if perch.ready():
+		# 높은 자리 응징 (v1.1.0 맞딜 검수): 소녀 발밑에서 가지 높이까지 솟는 큰 뿌리 가시 (주황 기둥 예고 = 판정, 가드 가능)
+		perch.consume()
+		_chain = -1
+		_perch_spikes = true
+		_start_attack(State.SPIKES)
+		punishing = true
+		return
 	if dist < 330.0:
 		cands = [[State.SWEEP, 50], [State.HAND, 20], [State.RING, 15], [State.SPIKES, 10]]
 		if phase == 2:
@@ -596,6 +625,8 @@ func _start_attack(st: State) -> void:
 		State.SPIKES:
 			_mark_spikes()
 			_begin(st, 0.9 * fast)
+			if not spike_heights.is_empty():
+				_tel.show_rect(melee_reach(), false, startup_len)   # 큰 가시: 공격 범위 예고 = 소녀 발밑 가시의 판정 기둥
 		State.SWEEP:
 			_begin(st, 0.5 * fast)
 		State.SWEEP2:
@@ -647,10 +678,28 @@ func telegraph_label(kind: String) -> String:
 # ---------- 패턴 실행 ----------
 
 func _mark_spikes() -> void:
+	var perch_mode := _perch_spikes
+	_perch_spikes = false
 	_clear_marks()
 	if player == null:
 		return
 	var px := player.global_position.x
+	if perch_mode:
+		# 높은 자리 응징: 소녀 발밑(2페이즈는 소녀가 달리는 쪽, 서 있으면 보스 반대쪽에 하나 더)에 소녀 발 높이 + 150 까지 솟는 큰 가시
+		var h := clampf(PerchMeter.height_of(player, ground_y) + PERCH_SPIKE_OVER, RootSpike.HEIGHT, PERCH_SPIKE_MAX)
+		spike_marks = [px]
+		spike_delays = [0.0]
+		spike_heights = [h]
+		if phase == 2:
+			var lead := signf(player.velocity.x) if absf(player.velocity.x) > 40.0 else signf(px - global_position.x)
+			if lead == 0.0:
+				lead = float(-facing)
+			spike_marks.append(px + lead * PERCH_SPIKE_GAP)
+			spike_delays.append(0.08)
+			spike_heights.append(h)
+		for i in spike_marks.size():
+			spike_marks[i] = _clamp_x(spike_marks[i])
+		return
 	if phase == 1:
 		spike_marks = [px, px + facing * 220.0]
 		spike_delays = [0.0, 0.08]
@@ -679,6 +728,8 @@ func _raise_spikes() -> void:
 		var sp: RootSpike = SPIKE.instantiate()
 		sp.damage = spike_damage
 		sp.delay = spike_delays[i] if i < spike_delays.size() else 0.0
+		if i < spike_heights.size():
+			sp.spike_height = spike_heights[i]
 		get_parent().add_child(sp)
 		sp.global_position = Vector2(spike_marks[i], ground_y)
 		sp.launch(Vector2.UP, self, false)
@@ -689,6 +740,7 @@ func _raise_spikes() -> void:
 func _clear_marks() -> void:
 	spike_marks.clear()
 	spike_delays.clear()
+	spike_heights.clear()
 
 
 ## 뿌리 손 자리: 예비 60% 까지 소녀를 따라간다 (2페이즈는 두 번째 손이 소녀가 달리는 쪽 앞에)
