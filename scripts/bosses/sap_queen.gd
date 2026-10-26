@@ -475,6 +475,7 @@ func _physics_process(delta: float) -> void:
 						_burst_at += BEAT * 2.0
 						_tel.show_rect(burst_reach(), false, BEAT * 2.0)
 					else:
+						_tel.end()   # 마지막 터뜨림이 시작됐다 — 예고를 걷는다 (남아 있으면 셋째가 오는 줄 알고 반격 기회를 놓친다)
 						punishing = false   # 응징이 끝났다 — 남은 내려앉음은 다시 무너뜨릴 수 있는 빈틈
 			elif crowd.ready() and not _burst_done:
 				# 맞딜 방지 (v1.1.0 맞딜 검수 2): 내려앉은 몸에 붙어 버티는 소녀에게 — 다음 박부터 하나·둘 예고, 셋에 수액 터뜨리기 (내려앉음마다 한 번)
