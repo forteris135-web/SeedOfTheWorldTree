@@ -78,10 +78,9 @@ const PERCH_SPIKE_MAX := 760.0
 const PERCH_SPIKE_GAP := 200.0
 
 ## ---- v1.1.1 추가 배율 ----
-## 숫자의 단일 출처는 Balance.BOSS_EXTRA["root"] (v1.1.1 난이도 묶음). 그 상수가 없는 빌드에서는 같은 값의 이 표를 쓴다.
+## 숫자의 단일 출처는 Balance.BOSS_EXTRA["root"] (hp 1.75 · atk 1.25 · atk_phase2 1.10).
 ## hp: 체력 배율, atk: 모든 공격 피해 배율, atk_phase2: 2페이즈(체력 절반 → 다시 일어선 뒤)에 더 곱하는 배율.
 ## 던전 단계·난이도 배율(Balance.hp_mult / 받는 피해 쪽 Balance.incoming_damage)과는 따로, 여기서 한 번만 곱한다.
-const EXTRA_FALLBACK := {"hp": 1.75, "atk": 1.25, "atk_phase2": 1.10}
 ## 씨앗 폭우는 2페이즈에서도 그대로 (기획자 지시 '2페이즈에서 강화되지 않고 유지') — 2페이즈 공격력 ×1.10 도 받지 않는다.
 ## true 로 바꾸면 씨앗 폭우도 2페이즈 배율을 받는다.
 const BARRAGE_PHASE2_ATK := false
@@ -272,7 +271,6 @@ var _heal_said := 0
 var _heal_said_at := -100.0
 var _pending_lines: Array = []   # [시각(_clock), 키]
 var _lines_cache: Dictionary = {}
-static var _extra: Dictionary = {}
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -301,17 +299,9 @@ func _ready() -> void:
 	add_child(_speech)
 
 
-## v1.1.1 뿌리지기 추가 배율 (hp / atk / atk_phase2): Balance.BOSS_EXTRA["root"] 가 있으면 그 값, 없으면 EXTRA_FALLBACK.
+## v1.1.1 뿌리지기 추가 배율 (hp / atk / atk_phase2) = Balance.BOSS_EXTRA["root"]
 static func extra(key: String) -> float:
-	if _extra.is_empty():
-		_extra = EXTRA_FALLBACK.duplicate()
-		var consts: Dictionary = (load("res://scripts/systems/balance.gd") as Script).get_script_constant_map()
-		var all = consts.get("BOSS_EXTRA", null)
-		if all is Dictionary and (all as Dictionary).get("root", null) is Dictionary:
-			var mine: Dictionary = all["root"]
-			for k in mine:
-				_extra[k] = float(mine[k])
-	return float(_extra.get(key, 1.0))
+	return Balance.boss_extra("root", key)
 
 
 ## 지금 공격 피해 배율 (v1.1.1): 추가 공격력 ×1.25, 2페이즈면 ×1.10 더. 던전 단계·난이도 배율은 소녀가 받을 때(Balance.incoming_damage) 따로.
