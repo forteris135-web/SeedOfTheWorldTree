@@ -39,6 +39,7 @@ func _ready() -> void:
 	await _f()
 	await _g()
 	await _e()
+	await _e(true)
 	await _h()
 	await _b()
 	print("[knightfix] 끝: 실패 %d" % _fail)
@@ -226,9 +227,15 @@ func _g() -> void:
 	await _calm()
 
 
-## E. 높은 가지(Branch3, 위 1120) 위 1페이즈 30초: 검기를 소녀 쪽으로 올려 쏴서 두 번 넘게 맞힌다
-func _e() -> void:
+## E. 높은 가지(Branch3, 위 1120) 위 1페이즈 30초: 버티는 소녀가 두 번 넘게 맞는다 (검기를 올려 쏘거나, 바로 밑에 오면 응징 내려찍기)
+##    v1.1.1: 받는 피해 ×1.15 로 첫 내려찍기에 체력이 40 아래로 떨어져(시험이 곧바로 채움) 소녀가 쓰러지지 않고 매번 가지에서 떨어진다 —
+##    기사가 가지 바로 밑(맞딜 계량기 280 · 위 520)에 머물러 응징 내려찍기만 나온다 (v1.1.0 맞딜 규칙대로). 그래서 E 는 '맞는다'만 보고,
+##    검기를 올려 쏘는지는 기사가 걸어오지 못하게(행진 0) 멀리 세운 E2 에서 따로 본다.
+func _e(hold_far := false) -> void:
 	await _calm()
+	var speed := _boss.march_speed
+	if hold_far:
+		_boss.march_speed = 0.0
 	_boss.phase = 1
 	_boss.hp = _boss.max_hp
 	_boss.poise = 0.0
@@ -261,13 +268,15 @@ func _e() -> void:
 			_player.velocity = Vector2.ZERO
 			await get_tree().physics_frame
 	_boss.state_changed.disconnect(cb)
+	_boss.march_speed = speed
 	var total := 0.0
 	var by := {}
 	for h in _hits:
 		total += h[1]
 		by[h[0]] = by.get(h[0], 0.0) + h[1]
-	_check(_hits.size() >= 2 and by.has("WAVE"), "E 높은 가지 1페이즈 30초: 맞은 횟수 %d(2 이상), 피해 %.0f, 공격별 피해 %s, 떨어짐 %d, 기사가 쓴 패턴 %s" % [
-		_hits.size(), total, by, knocked, attacks])
+	var ok := _hits.size() >= 2 and (by.has("WAVE") or not hold_far)
+	_check(ok, "E%s 높은 가지 1페이즈 30초%s: 맞은 횟수 %d(2 이상%s), 피해 %.0f, 공격별 피해 %s, 떨어짐 %d, 기사가 쓴 패턴 %s" % [
+		"2" if hold_far else "", " (기사 멀리 고정)" if hold_far else "", _hits.size(), ", 검기 포함" if hold_far else "", total, by, knocked, attacks])
 	await _calm()
 
 

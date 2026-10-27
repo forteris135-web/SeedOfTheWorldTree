@@ -8,8 +8,9 @@ extends Node
 ##  (d) 두 씬의 그림 방향 플래그와 능력치가 그림 판단·너프 값과 같은지
 ##  (e) 부위 뼈대 그림(GuardRigVisual)이면: 방패(weapon 뼈)가 그림이 보는 쪽(visible_facing)에 그려지는지 — 좌우 모두, 세 씬 모두
 
-const EXPECT_GUARD := {"max_hp": 100.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.5, "art_faces_right": true}
-const EXPECT_SAVABLE := {"max_hp": 110.0, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.5, "art_faces_right": false}
+## max_hp: 씬 값 × v1.1.1 새 Normal 기준(Balance.BASE_MULT 1.15, 방 밖이라 단계 0)
+const EXPECT_GUARD := {"max_hp": 100.0 * Balance.BASE_MULT, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.5, "art_faces_right": true}
+const EXPECT_SAVABLE := {"max_hp": 110.0 * Balance.BASE_MULT, "max_poise": 100.0, "damage": 12.0, "turn_delay": 0.5, "art_faces_right": false}
 const EXPECT_SCRIPT := {"charge_speed": 700.0, "charge_time": 0.55, "charge_damage": 14.0, "stuck_time": 2.4, "charge_chance": 0.35, "charge_cooldown": 1.2, "block_limit": 3, "block_reset_time": 1.5, "block_break_poise": 40.0}
 
 var _fail := 0
