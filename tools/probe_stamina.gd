@@ -17,6 +17,9 @@ extends Node
 ##      (v1.1.0 맞딜 검수 — 영혼 돌려 쓰기 막기): 씨앗 누름 → 바람·빛도 잠김(제 쿨은 0), 바꾸기는 즉시,
 ##      바꾼 영혼의 HUD 원·터치 버튼에 꽉 찬 호와 남은 초·버튼 꺼짐, 씨앗 → 바람 → 빛 → 씨앗이 1.65초 간격, 씨앗만 쓰면 리듬 그대로(1.68초),
 ##      예비동작 중 끊긴 베기·모으는 중 끊긴 빛은 잠김도 돌려줌, 쏴도 스태미너는 그대로(비용 0)
+##  (l) v1.1.1 수액의 숨결(여왕 보상, sap_breath): 회복이 다시 시작되기까지의 기다림 ×0.75 — 0.5/0.7/0.8/1.5 → 0.375/0.525/0.6/1.125,
+##      실제로 1타가 끝난 뒤 0.33초 0 → 그 뒤 찬다(숨결 없으면 0.45초 0), 막기·가드 깨짐 기다림, 음수 안 됨, 최대치·비용·3타 후딜레이·맥동 그대로,
+##      두 번 받아도 하나, 저장·불러오기 뒤 그대로, 여왕을 정화한 옛 저장(판 2, 숨결 없음)을 불러오면 저절로 생김
 
 var _fail := 0
 var _room: Node
@@ -123,6 +126,7 @@ func _run() -> void:
 	await _test_swing_pitch()
 	await _test_roll()
 	await _test_soul_lock()
+	await _test_sap_breath()
 
 
 ## 공격 버튼을 눌러 그 타가 시작되기를 기다린다. 시작되면 그 순간의 스태미너를 돌려준다 (-1 = 시작 안 됨)
@@ -840,3 +844,116 @@ func _test_soul_lock() -> void:
 	_player.soul = "seed"
 	Progress.soul = "seed"
 	await _wait(1.0)
+
+
+# ---------- (l) v1.1.1 수액의 숨결 ----------
+func _test_sap_breath() -> void:
+	Progress.abilities.erase("sap_breath")
+	Progress.abilities.erase("sap_pulse")
+	await _reset()
+	var base := [_player.regen_delay(_player.stamina_regen_delay_after_action), _player.regen_delay(_player.stamina_regen_delay_after_shot),
+		_player.regen_delay(_player.stamina_regen_delay_after_block), _player.regen_delay(_player.stamina_regen_delay_after_break)]
+	_check(_approx(base[0], 0.5, 0.0001) and _approx(base[1], 0.7, 0.0001) and _approx(base[2], 0.8, 0.0001) and _approx(base[3], 1.5, 0.0001),
+		"숨결 없이: 회복 기다림 공격·구르기·가드 뒤 %.3f / 바람·빛 %.3f / 막은 뒤 %.3f / 깨짐 %.3f (v1.1.0 그대로)" % base)
+	var cost0: Array = _player.light_stamina_cost.duplicate()
+	var roll0 := _player.roll_stamina_cost
+	var lock0 := _player.light_recovery_final
+	var max0 := _player.max_guard
+	var rate0 := _player.stamina_regen_rate()
+	Progress.gain_ability("sap_breath")
+	Progress.gain_ability("sap_breath")   # 다시 받아도(보스 재전투·불러오기) 하나 — 참/거짓
+	await _frames(2)
+	var br := [_player.regen_delay(_player.stamina_regen_delay_after_action), _player.regen_delay(_player.stamina_regen_delay_after_shot),
+		_player.regen_delay(_player.stamina_regen_delay_after_block), _player.regen_delay(_player.stamina_regen_delay_after_break)]
+	print("[probe] 수액의 숨결: 기다림 %s → %s" % [str(base), str(br)])
+	_check(Progress.has_sap_breath() and _approx(br[0], 0.375, 0.0001) and _approx(br[1], 0.525, 0.0001) and _approx(br[2], 0.6, 0.0001) and _approx(br[3], 1.125, 0.0001),
+		"숨결: 0.5 → 0.375, 0.7 → 0.525, 0.8 → 0.6, 1.5 → 1.125 (×0.75, 두 번 받아도 한 번만)")
+	_check(_player.light_stamina_cost == cost0 and _approx(_player.roll_stamina_cost, roll0) and _approx(_player.light_recovery_final, lock0) and _approx(lock0, 0.35)
+		and _approx(_player.max_guard, max0) and _approx(_player.stamina_regen_rate(), rate0) and not Progress.has_sap_pulse(),
+		"숨결은 기다림만: 공격 비용 %s·구르기 %.0f·최대 %.0f·회복 빠르기 %.1f·3타 후딜레이 그대로, 맥동과 따로" % [str(_player.light_stamina_cost), _player.roll_stamina_cost, _player.max_guard, _player.stamina_regen_rate()])
+	var mult0 := _player.sap_breath_delay_mult
+	_player.sap_breath_delay_mult = -1.0
+	var neg := _player.regen_delay(0.5)
+	_player.sap_breath_delay_mult = mult0
+	_check(_approx(neg, 0.0, 0.0001) and _approx(_player.regen_delay(-0.2), 0.0, 0.0001), "기다림은 음수가 되지 않는다 (%.3f)" % neg)
+	# 실제로: 1타가 끝난 뒤 0.33초 동안 0, 그다음 0.5초는 (0.045초 기다림 남음 →) 약 0.455초 × 28
+	await _reset(STAND, 60.0)
+	_player._guard_regen_delay = 0.2
+	await _press_until_step(1)
+	while _player.state == Player.State.ATTACK:
+		await get_tree().physics_frame
+	var g_033 := await _gain_over(0.33)
+	var g_next := await _gain_over(0.5)
+	print("[probe] 숨결 1타 뒤: 0.33초 +%.2f, 그다음 0.5초 +%.2f (숨결 없으면 0.45초까지 0, 그다음 0.5초 약 +14 중 앞 0.12초 0)" % [g_033, g_next])
+	_check(_approx(g_033, 0.0) and g_next > 0.45 * 28.0 * 0.9 and g_next < 0.5 * 28.0 * 1.05, "숨결: 공격이 끝난 뒤 0.375초 기다렸다가 찬다 (0.33초 0, 그다음 0.5초 +%.1f)" % g_next)
+	# 구르기 뒤도 0.375
+	await _reset(STAND, 60.0)
+	await _tap("dodge")
+	var rolled := false
+	for i in 60:
+		rolled = rolled or _player.state == Player.State.ROLL
+		if rolled and _player.state != Player.State.ROLL:
+			break
+		await get_tree().physics_frame
+	var roll_wait := _player._guard_regen_delay
+	_check(rolled and _approx(roll_wait, 0.375, 0.02), "숨결: 구르기가 끝난 순간 기다림 %.3f (0.375)" % roll_wait)
+	# 막은 뒤 0.6 / 가드 깨짐 1.125 (receive_hit 로 앞에서 맞힌다)
+	await _reset(STAND, 60.0)
+	var src := Node2D.new()
+	_room.add_child(src)
+	src.global_position = _player.global_position + Vector2(120, 0)
+	var inv := _player._invuln_timer
+	_player._invuln_timer = 0.0
+	_player._set_state(Player.State.GUARD)
+	_player._guard_pressed_at = -1000.0
+	var r1: String = _player.receive_hit(HitData.make(5.0, 0.0, src), null)
+	var w_block := _player._guard_regen_delay
+	_player.guard = 1.0
+	_player._invuln_timer = 0.0
+	_player._set_state(Player.State.GUARD)
+	_player._guard_pressed_at = -1000.0
+	var r2: String = _player.receive_hit(HitData.make(5.0, 0.0, src), null)
+	var w_break := _player._guard_regen_delay
+	_player._invuln_timer = inv
+	src.queue_free()
+	print("[probe] 숨결 막기: %s → 기다림 %.3f, %s → 기다림 %.3f" % [r1, w_block, r2, w_break])
+	_check(r1 == "guard" and _approx(w_block, 0.6, 0.0001) and r2 == "guard_break" and _approx(w_break, 1.125, 0.0001), "숨결: 막은 뒤 0.6초, 가드가 깨지면 1.125초")
+	await _wait(1.6)
+	_player.hp = _player.max_hp
+	# 저장 → 초기화 → 불러오기 / 여왕을 정화한 옛 저장(숨결 없음)
+	var had := FileAccess.file_exists(SaveGame.PATH)
+	var backup := FileAccess.get_file_as_string(SaveGame.PATH) if had else ""
+	var keep_ab := Progress.abilities.duplicate()
+	var keep_diff := Progress.difficulty
+	SaveGame.save("", "res://scenes/rooms/canopy_01.tscn")
+	Progress.abilities.erase("sap_breath")
+	_check(not Progress.has_sap_breath() and _approx(_player.regen_delay(0.5), 0.5, 0.0001), "지운 뒤에는 0.5 (시험 준비)")
+	SaveGame.load_game()
+	_check(Progress.has_sap_breath() and _approx(_player.regen_delay(0.5), 0.375, 0.0001), "저장·불러오기 뒤에도 숨결 (0.375)")
+	var old := {"version": 2, "saved_at": "2026-10-26T10:00:00", "grass": "", "scene": "res://scenes/rooms/canopy_01.tscn",
+		"flags": {"boss_queen_defeated": true, "tokens_boss_queen_defeated": true}, "abilities": {"double_jump": true, "sap_walk": true, "sap_pulse": true},
+		"soul": "seed", "upgrades": {}, "grasses": {}, "rescued": {}, "visited_rooms": {}, "ending": "", "purity": {}, "collected": {}, "dust": 0}
+	var f := FileAccess.open(SaveGame.PATH, FileAccess.WRITE)
+	f.store_string(JSON.stringify(old))
+	f.close()
+	SaveGame.load_game()
+	var got_old := Progress.has_sap_breath() and Progress.has_sap_pulse() and _approx(_player.regen_delay(0.5), 0.375, 0.0001)
+	SaveGame.load_game()
+	_check(got_old and Progress.has_sap_breath() and Progress.abilities.keys().count("sap_breath") == 1, "여왕을 정화한 v1.1.0 저장(숨결 없음)을 불러오면 숨결이 생긴다 — 두 번 불러도 하나")
+	old["flags"] = {}
+	old["abilities"] = {"double_jump": true}
+	f = FileAccess.open(SaveGame.PATH, FileAccess.WRITE)
+	f.store_string(JSON.stringify(old))
+	f.close()
+	SaveGame.load_game()
+	_check(not Progress.has_sap_breath() and _approx(_player.regen_delay(0.5), 0.5, 0.0001), "여왕을 정화하지 않은 저장은 숨결 없음 (0.5)")
+	# 되돌림
+	if had:
+		f = FileAccess.open(SaveGame.PATH, FileAccess.WRITE)
+		f.store_string(backup)
+		f.close()
+	elif FileAccess.file_exists(SaveGame.PATH):
+		DirAccess.remove_absolute(SaveGame.PATH)
+	Progress.abilities = keep_ab
+	Progress.abilities.erase("sap_breath")
+	Progress.difficulty = keep_diff

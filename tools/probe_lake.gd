@@ -388,7 +388,7 @@ func _probe_queen() -> void:
 	await _open("sap_lake_boss", "FromLake02")
 	var boss: SapQueen = _room.get_node("Boss")
 	# v1.1.0: 체력은 던전 단계 배율(수액의 호수 단계 3 → ×1.331 × 난이도)을 받는다 (Balance.hp_mult)
-	var queen_hp := 1300.0 * Balance.hp_mult("sap_lake")
+	var queen_hp := 1300.0 * Balance.hp_mult("sap_lake") * Balance.boss_extra("queen", "hp")   # v1.1.1: × 여왕 추가 체력 1.15
 	_check(boss != null and is_equal_approx(boss.max_hp, queen_hp) and boss.max_poise == 170.0, "여왕 체력 1300 × 단계 배율 = %.1f (지금 %.1f), 흐트러짐 170" % [queen_hp, boss.max_hp if boss else 0.0])
 	_player._invuln_timer = 9999.0
 	_player.global_position = Vector2(1850, 1433)   # 섬 위

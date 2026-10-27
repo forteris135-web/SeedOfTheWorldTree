@@ -288,6 +288,12 @@ func has_sap_pulse() -> bool:
 	return has_ability("sap_pulse")
 
 
+## v1.1.1: 수액의 여왕을 정화하고 얻는 또 하나의 영구 패시브 '수액의 숨결' — 끊긴 스태미너 회복이 다시 시작되기까지 ×0.75
+## (Player.regen_delay). 능력 하나(참/거짓)라 여러 번 받아도 겹치지 않는다. 옛 저장은 SaveMigrate.grant_boss_passives 가 채운다.
+func has_sap_breath() -> bool:
+	return has_ability("sap_breath")
+
+
 ## 테스트용 초기화.
 func reset() -> void:
 	flags.clear()

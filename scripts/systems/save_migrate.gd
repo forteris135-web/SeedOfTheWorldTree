@@ -12,7 +12,10 @@ extends RefCounted
 ##   3) 이미 정화한 보스의 첫 정화 새순 (Progress.BOSS_TOKENS, 깃발 tokens_<보스 깃발> 로 한 번만)
 ##   4) 수액의 여왕을 정화했으면 영구 패시브 '수액의 맥동'
 ##   5) 옛 조건(네 능력)으로 선 five_souls 깃발은 새 진엔딩 조건이 아니면 내린다 (통합 때 추가)
-## v2 이상 파일은 아무것도 하지 않는다. 이슬 상한은 Progress.dew_max() 가 늘 5 로 자른다.
+## v2 이상 파일은 위 규칙을 건너뛴다. 이슬 상한은 Progress.dew_max() 가 늘 5 로 자른다.
+##
+## v1.1.1 (판 번호는 그대로 2): 보스 정화로 얻는 영구 패시브를 깃발로 다시 맞춘다 (grant_boss_passives — 어느 판이든 불러올 때마다,
+## 능력은 참/거짓이라 몇 번 불러도 겹치지 않는다). 수액의 여왕을 정화했으면 새 '수액의 숨결'.
 ## 진행을 불러오지 않고 저장 파일만 읽는 곳(보스 러시의 '저장된 성장', 저장 칸 요약 등)은 migrate_data(읽은 사전)로 같은 규칙을 쓸 수 있다.
 
 ## 옛 이슬 보상 자리 (pickup_id) — 지금은 새순을 준다
@@ -33,6 +36,7 @@ const DEW_STAT_REFUND := 280
 
 ## 불러온 진행(Progress) 위에서 판을 올린다 (SaveGame.load_game 이 맨 끝에 부른다).
 static func after_load(from_version: int) -> void:
+	grant_boss_passives(Progress.flags, Progress.abilities)
 	if from_version >= 2:
 		return
 	var out := _v1_to_v2(Progress.flags, Progress.abilities, Progress.upgrades, Progress.collected)
@@ -44,11 +48,12 @@ static func after_load(from_version: int) -> void:
 
 ## 읽기만 한 저장 파일 사전(JSON)을 그 자리에서 판 2 로 고친다. Progress 는 건드리지 않는다. 이미 판 2 면 그대로.
 static func migrate_data(data: Dictionary) -> void:
-	if int(data.get("version", 1)) >= 2:
-		return
 	for k in ["flags", "abilities", "upgrades", "collected"]:
 		if not data.get(k) is Dictionary:
 			data[k] = {}
+	grant_boss_passives(data["flags"], data["abilities"])
+	if int(data.get("version", 1)) >= 2:
+		return
 	var out := _v1_to_v2(data["flags"], data["abilities"], data["upgrades"], data["collected"])
 	data["dust"] = int(data.get("dust", 0)) + int(out["dust"])
 	data["tokens"] = int(data.get("tokens", 0)) + int(out["tokens"])
@@ -84,6 +89,13 @@ static func _v1_to_v2(flags: Dictionary, abilities: Dictionary, upgrades: Dictio
 	if flags.get("five_souls", false) and not _third_unlocked_in(flags):
 		flags.erase("five_souls")
 	return {"tokens": tokens, "dust": dust}
+
+
+## 보스 정화 깃발 → v1.1.1 에 새로 생긴 영구 패시브. 수액의 여왕을 정화했으면 '수액의 숨결' (맥동은 위 4) 그대로 — 판 2 파일은
+## 여왕 보상 때 이미 받았다). 이미 있으면 그대로(참/거짓이라 겹치지 않음).
+static func grant_boss_passives(flags: Dictionary, abilities: Dictionary) -> void:
+	if flags.get("boss_queen_defeated", false):
+		abilities["sap_breath"] = true
 
 
 ## EndingChoice.third_unlocked() 와 같은 조건을 깃발 사전으로 (뿌리지기 정화 + read_scripture_1~4)

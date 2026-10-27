@@ -52,3 +52,17 @@ func copy() -> HitData:
 		if p.usage & PROPERTY_USAGE_SCRIPT_VARIABLE:
 			h.set(p.name, get(p.name))
 	return h
+
+
+## v1.1.1: 이 공격이 target 에게 닿을 때 쓸 HitData (Hurtbox.receive 가 부른다). 소녀의 영혼 기술이 보스(group "boss" 다섯)에
+## 닿으면 복사본에 Balance.soul_vs_boss 배율(바람·빛 ×0.8, 씨앗 베기 ×1.1)을 곱해 돌려준다. 그 밖(중간 보스·몹·영혼 기술이
+## 아닌 공격)은 자기 자신 그대로 — 원본(여럿이 함께 받는 객체)과 기본 피해 수치는 고치지 않는다.
+func for_target(target: Node) -> HitData:
+	if soul == "" or not from_player or target == null or not target.is_in_group("boss"):
+		return self
+	var k := Balance.soul_vs_boss(soul)
+	if is_equal_approx(k, 1.0):
+		return self
+	var h := copy()
+	h.damage = damage * k
+	return h

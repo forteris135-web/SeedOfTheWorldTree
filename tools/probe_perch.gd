@@ -308,7 +308,8 @@ func _test_bird() -> void:
 	var close := absf(tel_last.position.x - hb_rect.position.x) <= 2.0 and absf(tel_last.end.x - hb_rect.end.x) <= 2.0 \
 		and absf(tel_last.position.y - hb_rect.position.y) <= 2.0 and absf(tel_last.end.y - hb_rect.end.y) <= 2.0
 	_check(tel_seen and hb_rect.size != Vector2.ZERO and close, "새가 내려앉는 순간의 날개바람: 공격 범위 예고 = 판정 (±2px)")
-	_check(is_equal_approx(dmg, GrayLeafBird.LANDING_DAMAGE) and guardable, "날개바람 피해 %.0f·가드 가능" % dmg)
+	# v1.1.1: 새 추가 공격 배율(Balance.BOSS_EXTRA bird atk 1.05)을 한 번 받은 값
+	_check(is_equal_approx(dmg, GrayLeafBird.LANDING_DAMAGE * Balance.boss_extra("bird", "atk")) and guardable, "날개바람 피해 %.1f·가드 가능" % dmg)
 	var st_top := b.ground_y - 134.0   # 땅에 선 소녀 맞는 영역 윗끝
 	_check(hb_rect.end.y < st_top - 30.0 and b.ground_y - hb_rect.position.y >= 450.0, "날개바람은 몸 높이(바닥 위 %.0f..%.0f) — 땅에 선 소녀는 안 맞고 떠 있는 소녀만" % [b.ground_y - hb_rect.end.y, b.ground_y - hb_rect.position.y])
 	# 깃털 세례: 하늘의 새, 땅의 소녀 → 안 참 / 가지(Branch4) 위 소녀 → 참 → 다음 패턴 깃털 +2

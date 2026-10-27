@@ -177,8 +177,10 @@ func _ready() -> void:
 	add_child(preload("res://scripts/fx/knight_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	_tel = RangeTelegraph.attach(self)
 	crowd.max_up = CROWD_MAX_UP
-	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
-	max_hp *= Balance.hp_mult(Balance.region_of(self))
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도. reset_fight 는 max_hp 를 읽는다.
+	# v1.1.1: × 새 Normal 기준 1.15(hp_mult 안) × 보스별 추가(Balance.BOSS_EXTRA["knight"]) — 한 번만. 공격도 내 공격 값에 한 번.
+	max_hp *= Balance.hp_mult(Balance.region_of(self)) * Balance.boss_extra("knight", "hp")
+	Balance.scale_boss_damage(self, ["thrust_damage", "flame_damage", "slam_damage", "throw_damage", "wave_damage", "combo_damages", "charge_damage", "spin_damage", "ring_damage"], Balance.boss_extra("knight", "atk"))
 	hp = max_hp
 	_home = global_position
 	visible = false

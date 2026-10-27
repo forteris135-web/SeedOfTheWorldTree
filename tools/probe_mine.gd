@@ -795,7 +795,8 @@ func _probe_reflect_flight() -> void:
 		boss.hp = boss.max_hp
 		boss.poise = 0.0
 		var r: Dictionary = await _blob_once(boss, func() -> void: boss._spray(), Vector2(2600.0 - d, 932.0))
-		var good: bool = r["blob"] and r["reflected"] and is_equal_approx(r["dmg"], 14.0 * 1.6 * 1.5)
+		# v1.1.1: 방울은 펌프 추가 공격(×1.1)을 받은 값(14 → 15.4)에서 날아가므로 되받은 피해도 그 값 × 1.6 × 1.5
+		var good: bool = r["blob"] and r["reflected"] and is_equal_approx(r["dmg"], 14.0 * Balance.boss_extra("pump", "atk") * 1.6 * 1.5)
 		ok = ok and good
 		lines.append("%d: 되받음 %s 피해 %.1f 장갑 %.0f" % [d, r["reflected"], r["dmg"], boss.poise])
 	_check(ok, "무쇠 펌프 방울 되받기 (거리별, 저스트 가드 45 + 되받은 방울 %.0f): %s" % [boss.reflect_poise, lines])
@@ -861,8 +862,9 @@ func _probe_piston_reach() -> void:
 	_player.hp = _player.max_hp
 	# v1.1.0: 소녀가 받는 피해에 적 능력치 배율(Balance)이 붙는다 → 기대값도 같은 배율로 (판정 자리 시험은 그대로)
 	var m := Balance.atk_mult(Balance.region_of(_player))
-	var piston := int(round(28.0 * m))
-	var wave := int(round(16.0 * m))
+	# v1.1.1: 펌프 자신의 공격 값은 추가 공격 배율(×1.1)을 받은 값 — 펌프에게서 읽는다 (28 → 30.8, 16 → 17.6)
+	var piston := int(round(float(boss.piston_damage) * m))
+	var wave := int(round(float(boss.shock_damage) * m))
 	_check(got[300.0].has(piston) and not got[450.0].has(piston) and got[450.0].has(wave), "피스톤 판정: 300 에 서면 %s (피스톤 28×%.2f=%d 포함), 450 이면 %s (피스톤 없음, 충격파 16×%.2f=%d)" % [got[300.0], m, piston, got[450.0], m, wave])
 	boss.queue_free()
 	await _frames(2)

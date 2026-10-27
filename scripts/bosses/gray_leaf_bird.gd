@@ -175,6 +175,8 @@ const FLAP_BOX := Rect2(-300, -430, 600, 460)
 ## (예전엔 바닥선에 두어 몇 프레임 동안 30px 떨어졌다 — 날개바람 판정이 함께 내려가 예고와 어긋났다)
 const GROUND_REST := 30.0
 const LANDING_DAMAGE := 16.0
+## 이 새의 내려앉기 날개바람 피해 (LANDING_DAMAGE × v1.1.1 보스 추가 공격 배율 — _ready 에서 한 번)
+var _landing_damage := LANDING_DAMAGE
 ## 높은 자리 계량기 (v1.1.0 맞딜 검수, PerchMeter): 새가 하늘에 있는 동안 소녀가 바닥 위 200 넘게 높은 곳(가지 위·점프·이단 점프)에
 ## PERCH_TRIGGER 초 머물면, 다음 하늘 패턴은 '깃털 세례' — 소녀 머리 위 비스듬한 자리(가로 PERCH_SIDE, 위 PERCH_ABOVE)로 올라가
 ## 깃털을 PERCH_EXTRA 발 더 쏜다 (예고·붉은 점·깃털 판정 = 보이는 그림은 보통 깃털 화살과 같고 가드 가능 — **저스트 가드로 되받으면**
@@ -199,8 +201,10 @@ const BODY_OFFSET := Vector2(0.0, -150.0)
 func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/bird_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
-	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
-	max_hp *= Balance.hp_mult(Balance.region_of(self))
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도. reset_fight 는 max_hp 를 읽는다.
+	# v1.1.1: × 새 Normal 기준 1.15(hp_mult 안) × 보스별 추가(Balance.BOSS_EXTRA["bird"]) — 한 번만. 공격도 내 공격 값에 한 번.
+	max_hp *= Balance.hp_mult(Balance.region_of(self)) * Balance.boss_extra("bird", "hp")
+	Balance.scale_boss_damage(self, ["leaf_damage", "feather_damage", "sweep_damage", "peck_damage", "_landing_damage"], Balance.boss_extra("bird", "atk"))
 	hp = max_hp
 	_home = global_position
 	set_collision_mask_value(1, false)
@@ -632,7 +636,7 @@ func landing_reach() -> Rect2:
 
 ## 내려앉는 순간: 날개로 몸 둘레를 내리친다 (가드 가능)
 func _landing_gust() -> void:
-	var hit := HitData.make(LANDING_DAMAGE, 0.0, self, Vector2(560, -300))
+	var hit := HitData.make(_landing_damage, 0.0, self, Vector2(560, -300))
 	hit.hitstop = 0.05
 	hitbox.set_box(LANDING_BOX, 1)
 	hitbox.activate(hit, 0.2)

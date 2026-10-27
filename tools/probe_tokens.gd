@@ -11,9 +11,10 @@ extends Node
 ##  4) 구매: 비용 1·1·2 (스태미너 1·1·1), 단계 상한, 모자람 거절, 바람·빛은 그 영혼을 얻어야 (잠김 거절), 19개로 모두 최대 → 0 남음
 ##  5) 저장 → 초기화 → 불러오기: 새순·단계·최대 스태미너 그대로
 ##  6) 옛 세이브(v1) 이주 4경우 + 판 2 파일은 그대로 + 파일 사전만 고치는 SaveMigrate.migrate_data
-##  7) 여왕 보상: 회상에서 돌아오면 수액 위 걷기 + 수액의 맥동, 새순 +1, 안내 / 회상 글자
+##     v1.1.1: 여왕을 정화한 파일은 어느 판이든 '수액의 숨결'(sap_breath)을 받는다 (두 번 불러도 하나)
+##  7) 여왕 보상: 회상에서 돌아오면 수액 위 걷기 + 수액의 맥동 + 수액의 숨결(v1.1.1), 새순 +1, 안내 / 회상 글자
 ##  8) 달빛풀 메뉴: 탭 셋(이동·성장·기술), 기술 탭 결정·터치 두 번 구매 → 바로 저장, 모자람·잠김 안내, 탭 머리 터치
-##  9) 보스 러시 '다 자란 몸': 이슬 5 · 넘침 0 · 수액의 맥동 · 기술 다섯 줄 3단계
+##  9) 보스 러시 '다 자란 몸': 이슬 5 · 넘침 0 · 수액의 맥동 · 수액의 숨결 · 기술 다섯 줄 3단계
 ## 10) 이슬 최대 5, 달빛풀에서 쉬면 이슬 5개로 가득
 ## 마지막에 "[probe] 끝: 실패 N" 을 찍고 그 수로 종료한다. 진짜 세이브 파일은 시작 때 백업하고 끝에 되돌린다.
 
@@ -479,6 +480,7 @@ func _probe_migration() -> void:
 	_check(is_equal_approx(float(Progress.upgrades.get("dews", -1)), 2.0) and int(Progress.upgrades.get("stat_dews_level", -1)) == 2 and Progress.dew_max() == 5 and Progress.dew_overflow() == 0, "A) 이슬 성장 2 · 단계 2 → 이슬 5, 넘침 0")
 	_check(Progress.dust == 100 + 280, "A) 빛 가루 100 + 280 (없어진 3단계 값) = %d" % Progress.dust)
 	_check(Progress.has_sap_pulse() and Progress.has_ability("sap_walk") and is_equal_approx(float(Progress.upgrades.get("max_hp", 0)), 30.0), "A) 여왕 정화 → 수액의 맥동 (수액 위 걷기·다른 성장은 그대로)")
+	_check(Progress.has_sap_breath(), "A) v1.1.1: 여왕을 정화한 옛 파일 → 수액의 숨결도")
 	var all_tok := true
 	for f in Progress.BOSS_TOKENS:
 		all_tok = all_tok and Progress.has("tokens_" + f) and Progress.grant_boss_tokens(f) == 0
@@ -499,7 +501,7 @@ func _probe_migration() -> void:
 	# B) 이슬 0 (아무것도 모으지 않은 파일)
 	_write_save(_v1_save({}))
 	SaveGame.load_game()
-	_check(Progress.tokens == 0 and is_equal_approx(float(Progress.upgrades.get("dews", -1)), 0.0) and Progress.dew_max() == 3 and Progress.dust == 100 and not Progress.has_sap_pulse(), "B) 이슬 0: 새순 0, 이슬 3, 빛 가루 그대로, 맥동 없음")
+	_check(Progress.tokens == 0 and is_equal_approx(float(Progress.upgrades.get("dews", -1)), 0.0) and Progress.dew_max() == 3 and Progress.dust == 100 and not Progress.has_sap_pulse() and not Progress.has_sap_breath(), "B) 이슬 0: 새순 0, 이슬 3, 빛 가루 그대로, 맥동·숨결 없음")
 	# C) 구원은 했지만 보상을 아직 안 받음 (reward_due 만) → 세지 않고, 말을 걸면 새 보상(새순)
 	_write_save(_v1_save({"flags": {"reward_due_gardener_canopy": true, "gardener_canopy_rescued": true}, "rescued": {"gardener_canopy": true}, "upgrades": {"dews": 0.0}}))
 	SaveGame.load_game()
@@ -511,11 +513,18 @@ func _probe_migration() -> void:
 		"upgrades": {"dews": 3.0, "stat_dews_level": 1}, "abilities": {"double_jump": true, "wind": true}}))
 	SaveGame.load_game()
 	_check(Progress.tokens == 1 + 2 + 1 and is_equal_approx(float(Progress.upgrades.get("dews", -1)), 1.0) and int(Progress.upgrades.get("stat_dews_level", -1)) == 1 and Progress.dew_max() == 4 and Progress.dust == 100, "D) 성장 이슬 1단계: 이슬 4, 새순 구슬 1 + 잔 2 + 새 1 = %d, 빛 가루 그대로 %d" % [Progress.tokens, Progress.dust])
-	_check(not Progress.has_sap_pulse() and Progress.has("tokens_boss_bird_defeated"), "D) 여왕을 안 만났으면 맥동 없음, 새 새순 깃발")
+	_check(not Progress.has_sap_pulse() and not Progress.has_sap_breath() and Progress.has("tokens_boss_bird_defeated"), "D) 여왕을 안 만났으면 맥동·숨결 없음, 새 새순 깃발")
 	# E) 판 2 파일은 손대지 않는다 (이슬 상한은 dew_max 가 자른다)
 	_write_save(_v1_save({"version": 2, "tokens": 4, "upgrades": {"dews": 9.0}, "collected": {"pick_canopy_01_1": true}, "flags": {"boss_queen_defeated": true}}))
 	SaveGame.load_game()
 	_check(Progress.tokens == 4 and is_equal_approx(float(Progress.upgrades.get("dews", 0)), 9.0) and Progress.dew_max() == 5 and not Progress.has_sap_pulse(), "E) 판 2: 그대로 (새순 4, 이슬 기록 9 → 이슬 5)")
+	# v1.1.1: 판 2 파일도 여왕을 정화했으면 수액의 숨결을 받는다 — 다시 저장·불러와도 하나 (참/거짓)
+	_check(Progress.has_sap_breath(), "E) v1.1.1: 여왕을 정화한 판 2 파일 → 수액의 숨결")
+	SaveGame.save("", "res://scenes/rooms/canopy_01.tscn")
+	var saved_ab: Dictionary = _read_save().get("abilities", {})
+	SaveGame.load_game()
+	_check(Progress.has_sap_breath() and saved_ab.get("sap_breath", false) == true and Progress.abilities.keys().count("sap_breath") == 1,
+		"E) 숨결이 저장 파일에 남고 다시 불러와도 하나 (%s)" % str(saved_ab))
 	# 판 표시가 없는 아주 옛 파일 = 판 1
 	var d := _v1_save({"collected": {"pick_canopy_07_1": true}})
 	d.erase("version")
@@ -532,6 +541,13 @@ func _probe_migration() -> void:
 	_check(raw_ok and Progress.tokens == 0 and Progress.dust == 0, "F) migrate_data: 사전만 판 2 (새순 %s, 빛 가루 %s, 이슬 성장 %s, 맥동), Progress 는 그대로" % [raw.get("tokens"), raw.get("dust"), raw["upgrades"].get("dews")])
 	SaveMigrate.migrate_data(raw)
 	_check(int(raw["tokens"]) == 19 and int(raw["dust"]) == 380, "F) 두 번 불러도 더 주지 않는다")
+	_check(raw["abilities"].get("sap_breath", false) == true and not Progress.has_sap_breath(), "F) v1.1.1: migrate_data 도 사전에 수액의 숨결 (Progress 는 그대로)")
+	var raw2 := {"version": 2, "flags": {"boss_queen_defeated": true}, "abilities": {"sap_pulse": true}, "tokens": 3}
+	SaveMigrate.migrate_data(raw2)
+	var raw3 := {"version": 2, "flags": {}, "abilities": {}}
+	SaveMigrate.migrate_data(raw3)
+	_check(raw2["abilities"].get("sap_breath", false) == true and int(raw2["tokens"]) == 3 and int(raw2["version"]) == 2 and not raw3["abilities"].has("sap_breath"),
+		"F) 판 2 사전: 여왕 정화면 숨결만 더하고(새순 그대로) 아니면 그대로")
 	# G) (통합) 옛 조건(네 능력)으로 선 five_souls 는 새 진엔딩 조건이 아니면 내린다 / 조건을 채운 옛 파일은 그대로
 	_write_save(_v1_save({"flags": {"five_souls": true, "boss_root_defeated": true, "read_scripture_1": true}}))
 	SaveGame.load_game()
@@ -552,10 +568,10 @@ func _probe_queen_reward() -> void:
 	var ab: Array = scene.get("abilities")
 	var msg := str(scene.get("reward_message"))
 	scene.free()
-	_check(ab.has("sap_walk") and ab.has("sap_pulse"), "여왕 방 abilities %s (수액 위 걷기 + 수액의 맥동)" % str(ab))
-	_check(msg.contains("수액의 맥동") and msg.contains("수액 위"), "여왕 보상 글자 '%s'" % msg)
+	_check(ab.has("sap_walk") and ab.has("sap_pulse") and ab.has("sap_breath"), "여왕 방 abilities %s (수액 위 걷기 + 수액의 맥동 + 수액의 숨결)" % str(ab))
+	_check(msg.contains("수액의 맥동") and msg.contains("수액의 숨결") and msg.contains("수액 위"), "여왕 보상 글자 '%s'" % msg)
 	var mem: Dictionary = DialogueData.load_dialogue("res://data/dialogue/memories.json").get("memory_queen", {})
-	_check(str(mem.get("reward_text", "")).contains("수액의 맥동"), "회상 끝 글자 '%s'" % mem.get("reward_text", ""))
+	_check(str(mem.get("reward_text", "")).contains("수액의 맥동") and str(mem.get("reward_text", "")).contains("수액의 숨결"), "회상 끝 글자 '%s'" % mem.get("reward_text", ""))
 	# 회상에서 돌아온 것처럼: 깃발만 서 있고 after_ 깃발 없음 → 방이 영혼을 깃들게 한다
 	Progress.reset()
 	Progress.set_flag("boss_queen_defeated")
@@ -569,7 +585,7 @@ func _probe_queen_reward() -> void:
 	var text := str(hud.get("_message")) if hud else ""
 	print("[probe] 보상 안내가 뜬 때: %.2f초 뒤" % shown)
 	print("[probe] 여왕 보상 (%.2f초): 능력 %s, 새순 %d, 안내 '%s'" % [took, str(Progress.abilities.keys()), Progress.tokens, text])
-	_check(took >= 0.0 and Progress.has_ability("sap_walk") and Progress.has_sap_pulse() and Progress.tokens == 1 and Progress.has("tokens_boss_queen_defeated"), "회상 뒤: 수액 위 걷기 + 수액의 맥동, 새순 +1")
+	_check(took >= 0.0 and Progress.has_ability("sap_walk") and Progress.has_sap_pulse() and Progress.has_sap_breath() and Progress.tokens == 1 and Progress.has("tokens_boss_queen_defeated"), "회상 뒤: 수액 위 걷기 + 수액의 맥동 + 수액의 숨결, 새순 +1")
 	_check(text.contains("수액의 맥동") and text.ends_with("·  새순 +1"), "보상 안내에 맥동과 새순 +1 ('%s')" % text)
 	await _sleep(3.8)   # 입력 잠금이 풀리게 (BossRoom._after_memory 끝)
 	Progress.reset()
@@ -677,7 +693,7 @@ func _probe_rush_full_body() -> void:
 		lv.append(Progress.token_level(t))
 	_check(Progress.dew_max() == 5 and Progress.dew_overflow() == 0 and is_equal_approx(Progress.heal_bonus(), 50.0), "이슬 5, 넘침 0, 회복량 성장 50 (%d, %d, %.0f)" % [Progress.dew_max(), Progress.dew_overflow(), Progress.heal_bonus()])
 	_check(lv == [3, 3, 3, 3, 3] and is_equal_approx(Progress.max_stamina(), 109.0), "기술 다섯 줄 모두 3단계 %s, 스태미너 109" % str(lv))
-	_check(Progress.has_sap_pulse() and Progress.has_ability("sap_walk") and Progress.has_ability("wind") and Progress.has_ability("light"), "수액의 맥동·수액 위 걷기·바람·빛")
+	_check(Progress.has_sap_pulse() and Progress.has_sap_breath() and Progress.has_ability("sap_walk") and Progress.has_ability("wind") and Progress.has_ability("light"), "수액의 맥동·수액의 숨결·수액 위 걷기·바람·빛")
 	_check(is_equal_approx(float(Progress.upgrades.get("max_hp", 0)), 120.0) and is_equal_approx(float(Progress.upgrades.get("attack", 0)), 0.4), "체력 +120 · 공격 +40% 는 그대로")
 	Progress.reset()
 
