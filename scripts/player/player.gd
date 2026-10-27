@@ -209,6 +209,9 @@ signal stamina_pulsed(amount: float)
 @export var stamina_regen_delay_after_action := 0.5
 ## 바람·빛(상태가 따로 없는 영혼 기술)은 쏜 순간부터 이만큼 기다린다 (쏘는 0.2초 + 0.5초)
 @export var stamina_regen_delay_after_shot := 0.7
+## 가드로 막은 뒤 / 가드가 깨진 뒤 기다리는 시간 (v1.1.0 값 그대로 — v1.1.1 에서 이름만 붙임)
+@export var stamina_regen_delay_after_block := 0.8
+@export var stamina_regen_delay_after_break := 1.5
 
 @export_group("수액의 맥동 (수액의 여왕을 정화하면 얻는 영구 패시브)")
 ## 3타가 적에게 닿으면 즉시 차는 스태미너 (3타 한 번에 한 번만, 여러 적을 맞혀도)
@@ -218,6 +221,11 @@ signal stamina_pulsed(amount: float)
 ## 낙하 공격(내려꽂기·착지 충격) 피해 배수와 판정 크기 배수 (상자 가운데는 그대로, 이펙트도 같이 커진다)
 @export var sap_pulse_plunge_damage_mult := 1.3
 @export var sap_pulse_plunge_box_mult := 1.15
+
+@export_group("수액의 숨결 (v1.1.1: 수액의 여왕을 정화하면 얻는 또 하나의 영구 패시브)")
+## 공격·구르기·가드·영혼 기술·막기·가드 깨짐으로 끊긴 스태미너 회복이 다시 시작되기까지의 기다림 배수
+## (0.5 → 0.375, 바람·빛 0.7 → 0.525, 막은 뒤 0.8 → 0.6, 깨짐 1.5 → 1.125). 최대치·소모량·3타 후딜레이·맥동은 그대로.
+@export var sap_breath_delay_mult := 0.75
 
 @export_group("가드와 저스트 가드")
 @export var max_guard := 100.0
@@ -830,6 +838,11 @@ static func _scaled_about_center(r: Rect2, k: float) -> Rect2:
 	return Rect2(r.get_center() - sz * 0.5, sz)
 
 
+## 끊긴 스태미너 회복이 다시 시작되기까지의 기다림 (초): base, 수액의 숨결이 있으면 ×0.75 (음수가 되지 않게)
+func regen_delay(base: float) -> float:
+	return maxf(base * (sap_breath_delay_mult if Progress.has_sap_breath() else 1.0), 0.0)
+
+
 ## 자연 회복 빠르기 (초당): 28, 수액의 맥동이 있으면 ×1.1
 func stamina_regen_rate() -> float:
 	return guard_regen * (sap_pulse_regen_mult if Progress.has_sap_pulse() else 1.0)
@@ -1259,7 +1272,7 @@ func _cast_wind() -> void:
 	var p: Projectile = WIND_CRESCENT.new()
 	_soul_cooldowns["wind"] = soul_cooldown_total("wind")
 	_set_soul_lock()
-	_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_shot)   # 쏜 뒤 0.7초는 스태미너가 차지 않는다
+	_guard_regen_delay = maxf(_guard_regen_delay, regen_delay(stamina_regen_delay_after_shot))   # 쏜 뒤 0.7초(숨결 0.525)는 스태미너가 차지 않는다
 	p.speed = gust_speed
 	p.damage = gust_damage * attack_multiplier * Progress.skill_damage_mult("wind")
 	p.poise = gust_poise
@@ -1303,7 +1316,7 @@ func _cast_wind() -> void:
 func _cast_laser() -> void:
 	_soul_cooldowns["light"] = soul_cooldown_total("light")
 	var lock_prev := _set_soul_lock()
-	_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_shot)   # 쏜 뒤 0.7초는 스태미너가 차지 않는다
+	_guard_regen_delay = maxf(_guard_regen_delay, regen_delay(stamina_regen_delay_after_shot))   # 쏜 뒤 0.7초(숨결 0.525)는 스태미너가 차지 않는다
 	var l: SoulLaser = SOUL_LASER.new()
 	l.player = self
 	l.facing = facing
@@ -1507,7 +1520,7 @@ func _set_state(new_state: State) -> void:
 		hitbox.deactivate()
 	if state in NO_REGEN_STATES and not (new_state in NO_REGEN_STATES):
 		# 공격·영혼 기술·낙하 공격·가드에서 벗어났다: 짧게 기다린 뒤부터 스태미너가 찬다
-		_guard_regen_delay = maxf(_guard_regen_delay, stamina_regen_delay_after_action)
+		_guard_regen_delay = maxf(_guard_regen_delay, regen_delay(stamina_regen_delay_after_action))
 	if state == State.SOUL_SLASH and attack_phase == "startup":
 		# 예비동작 중에 끊긴 씨앗 베기: 쿨다운이 아직 안 걸렸듯 함께 잠김도 돌려준다
 		_refund_soul_lock(_slash_lock_prev)
@@ -1554,11 +1567,11 @@ func receive_hit(hit: HitData, _hurtbox: Hurtbox) -> String:
 		velocity.x = -facing * 160.0
 		Juice.hitstop(0.03, 0.1)
 		Juice.rumble(0.2, 0.4, 0.08)
-		_guard_regen_delay = 0.8
+		_guard_regen_delay = regen_delay(stamina_regen_delay_after_block)
 		if guard <= 0.0:
 			guard = 0.0
 			guard_changed.emit(guard, max_guard)
-			_guard_regen_delay = 1.5
+			_guard_regen_delay = regen_delay(stamina_regen_delay_after_break)
 			_hit_timer = guard_break_stun
 			_set_state(State.HIT)
 			guard_broken.emit()

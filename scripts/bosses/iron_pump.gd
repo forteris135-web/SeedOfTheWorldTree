@@ -89,6 +89,8 @@ const BITE_BOX := Rect2(40, -230, 320, 250)
 ## 예고(범위 사각형)·김 이펙트는 이 사각형을 그대로 쓴다.
 const VENT_BOX := Rect2(-330, -700, 660, 760)
 const VENT_DAMAGE := 20.0
+## 이 펌프의 김 분출 피해 (VENT_DAMAGE × v1.1.1 보스 추가 공격 배율 — _ready 에서 한 번)
+var _vent_damage := VENT_DAMAGE
 ## 김 분출 뒤에도 몸에 붙어 있으면 한 번 더 (v1.1.0 맞딜 검수 2 — 영혼 기술 함께 잠김을 걷고 그 대신): 첫 분출이 끝날 때 소녀가 계량기 자리
 ## (CrowdMeter.covers — 가로 320) 안에 남아 있으면 첫 분출 2박 뒤 같은 사각형에서 한 번 더 (그 사이 예고가 다시 차오른다 — 첫 분출 판정 0.25초
 ## + VENT_REPUFF). 맞은 뒤 무적 0.5초가 끝난 뒤라, 맞고도 몸에 붙어 있는 소녀는 또 맞는다. 예고를 보고 몸에서 떨어진 소녀에게는 오지 않는다.
@@ -166,8 +168,10 @@ func _ready() -> void:
 	crowd.max_up = CROWD_MAX_UP
 	crowd.above_px = CROWD_ABOVE_PX
 	crowd.above_mult = CROWD_ABOVE_MULT
-	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
-	max_hp *= Balance.hp_mult(Balance.region_of(self))
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도. reset_fight 는 max_hp 를 읽는다.
+	# v1.1.1: × 새 Normal 기준 1.15(hp_mult 안) × 보스별 추가(Balance.BOSS_EXTRA["pump"]) — 한 번만. 공격도 내 공격 값에 한 번.
+	max_hp *= Balance.hp_mult(Balance.region_of(self)) * Balance.boss_extra("pump", "hp")
+	Balance.scale_boss_damage(self, ["piston_damage", "shock_damage", "spray_damage", "bite_damage", "spurt_damage", "_vent_damage"], Balance.boss_extra("pump", "atk"))
 	hp = max_hp
 	_home = global_position
 	visible = false
@@ -523,7 +527,7 @@ func _bite() -> void:
 
 ## 맞딜 응징: 몸 둘레로 김을 뿜는다 (가드 가능, 저스트 가드로 받아칠 수 없음 — 몸에서 나오는 김이라 되받을 것이 없다)
 func _vent() -> void:
-	var hit := HitData.make(VENT_DAMAGE, 0.0, self, Vector2(560, -260))
+	var hit := HitData.make(_vent_damage, 0.0, self, Vector2(560, -260))
 	hit.parryable = false
 	hit.hitstop = 0.05
 	hitbox.set_box(VENT_BOX, 1)

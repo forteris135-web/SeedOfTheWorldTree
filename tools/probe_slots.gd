@@ -509,7 +509,7 @@ func _probe_title_ui() -> void:
 	var t := await _title()
 	var ver: Label = t.get_node("BuildVersion")
 	_check(not t.has_item("Continue") and t.has_item("Start") and not t.has_item("BossRush") and not t.has_item("MusicRoom"), "저장이 없는 타이틀: '이어하기'·'보스 러시'·'음악 감상' 없음")
-	_check(ver.text == "v1.1.0" and ver.text == "v" + str(ProjectSettings.get_setting("application/config/version")) and ver.get_global_rect().position.x > t.size.x * 0.6,
+	_check(ver.text == "v1.1.1" and ver.text == "v" + str(ProjectSettings.get_setting("application/config/version")) and ver.get_global_rect().position.x > t.size.x * 0.6,
 		"오른쪽 아래 버전 글자 '%s'" % ver.text)
 	await _drop(t)
 	# 이어하기 → 칸 고르기 (찬 칸만) → 불러오기

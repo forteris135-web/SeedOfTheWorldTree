@@ -11,7 +11,7 @@ config_version=5
 
 config/name="세계수의 씨앗"
 config/description="멸망해 가는 몽환의 세계에서, 한 소녀가 끝을 막기 위해 걸어간다."
-config/version="1.1.0"
+config/version="1.1.1"
 run/main_scene="res://scenes/ui/title_screen.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 boot_splash/bg_color=Color(0.0784314, 0.101961, 0.164706, 1)

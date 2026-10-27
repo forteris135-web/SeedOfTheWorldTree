@@ -141,9 +141,9 @@ func _knight() -> void:
 	boss.facing = -1
 	boss._set_state(boss.State.MARCH)
 	boss._timer = 99.0
-	# 체력 1.5배 (2026-10-19 기획자 요청: 1100 → 1650)
-	var hp_ok: bool = is_equal_approx(boss.max_hp, 1650.0) and is_equal_approx(boss.hp, 1650.0)
-	print("[probe] 기사 체력: max_hp %.0f, hp %.0f → %s" % [boss.max_hp, boss.hp, "1650 OK" if hp_ok else "1650 아님!"])
+	# 체력 1.5배 (2026-10-19 기획자 요청: 1100 → 1650). v1.1.1: × 새 Normal 1.15 (방 밖 = 수관 단계 0, 기사 추가 배율 1) = 1897.5
+	var hp_ok: bool = is_equal_approx(boss.max_hp, 1650.0 * 1.15) and is_equal_approx(boss.hp, 1650.0 * 1.15)
+	print("[probe] 기사 체력: max_hp %.1f, hp %.1f → %s" % [boss.max_hp, boss.hp, "1650×1.15 OK" if hp_ok else "1650×1.15 아님!"])
 	if not hp_ok:
 		_fail += 1
 	# 정지 자세로 안정시키기 (바닥에 선다)
@@ -1244,7 +1244,8 @@ func _ok(cond: bool, label: String) -> void:
 ## 2026-10-19 탄막 가시성 + 체력 2배: 깃털·잎의 그림 크기(판정 대비), 테두리·심·발광·꼬리, 붉은 점·흰 띠 예고의 때, 체력 1800.
 func _bird_shots(boss: Node, vis: Node2D) -> void:
 	print("[probe] 새 탄막 가시성·체력")
-	_ok(boss.max_hp == 1800.0 and boss.hp == 1800.0, "체력 최대 %.0f / 지금 %.0f (1800 기준)" % [boss.max_hp, boss.hp])
+	# v1.1.1: 1800 × 새 Normal 1.15 × 새 추가 체력 1.10 = 2277
+	_ok(is_equal_approx(boss.max_hp, 1800.0 * 1.15 * 1.10) and is_equal_approx(boss.hp, boss.max_hp), "체력 최대 %.0f / 지금 %.0f (1800 × 1.15 × 1.10 = 2277 기준)" % [boss.max_hp, boss.hp])
 	var player: Player = PLAYER.instantiate()
 	get_tree().root.add_child(player)
 	player.set_physics_process(false)
@@ -1445,8 +1446,9 @@ func _bird_shots(boss: Node, vis: Node2D) -> void:
 	print("[probe]    reset_fight 뒤: rain_warn %.2f, feather_warn %.2f, muzzle_flash %.2f, telegraph %.2f, 띠 보임 %s, 점 보임 %s" % [
 		boss.rain_warn, boss.feather_warn, boss.muzzle_flash, boss.telegraph_amount, band.visible, vis._muzzle.visible])
 	_ok(boss.rain_warn == 0.0 and boss.feather_warn == 0.0 and boss.muzzle_flash == 0.0 and boss.telegraph_amount == 0.0 and not band.visible and not vis._muzzle.visible, "reset_fight 가 예고 값을 비운다")
-	# ---- 체력만 2배: 잎 삼키기 회복량은 예전(900×0.06 = 54) 그대로 ----
-	_ok(absf(boss.max_hp * boss.eat_heal_ratio - 54.0) < 0.01, "잎 삼키기 회복 %.0f (예전 54 그대로)" % (boss.max_hp * boss.eat_heal_ratio))
+	# ---- 체력만 2배: 잎 삼키기 회복 비율 3% (예전 900×0.06 = 54 → 1800×0.03). v1.1.1: 체력이 1800 × 1.15(새 Normal) × 1.10(새 추가) = 2277
+	#      이 되어 같은 3% 로 68.3 (옛 v1.1.0 Hard 의 62.1 × 1.1) ----
+	_ok(is_equal_approx(boss.eat_heal_ratio, 0.03) and absf(boss.max_hp * boss.eat_heal_ratio - 1800.0 * 1.15 * 1.10 * 0.03) < 0.01, "잎 삼키기 회복 %.1f (체력의 3%%)" % (boss.max_hp * boss.eat_heal_ratio))
 	boss.player = null
 	player.free()
 

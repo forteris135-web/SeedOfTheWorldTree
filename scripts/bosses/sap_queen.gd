@@ -223,8 +223,10 @@ func _ready() -> void:
 	add_to_group("boss")
 	add_child(preload("res://scripts/fx/sap_queen_fx.gd").new())   # 이펙트 리뉴얼 F2: 기술 이펙트 (판정과 무관)
 	_tel = RangeTelegraph.attach(self)
-	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
-	max_hp *= Balance.hp_mult(Balance.region_of(self))
+	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도. reset_fight 는 max_hp 를 읽는다.
+	# v1.1.1: × 새 Normal 기준 1.15(hp_mult 안) × 보스별 추가(Balance.BOSS_EXTRA["queen"]) — 한 번만. 공격도 내 공격 값에 한 번.
+	max_hp *= Balance.hp_mult(Balance.region_of(self)) * Balance.boss_extra("queen", "hp")
+	Balance.scale_boss_damage(self, ["dust_damage", "wave_damage", "butterfly_damage", "land_damage"], Balance.boss_extra("queen", "atk"))
 	hp = max_hp
 	_home = global_position
 	set_collision_mask_value(1, false)
