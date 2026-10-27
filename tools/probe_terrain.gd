@@ -687,7 +687,7 @@ var _atlas_img: Image
 func _probe_art() -> void:
 	TerrainSkin.clear_cache()
 	var ids := _art_room_ids()
-	_check(ids.size() == 42, "그림 옷 지역의 방 %d곳 (42 — v1.1.0 두 갈래 길 포함)" % ids.size())
+	_check(ids.size() == 46, "그림 옷 지역의 방 %d곳 (46 — v1.1.0 두 갈래 길, v1.1.1 호수·잠긴 채굴장 새 방 넷 포함)" % ids.size())
 	_probe_art_skins()
 	await _probe_art_rooms(ids)
 	await _probe_art_colliders(ids)

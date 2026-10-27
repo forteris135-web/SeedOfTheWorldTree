@@ -125,6 +125,9 @@ func _probe_rooms() -> void:
 	var rooms := {
 		"flooded_mine_01": {"portals": 3, "grass": 1, "pumps": 3},
 		"flooded_mine_02": {"portals": 3, "records": 1, "pumps": 3, "cracked": 1},
+		# v1.1.1: 펌프실 통로와 배관 위 사이에 끼운 일반 방 둘
+		"flooded_mine_03": {"portals": 2, "records": 1, "pumps": 2},
+		"flooded_mine_04": {"portals": 2, "pumps": 2},
 		"flooded_mine_boss": {"portals": 1, "grass": 1, "boss": true},
 		"canopy_hidden_1": {"portals": 1, "pickups": 1},
 		"canopy_hidden_2": {"portals": 1, "records": 1},

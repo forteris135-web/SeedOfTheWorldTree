@@ -210,7 +210,7 @@ spawn_name = "FromLake"
 
 [node name="ToLake02" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(4410, 1560)
-target_scene = "res://scenes/rooms/sap_lake_02.tscn"
+target_scene = "res://scenes/rooms/sap_lake_03.tscn"
 spawn_name = "FromLake01"
 
 [node name="Interactables" type="Node2D" parent="."]

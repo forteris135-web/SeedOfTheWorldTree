@@ -2,7 +2,8 @@ extends Node
 ## 확장판 · 수액의 호수 묶음 시험 (화면 없이 돈다). 방을 통째로 띄우고 소녀·적·보스를 손으로 돌린다.
 ## 실행: godot --headless --path . res://tools/probe_lake.tscn   (끝줄 "[probe] 끝: 실패 N")
 ##       godot --path . res://tools/probe_lake.tscn -- --shots   (창이 뜨고 screenshots/debug_lake_*.png 를 찍는다)
-##  1) 방 4개 로드 + 포탈 체인: hidden_descent ↔ sap_lake_01 ↔ sap_lake_02 ↔ sap_lake_boss (대상 방·등장 표식이 있는지), 지역·음악·어둠·지도 등록
+##  1) 방 6개 로드 + 포탈 체인: hidden_descent ↔ sap_lake_01 ↔ sap_lake_03 ↔ sap_lake_04 ↔ sap_lake_02 ↔ sap_lake_boss (대상 방·등장 표식이 있는지), 지역·음악·어둠·지도 등록
+##     (v1.1.1: 가라앉은 뿌리 숲 sap_lake_03 · 수액 폭포 아래 sap_lake_04 를 호숫가와 수면 자국 벽 사이에 끼움 — 체인 순서도 본다)
 ##  2) 수액 웅덩이: 능력 없으면 느려지고(거리 절반쯤) 체력이 깎인다 / 있으면 빠르고(1.2배 이상) 체력 그대로.
 ##     구르기: 능력 없으면 수액에서 짧아지고, 있으면 땅보다 길어진다 (EXPANSION 2장)
 ##  3) 수액 어부: 예고 길이 2박(0.87초 ±0.06), 채찍 판정 사거리 300, 가까우면 물러남, 줄 그림이 뒤로 흔들렸다 앞으로 뻗는지,
@@ -28,8 +29,11 @@ var _room_id := ""
 var _player: Player = null
 var _shots := false
 
-const ROOMS := ["hidden_descent", "sap_lake_01", "sap_lake_02", "sap_lake_boss"]
-const SPAWNS := {"hidden_descent": "FromVillage", "sap_lake_01": "FromDescent", "sap_lake_02": "FromLake01", "sap_lake_boss": "FromLake02"}
+const ROOMS := ["hidden_descent", "sap_lake_01", "sap_lake_03", "sap_lake_04", "sap_lake_02", "sap_lake_boss"]
+const SPAWNS := {"hidden_descent": "FromVillage", "sap_lake_01": "FromDescent", "sap_lake_03": "FromLake01", "sap_lake_04": "FromLake03", "sap_lake_02": "FromLake01", "sap_lake_boss": "FromLake02"}
+## v1.1.1: 보스까지 이어지는 앞쪽 포탈 (방 → [포탈 노드, 다음 방]) — 옛 노드 이름은 그대로 두고 대상만 바꿨다
+const CHAIN := {"hidden_descent": ["ToLake", "sap_lake_01"], "sap_lake_01": ["ToLake02", "sap_lake_03"], "sap_lake_03": ["ToLake04", "sap_lake_04"],
+	"sap_lake_04": ["ToLake02", "sap_lake_02"], "sap_lake_02": ["ToBoss", "sap_lake_boss"]}
 
 
 func _ready() -> void:
@@ -161,6 +165,10 @@ func _probe_rooms_and_portals() -> void:
 					has_marker = link.find('name="%s"' % p.spawn_name) >= 0
 					print("[probe]   (주의) village_02 에 아직 숨은 입구가 없다 — 통합 뒤 python3 tools/link_sap_lake.py 필요 (지금은 도구 안의 표식으로 셈)")
 			_check(ok_scene and has_marker, "%s: 포탈 %s → %s (%s)%s" % [rid, p.name, target.get_file(), p.spawn_name, "" if p.requires_ability == "" else " [%s 필요]" % p.requires_ability])
+		if CHAIN.has(rid):
+			var fwd = _room.get_node_or_null("Exits/" + CHAIN[rid][0])
+			_check(fwd != null and str(fwd.target_scene).ends_with("/%s.tscn" % CHAIN[rid][1]) and fwd.requires_ability == "",
+				"%s: 앞으로 가는 포탈 %s → %s (조건 없음)" % [rid, CHAIN[rid][0], CHAIN[rid][1]])
 		if _shots:
 			_player.get_node("Camera2D").reset_smoothing()
 			await _wait(1.0)
@@ -176,7 +184,7 @@ func _probe_rooms_and_portals() -> void:
 			imgs_ok = false
 	_check(mq.get("lines", []).size() == 4 and imgs_ok and mems.has("memory_bird"), "memories_lake.json: memory_queen 4줄 + 그림 있음, 기존 회상 유지")
 	var recs: Dictionary = DialogueData.load_dialogue("res://data/dialogue/records.json")
-	_check(recs.has("dry_channel_mark") and recs.has("fisher_tally") and recs.has("old_promise"), "records_lake.json: 마른 수로의 표식·어부의 눈금 + 기존 기록물 유지")
+	_check(recs.has("dry_channel_mark") and recs.has("fisher_tally") and recs.has("sunken_grove") and recs.has("old_promise"), "records_lake.json: 마른 수로의 표식·어부의 눈금·가라앉은 숲의 비석(v1.1.1) + 기존 기록물 유지")
 	_check(ResourceLoader.exists("res://audio/music/boss_sap_queen.wav") and ResourceLoader.exists("res://audio/music/field_sap_lake.wav"), "정식 곡 2곡(boss_sap_queen, field_sap_lake)이 있다")
 	var st: AudioStream = load("res://audio/music/boss_sap_queen.wav")
 	_check(st is AudioStreamWAV and (st as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_FORWARD, "boss_sap_queen.wav 는 가져올 때 반복(loop forward)으로 읽힌다")
