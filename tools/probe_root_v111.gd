@@ -3,11 +3,11 @@ extends Node
 ## 실행: godot --headless --path <프로젝트> res://tools/probe_root_v111.tscn
 ##       화면 있는 실행(창)이면 screenshots/root_v111_*.png 도 남긴다 (예고·촉수·씨앗 폭우·싸움 전 대화·싸움 중 자막).
 ## 확인하는 것:
-##  1) 체력 = 2100 × Balance.hp_mult(심연) × 1.75, 공격 배율 1페이즈 ×1.25 · 2페이즈 ×1.375 (가시·촉수 실제 피해)
+##  1) 체력 = 2100 × Balance.hp_mult(심연) × 1.35, 공격 배율 1페이즈 ×1.15 · 2페이즈 ×1.25 (합연산) (가시·촉수 실제 피해)
 ##  2) 뿌리 촉수(맵 패턴): 1페이즈 2줄 / 2페이즈 4줄, 예고 띠 = 다 솟은 판정 사각형(로컬·월드), 가드 불가,
 ##     땅 폭 안에 선 소녀는 맞고 땅 폭 밖(빈 틈)에 선 소녀는 안 맞음, 4줄 땅 폭 사이 빈 틈 ≥ 250px, 시계가 저절로 건다
 ##  3) 씨앗 폭우: 3물결, 물결마다 틈 하나(틈 안 씨앗 없음, 줄의 다른 곳은 간격 ≤ 170), 첫 틈은 소녀에게서 260px 넘게,
-##     씨앗은 0.55초 떠서 예고 → 떨어짐, 2페이즈에도 예비·길이·씨앗 수·피해(×1.25) 그대로
+##     씨앗은 0.55초 떠서 예고 → 떨어짐, 2페이즈에도 예비·길이·씨앗 수·피해(×1.15) 그대로
 ##  4) 대사: 처음 마주칠 때만 싸움 전 대화(그동안 보스는 등장 자세로 기다림, 깃발), 두 번째는 없음,
 ##     싸움 중 자막 — 시작·체력 75%·다시 일어섬 문장이 데이터 파일 그대로 뜸, 보스 러시면 안 뜸
 ## 마지막에 "[probe] 끝: 실패 N" 을 찍고 그 수로 종료한다.
@@ -172,11 +172,11 @@ func _intro_talk() -> void:
 # ---------- 1) 체력·공격 배율 ----------
 
 func _hp_and_atk() -> void:
-	var want := 2100.0 * Balance.hp_mult("abyss") * 1.75
-	_check(absf(_boss.max_hp - want) < 0.5, "체력 %.1f = 2100 × 심연 %.4f × 1.75 (%.1f)" % [_boss.max_hp, Balance.hp_mult("abyss"), want])
-	_check(is_equal_approx(RootKeeper.extra("hp"), 1.75) and is_equal_approx(RootKeeper.extra("atk"), 1.25) and is_equal_approx(RootKeeper.extra("atk_phase2"), 1.10),
-		"추가 배율 표: 체력 1.75 · 공격 1.25 · 2페이즈 1.10")
-	_check(is_equal_approx(_boss.atk_factor(), 1.25), "1페이즈 공격 배율 %.3f (1.25)" % _boss.atk_factor())
+	var want := 2100.0 * Balance.hp_mult("abyss") * 1.35
+	_check(absf(_boss.max_hp - want) < 0.5, "체력 %.1f = 2100 × 심연 %.4f × 1.35 (%.1f)" % [_boss.max_hp, Balance.hp_mult("abyss"), want])
+	_check(is_equal_approx(RootKeeper.extra("hp"), 1.35) and is_equal_approx(RootKeeper.extra("atk"), 1.15) and is_equal_approx(RootKeeper.extra("atk_phase2"), 0.10),
+		"추가 배율 표: 체력 1.35 · 공격 1.15 · 2페이즈 +0.10")
+	_check(is_equal_approx(_boss.atk_factor(), 1.15), "1페이즈 공격 배율 %.3f (1.15)" % _boss.atk_factor())
 	_hold()
 	_stand(_boss.global_position.x - 500.0)
 	_boss.force_pattern("SPIKES")
@@ -186,7 +186,7 @@ func _hp_and_atk() -> void:
 	for n in get_tree().get_nodes_in_group("root_effect"):
 		if n is RootSpike:
 			dmg = (n as RootSpike).damage
-	_check(is_equal_approx(dmg, _boss.spike_damage * 1.25), "1페이즈 뿌리 가시 피해 %.2f = 20 × 1.25" % dmg)
+	_check(is_equal_approx(dmg, _boss.spike_damage * 1.15), "1페이즈 뿌리 가시 피해 %.2f = 20 × 1.15" % dmg)
 
 
 # ---------- 2) 뿌리 촉수 ----------
@@ -344,7 +344,7 @@ func _tentacles_phase2() -> void:
 			worst = minf(worst, f2[i].x - f2[i - 1].y)
 	_check(worst >= 230.0, "무작위 200번: 4줄 사이 가장 좁은 빈 틈 %.0fpx (≥ 230)" % worst)
 	var dmg: float = ts[0].damage if not ts.is_empty() and is_instance_valid(ts[0]) else -1.0
-	_check(is_equal_approx(dmg, _boss.tentacle_damage * 1.25 * 1.10), "2페이즈 촉수 피해 %.2f = 24 × 1.25 × 1.10" % dmg)
+	_check(is_equal_approx(dmg, _boss.tentacle_damage * 1.25), "2페이즈 촉수 피해 %.2f = 24 × 1.25 (1 + 0.15 + 0.10)" % dmg)
 	await get_tree().create_timer(1.5).timeout
 
 
@@ -392,7 +392,7 @@ func _barrage(ph: int) -> void:
 		hover_ok = hover_ok and is_equal_approx(s.delay, RootKeeper.BARRAGE_HOVER) and s.height() > 900.0
 	_check(hover_ok, "%d페이즈: 첫 물결 씨앗 %d개가 하늘(높이 > 900)에서 %.2f초 떠서 예고" % [ph, first.size(), RootKeeper.BARRAGE_HOVER])
 	var sdmg := (first[0] as RootSeed).damage if not first.is_empty() else -1.0
-	_check(is_equal_approx(sdmg, _boss.seed_damage * 1.25), "%d페이즈: 씨앗 폭우 피해 %.2f = 16 × 1.25 (2페이즈 배율 없음)" % [ph, sdmg])
+	_check(is_equal_approx(sdmg, _boss.seed_damage * 1.15), "%d페이즈: 씨앗 폭우 피해 %.2f = 16 × 1.15 (2페이즈 배율 없음)" % [ph, sdmg])
 	if ph == 1:
 		await get_tree().create_timer(0.35).timeout
 		await _shot("barrage_markers")
@@ -440,7 +440,7 @@ func _to_phase2() -> void:
 	await get_tree().create_timer(0.8).timeout
 	await _shot("rise_line")
 	await _until(func() -> bool: return _boss.state == RootKeeper.State.STANCE, 4.0)
-	_check(is_equal_approx(_boss.atk_factor(), 1.25 * 1.10), "2페이즈 공격 배율 %.4f (1.375)" % _boss.atk_factor())
+	_check(is_equal_approx(_boss.atk_factor(), 1.25), "2페이즈 공격 배율 %.4f (1.25 = 1 + 0.15 + 0.10)" % _boss.atk_factor())
 
 
 func _phase2_atk() -> void:
@@ -453,7 +453,7 @@ func _phase2_atk() -> void:
 	for n in get_tree().get_nodes_in_group("root_effect"):
 		if n is RootSpike:
 			dmg = (n as RootSpike).damage
-	_check(is_equal_approx(dmg, _boss.spike_damage * 1.25 * 1.10), "2페이즈 뿌리 가시 피해 %.2f = 20 × 1.25 × 1.10" % dmg)
+	_check(is_equal_approx(dmg, _boss.spike_damage * 1.25), "2페이즈 뿌리 가시 피해 %.2f = 20 × 1.25" % dmg)
 	# 2페이즈 연계 강화: 휘두르기 뒤 연계 표 (1000번)
 	var sweep2 := 0
 	var spikes := 0

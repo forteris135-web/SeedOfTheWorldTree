@@ -16,9 +16,9 @@ const SCALE_CONTACT := false
 ## 벽 부수기의 전투 효과(방패·장갑 깨기) 끔 — 초반 능력이 되므로 탐색 전용 (D15)
 const WALL_BREAK_COMBAT := false
 ## v1.1.1 보스별 추가 배율 (난이도·던전 단계 배율 뒤에 한 번 더 곱한다). hp = 최대 체력(_ready 에서 한 번),
-## atk = 그 보스 자신의 공격(근접·투사체·가시 …; 방의 몹은 아님). 뿌리지기 atk_phase2 = 2페이즈(체력 50% 이하) 공격 ×1.1 더.
+## atk = 그 보스 자신의 공격(근접·투사체·가시 …; 방의 몹은 아님). 뿌리지기 atk_phase2 = 2페이즈(체력 50% 이하) 공격에 더하는 몫(합연산: 1 + 0.15 + 0.10 = ×1.25).
 ## 등불 기사는 기준점이라 그대로(×1). 뿌리지기 값은 root_keeper.gd 가 읽는다.
-const BOSS_EXTRA := {"bird": {"hp": 1.10, "atk": 1.05}, "knight": {"hp": 1.0, "atk": 1.0}, "pump": {"hp": 1.15, "atk": 1.10}, "queen": {"hp": 1.15, "atk": 1.05}, "root": {"hp": 1.75, "atk": 1.25, "atk_phase2": 1.10}}
+const BOSS_EXTRA := {"bird": {"hp": 1.10, "atk": 1.05}, "knight": {"hp": 1.0, "atk": 1.0}, "pump": {"hp": 1.15, "atk": 1.10}, "queen": {"hp": 1.15, "atk": 1.05}, "root": {"hp": 1.35, "atk": 1.15, "atk_phase2": 0.10}}
 ## v1.1.1 영혼 기술이 보스(group "boss" 다섯)에게 닿을 때만의 피해 배율: 바람·빛(던지는 영혼) −20%, 씨앗 베기 +10%.
 ## 중간 보스·몹, 기본 피해와 쿨다운은 그대로. HitData.for_target 이 복사본에 곱한다.
 const SOUL_VS_BOSS := {"seed": 1.10, "wind": 0.8, "light": 0.8}

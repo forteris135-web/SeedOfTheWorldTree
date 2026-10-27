@@ -109,14 +109,14 @@ func _spawn_hp(path: String, region: String) -> float:
 
 func _probe_hp() -> void:
 	Progress.difficulty = "normal"
-	# 세 번째 값 = v1.1.0 Normal 체력, 네 번째 = v1.1.1 보스별 추가 체력 (새 1.10 · 펌프 1.15 · 기사 1 · 여왕 1.15 · 뿌리지기 1.75).
+	# 세 번째 값 = v1.1.0 Normal 체력, 네 번째 = v1.1.1 보스별 추가 체력 (새 1.10 · 펌프 1.15 · 기사 1 · 여왕 1.15 · 뿌리지기 1.35).
 	# 기대값 = v1.1.0 Normal × 1.15(새 Normal) × 보스 추가 — 한 번씩만.
 	var cases := [
 		["res://scenes/bosses/gray_leaf_bird.tscn", "canopy", 1800.0, 1.10],
 		["res://scenes/bosses/iron_pump.tscn", "flooded_mine", 1936.0, 1.15],
 		["res://scenes/bosses/lantern_knight.tscn", "mine", 1996.5, 1.0],
 		["res://scenes/bosses/sap_queen.tscn", "sap_lake", 1730.3, 1.15],
-		["res://scenes/bosses/root_keeper.tscn", "abyss", 3074.61, 1.75],
+		["res://scenes/bosses/root_keeper.tscn", "abyss", 3074.61, 1.35],
 		["res://scenes/enemies/woodcutter.tscn", "canopy", 95.0, 1.0],
 		["res://scenes/enemies/gardener.tscn", "canopy", 70.0, 1.0],
 		["res://scenes/enemies/guard.tscn", "village", 110.0, 1.0],
@@ -302,8 +302,8 @@ func _probe_boss_atk() -> void:
 	var pump_piston := _incoming(28.0 * 1.10, "flooded_mine")
 	_check(_near(bird_sweep, 35.02, 0.02) and _near(pump_piston, 62.15, 0.03), "최종 받는 피해 (Normal): 새 날개 휘두르기 %.2f, 펌프 피스톤 %.2f" % [bird_sweep, pump_piston])
 	# 표 자체 (뿌리지기는 root_keeper.gd 가 읽는다)
-	_check(_near(Balance.boss_extra("root", "hp"), 1.75, 0.0001) and _near(Balance.boss_extra("root", "atk"), 1.25, 0.0001) and _near(Balance.boss_extra("root", "atk_phase2"), 1.10, 0.0001)
-		and _near(Balance.boss_extra("knight", "hp"), 1.0, 0.0001) and _near(Balance.boss_extra("nobody", "hp"), 1.0, 0.0001), "BOSS_EXTRA 표: 뿌리지기 체력 1.75·공격 1.25·2페이즈 1.10, 기사 1, 모르는 이름 1")
+	_check(_near(Balance.boss_extra("root", "hp"), 1.35, 0.0001) and _near(Balance.boss_extra("root", "atk"), 1.15, 0.0001) and _near(Balance.boss_extra("root", "atk_phase2"), 0.10, 0.0001)
+		and _near(Balance.boss_extra("knight", "hp"), 1.0, 0.0001) and _near(Balance.boss_extra("nobody", "hp"), 1.0, 0.0001), "BOSS_EXTRA 표: 뿌리지기 체력 1.35·공격 1.15·2페이즈 +0.10, 기사 1, 모르는 이름 1")
 
 
 # ---------- (h) v1.1.1 영혼 기술 → 보스 ----------

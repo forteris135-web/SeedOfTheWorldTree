@@ -196,7 +196,9 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## 촉수 그림: 줄기 조각을 밑동부터 솟은 길이(_len)만큼 이어 붙이고 끝에 가시 끝. 띠(band_rect) 안에 맞춘다.
+## 촉수 그림: 줄기 조각을 솟은 길이(_len)만큼 이어 붙이고 끝에 가시 끝. 띠(band_rect) 안에 맞춘다.
+## 줄기 조각은 원뿔(아래가 넓음)이라 그냥 이으면 이음매마다 폭이 계단처럼 끊겨 보인다 → 끝에서 밑동 쪽으로 깔며 한 조각씩 위아래를 뒤집어
+## 이음매 양쪽이 그림의 같은 줄(같은 폭·같은 무늬)이 되게 한다. 끝 바로 밑 조각은 뒤집지 않아 가시 끝과도 이어진다.
 func _draw_art() -> void:
 	if _len <= 4.0:
 		return
@@ -210,14 +212,23 @@ func _draw_art() -> void:
 	var tip_h := TIP_SRC.size.y * ART_SCALE
 	var seg_h := BODY_SRC.size.y * ART_SCALE
 	var dw := BODY_SRC.size.x * ART_SCALE
-	var body_end := maxf(_len - tip_h, 0.0)
-	var y := 0.0
-	while y < body_end:
-		var h := minf(seg_h, body_end - y)
-		# 조각의 아래쪽부터 h 만큼 (밑동 쪽 조각이 땅에 붙게). 조각마다 그림의 같은 줄기를 이어 붙인다
-		var src := Rect2(BODY_SRC.position + Vector2(0, BODY_SRC.size.y - h / ART_SCALE), Vector2(BODY_SRC.size.x, h / ART_SCALE))
-		_art.draw_texture_rect_region(tex, Rect2(Vector2(-dw / 2.0, -y - h), Vector2(dw, h)), src)
-		y += h
+	var top := maxf(_len - tip_h, 0.0)   # 줄기의 윗끝 (밑동에서 px)
+	var k := 0
+	while top > 0.0:
+		var h := minf(seg_h, top)
+		var sh := h / ART_SCALE
+		if k % 2 == 0:
+			# 그대로: 윗변 = 그림의 좁은 줄(BODY_SRC 위)
+			var src := Rect2(BODY_SRC.position, Vector2(BODY_SRC.size.x, sh))
+			_art.draw_texture_rect_region(tex, Rect2(Vector2(-dw / 2.0, -top), Vector2(dw, h)), src)
+		else:
+			# 뒤집음: 윗변 = 그림의 넓은 줄(BODY_SRC 아래) — 위 조각의 아랫변과 같은 줄
+			var src := Rect2(Vector2(BODY_SRC.position.x, BODY_SRC.end.y - sh), Vector2(BODY_SRC.size.x, sh))
+			_art.draw_set_transform(Vector2(0, -top + h / 2.0), 0.0, Vector2(1, -1))
+			_art.draw_texture_rect_region(tex, Rect2(Vector2(-dw / 2.0, -h / 2.0), Vector2(dw, h)), src)
+			_art.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		top -= h
+		k += 1
 	var th := minf(tip_h, _len)
 	var tsrc := Rect2(TIP_SRC.position + Vector2(0, TIP_SRC.size.y - th / ART_SCALE), Vector2(TIP_SRC.size.x, th / ART_SCALE))
 	_art.draw_texture_rect_region(tex, Rect2(Vector2(-dw / 2.0, -_len), Vector2(dw, th)), tsrc)

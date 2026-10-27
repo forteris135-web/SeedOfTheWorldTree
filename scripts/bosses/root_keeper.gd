@@ -14,7 +14,7 @@ class_name RootKeeper
 ## BossRoom 과 맞추는 약속: start_fight / reset_fight / arena / ground_y / fallen / purified / hp_changed / poise_changed / phase_changed
 ##   / telegraph(kind) + telegraph_label(kind) / state_name() / debug_log / is_ground() / receive_hit / hp·poise·phase·facing
 ## v1.1.1 (기획자 v1.1.1 지시서 2-E: 최종 보스 대폭 개편 — 가장 쉬웠던 최종 보스를 가장 매운 보스로):
-##   체력 ×1.75·공격력 ×1.25 (던전 단계·난이도 배율 위에 한 번), 2페이즈 공격력 ×1.10 더 (atk_factor),
+##   체력 ×1.35·공격력 ×1.15 (던전 단계·난이도 배율 위에 한 번), 2페이즈 공격력 +0.10 합연산 → ×1.25 (atk_factor),
 ##   새 패턴 1 '뿌리 촉수'(맵 패턴 — 공격 고르기와 따로 도는 시계, 아주 긴 사선 뿌리 2줄 / 2페이즈 4줄, 가드 불가, RootTentacle),
 ##   새 패턴 2 '씨앗 폭우'(BARRAGE — 하늘에서 싸움터 전체로 줄지어 떨어지는 가시 씨앗 3물결, 물결마다 틈 하나가 옮겨 가며 소녀를 몰아감;
 ##   2페이즈에도 그대로), 2페이즈 '폭주'(연계 확률↑·휘두르기 → 가시 새 연계·연계 앞 되돌림 짧게),
@@ -78,10 +78,10 @@ const PERCH_SPIKE_MAX := 760.0
 const PERCH_SPIKE_GAP := 200.0
 
 ## ---- v1.1.1 추가 배율 ----
-## 숫자의 단일 출처는 Balance.BOSS_EXTRA["root"] (hp 1.75 · atk 1.25 · atk_phase2 1.10).
-## hp: 체력 배율, atk: 모든 공격 피해 배율, atk_phase2: 2페이즈(체력 절반 → 다시 일어선 뒤)에 더 곱하는 배율.
+## 숫자의 단일 출처는 Balance.BOSS_EXTRA["root"] (hp 1.35 · atk 1.15 · atk_phase2 0.10).
+## hp: 체력 배율, atk: 모든 공격 피해 배율, atk_phase2: 2페이즈(체력 절반 → 다시 일어선 뒤)에 공격 배율에 더하는 몫 (합연산 → ×1.25).
 ## 던전 단계·난이도 배율(Balance.hp_mult / 받는 피해 쪽 Balance.incoming_damage)과는 따로, 여기서 한 번만 곱한다.
-## 씨앗 폭우는 2페이즈에서도 그대로 (기획자 지시 '2페이즈에서 강화되지 않고 유지') — 2페이즈 공격력 ×1.10 도 받지 않는다.
+## 씨앗 폭우는 2페이즈에서도 그대로 (기획자 지시 '2페이즈에서 강화되지 않고 유지') — 2페이즈 공격력 +0.10 도 받지 않는다.
 ## true 로 바꾸면 씨앗 폭우도 2페이즈 배율을 받는다.
 const BARRAGE_PHASE2_ATK := false
 ## 2페이즈 '폭주': 연계가 예약된 공격의 되돌림 길이 배수 (연계 사이 빈틈이 짧아진다)
@@ -289,7 +289,7 @@ func _ready() -> void:
 	_tel = RangeTelegraph.attach(self)
 	crowd.max_up = CROWD_MAX_UP
 	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
-	# v1.1.1: 뿌리지기 추가 배율 ×1.75 를 한 번 더 (extra("hp"), 씬을 새로 만들 때마다 한 번 — 겹쳐 곱해지지 않는다)
+	# v1.1.1: 뿌리지기 추가 배율 ×1.35 를 한 번 더 (extra("hp"), 씬을 새로 만들 때마다 한 번 — 겹쳐 곱해지지 않는다)
 	max_hp *= Balance.hp_mult(Balance.region_of(self)) * extra("hp")
 	hp = max_hp
 	_home = global_position
@@ -304,9 +304,9 @@ static func extra(key: String) -> float:
 	return Balance.boss_extra("root", key)
 
 
-## 지금 공격 피해 배율 (v1.1.1): 추가 공격력 ×1.25, 2페이즈면 ×1.10 더. 던전 단계·난이도 배율은 소녀가 받을 때(Balance.incoming_damage) 따로.
+## 지금 공격 피해 배율 (v1.1.1): 추가 공격력 ×1.15, 2페이즈면 +0.10 더해 ×1.25 (합연산). 던전 단계·난이도 배율은 소녀가 받을 때(Balance.incoming_damage) 따로.
 func atk_factor() -> float:
-	return extra("atk") * (extra("atk_phase2") if phase == 2 else 1.0)
+	return extra("atk") + (extra("atk_phase2") if phase == 2 else 0.0)
 
 
 ## 기본 피해 → 이 보스가 실제로 싣는 피해 (atk_factor 를 곱한 값)
