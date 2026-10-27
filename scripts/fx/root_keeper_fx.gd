@@ -26,7 +26,8 @@ func _on_phase(_st: int, _old: String, new: String) -> void:
 				fit_fx("staff_arc", reach, f, 0.0, {"flip_v": state_name() == "SWEEP2"})
 			else:
 				_staff_arc(ahead(150.0, -160.0), 20.0, state_name() == "SWEEP2")
-		"ORBS":
+		"ORBS", "BARRAGE":
+			# (v1.1.1 씨앗 폭우도 지팡이 머리의 같은 번쩍임 — 씨앗을 하늘로 흩뿌린다)
 			Fx.spawn("orb_charge", vis_point("staff_head", boss.call("orb_origin") if boss.has_method("orb_origin") else body_point(1.0, 460.0)))
 		"STOMP":
 			var sr: Rect2 = boss.call("melee_reach") if boss.has_method("melee_reach") else Rect2()

@@ -1,0 +1,25 @@
+{
+  "_note": "v1.1.1 뿌리지기 보스전 대사 (임시 — 기획자가 문장만 고치면 된다. SCRIPT.md 8장). intro = 처음 마주칠 때 싸움 전 대화 상자, battle = 싸우는 동안 화면 위쪽 자막. 셀레니아는 말하지 않는다.",
+  "speaker": "뿌리지기",
+  "intro": [
+    {"id": "root_keeper_intro_01", "text": "…또 하나의 씨앗인가. 결국 여기까지 내려왔구나."},
+    {"id": "root_keeper_intro_02", "text": "이 정원은 내가 홀로 가꿔 왔다. 사람의 손이 닿지 않은 마지막 땅이다."},
+    {"id": "root_keeper_intro_03", "text": "네 허리의 그 등불… 사람의 불이로군. 그 불이 무엇을 태워 밝힌 것인지, 너는 아느냐."},
+    {"id": "root_keeper_intro_04", "text": "사람을 버려라, 작은 씨앗아. 여기 남아 나와 함께 나무가 되자. …싫다면, 흙으로 돌려보내 주마."}
+  ],
+  "battle": {
+    "start": [{"id": "root_keeper_battle_start", "text": "사람들은 약속을 잊었다. 나는 잊지 않았다."}],
+    "hp75": [{"id": "root_keeper_battle_hp75", "text": "그들은 나무의 피를 뽑아 등불을 밝혔다. 그리고 그것을 번영이라 불렀지."}],
+    "hp60": [{"id": "root_keeper_battle_hp60", "text": "그들을 지켜 무엇을 얻느냐. 끝내는 너마저 뽑아 쓸 것이다."}],
+    "rise": [{"id": "root_keeper_battle_rise", "text": "아직이다…! 이 정원만은, 다시는 그들에게 내주지 않는다!"}],
+    "hp35": [{"id": "root_keeper_battle_hp35", "text": "나와 함께 남아라. 너와 나라면, 이 정원 하나쯤은 지킬 수 있다."}],
+    "hp15": [{"id": "root_keeper_battle_hp15", "text": "어째서… 나무는 끝까지 그들을 믿었단 말이냐."}],
+    "heal": [
+      {"id": "root_keeper_battle_heal_01", "text": "그 이슬도 나무가 흘린 눈물이다."},
+      {"id": "root_keeper_battle_heal_02", "text": "아직 일어서느냐. …무엇을 위해서냐."}
+    ],
+    "low": [{"id": "root_keeper_battle_low", "text": "그만 쓰러져라. 흙은 따뜻하다. 여기서는 아무도 너를 베지 않는다."}],
+    "player_down": [{"id": "root_keeper_battle_player_down", "text": "…쉬어라, 작은 씨앗. 정원이 너를 덮어 줄 것이다."}],
+    "fallen": [{"id": "root_keeper_battle_fallen", "text": "…그 등불이, 이리도 따뜻했던가."}]
+  }
+}
