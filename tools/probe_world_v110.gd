@@ -5,6 +5,7 @@ extends Node
 ##  1) 무쇠 펌프 던전을 초반으로 (요청 20): 관의 복도(mine_02) ToFlooded ↔ 잠긴 채굴장(flooded_mine_01) FromMine02 왕복,
 ##     잠긴 채굴장 → 책임자의 방 지름길(ToMineDeep)은 등불이 있어야 열림, 책임자의 방 쪽 문은 조건 없음
 ##  2) 새만 잡은 상태(이단 점프·바람)로 mine_02 → 펌프 방까지: 문 조건 없음, 얕은 수액에서 피해 0·느려짐 0.85 (깊은 수액은 그대로 깎임)
+##     (v1.1.1: 펌프실 통로 → 무너진 배수 갱 flooded_mine_03 → 녹슨 레일 굴 flooded_mine_04 → 배관 위 → 펌프실, 호수 새 방 둘도 깊은 수액)
 ##  3) 엔딩 장치 방 (요청 28): abyss_boss ↔ abyss_ending 왕복, 정화 전 장치 숨김·뒤 깨어남, 뿌리지기 방에는 진엔딩 장치(third) 하나
 ##  4) 진엔딩 조건 (요청 27): 경전 조각이 모자라면 보이되 꺼짐(잿빛·회전 멈춤·손길 거절·안내 n/4), 네 장 읽으면 그 자리에서 깨어남
 ##  5) 정원 끝의 비석 (요청 26): 달빛 정원 x 2180, 글·네 조각을 다 읽으면 더해지는 줄, 탐사 수에 들어감
@@ -214,14 +215,15 @@ func _probe_shallow_sap() -> void:
 	Progress.reset()
 	Progress.gain_ability("double_jump")
 	Progress.gain_ability("wind")
-	var route := [["mine_02", "ToFlooded"], ["flooded_mine_01", "Exit2"], ["flooded_mine_02", "Exit2"]]
+	var route := [["mine_02", "ToFlooded", "flooded_mine_01"], ["flooded_mine_01", "Exit2", "flooded_mine_03"], ["flooded_mine_03", "ToFlooded04", "flooded_mine_04"],
+		["flooded_mine_04", "ToFlooded02", "flooded_mine_02"], ["flooded_mine_02", "Exit2", "flooded_mine_boss"]]
 	var free := true
 	for r in route:
 		var p := _props(r[0], "Exits/" + r[1])
-		if str(p.get("requires_ability", "")) != "":
+		if str(p.get("requires_ability", "")) != "" or not str(p.get("target_scene", "")).ends_with("/%s.tscn" % r[2]):
 			free = false
-	_check(free, "새만 잡은 상태: 관의 복도 → 잠긴 채굴장 → 배관 위 → 펌프실 문에 능력 조건 없음")
-	var spawns := {"flooded_mine_01": "FromMine02", "flooded_mine_02": "FromFlooded01", "flooded_mine_boss": "FromFlooded02"}
+	_check(free, "새만 잡은 상태: 관의 복도 → 펌프실 통로 → 무너진 배수 갱 → 녹슨 레일 굴 → 배관 위 → 펌프실 문, 차례대로 이어지고 능력 조건 없음")
+	var spawns := {"flooded_mine_01": "FromMine02", "flooded_mine_03": "FromFlooded01", "flooded_mine_04": "FromFlooded03", "flooded_mine_02": "FromFlooded01", "flooded_mine_boss": "FromFlooded02"}
 	for rid in spawns:
 		await _open(rid, spawns[rid])
 		_kill_enemies()
@@ -254,7 +256,7 @@ func _probe_shallow_sap() -> void:
 	await _wait(1.6)
 	_check(not deep_pool.shallow and _player.hp < hp1, "책임자의 방 웅덩이는 깊은 수액 그대로 (체력 %.0f → %.0f)" % [hp1, _player.hp])
 	var lake_ok := true
-	for rid in ["sap_lake_01", "sap_lake_02", "sap_lake_boss"]:
+	for rid in ["sap_lake_01", "sap_lake_03", "sap_lake_04", "sap_lake_02", "sap_lake_boss"]:
 		var ps: PackedScene = load("res://scenes/rooms/%s.tscn" % rid)
 		var st := ps.get_state()
 		for i in st.get_node_count():

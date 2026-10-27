@@ -248,7 +248,7 @@ spawn_name = "FromFlooded"
 
 [node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(3810, 1100)
-target_scene = "res://scenes/rooms/flooded_mine_02.tscn"
+target_scene = "res://scenes/rooms/flooded_mine_03.tscn"
 spawn_name = "FromFlooded01"
 
 [node name="ToMineDeep" parent="Exits" instance=ExtResource("40_portal")]

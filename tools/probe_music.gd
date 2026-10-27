@@ -193,7 +193,7 @@ func _probe_region_table() -> void:
 	Progress.reset()
 	for k in table:
 		print("[probe]   %s : 방 %d개" % [k, table[k]])
-	_check(n == 42 and bad.is_empty(), "방 %d개의 들판 곡 (수관은 새 정화 뒤 되살아난 곡, 달빛 정원 자기 곡, 숨은 내리막 = 수액의 호수) %s" % [n, bad])
+	_check(n == 46 and bad.is_empty(), "방 %d개(v1.1.1: 46)의 들판 곡 (수관은 새 정화 뒤 되살아난 곡, 달빛 정원 자기 곡, 숨은 내리막 = 수액의 호수) %s" % [n, bad])
 
 
 # ---------- 4) 실제 방 이동 ----------

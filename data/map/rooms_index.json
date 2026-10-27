@@ -1228,7 +1228,7 @@
       3810,
       1100
      ],
-     "to": "flooded_mine_02",
+     "to": "flooded_mine_03",
      "spawn": "FromFlooded01",
      "requires": "",
      "hidden": false
@@ -1263,8 +1263,8 @@
    "name": "잠긴 채굴장 · 배관 위",
    "region": "flooded_mine",
    "offset": [
-    39700,
-    3800
+    32600,
+    6200
    ],
    "bounds": [
     0,
@@ -1294,7 +1294,7 @@
       190,
       2100
      ],
-     "to": "flooded_mine_01",
+     "to": "flooded_mine_04",
      "spawn": "FromFlooded02",
      "requires": "",
      "hidden": false
@@ -1329,6 +1329,112 @@
    "records": [
     "blueprint_piece"
    ]
+  },
+  "flooded_mine_03": {
+   "name": "잠긴 채굴장 · 무너진 배수 갱",
+   "region": "flooded_mine",
+   "offset": [
+    39700,
+    3800
+   ],
+   "bounds": [
+    0,
+    0,
+    3000,
+    2200
+   ],
+   "boss": false,
+   "markers": {
+    "FromFlooded01": [
+     270,
+     632
+    ],
+    "FromFlooded04": [
+     270,
+     2032
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToFlooded01",
+     "pos": [
+      190,
+      700
+     ],
+     "to": "flooded_mine_01",
+     "spawn": "FromFlooded02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToFlooded04",
+     "pos": [
+      190,
+      2100
+     ],
+     "to": "flooded_mine_04",
+     "spawn": "FromFlooded03",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": [
+    "drain_shaft_log"
+   ]
+  },
+  "flooded_mine_04": {
+   "name": "잠긴 채굴장 · 녹슨 레일 굴",
+   "region": "flooded_mine",
+   "offset": [
+    34600,
+    8500
+   ],
+   "bounds": [
+    0,
+    0,
+    5000,
+    1400
+   ],
+   "boss": false,
+   "markers": {
+    "FromFlooded03": [
+     4730,
+     1032
+    ],
+    "FromFlooded02": [
+     270,
+     1032
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToFlooded03",
+     "pos": [
+      4810,
+      1100
+     ],
+     "to": "flooded_mine_03",
+     "spawn": "FromFlooded04",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToFlooded02",
+     "pos": [
+      190,
+      1100
+     ],
+     "to": "flooded_mine_02",
+     "spawn": "FromFlooded01",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
   },
   "flooded_mine_boss": {
    "name": "잠긴 채굴장 · 펌프실의 심장",
@@ -1401,8 +1507,8 @@
    "name": "잠긴 채굴장 · 녹슨 틈",
    "region": "flooded_mine",
    "offset": [
-    42800,
-    3800
+    31000,
+    7200
    ],
    "bounds": [
     0,
@@ -2117,7 +2223,7 @@
       4410,
       1560
      ],
-     "to": "sap_lake_02",
+     "to": "sap_lake_03",
      "spawn": "FromLake01",
      "requires": "",
      "hidden": false
@@ -2170,7 +2276,7 @@
       400,
       2900
      ],
-     "to": "sap_lake_01",
+     "to": "sap_lake_04",
      "spawn": "FromLake02",
      "requires": "",
      "hidden": false
@@ -2202,6 +2308,112 @@
    "records": [
     "dry_channel_mark"
    ]
+  },
+  "sap_lake_03": {
+   "name": "수액의 호수 · 가라앉은 뿌리 숲",
+   "region": "sap_lake",
+   "offset": [
+    24800,
+    4000
+   ],
+   "bounds": [
+    0,
+    0,
+    3700,
+    1600
+   ],
+   "boss": false,
+   "markers": {
+    "FromLake01": [
+     3430,
+     572
+    ],
+    "FromLake04": [
+     270,
+     1192
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToLake01",
+     "pos": [
+      3510,
+      640
+     ],
+     "to": "sap_lake_01",
+     "spawn": "FromLake02",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToLake04",
+     "pos": [
+      190,
+      1260
+     ],
+     "to": "sap_lake_04",
+     "spawn": "FromLake03",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": [
+    "sunken_grove"
+   ]
+  },
+  "sap_lake_04": {
+   "name": "수액의 호수 · 수액 폭포 아래",
+   "region": "sap_lake",
+   "offset": [
+    24800,
+    5600
+   ],
+   "bounds": [
+    0,
+    0,
+    3700,
+    1600
+   ],
+   "boss": false,
+   "markers": {
+    "FromLake03": [
+     270,
+     432
+    ],
+    "FromLake02": [
+     3430,
+     1232
+    ]
+   },
+   "portals": [
+    {
+     "node": "Exits/ToLake03",
+     "pos": [
+      190,
+      500
+     ],
+     "to": "sap_lake_03",
+     "spawn": "FromLake04",
+     "requires": "",
+     "hidden": false
+    },
+    {
+     "node": "Exits/ToLake02",
+     "pos": [
+      3510,
+      1300
+     ],
+     "to": "sap_lake_02",
+     "spawn": "FromLake01",
+     "requires": "",
+     "hidden": false
+    }
+   ],
+   "grasses": [],
+   "cracked": [],
+   "records": []
   },
   "sap_lake_boss": {
    "name": "수액의 호수 · 호수 한가운데",

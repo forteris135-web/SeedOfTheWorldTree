@@ -53,7 +53,7 @@ bounds = Rect2(0, 0, 3000, 2200)
 region = "flooded_mine"
 room_id = "flooded_mine_02"
 display_name = "잠긴 채굴장 · 배관 위"
-map_offset = Vector2(39700, 3800)
+map_offset = Vector2(32600, 6200)
 edge_color_alive = Color(0.95, 0.62, 0.36, 0.8)
 edge_color_ash = Color(0.6, 0.66, 0.78, 0.55)
 terrain_color = Color(0.2, 0.08, 0.06, 1)
@@ -268,7 +268,7 @@ position = Vector2(250, 1382)
 
 [node name="Exit1" parent="Exits" instance=ExtResource("40_portal")]
 position = Vector2(190, 2100)
-target_scene = "res://scenes/rooms/flooded_mine_01.tscn"
+target_scene = "res://scenes/rooms/flooded_mine_04.tscn"
 spawn_name = "FromFlooded02"
 
 [node name="Exit2" parent="Exits" instance=ExtResource("40_portal")]
