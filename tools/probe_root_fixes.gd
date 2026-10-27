@@ -228,7 +228,7 @@ func _phase2_poise() -> void:
 	_boss.poise = _boss.max_poise - 1.0
 	_boss.receive_hit(HitData.make(1.0, 50.0, _player), null)
 	var broke := _boss.state == RootKeeper.State.BROKEN
-	_boss.hp = _boss.max_hp * 0.51
+	_boss.hp = _boss.max_hp * 0.5 + 10.0   # (v1.1.1: 체력이 1.75배라 0.51 에서 30 으로는 절반 아래로 안 내려갔다)
 	_boss.receive_hit(HitData.make(30.0, 0.0, _player), null)
 	var rise := _boss.state == RootKeeper.State.RISE
 	var p_after := _boss.poise

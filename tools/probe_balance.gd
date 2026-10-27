@@ -101,7 +101,7 @@ func _probe_hp() -> void:
 		["res://scenes/bosses/iron_pump.tscn", "flooded_mine", 1936.0],
 		["res://scenes/bosses/lantern_knight.tscn", "mine", 1996.5],
 		["res://scenes/bosses/sap_queen.tscn", "sap_lake", 1730.3],
-		["res://scenes/bosses/root_keeper.tscn", "abyss", 3074.61],
+		["res://scenes/bosses/root_keeper.tscn", "abyss", 3074.61 * 1.75],   # v1.1.1 뿌리지기 추가 체력 ×1.75 (root_keeper.gd extra("hp"))
 		["res://scenes/enemies/woodcutter.tscn", "canopy", 95.0],
 		["res://scenes/enemies/gardener.tscn", "canopy", 70.0],
 		["res://scenes/enemies/guard.tscn", "village", 110.0],

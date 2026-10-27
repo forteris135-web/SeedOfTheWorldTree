@@ -13,9 +13,15 @@ class_name RootKeeper
 ## 체력 0 → 쓰러짐 → 정화 → 마지막 회상 → 선택.
 ## BossRoom 과 맞추는 약속: start_fight / reset_fight / arena / ground_y / fallen / purified / hp_changed / poise_changed / phase_changed
 ##   / telegraph(kind) + telegraph_label(kind) / state_name() / debug_log / is_ground() / receive_hit / hp·poise·phase·facing
+## v1.1.1 (기획자 v1.1.1 지시서 2-E: 최종 보스 대폭 개편 — 가장 쉬웠던 최종 보스를 가장 매운 보스로):
+##   체력 ×1.75·공격력 ×1.25 (던전 단계·난이도 배율 위에 한 번), 2페이즈 공격력 ×1.10 더 (atk_factor),
+##   새 패턴 1 '뿌리 촉수'(맵 패턴 — 공격 고르기와 따로 도는 시계, 아주 긴 사선 뿌리 2줄 / 2페이즈 4줄, 가드 불가, RootTentacle),
+##   새 패턴 2 '씨앗 폭우'(BARRAGE — 하늘에서 싸움터 전체로 줄지어 떨어지는 가시 씨앗 3물결, 물결마다 틈 하나가 옮겨 가며 소녀를 몰아감;
+##   2페이즈에도 그대로), 2페이즈 '폭주'(연계 확률↑·휘두르기 → 가시 새 연계·연계 앞 되돌림 짧게),
+##   대사(처음 마주칠 때 싸움 전 대화 상자 + 싸우는 동안 위쪽 자막 RootKeeperSpeech, data/dialogue/root_keeper.json).
 
-enum State { WAIT, INTRO, STANCE, SPIKES, SWEEP, ORBS, WALL, RISE, BROKEN, FALLEN, PURIFIED, HAND, SEEDS, RING, STOMP, SWEEP2 }
-const ATTACK_STATES := [State.SPIKES, State.SWEEP, State.ORBS, State.WALL, State.HAND, State.SEEDS, State.RING, State.STOMP, State.SWEEP2]
+enum State { WAIT, INTRO, STANCE, SPIKES, SWEEP, ORBS, WALL, RISE, BROKEN, FALLEN, PURIFIED, HAND, SEEDS, RING, STOMP, SWEEP2, BARRAGE }
+const ATTACK_STATES := [State.SPIKES, State.SWEEP, State.ORBS, State.WALL, State.HAND, State.SEEDS, State.RING, State.STOMP, State.SWEEP2, State.BARRAGE]
 ## 가드 불가 패턴 (붉은 예고 빛 + 그림이 붉게 깜빡임)
 const RED_STATES := [State.WALL, State.HAND, State.STOMP]
 ## 가드 불가 예고의 깜빡임 속도(초당 횟수). 그림·뿌리 손 예고가 함께 쓴다. 빛에 민감한 사람을 위해 3 이하로 둔다.
@@ -71,6 +77,79 @@ const PERCH_SPIKE_MAX := 760.0
 ## 2페이즈 큰 가시 둘째 줄 간격 (px)
 const PERCH_SPIKE_GAP := 200.0
 
+## ---- v1.1.1 추가 배율 ----
+## 숫자의 단일 출처는 Balance.BOSS_EXTRA["root"] (v1.1.1 난이도 묶음). 그 상수가 없는 빌드에서는 같은 값의 이 표를 쓴다.
+## hp: 체력 배율, atk: 모든 공격 피해 배율, atk_phase2: 2페이즈(체력 절반 → 다시 일어선 뒤)에 더 곱하는 배율.
+## 던전 단계·난이도 배율(Balance.hp_mult / 받는 피해 쪽 Balance.incoming_damage)과는 따로, 여기서 한 번만 곱한다.
+const EXTRA_FALLBACK := {"hp": 1.75, "atk": 1.25, "atk_phase2": 1.10}
+## 씨앗 폭우는 2페이즈에서도 그대로 (기획자 지시 '2페이즈에서 강화되지 않고 유지') — 2페이즈 공격력 ×1.10 도 받지 않는다.
+## true 로 바꾸면 씨앗 폭우도 2페이즈 배율을 받는다.
+const BARRAGE_PHASE2_ATK := false
+## 2페이즈 '폭주': 연계가 예약된 공격의 되돌림 길이 배수 (연계 사이 빈틈이 짧아진다)
+const P2_CHAIN_RECOVERY := 0.7
+
+## ---- v1.1.1 새 패턴 1 '뿌리 촉수' (맵 패턴) ----
+## 공격 고르기와 따로 도는 시계(_map_timer)로 주기마다 — 다른 공격과 겹칠 수 있다 (씨앗 폭우·뿌리 벽 돌진·맞딜 응징 중에는 끝날 때까지 미룬다).
+## 아주 긴 뿌리 촉수가 땅에서 비스듬히(땅과 34~42도) 솟아 싸움터를 가로지른다: 1페이즈 2줄, 2페이즈 4줄. 가드 불가(붉은 띠, 구르기로 피함).
+## 자리(map_layout): 싸움터 폭을 줄 수로 똑같이 나눈 간격 W 마다 한 줄 — 한 줄은 소녀가 선 자리를 덮고 나머지는 W 씩 떨어진다
+## (싸움터 끝을 넘으면 반대 끝에서 돌아 들어온다). 서 있는 소녀가 맞는 땅 폭(약 360px)이 W(1페이즈 1340·2페이즈 670) 가운데라
+## 줄 사이에 늘 300px 넘는 빈 땅이 남는다 (피할 틈). 땅에서 멀어질수록 높아져 가지 위·공중의 소녀도 맞는다.
+const MAP_FIRST := 6.0
+const MAP_INTERVAL := Vector2(10.0, 14.0)
+const MAP_INTERVAL_P2 := Vector2(9.0, 12.0)
+## 다시 일어선 뒤(2페이즈 시작) 첫 맵 패턴까지 (초, 싸우는 시간)
+const MAP_AFTER_RISE := 3.5
+## 예고 길이 (초). 줄마다 MAP_STAGGER 씩 늦게 솟는다.
+const MAP_TELEGRAPH := 1.25
+const MAP_TELEGRAPH_P2 := 1.05
+const MAP_STAGGER := 0.12
+## 맵 패턴을 건 뒤 이 시간(초) 동안은 씨앗 폭우를 고르지 않는다 (예고 1.25 + 줄 차례 + 판정 창)
+const MAP_BARRAGE_GAP := 2.2
+## 땅과 이루는 각 (도, 이 사이에서 줄마다 무작위)
+const MAP_ANGLE := Vector2(34.0, 42.0)
+## 촉수가 기운 쪽의 가로 여유가 이보다 짧으면 반대로 기운다 (벽에 막혀 짧은 촉수가 되지 않게)
+const MAP_MIN_RUN := 1000.0
+const MAP_MAX_LEN := 2600.0
+## 촉수가 싸움터 위로 넘어가는 높이 (싸움터 윗변 위로 px)
+const MAP_TOP_OVER := 400.0
+## 서 있는 소녀 몸 (맞는 땅 폭 계산): 높이 132·반폭 25 (player.tscn 맞는 영역 캡슐)
+const BODY_H := 132.0
+const BODY_HALF := 25.0
+
+## ---- v1.1.1 새 패턴 2 '씨앗 폭우' (BARRAGE) ----
+## 지팡이를 머리 위로 들어(예비 BARRAGE_STARTUP) 하늘에서 가시 씨앗을 싸움터 전체에 줄지어 떨어뜨린다 — BARRAGE_WAVES 물결, BARRAGE_WAVE_GAP 초 간격.
+## 물결마다 한 군데만 빈다(틈 반폭 BARRAGE_GAP_HALF — 터짐 반지름 70·소녀 반폭 25 를 빼면 서 있을 폭 약 330px).
+## 첫 틈은 소녀에게서 BARRAGE_FIRST 만큼 옆(제자리에 서 있으면 맞는다), 다음 틈은 같은 쪽으로 BARRAGE_STEP 씩 옮겨 가며(벽에 닿으면 돌아섬)
+## 소녀를 몰아간다. 씨앗마다 떨어질 자리에 주황 점 예고(RootSeed, 가드 가능)가 뜨고 BARRAGE_HOVER 초 떠서 기다렸다가 떨어진다.
+## 2페이즈에서도 그대로 (빨라지지도 늘지도 않는다 — 기획자 지시).
+const BARRAGE_STARTUP := 0.9
+const BARRAGE_WAVES := 3
+const BARRAGE_WAVE_GAP := 1.0
+const BARRAGE_SPACING := 170.0
+const BARRAGE_GAP_HALF := 260.0
+const BARRAGE_HOVER := 0.55
+const BARRAGE_FIRST := Vector2(260.0, 420.0)
+const BARRAGE_STEP := Vector2(380.0, 520.0)
+## 틈 가운데가 싸움터 끝에서 이만큼 안쪽에 있게 / 씨앗 줄의 양 끝 여백
+const BARRAGE_EDGE := 200.0
+const BARRAGE_ROW_MARGIN := 60.0
+
+## ---- v1.1.1 대사 (기획자 지시서 2-E 추가: 스토리텔링) ----
+## 처음 마주칠 때만(깃발 INTRO_FLAG) 싸움 전에 대화 상자로 몇 마디 — 셀레니아는 말하지 않는다(대사 원칙), 뿌리지기만 그녀에게 말한다.
+## 싸우는 동안: 화면 위쪽 자막(RootKeeperSpeech — 입력을 막지 않는다)으로 짧은 한 마디씩
+## (시작·체력 75%·60%·다시 일어섬·35%·15%·소녀가 회복할 때(두 번까지)·소녀가 쓰러지기 직전·소녀가 쓰러짐·뿌리지기가 쓰러짐).
+## 대사는 data/dialogue/root_keeper.json (SCRIPT.md 8장, 임시 — 기획자가 문장만 고치면 된다). 보스 러시에는 둘 다 없다.
+const DIALOGUE_PATH := "res://data/dialogue/root_keeper.json"
+const INTRO_FLAG := "root_keeper_intro_seen"
+## 체력 비율 → 대사 키 (그 아래로 처음 내려갈 때 한 번)
+const HP_LINES := [[0.75, "hp75"], [0.6, "hp60"], [0.35, "hp35"], [0.15, "hp15"]]
+## 시작 대사는 싸움이 시작되고 이만큼 뒤 (보스 등장 이름 카드(3초)가 걷힌 뒤)
+const START_LINE_DELAY := 1.2
+## 소녀가 쓰러지기 직전 대사: 체력 비율이 이 아래로 내려가면 (한 번)
+const LOW_HP_LINE := 0.3
+const HEAL_LINES_MAX := 2
+const HEAL_LINE_GAP := 15.0
+
 signal hp_changed(hp: float, max_hp: float)
 signal poise_changed(poise: float, max_poise: float)
 signal phase_changed(phase: int)
@@ -105,6 +184,8 @@ signal telegraph(kind: String)
 @export var stomp_slam_damage := 26.0
 ## 뿌리 손에 잡혀 묶이는 시간
 @export var hand_hold := 0.7
+## v1.1.1 새 패턴 피해 (기본값 — atk_factor 와 Balance 배율을 받는다): 뿌리 촉수 / 씨앗 폭우는 씨앗 비와 같은 seed_damage
+@export var tentacle_damage := 24.0
 
 var state: State = State.WAIT
 var hp := 2100.0
@@ -176,6 +257,22 @@ var _wall_from := Vector2.ZERO
 var _wall_run_from := Vector2(INF, INF)
 var _wall_run_face := 0
 var _wall_run := 0.0
+## v1.1.1 맵 패턴 시계 (싸우는 동안만 흐른다 — _map_clock_runs). 시험이 패턴을 손으로 걸면(force_pattern) manual_control 이 켜져 저절로는 안 나온다.
+var _map_timer := MAP_FIRST
+var _map_struck_at := -100.0
+var manual_control := false
+## 마지막으로 건 씨앗 폭우의 물결 자리 (시험·그림용): [{"gap": x, "xs": [..]}, ...]
+var barrage_waves: Array = []
+## v1.1.1 대사: 싸움 전 대화를 거는가 (0 = 이 방이 실제 게임 장면일 때만 — 시험이 방을 자식으로 놓으면 건너뜀, 1 = 늘(시험), -1 = 안 함)
+var intro_talk_mode := 0
+var _talking := false
+var _speech: RootKeeperSpeech
+var _said := {}
+var _heal_said := 0
+var _heal_said_at := -100.0
+var _pending_lines: Array = []   # [시각(_clock), 키]
+var _lines_cache: Dictionary = {}
+static var _extra: Dictionary = {}
 
 @onready var hitbox: Hitbox = $Hitbox
 @onready var hurtbox: Hurtbox = $Hurtbox
@@ -185,6 +282,7 @@ const SEED := preload("res://scenes/bosses/root_seed.tscn")
 const ORB := preload("res://scenes/bosses/root_orb.tscn")
 const SHOCKWAVE := preload("res://scenes/bosses/root_shockwave.tscn")
 const WALL_FX := preload("res://scenes/bosses/root_wall.tscn")
+const TENTACLE := preload("res://scenes/bosses/root_tentacle.tscn")
 
 
 func _ready() -> void:
@@ -193,10 +291,37 @@ func _ready() -> void:
 	_tel = RangeTelegraph.attach(self)
 	crowd.max_up = CROWD_MAX_UP
 	# v1.1.0 체력 배율: 보스가 놓인 방의 던전 단계 1.1^단계 × 난이도 (새·수관 ×1). reset_fight 는 max_hp 를 읽는다.
-	max_hp *= Balance.hp_mult(Balance.region_of(self))
+	# v1.1.1: 뿌리지기 추가 배율 ×1.75 를 한 번 더 (extra("hp"), 씬을 새로 만들 때마다 한 번 — 겹쳐 곱해지지 않는다)
+	max_hp *= Balance.hp_mult(Balance.region_of(self)) * extra("hp")
 	hp = max_hp
 	_home = global_position
 	visible = false
+	_speech = RootKeeperSpeech.new()
+	_speech.name = "Speech"
+	add_child(_speech)
+
+
+## v1.1.1 뿌리지기 추가 배율 (hp / atk / atk_phase2): Balance.BOSS_EXTRA["root"] 가 있으면 그 값, 없으면 EXTRA_FALLBACK.
+static func extra(key: String) -> float:
+	if _extra.is_empty():
+		_extra = EXTRA_FALLBACK.duplicate()
+		var consts: Dictionary = (load("res://scripts/systems/balance.gd") as Script).get_script_constant_map()
+		var all = consts.get("BOSS_EXTRA", null)
+		if all is Dictionary and (all as Dictionary).get("root", null) is Dictionary:
+			var mine: Dictionary = all["root"]
+			for k in mine:
+				_extra[k] = float(mine[k])
+	return float(_extra.get(key, 1.0))
+
+
+## 지금 공격 피해 배율 (v1.1.1): 추가 공격력 ×1.25, 2페이즈면 ×1.10 더. 던전 단계·난이도 배율은 소녀가 받을 때(Balance.incoming_damage) 따로.
+func atk_factor() -> float:
+	return extra("atk") * (extra("atk_phase2") if phase == 2 else 1.0)
+
+
+## 기본 피해 → 이 보스가 실제로 싣는 피해 (atk_factor 를 곱한 값)
+func _dmg(base: float) -> float:
+	return base * atk_factor()
 
 
 func start_fight(p: Player) -> void:
@@ -206,6 +331,22 @@ func start_fight(p: Player) -> void:
 	facing = -1
 	_set_state(State.INTRO)
 	_timer = 2.6
+	_map_timer = MAP_FIRST
+	_said.clear()
+	_heal_said = 0
+	_pending_lines.clear()
+	if _speech:
+		_speech.hud = get_parent().get_node_or_null("CombatHUD") if get_parent() else null
+		_speech.clear()
+	if not player.healed.is_connected(_on_player_healed):
+		player.healed.connect(_on_player_healed)
+		player.hp_changed.connect(_on_player_hp_changed)
+		player.died.connect(_on_player_died)
+	# 처음 마주칠 때만 싸움 전 대화 (BossRoom 이 등장 구도를 잡은 뒤에 — 같은 틱의 _frame_intro 가 구도를 덮어쓰지 않게 미뤄 건다)
+	if _intro_talk_due():
+		Progress.set_flag(INTRO_FLAG)
+		_talking = true
+		_start_intro_talk.call_deferred()
 
 
 func reset_fight() -> void:
@@ -229,6 +370,14 @@ func reset_fight() -> void:
 	_perch_spikes = false
 	plunge_decay.reset()
 	_tel.clear()
+	_map_timer = MAP_FIRST
+	barrage_waves.clear()
+	_pending_lines.clear()
+	_said.clear()
+	_heal_said = 0
+	_talking = false
+	if _speech:
+		_speech.clear()
 	global_position = _home
 	_set_state(State.WAIT)
 	hp_changed.emit(hp, max_hp)
@@ -252,6 +401,12 @@ func _physics_process(delta: float) -> void:
 	_timer -= delta
 	_clock += delta
 	_tick_events()
+	_tick_lines()
+	# v1.1.1 맵 패턴 '뿌리 촉수': 공격 고르기와 따로 도는 시계 (다른 공격과 겹칠 수 있다)
+	if player and _map_clock_runs():
+		_map_timer -= delta
+		if _map_timer <= 0.0 and _map_can_fire():
+			_map_strike()
 	_face_hold = maxf(_face_hold - delta, 0.0)
 	stagger = maxf(stagger - delta / stagger_len, 0.0)
 	if player:
@@ -268,9 +423,12 @@ func _physics_process(delta: float) -> void:
 	match state:
 		State.INTRO:
 			velocity.x = 0.0
+			if _talking:
+				_timer = maxf(_timer, 0.6)   # 싸움 전 대화가 끝날 때까지 기다린다 (끝나고 0.6초 뒤 자세)
 			if _timer <= 0.0:
 				_set_state(State.STANCE)
 				_timer = 0.8
+				_say_later("start", START_LINE_DELAY)
 		State.STANCE:
 			if player:
 				var dx := player.global_position.x - global_position.x
@@ -297,7 +455,7 @@ func _physics_process(delta: float) -> void:
 		State.SWEEP:
 			velocity.x = move_toward(velocity.x, 0.0, SWEEP_DECEL * delta)
 			_phase_step(delta, startup_len, SWEEP_ACTIVE, 0.8 * fast, func() -> void:
-				var hit := HitData.make(sweep_damage, 0.0, self, Vector2(560, -220))
+				var hit := HitData.make(_dmg(sweep_damage), 0.0, self, Vector2(560, -220))
 				hitbox.set_box(SWEEP_BOX, facing)
 				hitbox.activate(hit, SWEEP_ACTIVE)
 				velocity.x = facing * SWEEP_SLIDE
@@ -305,7 +463,7 @@ func _physics_process(delta: float) -> void:
 		State.SWEEP2:
 			velocity.x = move_toward(velocity.x, 0.0, SWEEP_DECEL * delta)
 			_phase_step(delta, startup_len, SWEEP_ACTIVE, 0.7 * fast, func() -> void:
-				var hit := HitData.make(sweep2_damage, 0.0, self, Vector2(520, -260))
+				var hit := HitData.make(_dmg(sweep2_damage), 0.0, self, Vector2(520, -260))
 				hitbox.set_box(SWEEP2_BOX, facing)
 				hitbox.activate(hit, SWEEP_ACTIVE)
 				velocity.x = facing * SWEEP2_SLIDE
@@ -320,7 +478,7 @@ func _physics_process(delta: float) -> void:
 					_queue(i * gap, func() -> void: _spawn_orb(off)))
 		State.WALL:
 			_phase_step(delta, startup_len, WALL_ACTIVE, 1.3, func() -> void:
-				var hit := HitData.make(wall_damage, 0.0, self, Vector2(760, -340))
+				var hit := HitData.make(_dmg(wall_damage), 0.0, self, Vector2(760, -340))
 				hit.guardable = false
 				_wall_from = global_position
 				hitbox.set_box(WALL_BOX, facing)
@@ -346,7 +504,7 @@ func _physics_process(delta: float) -> void:
 				_red = false
 				for i in hand_targets.size():
 					var h: RootHand = HAND.instantiate()
-					h.damage = hand_damage
+					h.damage = _dmg(hand_damage)
 					h.hold_time = hand_hold
 					h.delay = i * 0.25
 					h.throw_dir = 1 if hand_targets[i] >= global_position.x else -1
@@ -370,7 +528,7 @@ func _physics_process(delta: float) -> void:
 				for i in n:
 					var o: RootOrb = ORB.instantiate()
 					o.mode = RootOrb.Mode.ORBIT
-					o.damage = ring_damage
+					o.damage = _dmg(ring_damage)
 					o.center = self
 					o.center_offset = Vector2(0, -200)
 					o.orbit_r = 90.0
@@ -398,7 +556,7 @@ func _physics_process(delta: float) -> void:
 				_tel.show_rect(melee_reach(), true, PUNISH_RESTOMP)
 			_phase_step(delta, startup_len, 0.3, 1.2, func() -> void:
 				_red = false
-				var hit := HitData.make(stomp_slam_damage, 0.0, self, Vector2(620, -380))
+				var hit := HitData.make(_dmg(stomp_slam_damage), 0.0, self, Vector2(620, -380))
 				hit.guardable = false
 				hit.hitstop = 0.08
 				hitbox.set_box(PUNISH_STOMP_BOX if punishing else STOMP_BOX, 1)
@@ -414,6 +572,15 @@ func _physics_process(delta: float) -> void:
 						Juice.shake(6.0)
 						Sfx.play("stomp", -5.0, 0.06)
 						_spawn_shockwaves()))
+		State.BARRAGE:
+			# v1.1.1 씨앗 폭우: 2페이즈에서도 같은 길이 (fast 를 곱하지 않는다)
+			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
+			_phase_step(delta, startup_len, (BARRAGE_WAVES - 1) * BARRAGE_WAVE_GAP + 0.3, 0.9, func() -> void:
+				barrage_waves = barrage_layout(player.global_position.x if player else global_position.x)
+				for w in barrage_waves.size():
+					var xs: Array = barrage_waves[w]["xs"]
+					_queue(w * BARRAGE_WAVE_GAP, func() -> void: _spawn_barrage_wave(xs))
+				Sfx.play("ring_hum", -6.0, 0.05))
 		State.RISE:
 			velocity.x = 0.0
 			if _timer <= 0.0:
@@ -449,6 +616,9 @@ func _phase_step(delta: float, startup: float, active: float, recovery: float, o
 		"active":
 			if _timer <= 0.0:
 				attack_phase = "recovery"
+				# v1.1.1 2페이즈 '폭주': 연계가 예약돼 있으면 되돌림을 줄여 다음 공격이 더 빨리 붙는다
+				if phase == 2 and _chain >= 0:
+					recovery *= P2_CHAIN_RECOVERY
 				_timer = recovery
 				recovery_len = recovery
 		"recovery":
@@ -625,13 +795,16 @@ func _choose(dist: float) -> void:
 		if phase == 2:
 			cands.append([State.STOMP, 20])
 	elif dist < 700.0:
-		cands = [[State.SPIKES, 30], [State.ORBS, 20], [State.HAND, 20], [State.SEEDS, 20], [State.RING, 10]]
+		cands = [[State.SPIKES, 30], [State.ORBS, 20], [State.HAND, 20], [State.SEEDS, 20], [State.RING, 10], [State.BARRAGE, 14]]
 		if phase == 2:
 			cands.append([State.STOMP, 12])
 	else:
-		cands = [[State.SPIKES, 25], [State.ORBS, 25], [State.SEEDS, 25], [State.HAND, 10]]
+		cands = [[State.SPIKES, 25], [State.ORBS, 25], [State.SEEDS, 25], [State.HAND, 10], [State.BARRAGE, 22]]
 		if phase == 2:
 			cands.append([State.WALL, 30])
+	# v1.1.1: 뿌리 촉수가 막 솟으려는 동안(맵 패턴을 건 뒤 MAP_BARRAGE_GAP 초)에는 씨앗 폭우를 고르지 않는다 (둘이 겹치면 피할 틈이 사라진다)
+	if _clock - _map_struck_at < MAP_BARRAGE_GAP:
+		cands = cands.filter(func(c: Array) -> bool: return c[0] != State.BARRAGE)
 	var pick := _weighted_pick(cands)
 	_chain = _pick_chain(pick, dist)
 	_start_attack(pick)
@@ -653,24 +826,31 @@ func _weighted_pick(cands: Array) -> State:
 
 
 ## 연계 표: (지금 패턴 → 다음 패턴, 확률). 2페이즈가 더 자주 잇는다.
+## v1.1.1 2페이즈 '폭주': 휘두르기 → 되돌려 베기 0.5 → 0.6, 되돌려 베기가 아니면 0.25 확률로 휘두르기 → 뿌리 가시(새 연계),
+## 가시 → 달빛 고리 0.25 → 0.35, 구슬 → 가시 0.3 → 0.4, 되돌려 베기 → 내려찍기 0.3 → 0.45. 1페이즈는 그대로.
 func _pick_chain(st: State, dist: float) -> int:
 	var p2 := phase == 2
 	match st:
 		State.SEEDS:
 			return State.HAND if randf() < (0.6 if p2 else 0.35) else -1
 		State.SWEEP:
-			return State.SWEEP2 if randf() < (0.5 if p2 else 0.25) else -1
+			if p2:
+				var r := randf()
+				if r < 0.6:
+					return State.SWEEP2
+				return State.SPIKES if r < 0.85 else -1
+			return State.SWEEP2 if randf() < 0.25 else -1
 		State.SPIKES:
-			if p2 and randf() < 0.25:
+			if p2 and randf() < 0.35:
 				return State.RING
 			return State.ORBS if (not p2 and randf() < 0.2) else -1
 		State.ORBS:
-			return State.SPIKES if (p2 and randf() < 0.3) else -1
+			return State.SPIKES if (p2 and randf() < 0.4) else -1
 		State.HAND:
 			# 뿌리 손 → 휘두르기 연계는 없앴다: 손에 잡혀 던져진 뒤 경직(0.4초) 동안 이어지는 휘두르기를 피할 수 없었다 (통합 검토)
 			return -1
 		State.SWEEP2:
-			return State.STOMP if (p2 and randf() < 0.3) else -1
+			return State.STOMP if (p2 and randf() < 0.45) else -1
 	return -1
 
 
@@ -711,12 +891,19 @@ func _start_attack(st: State) -> void:
 		State.STOMP:
 			telegraph.emit("stomp")
 			_begin(st, 1.0)
+		State.BARRAGE:
+			# v1.1.1 씨앗 폭우: 2페이즈에서도 같은 예비 (fast 를 곱하지 않는다)
+			telegraph.emit("barrage")
+			barrage_waves.clear()
+			_begin(st, BARRAGE_STARTUP)
 		_:
 			_begin(State.SWEEP, 0.5 * fast)
 
 
 ## 시험·스크린샷용: 이름으로 패턴을 바로 건다 ("SPIKES", "HAND", ...).
+## 손으로 패턴을 거는 동안은 맵 패턴(뿌리 촉수)이 저절로 나오지 않는다 (manual_control — 시험이 촉수에 흔들리지 않게).
 func force_pattern(name: String) -> void:
+	manual_control = true
 	_chain = -1
 	var idx := State.keys().find(name)
 	if idx < 0 or idx not in ATTACK_STATES:
@@ -732,6 +919,8 @@ func telegraph_label(kind: String) -> String:
 		"seeds": return "씨앗 비!"
 		"ring": return "달빛 고리!"
 		"stomp": return "내려찍기!"
+		"tentacles": return "뿌리 촉수!"
+		"barrage": return "씨앗 폭우!"
 	return ""
 
 
@@ -810,7 +999,7 @@ func _raise_spikes() -> void:
 		spike_heights.append(LANCE_HEIGHT)
 	for i in spike_marks.size():
 		var sp: RootSpike = SPIKE.instantiate()
-		sp.damage = spike_damage
+		sp.damage = _dmg(spike_damage)
 		sp.delay = spike_delays[i] if i < spike_delays.size() else 0.0
 		if i < spike_heights.size():
 			sp.spike_height = spike_heights[i]
@@ -849,7 +1038,7 @@ func _spawn_orb(offset: float) -> void:
 	var o: RootOrb = ORB.instantiate()
 	o.mode = RootOrb.Mode.HOMING
 	o.speed = 380.0 if phase == 1 else 460.0
-	o.damage = orb_damage
+	o.damage = _dmg(orb_damage)
 	o.lifetime = 4.5
 	o.homing = 1.6 if phase == 1 else 2.0
 	o.radius = 36.0
@@ -880,7 +1069,7 @@ func orb_origin() -> Vector2:
 
 func _spawn_seed(x: float) -> void:
 	var s: RootSeed = SEED.instantiate()
-	s.damage = seed_damage
+	s.damage = _dmg(seed_damage)
 	s.ground_y = ground_y
 	s.source = self
 	get_parent().add_child(s)
@@ -891,13 +1080,272 @@ func _spawn_seed(x: float) -> void:
 func _spawn_shockwaves() -> void:
 	for d in [-1, 1]:
 		var w: RootShockwave = SHOCKWAVE.instantiate()
-		w.damage = stomp_wave_damage
+		w.damage = _dmg(stomp_wave_damage)
 		w.dir = d
 		w.source = self
 		w.min_x = arena.position.x + 20.0 if arena.size.x > 0.0 else -INF
 		w.max_x = arena.end.x - 20.0 if arena.size.x > 0.0 else INF
 		get_parent().add_child(w)
 		w.global_position = Vector2(global_position.x + d * 90.0, ground_y)
+
+
+# ---------- v1.1.1 새 패턴 1: 뿌리 촉수 (맵 패턴) ----------
+
+## 맵 패턴 시계가 흐르는가: 싸우는 동안(자세·공격)만. 시험이 자세 타이머를 붙잡아 둔 동안(_timer ≥ 20)이나
+## 패턴을 손으로 거는 동안(manual_control)은 멈춘다. 무너짐·다시 일어섬·등장에는 흐르지 않는다.
+func _map_clock_runs() -> bool:
+	return not manual_control and _timer < 20.0 and (state == State.STANCE or state in ATTACK_STATES)
+
+
+## 지금 걸어도 되는가: 씨앗 폭우·뿌리 벽 돌진(싸움터 전체를 덮는 공격)과 맞딜 응징 동안은 끝날 때까지 미룬다.
+func _map_can_fire() -> bool:
+	return state not in [State.BARRAGE, State.WALL] and not punishing
+
+
+## 지금 페이즈의 촉수 줄 수 (1페이즈 2, 2페이즈 4)
+func map_count() -> int:
+	return 2 if phase == 1 else 4
+
+
+## 뿌리 촉수 자리 n 줄 (소녀 x = px). 줄마다 {"x": 밑동 x, "lean": 기운 쪽(±1), "angle": 땅과 이루는 각(rad), "rot": 노드 회전,
+## "length": 길이, "center": 서 있는 소녀가 맞는 땅 폭의 가운데}. 맨 앞 줄의 땅 폭 가운데가 소녀 자리.
+## 서 있는 소녀(높이 BODY_H, 반폭 BODY_HALF)가 맞는 땅 폭: 오른쪽으로 기울면 [x - h·sinθ - 반폭, x + h/sinθ + 높이/tanθ + 반폭]
+## (h = 띠 반폭, 밑동 끝은 띠에 수직이라 왼쪽 위 모서리가 h·sinθ 만큼 뒤로 나온다).
+func map_layout(n: int, px: float) -> Array:
+	var a0 := arena.position.x if arena.size.x > 0.0 else px - 1340.0
+	var a1 := arena.end.x if arena.size.x > 0.0 else px + 1340.0
+	var span := a1 - a0
+	var cell := span / float(n)
+	var top := (arena.position.y if arena.size.y > 0.0 else ground_y - 1000.0) - MAP_TOP_OVER
+	var h := RootTentacle.WIDTH / 2.0
+	var lean := 1 if randf() < 0.5 else -1
+	var out: Array = []
+	for i in n:
+		var c := a0 + fposmod(clampf(px, a0, a1) - a0 + i * cell, span)
+		var th := deg_to_rad(randf_range(MAP_ANGLE.x, MAP_ANGLE.y))
+		var off := (h / sin(th) + BODY_H / tan(th) - h * sin(th)) / 2.0
+		var s := lean if i % 2 == 0 else -lean
+		var x0 := c - s * off
+		var run := (a1 + 60.0 - x0) if s > 0 else (x0 - (a0 - 60.0))
+		if run < MAP_MIN_RUN:
+			s = -s
+			x0 = c - s * off
+			run = (a1 + 60.0 - x0) if s > 0 else (x0 - (a0 - 60.0))
+		var length := minf(minf(run / cos(th), (ground_y - top) / sin(th)), MAP_MAX_LEN)
+		out.append({"x": x0, "lean": s, "angle": th, "rot": s * (PI / 2.0 - th), "length": length, "center": c})
+	return out
+
+
+## 서 있는 소녀가 맞는 땅 폭 (월드 x 구간) — 시험·자리 계산 확인용
+static func map_footprint(e: Dictionary) -> Vector2:
+	var th: float = e["angle"]
+	var h := RootTentacle.WIDTH / 2.0
+	var near := h * sin(th) + BODY_HALF
+	var far := h / sin(th) + BODY_H / tan(th) + BODY_HALF
+	var x0: float = e["x"]
+	return Vector2(x0 - near, x0 + far) if int(e["lean"]) > 0 else Vector2(x0 - far, x0 + near)
+
+
+## 맵 패턴을 건다: 붉은 띠 예고(MAP_TELEGRAPH, 2페이즈 MAP_TELEGRAPH_P2) 뒤 줄마다 MAP_STAGGER 씩 차례로 솟는다.
+func _map_strike() -> void:
+	var gap := MAP_INTERVAL if phase == 1 else MAP_INTERVAL_P2
+	_map_timer = randf_range(gap.x, gap.y)
+	if player == null:
+		return
+	var tel := MAP_TELEGRAPH if phase == 1 else MAP_TELEGRAPH_P2
+	_map_struck_at = _clock
+	var lay := map_layout(map_count(), player.global_position.x)
+	for i in lay.size():
+		var e: Dictionary = lay[i]
+		var t: RootTentacle = TENTACLE.instantiate()
+		t.damage = _dmg(tentacle_damage)
+		t.delay = tel + i * MAP_STAGGER
+		t.length = e["length"]
+		t.rotation = e["rot"]
+		t.source = self
+		get_parent().add_child(t)
+		t.global_position = Vector2(float(e["x"]), ground_y)
+	telegraph.emit("tentacles")
+	Sfx.play("end_rumble", -3.0, 0.05)
+	Juice.shake(4.0)
+
+
+## 시험·스크린샷용: 맵 패턴을 지금 건다 (시계와 상관없이)
+func force_map_pattern() -> void:
+	_map_strike()
+
+
+# ---------- v1.1.1 새 패턴 2: 씨앗 폭우 ----------
+
+## 씨앗 폭우의 물결 자리 (소녀 x = px): [{"gap": 틈 가운데, "xs": [씨앗 x...]}, ...] — 맨 위 상수 설명 참고.
+func barrage_layout(px: float) -> Array:
+	var a0 := arena.position.x if arena.size.x > 0.0 else px - 1340.0
+	var a1 := arena.end.x if arena.size.x > 0.0 else px + 1340.0
+	var lo := a0 + BARRAGE_EDGE
+	var hi := a1 - BARRAGE_EDGE
+	var side := 1 if randf() < 0.5 else -1
+	var g := px + side * randf_range(BARRAGE_FIRST.x, BARRAGE_FIRST.y)
+	if g < lo or g > hi:
+		side = -side
+		g = px + side * randf_range(BARRAGE_FIRST.x, BARRAGE_FIRST.y)
+	g = clampf(g, lo, hi)
+	var waves: Array = []
+	for w in BARRAGE_WAVES:
+		if w > 0:
+			var step := randf_range(BARRAGE_STEP.x, BARRAGE_STEP.y)
+			if g + side * step < lo or g + side * step > hi:
+				side = -side
+			g = clampf(g + side * step, lo, hi)
+		var xs: Array = []
+		var x := a0 + BARRAGE_ROW_MARGIN + (BARRAGE_SPACING * 0.5 if w % 2 == 1 else 0.0)
+		while x <= a1 - BARRAGE_ROW_MARGIN:
+			if absf(x - g) >= BARRAGE_GAP_HALF:
+				xs.append(x)
+			x += BARRAGE_SPACING
+		waves.append({"gap": g, "xs": xs})
+	return waves
+
+
+## 씨앗 폭우 한 물결: 줄의 씨앗이 모두 함께 떠서(BARRAGE_HOVER) 주황 점 예고를 보이다가 떨어진다
+func _spawn_barrage_wave(xs: Array) -> void:
+	var dmg := seed_damage * (atk_factor() if BARRAGE_PHASE2_ATK else extra("atk"))
+	for x in xs:
+		var s: RootSeed = SEED.instantiate()
+		s.damage = dmg
+		s.ground_y = ground_y
+		s.source = self
+		s.delay = BARRAGE_HOVER
+		get_parent().add_child(s)
+		s.global_position = Vector2(float(x), ground_y - RootSeed.FALL_HEIGHT)
+	Sfx.play("seed_fall", -3.0, 0.2)
+
+
+# ---------- v1.1.1 대사 ----------
+
+## 싸움 전 대화를 걸 때인가: 처음 마주칠 때만(INTRO_FLAG), 보스 러시가 아닐 때. intro_talk_mode 0 이면
+## 이 방이 실제 게임 장면일 때만 (시험이 방을 자식으로 놓거나 --bosstest 면 건너뛴다).
+func _intro_talk_due() -> bool:
+	if intro_talk_mode < 0 or BossRush.active or Progress.has(INTRO_FLAG):
+		return false
+	if _intro_lines().is_empty():
+		return false
+	if intro_talk_mode > 0:
+		return true
+	var room := get_parent()
+	return room != null and room == get_tree().current_scene and not ("--bosstest" in OS.get_cmdline_user_args())
+
+
+func _lines_data() -> Dictionary:
+	if _lines_cache.is_empty():
+		_lines_cache = DialogueData.load_dialogue(DIALOGUE_PATH)
+	return _lines_cache
+
+
+func _intro_lines() -> Array:
+	var out: Array = []
+	var speaker := str(_lines_data().get("speaker", "뿌리지기"))
+	for l in _lines_data().get("intro", []):
+		if l is Dictionary:
+			var d: Dictionary = (l as Dictionary).duplicate()
+			if not d.has("speaker"):
+				d["speaker"] = speaker
+			out.append(d)
+	return out
+
+
+func _start_intro_talk() -> void:
+	if not is_inside_tree() or state != State.INTRO:
+		_talking = false
+		return
+	var lines := _intro_lines()
+	var cam := player.get_node_or_null("Camera2D") if player else null
+	if cam and cam.has_method("frame_with"):
+		cam.frame_with(self, 120.0)   # 말하는 동안 소녀와 뿌리지기를 함께 보여 준다
+	Dialogue.start(lines, func() -> void:
+		_talking = false
+		if cam and is_instance_valid(cam) and cam.has_method("frame_with"):
+			cam.frame_with(self, 0.2, 0.0, 0.9))
+	if not Dialogue.is_active():
+		_talking = false
+
+
+## 싸우는 동안 대사가 뜨는가 (보스 러시에는 없다)
+func lines_enabled() -> bool:
+	return _speech != null and not BossRush.active
+
+
+## 키(battle 의 이름)에 맞는 한 마디를 위쪽 자막으로. 같은 키는 한 싸움에 한 번 (회복은 HEAL_LINES_MAX 번, 차례로).
+## force: 지금 떠 있는 대사를 밀어내고 바로 (다시 일어섬·쓰러짐)
+func _say(key: String, force := false) -> void:
+	if not lines_enabled():
+		return
+	var idx := 0
+	if key == "heal":
+		idx = _heal_said
+	elif _said.has(key):
+		return
+	var arr: Array = (_lines_data().get("battle", {}) as Dictionary).get(key, [])
+	if arr.is_empty():
+		return
+	_said[key] = true
+	var line = arr[mini(idx, arr.size() - 1)]
+	var text := str(line.get("text", "")) if line is Dictionary else str(line)
+	if text == "":
+		return
+	_speech.speaker = str(_lines_data().get("speaker", "뿌리지기"))
+	_speech.say(text, clampf(1.8 + text.length() * 0.06, 3.2, 5.2), force)
+
+
+## delay 초 뒤에 _say (예약된 공격과 따로 — 무너짐이 거둬 가지 않는다)
+func _say_later(key: String, delay: float) -> void:
+	_pending_lines.append([_clock + delay, key])
+
+
+func _tick_lines() -> void:
+	if _pending_lines.is_empty():
+		return
+	var rest: Array = []
+	for e in _pending_lines:
+		if e[0] <= _clock:
+			if state not in [State.FALLEN, State.PURIFIED, State.WAIT]:
+				_say(e[1])
+		else:
+			rest.append(e)
+	_pending_lines = rest
+
+
+## 체력이 정해진 비율 아래로 처음 내려가면 그 대사 (HP_LINES)
+func _check_hp_lines() -> void:
+	if max_hp <= 0.0:
+		return
+	var r := hp / max_hp
+	for e in HP_LINES:
+		if r <= float(e[0]) and not _said.has(e[1]):
+			_say(e[1])
+			return
+
+
+func _on_player_healed() -> void:
+	if state in [State.WAIT, State.INTRO, State.FALLEN, State.PURIFIED] or _heal_said >= HEAL_LINES_MAX:
+		return
+	if _clock - _heal_said_at < HEAL_LINE_GAP:
+		return
+	_say("heal")
+	_heal_said += 1
+	_heal_said_at = _clock
+
+
+func _on_player_hp_changed(php: float, pmax: float) -> void:
+	if state in [State.WAIT, State.INTRO, State.FALLEN, State.PURIFIED] or pmax <= 0.0:
+		return
+	if php > 0.0 and php / pmax < LOW_HP_LINE:
+		_say("low")
+
+
+func _on_player_died() -> void:
+	if state in [State.WAIT, State.FALLEN, State.PURIFIED]:
+		return
+	_say("player_down", true)
 
 
 ## 떠 있는 패턴 효과(손·구슬·씨앗·충격파·가시)를 모두 치운다 (쓰러짐·2페이즈 전환·리셋).
@@ -929,6 +1377,7 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 	if hp <= 0.0:
 		_fall()
 		return "hit"
+	_check_hp_lines()
 	if phase == 1 and hp <= max_hp * 0.5:
 		# 무너졌다 다시 일어선다 (여기서 주제곡이 터진다 — 13단계)
 		phase = 2
@@ -943,8 +1392,11 @@ func receive_hit(hit: HitData, _hb: Hurtbox) -> String:
 		poise_changed.emit(poise, max_poise)
 		_set_state(State.RISE)
 		_timer = rise_len
+		# v1.1.1: 다시 일어선 뒤 곧 4줄 맵 패턴 (폭주의 시작)
+		_map_timer = MAP_AFTER_RISE
 		phase_changed.emit(2)
 		telegraph.emit("rise")
+		_say("rise", true)
 		Juice.hitstop(0.2, 0.02)
 		Juice.shake(14.0)
 		return "hit"
@@ -998,6 +1450,8 @@ func _fall() -> void:
 	_set_state(State.FALLEN)
 	Juice.hitstop(0.2, 0.02)
 	Juice.shake(12.0)
+	_pending_lines.clear()
+	_say("fallen", true)
 	fallen.emit()
 
 

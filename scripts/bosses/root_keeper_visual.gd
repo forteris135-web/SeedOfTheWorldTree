@@ -333,7 +333,8 @@ func _process(delta: float) -> void:
 			if ph == "startup":
 				tremor = clampf(_boss.phase_progress(), 0.0, 1.0) * 0.5
 			breath = 0.0
-		RootKeeper.State.SEEDS:
+		RootKeeper.State.SEEDS, RootKeeper.State.BARRAGE:
+			# (v1.1.1 씨앗 폭우도 같은 자세 — 지팡이를 머리 위로 들어 흔든다)
 			p = _beat("seed_up", "seed_up", "idle", 0.3)
 			drive = _beat_drive()
 			if ph == "active":
@@ -701,7 +702,7 @@ func _on_phase(st: int, ph: String) -> void:
 			_puff(5, f * 30.0)
 		RootKeeper.State.WALL:
 			_puff(10, -f * 60.0)
-		RootKeeper.State.SEEDS:
+		RootKeeper.State.SEEDS, RootKeeper.State.BARRAGE:
 			motion.kick("crouch", -0.3)
 
 
@@ -808,8 +809,8 @@ func _draw_marks() -> void:
 		RootKeeper.State.SWEEP, RootKeeper.State.SWEEP2:
 			# v1.1.0: 휘두르기의 공격 범위 예고는 보스의 RangeTelegraph 가 판정과 같은 사각형으로 그린다 (예전 붉은 부채꼴은 판정보다 훨씬 컸다)
 			pass
-		RootKeeper.State.ORBS, RootKeeper.State.SEEDS:
-			# 지팡이 머리에 모이는 빛의 고리
+		RootKeeper.State.ORBS, RootKeeper.State.SEEDS, RootKeeper.State.BARRAGE:
+			# 지팡이 머리에 모이는 빛의 고리 (v1.1.1 씨앗 폭우: 씨앗마다 떨어질 자리의 주황 점은 씨앗이 스스로 그린다)
 			var h := head_world()
 			var r := 34.0 + 46.0 * p
 			_marks.draw_circle(h, r, _tg(0.18 * fade, guard))
